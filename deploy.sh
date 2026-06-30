@@ -8,10 +8,13 @@
 #   ./deploy.sh restart  重启
 #   ./deploy.sh status   查看运行状态
 #   ./deploy.sh prod     构建前端并以生产模式启动后端
+#   ./deploy.sh update   从 Git 仓库拉取最新代码并更新依赖
+#   ./deploy.sh clone [目录]  首次部署：克隆仓库到指定目录
 
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GIT_REPO_URL="${GIT_REPO_URL:-https://github.com/Reboot-QA/AI_testing_platform.git}"
 BACKEND_DIR="$ROOT/backend"
 FRONTEND_DIR="$ROOT/frontend"
 VENV_DIR="$BACKEND_DIR/venv"
@@ -84,12 +87,24 @@ AI质量平台 - 一键部署脚本
   restart         重启前后端服务
   status          查看服务状态
   prod            构建前端 + 生产模式启动后端
+  update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
+  clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
 
 环境变量:
   BACKEND_HOST    后端监听地址 (默认 0.0.0.0)
   BACKEND_PORT    后端端口 (默认 8000)
   FRONTEND_PORT   前端端口 (默认 5173)
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
+  GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
+  GIT_BRANCH      拉取分支 (默认当前分支，否则 main)
+
+首次部署示例:
+  git clone $GIT_REPO_URL
+  cd AI_testing_platform && ./deploy.sh
+
+  # 或使用 clone 子命令
+  ./deploy.sh clone /opt/AI_testing_platform
+  cd /opt/AI_testing_platform && ./deploy.sh
 
 访问地址:
   前端  http://127.0.0.1:${FRONTEND_PORT}
@@ -103,6 +118,153 @@ require_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
     error "未找到命令: $1"
     exit 1
+  fi
+}
+
+require_git() {
+  require_cmd git
+}
+
+detect_git_branch() {
+  if [[ -n "${GIT_BRANCH:-}" ]]; then
+    echo "$GIT_BRANCH"
+    return
+  fi
+  if [[ -d "$ROOT/.git" ]]; then
+    local current
+    current="$(git -C "$ROOT" rev-parse --abbrev-ref HEAD 2>/dev/null || true)"
+    if [[ -n "$current" && "$current" != "HEAD" ]]; then
+      echo "$current"
+      return
+    fi
+  fi
+  echo "main"
+}
+
+ensure_git_remote() {
+  cd "$ROOT"
+  if [[ ! -d .git ]]; then
+    return 1
+  fi
+  if ! git remote get-url origin >/dev/null 2>&1; then
+    info "添加 origin 远程: $GIT_REPO_URL"
+    git remote add origin "$GIT_REPO_URL"
+  fi
+}
+
+pull_latest() {
+  require_git
+  cd "$ROOT"
+  if [[ ! -d .git ]]; then
+    error "当前目录不是 Git 仓库"
+    error "首次部署: git clone $GIT_REPO_URL && cd AI_testing_platform && ./deploy.sh"
+    error "或执行: ./deploy.sh clone [目标目录]"
+    exit 1
+  fi
+  ensure_git_remote || true
+
+  local branch
+  branch="$(detect_git_branch)"
+  info "从仓库拉取最新代码"
+  info "  仓库: $GIT_REPO_URL"
+  info "  分支: $branch"
+
+  if [[ -n "$(git status --porcelain 2>/dev/null | grep -v '^??')" ]]; then
+    warn "检测到已跟踪文件的本地修改，拉取可能产生冲突"
+  fi
+
+  git fetch origin "$branch" || {
+    error "git fetch 失败，请检查网络与仓库权限"
+    exit 1
+  }
+
+  if ! git rev-parse "origin/$branch" >/dev/null 2>&1; then
+    error "远程分支 origin/$branch 不存在"
+    error "可指定分支: GIT_BRANCH=main ./deploy.sh update"
+    exit 1
+  fi
+
+  local local_ref remote_ref
+  local_ref="$(git rev-parse HEAD)"
+  remote_ref="$(git rev-parse "origin/$branch")"
+
+  if [[ "$local_ref" == "$remote_ref" ]]; then
+    ok "代码已是最新 ($(git rev-parse --short HEAD))"
+    return 0
+  fi
+
+  git merge-base --is-ancestor "$local_ref" "$remote_ref" 2>/dev/null || {
+    error "本地分支与远程存在分叉，无法快进合并"
+    error "请手动处理: git status && git pull origin $branch"
+    exit 1
+  }
+
+  git merge --ff-only "$remote_ref" || {
+    error "拉取失败，请手动解决后重试"
+    exit 1
+  }
+  ok "代码已更新: $(git log -1 --oneline)"
+}
+
+clone_project() {
+  local target="${1:-}"
+  require_git
+
+  local branch repo_name
+  branch="$(detect_git_branch)"
+  repo_name="$(basename "${GIT_REPO_URL%.git}")"
+
+  if [[ -z "$target" ]]; then
+    target="$(cd "$ROOT/.." && pwd)/$repo_name"
+  elif [[ "$target" != /* ]]; then
+    target="$(cd "$ROOT" && pwd)/$target"
+  fi
+
+  if [[ -d "$target/.git" ]]; then
+    warn "目标已是 Git 仓库: $target"
+    info "进入目录后执行: cd $target && ./deploy.sh update"
+    return 0
+  fi
+
+  if [[ -e "$target" && -n "$(ls -A "$target" 2>/dev/null)" ]]; then
+    error "目标目录非空: $target"
+    exit 1
+  fi
+
+  mkdir -p "$(dirname "$target")"
+  info "克隆仓库 $GIT_REPO_URL (分支: $branch) -> $target"
+  git clone -b "$branch" "$GIT_REPO_URL" "$target"
+  ok "克隆完成"
+  cat <<EOF
+
+下一步:
+  cd $target
+  ./deploy.sh
+
+EOF
+}
+
+update_project() {
+  local was_backend=0 was_frontend=0
+  prepare_dirs
+  if is_running "$BACKEND_PID_FILE"; then was_backend=1; fi
+  if is_running "$FRONTEND_PID_FILE"; then was_frontend=1; fi
+
+  if [[ "$was_backend" == "1" || "$was_frontend" == "1" ]]; then
+    info "更新前停止运行中的服务..."
+    stop_all
+  fi
+
+  pull_latest
+  install_all
+
+  if [[ "$was_backend" == "1" || "$was_frontend" == "1" ]]; then
+    info "重新启动服务..."
+    start_backend
+    start_frontend_dev
+    print_banner
+  else
+    ok "更新完成（服务未在运行）。启动请执行: ./deploy.sh start"
   fi
 }
 
@@ -531,6 +693,12 @@ main() {
       ;;
     prod)
       start_prod
+      ;;
+    update)
+      update_project
+      ;;
+    clone)
+      clone_project "${2:-}"
       ;;
     *)
       error "未知命令: $cmd"
