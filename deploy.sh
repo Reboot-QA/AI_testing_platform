@@ -28,7 +28,9 @@ FRONTEND_LOG="$LOG_DIR/frontend.log"
 
 BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+PUBLIC_HOST="${PUBLIC_HOST:-}"
 
 # 运行时 Python（优先使用 backend/venv）
 PYTHON=""
@@ -94,6 +96,8 @@ AI质量平台 - 一键部署脚本
   BACKEND_HOST    后端监听地址 (默认 0.0.0.0)
   BACKEND_PORT    后端端口 (默认 8000)
   FRONTEND_PORT   前端端口 (默认 5173)
+  FRONTEND_HOST   前端监听地址 (默认 0.0.0.0)
+  PUBLIC_HOST     外网访问地址 (默认自动检测本机 IP)
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
   GIT_BRANCH      拉取分支 (默认当前分支，否则 main)
@@ -112,6 +116,111 @@ AI质量平台 - 一键部署脚本
   文档  http://127.0.0.1:${BACKEND_PORT}/docs
   账号  admin / admin123
 EOF
+}
+
+detect_access_host() {
+  if [[ -n "$PUBLIC_HOST" ]]; then
+    echo "$PUBLIC_HOST"
+    return
+  fi
+  local ip=""
+  if command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+  if [[ -z "$ip" ]] && command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") { print $(i+1); exit }}')"
+  fi
+  echo "${ip:-127.0.0.1}"
+}
+
+print_access_urls() {
+  local access_host
+  access_host="$(detect_access_host)"
+  echo "  本机访问:"
+  echo "    前端  http://127.0.0.1:${FRONTEND_PORT}"
+  echo "    后端  http://127.0.0.1:${BACKEND_PORT}"
+  if [[ "$access_host" != "127.0.0.1" ]]; then
+    echo "  外网/局域网访问:"
+    echo "    前端  http://${access_host}:${FRONTEND_PORT}"
+    echo "    后端  http://${access_host}:${BACKEND_PORT}"
+    echo "    文档  http://${access_host}:${BACKEND_PORT}/docs"
+  fi
+}
+
+print_firewall_hint() {
+  if [[ "$(detect_access_host)" == "127.0.0.1" ]]; then
+    return
+  fi
+  warn "若外网无法打开页面，请检查云服务器安全组是否放行端口 ${FRONTEND_PORT}、${BACKEND_PORT}"
+}
+
+pids_on_port() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -ti :"$port" 2>/dev/null || true
+    return
+  fi
+  if command -v fuser >/dev/null 2>&1; then
+    fuser "${port}/tcp" 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+$' || true
+    return
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -tlnp 2>/dev/null | grep -E ":${port}([[:space:]]|$)" \
+      | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u || true
+  fi
+}
+
+port_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -tln 2>/dev/null | grep -qE ":${port}([[:space:]]|$)"
+    return $?
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -tln 2>/dev/null | grep -qE ":${port}([[:space:]]|$)"
+    return $?
+  fi
+  [[ -n "$(pids_on_port "$port")" ]]
+}
+
+free_port() {
+  local port="$1"
+  local name="$2"
+  local pids
+  pids="$(pids_on_port "$port" | tr '\n' ' ' | xargs echo -n 2>/dev/null || true)"
+  if [[ -z "$pids" ]]; then
+    return 0
+  fi
+  warn "端口 ${port} 已被占用 (${name})，正在释放进程: ${pids}"
+  local pid
+  for pid in $pids; do
+    kill "$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
+  done
+  sleep 1
+}
+
+wait_frontend() {
+  local url="http://127.0.0.1:${FRONTEND_PORT}/"
+  info "等待前端就绪..."
+  for _ in $(seq 1 30); do
+    if ! is_running "$FRONTEND_PID_FILE"; then
+      error "前端进程已退出，请查看日志: $FRONTEND_LOG"
+      tail -30 "$FRONTEND_LOG" 2>/dev/null >&2 || true
+      return 1
+    fi
+    if port_listening "$FRONTEND_PORT"; then
+      if command -v curl >/dev/null 2>&1 && curl -sf "$url" >/dev/null 2>&1; then
+        ok "前端已就绪 (监听 ${FRONTEND_HOST}:${FRONTEND_PORT})"
+        return 0
+      fi
+      ok "前端端口 ${FRONTEND_PORT} 已监听"
+      return 0
+    fi
+    sleep 1
+  done
+  warn "前端启动超时，请查看日志: $FRONTEND_LOG"
+  tail -30 "$FRONTEND_LOG" 2>/dev/null >&2 || true
+  return 1
 }
 
 require_cmd() {
@@ -509,6 +618,10 @@ install_frontend() {
   else
     npm install --prefer-offline --no-audit --no-fund
   fi
+  # 修复从 Windows 拷贝或 git 检出后 .bin 脚本无执行权限的问题
+  if [[ -d node_modules/.bin ]]; then
+    chmod +x node_modules/.bin/* 2>/dev/null || true
+  fi
   ok "前端依赖就绪"
 }
 
@@ -524,6 +637,11 @@ wait_backend() {
   detect_python
   info "等待后端就绪..."
   for _ in $(seq 1 30); do
+    if ! is_running "$BACKEND_PID_FILE"; then
+      error "后端进程已退出，请查看日志: $BACKEND_LOG"
+      tail -30 "$BACKEND_LOG" 2>/dev/null >&2 || true
+      return 1
+    fi
     if command -v curl >/dev/null 2>&1 && curl -sf "$url" >/dev/null 2>&1; then
       ok "后端已就绪"
       return 0
@@ -538,6 +656,7 @@ urllib.request.urlopen('${url}', timeout=2)
     sleep 1
   done
   warn "后端启动超时，请查看日志: $BACKEND_LOG"
+  tail -30 "$BACKEND_LOG" 2>/dev/null >&2 || true
   return 1
 }
 
@@ -546,6 +665,7 @@ start_backend() {
     warn "后端已在运行 (PID $(cat "$BACKEND_PID_FILE"))"
     return 0
   fi
+  free_port "$BACKEND_PORT" "backend"
   ensure_backend_venv
   info "启动后端 http://${BACKEND_HOST}:${BACKEND_PORT} ..."
   cd "$BACKEND_DIR"
@@ -555,7 +675,10 @@ start_backend() {
     --port "$BACKEND_PORT" \
     >>"$BACKEND_LOG" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
-  wait_backend || true
+  if ! wait_backend; then
+    stop_pid_file "后端" "$BACKEND_PID_FILE"
+    exit 1
+  fi
 }
 
 start_frontend_dev() {
@@ -567,18 +690,23 @@ start_frontend_dev() {
     warn "前端已在运行 (PID $(cat "$FRONTEND_PID_FILE"))"
     return 0
   fi
-  info "启动前端 http://127.0.0.1:${FRONTEND_PORT} ..."
+  free_port "$FRONTEND_PORT" "frontend"
+  detect_node
+  info "启动前端 ${FRONTEND_HOST}:${FRONTEND_PORT} ..."
   cd "$FRONTEND_DIR"
-  if [[ -x node_modules/.bin/vite ]]; then
-    nohup node_modules/.bin/vite --host 0.0.0.0 --port "$FRONTEND_PORT" \
-      >>"$FRONTEND_LOG" 2>&1 &
-  else
-    nohup npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" \
-      >>"$FRONTEND_LOG" 2>&1 &
+  local vite_js="node_modules/vite/bin/vite.js"
+  if [[ ! -f "$vite_js" ]]; then
+    error "未找到 vite，请先执行: ./deploy.sh install"
+    exit 1
   fi
+  # 用 node 直接启动，避免 node_modules/.bin/vite 无执行权限 (Permission denied)
+  nohup node "$vite_js" --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
+    >>"$FRONTEND_LOG" 2>&1 &
   echo $! >"$FRONTEND_PID_FILE"
-  sleep 2
-  ok "前端开发服务已启动"
+  if ! wait_frontend; then
+    stop_pid_file "前端" "$FRONTEND_PID_FILE"
+    exit 1
+  fi
 }
 
 start_backend_prod() {
@@ -586,6 +714,7 @@ start_backend_prod() {
     warn "后端已在运行 (PID $(cat "$BACKEND_PID_FILE"))"
     return 0
   fi
+  free_port "$BACKEND_PORT" "backend"
   ensure_backend_venv
   info "生产模式启动后端..."
   cd "$BACKEND_DIR"
@@ -601,7 +730,12 @@ start_backend_prod() {
 build_frontend() {
   info "构建前端静态资源..."
   cd "$FRONTEND_DIR"
-  npm run build
+  detect_node
+  local vite_js="node_modules/vite/bin/vite.js"
+  if [[ ! -f "$vite_js" ]]; then
+    npm install
+  fi
+  node "$vite_js" build
   ok "前端构建完成: frontend/dist"
 }
 
@@ -625,22 +759,37 @@ start_dev() {
 stop_all() {
   stop_pid_file "前端" "$FRONTEND_PID_FILE"
   stop_pid_file "后端" "$BACKEND_PID_FILE"
+  free_port "$FRONTEND_PORT" "frontend"
+  free_port "$BACKEND_PORT" "backend"
 }
 
 show_status() {
   detect_python
+  local access_host
+  access_host="$(detect_access_host)"
   echo "========================================"
   echo "  AI质量平台 - 服务状态"
   echo "========================================"
   if is_running "$BACKEND_PID_FILE"; then
-    ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE") → http://127.0.0.1:${BACKEND_PORT}"
+    ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE")"
+    echo "       本机  http://127.0.0.1:${BACKEND_PORT}"
+    [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${BACKEND_PORT}"
+  elif port_listening "$BACKEND_PORT"; then
+    warn "后端 PID 文件缺失，但端口 ${BACKEND_PORT} 仍被占用"
+    echo "       占用进程: $(pids_on_port "$BACKEND_PORT" | tr '\n' ' ')"
   else
     warn "后端未运行"
   fi
   if is_running "$FRONTEND_PID_FILE"; then
-    ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE") → http://127.0.0.1:${FRONTEND_PORT}"
+    ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE")"
+    echo "       本机  http://127.0.0.1:${FRONTEND_PORT}"
+    [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${FRONTEND_PORT}"
+  elif port_listening "$FRONTEND_PORT"; then
+    warn "前端 PID 文件缺失，但端口 ${FRONTEND_PORT} 仍被占用"
+    echo "       占用进程: $(pids_on_port "$FRONTEND_PORT" | tr '\n' ' ')"
   else
     warn "前端未运行"
+    [[ -f "$FRONTEND_LOG" ]] && echo "       日志: $FRONTEND_LOG"
   fi
   echo "Python: $PYTHON"
   echo "日志: $LOG_DIR"
@@ -651,15 +800,17 @@ print_banner() {
 
 ========================================
   部署完成！
-  前端:  http://127.0.0.1:${FRONTEND_PORT}
-  后端:  http://127.0.0.1:${BACKEND_PORT}
-  文档:  http://127.0.0.1:${BACKEND_PORT}/docs
+EOF
+  print_access_urls
+  cat <<EOF
   账号:  admin / admin123
   停止:  ./deploy.sh stop
+  状态:  ./deploy.sh status
   日志:  $LOG_DIR
 ========================================
 
 EOF
+  print_firewall_hint
 }
 
 main() {
