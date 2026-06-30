@@ -28,7 +28,9 @@ FRONTEND_LOG="$LOG_DIR/frontend.log"
 
 BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
+FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
+PUBLIC_HOST="${PUBLIC_HOST:-}"
 
 # 运行时 Python（优先使用 backend/venv）
 PYTHON=""
@@ -94,6 +96,8 @@ AI质量平台 - 一键部署脚本
   BACKEND_HOST    后端监听地址 (默认 0.0.0.0)
   BACKEND_PORT    后端端口 (默认 8000)
   FRONTEND_PORT   前端端口 (默认 5173)
+  FRONTEND_HOST   前端监听地址 (默认 0.0.0.0，允许外网访问)
+  PUBLIC_HOST     外网访问地址 (默认自动检测本机 IP)
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
   GIT_BRANCH      拉取分支 (默认当前分支，否则 main)
@@ -112,6 +116,81 @@ AI质量平台 - 一键部署脚本
   文档  http://127.0.0.1:${BACKEND_PORT}/docs
   账号  admin / admin123
 EOF
+}
+
+detect_access_host() {
+  if [[ -n "$PUBLIC_HOST" ]]; then
+    echo "$PUBLIC_HOST"
+    return
+  fi
+  local ip=""
+  if command -v hostname >/dev/null 2>&1; then
+    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  fi
+  if [[ -z "$ip" ]] && command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") { print $(i+1); exit }}')"
+  fi
+  echo "${ip:-127.0.0.1}"
+}
+
+print_access_urls() {
+  local access_host
+  access_host="$(detect_access_host)"
+  echo "  本机访问:"
+  echo "    前端  http://127.0.0.1:${FRONTEND_PORT}"
+  echo "    后端  http://127.0.0.1:${BACKEND_PORT}"
+  if [[ "$access_host" != "127.0.0.1" ]]; then
+    echo "  外网/局域网访问 (请用服务器 IP，不要用 127.0.0.1):"
+    echo "    前端  http://${access_host}:${FRONTEND_PORT}"
+    echo "    后端  http://${access_host}:${BACKEND_PORT}"
+    echo "    文档  http://${access_host}:${BACKEND_PORT}/docs"
+  fi
+}
+
+print_firewall_hint() {
+  if [[ "$(detect_access_host)" == "127.0.0.1" ]]; then
+    return
+  fi
+  warn "若外网无法打开页面，请检查云服务器安全组/防火墙是否放行端口 ${FRONTEND_PORT}、${BACKEND_PORT}"
+  warn "  ufw:        sudo ufw allow ${FRONTEND_PORT}/tcp && sudo ufw allow ${BACKEND_PORT}/tcp"
+  warn "  firewalld:  sudo firewall-cmd --add-port=${FRONTEND_PORT}/tcp --add-port=${BACKEND_PORT}/tcp --permanent && sudo firewall-cmd --reload"
+}
+
+port_listening() {
+  local port="$1"
+  if command -v ss >/dev/null 2>&1; then
+    ss -tln 2>/dev/null | grep -qE ":${port}([[:space:]]|$)"
+    return $?
+  fi
+  if command -v netstat >/dev/null 2>&1; then
+    netstat -tln 2>/dev/null | grep -qE ":${port}([[:space:]]|$)"
+    return $?
+  fi
+  return 1
+}
+
+wait_frontend() {
+  local url="http://127.0.0.1:${FRONTEND_PORT}/"
+  info "等待前端就绪..."
+  for _ in $(seq 1 30); do
+    if ! is_running "$FRONTEND_PID_FILE"; then
+      error "前端进程已退出，请查看日志: $FRONTEND_LOG"
+      tail -30 "$FRONTEND_LOG" 2>/dev/null >&2 || true
+      return 1
+    fi
+    if port_listening "$FRONTEND_PORT"; then
+      if command -v curl >/dev/null 2>&1 && curl -sf "$url" >/dev/null 2>&1; then
+        ok "前端已就绪 (监听 ${FRONTEND_HOST}:${FRONTEND_PORT})"
+        return 0
+      fi
+      ok "前端端口 ${FRONTEND_PORT} 已监听"
+      return 0
+    fi
+    sleep 1
+  done
+  warn "前端启动超时，请查看日志: $FRONTEND_LOG"
+  tail -30 "$FRONTEND_LOG" 2>/dev/null >&2 || true
+  return 1
 }
 
 require_cmd() {
@@ -567,18 +646,20 @@ start_frontend_dev() {
     warn "前端已在运行 (PID $(cat "$FRONTEND_PID_FILE"))"
     return 0
   fi
-  info "启动前端 http://127.0.0.1:${FRONTEND_PORT} ..."
+  info "启动前端 ${FRONTEND_HOST}:${FRONTEND_PORT} ..."
   cd "$FRONTEND_DIR"
   if [[ -x node_modules/.bin/vite ]]; then
-    nohup node_modules/.bin/vite --host 0.0.0.0 --port "$FRONTEND_PORT" \
+    nohup node_modules/.bin/vite --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
       >>"$FRONTEND_LOG" 2>&1 &
   else
-    nohup npm run dev -- --host 0.0.0.0 --port "$FRONTEND_PORT" \
+    nohup npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
       >>"$FRONTEND_LOG" 2>&1 &
   fi
   echo $! >"$FRONTEND_PID_FILE"
-  sleep 2
-  ok "前端开发服务已启动"
+  if ! wait_frontend; then
+    stop_pid_file "前端" "$FRONTEND_PID_FILE"
+    exit 1
+  fi
 }
 
 start_backend_prod() {
@@ -629,21 +710,36 @@ stop_all() {
 
 show_status() {
   detect_python
+  local access_host
+  access_host="$(detect_access_host)"
   echo "========================================"
   echo "  AI质量平台 - 服务状态"
   echo "========================================"
   if is_running "$BACKEND_PID_FILE"; then
-    ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE") → http://127.0.0.1:${BACKEND_PORT}"
+    ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE")"
+    echo "       本机  http://127.0.0.1:${BACKEND_PORT}"
+    if [[ "$access_host" != "127.0.0.1" ]]; then
+      echo "       外网  http://${access_host}:${BACKEND_PORT}"
+    fi
   else
     warn "后端未运行"
   fi
   if is_running "$FRONTEND_PID_FILE"; then
-    ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE") → http://127.0.0.1:${FRONTEND_PORT}"
+    ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE")"
+    echo "       本机  http://127.0.0.1:${FRONTEND_PORT}"
+    if [[ "$access_host" != "127.0.0.1" ]]; then
+      echo "       外网  http://${access_host}:${FRONTEND_PORT}"
+    fi
   else
     warn "前端未运行"
+    if [[ -f "$FRONTEND_LOG" ]]; then
+      echo "       日志: $FRONTEND_LOG"
+      tail -5 "$FRONTEND_LOG" 2>/dev/null || true
+    fi
   fi
   echo "Python: $PYTHON"
   echo "日志: $LOG_DIR"
+  print_firewall_hint
 }
 
 print_banner() {
@@ -651,15 +747,17 @@ print_banner() {
 
 ========================================
   部署完成！
-  前端:  http://127.0.0.1:${FRONTEND_PORT}
-  后端:  http://127.0.0.1:${BACKEND_PORT}
-  文档:  http://127.0.0.1:${BACKEND_PORT}/docs
+EOF
+  print_access_urls
+  cat <<EOF
   账号:  admin / admin123
   停止:  ./deploy.sh stop
+  状态:  ./deploy.sh status
   日志:  $LOG_DIR
 ========================================
 
 EOF
+  print_firewall_hint
 }
 
 main() {
