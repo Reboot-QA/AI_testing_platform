@@ -96,11 +96,7 @@ AI质量平台 - 一键部署脚本
   BACKEND_HOST    后端监听地址 (默认 0.0.0.0)
   BACKEND_PORT    后端端口 (默认 8000)
   FRONTEND_PORT   前端端口 (默认 5173)
-<<<<<<< HEAD
-  FRONTEND_HOST   前端监听地址 (默认 0.0.0.0，允许外网访问)
-=======
   FRONTEND_HOST   前端监听地址 (默认 0.0.0.0)
->>>>>>> Reboot
   PUBLIC_HOST     外网访问地址 (默认自动检测本机 IP)
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
@@ -144,11 +140,7 @@ print_access_urls() {
   echo "    前端  http://127.0.0.1:${FRONTEND_PORT}"
   echo "    后端  http://127.0.0.1:${BACKEND_PORT}"
   if [[ "$access_host" != "127.0.0.1" ]]; then
-<<<<<<< HEAD
-    echo "  外网/局域网访问 (请用服务器 IP，不要用 127.0.0.1):"
-=======
     echo "  外网/局域网访问:"
->>>>>>> Reboot
     echo "    前端  http://${access_host}:${FRONTEND_PORT}"
     echo "    后端  http://${access_host}:${BACKEND_PORT}"
     echo "    文档  http://${access_host}:${BACKEND_PORT}/docs"
@@ -159,11 +151,6 @@ print_firewall_hint() {
   if [[ "$(detect_access_host)" == "127.0.0.1" ]]; then
     return
   fi
-<<<<<<< HEAD
-  warn "若外网无法打开页面，请检查云服务器安全组/防火墙是否放行端口 ${FRONTEND_PORT}、${BACKEND_PORT}"
-  warn "  ufw:        sudo ufw allow ${FRONTEND_PORT}/tcp && sudo ufw allow ${BACKEND_PORT}/tcp"
-  warn "  firewalld:  sudo firewall-cmd --add-port=${FRONTEND_PORT}/tcp --add-port=${BACKEND_PORT}/tcp --permanent && sudo firewall-cmd --reload"
-=======
   warn "若外网无法打开页面，请检查云服务器安全组是否放行端口 ${FRONTEND_PORT}、${BACKEND_PORT}"
 }
 
@@ -181,7 +168,6 @@ pids_on_port() {
     ss -tlnp 2>/dev/null | grep -E ":${port}([[:space:]]|$)" \
       | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u || true
   fi
->>>>>>> Reboot
 }
 
 port_listening() {
@@ -194,9 +180,6 @@ port_listening() {
     netstat -tln 2>/dev/null | grep -qE ":${port}([[:space:]]|$)"
     return $?
   fi
-<<<<<<< HEAD
-  return 1
-=======
   [[ -n "$(pids_on_port "$port")" ]]
 }
 
@@ -214,7 +197,6 @@ free_port() {
     kill "$pid" 2>/dev/null || kill -9 "$pid" 2>/dev/null || true
   done
   sleep 1
->>>>>>> Reboot
 }
 
 wait_frontend() {
@@ -708,16 +690,6 @@ start_frontend_dev() {
     warn "前端已在运行 (PID $(cat "$FRONTEND_PID_FILE"))"
     return 0
   fi
-<<<<<<< HEAD
-  info "启动前端 ${FRONTEND_HOST}:${FRONTEND_PORT} ..."
-  cd "$FRONTEND_DIR"
-  if [[ -x node_modules/.bin/vite ]]; then
-    nohup node_modules/.bin/vite --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
-      >>"$FRONTEND_LOG" 2>&1 &
-  else
-    nohup npm run dev -- --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
-      >>"$FRONTEND_LOG" 2>&1 &
-=======
   free_port "$FRONTEND_PORT" "frontend"
   detect_node
   info "启动前端 ${FRONTEND_HOST}:${FRONTEND_PORT} ..."
@@ -726,7 +698,6 @@ start_frontend_dev() {
   if [[ ! -f "$vite_js" ]]; then
     error "未找到 vite，请先执行: ./deploy.sh install"
     exit 1
->>>>>>> Reboot
   fi
   # 用 node 直接启动，避免 node_modules/.bin/vite 无执行权限 (Permission denied)
   nohup node "$vite_js" --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
@@ -802,33 +773,16 @@ show_status() {
   if is_running "$BACKEND_PID_FILE"; then
     ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE")"
     echo "       本机  http://127.0.0.1:${BACKEND_PORT}"
-<<<<<<< HEAD
-    if [[ "$access_host" != "127.0.0.1" ]]; then
-      echo "       外网  http://${access_host}:${BACKEND_PORT}"
-    fi
-=======
     [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${BACKEND_PORT}"
   elif port_listening "$BACKEND_PORT"; then
     warn "后端 PID 文件缺失，但端口 ${BACKEND_PORT} 仍被占用"
     echo "       占用进程: $(pids_on_port "$BACKEND_PORT" | tr '\n' ' ')"
->>>>>>> Reboot
   else
     warn "后端未运行"
   fi
   if is_running "$FRONTEND_PID_FILE"; then
     ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE")"
     echo "       本机  http://127.0.0.1:${FRONTEND_PORT}"
-<<<<<<< HEAD
-    if [[ "$access_host" != "127.0.0.1" ]]; then
-      echo "       外网  http://${access_host}:${FRONTEND_PORT}"
-    fi
-  else
-    warn "前端未运行"
-    if [[ -f "$FRONTEND_LOG" ]]; then
-      echo "       日志: $FRONTEND_LOG"
-      tail -5 "$FRONTEND_LOG" 2>/dev/null || true
-    fi
-=======
     [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${FRONTEND_PORT}"
   elif port_listening "$FRONTEND_PORT"; then
     warn "前端 PID 文件缺失，但端口 ${FRONTEND_PORT} 仍被占用"
@@ -836,11 +790,9 @@ show_status() {
   else
     warn "前端未运行"
     [[ -f "$FRONTEND_LOG" ]] && echo "       日志: $FRONTEND_LOG"
->>>>>>> Reboot
   fi
   echo "Python: $PYTHON"
   echo "日志: $LOG_DIR"
-  print_firewall_hint
 }
 
 print_banner() {
