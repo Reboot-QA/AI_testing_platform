@@ -1,0 +1,175 @@
+from typing import List
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.auth import get_current_admin, get_password_hash
+from app.constants.menus import MENU_KEY_SET
+from app.database import get_db
+from app.models.user import User
+from app.schemas import (
+    MenuDefinitionOut,
+    UserCreateByAdmin,
+    UserOut,
+    UserPasswordReset,
+    UserPermissionsOut,
+    UserPermissionsUpdate,
+    UserUpdate,
+)
+from app.services.permission_service import (
+    ensure_default_permissions,
+    get_user_menu_keys,
+    list_menu_definitions,
+    set_user_menu_keys,
+)
+
+ALLOWED_ROLES = {"admin", "tester"}
+
+router = APIRouter(prefix="/users", tags=["用户管理"])
+
+
+def _user_out(user: User, db: Session) -> UserOut:
+    return UserOut(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        full_name=user.full_name,
+        role=user.role,
+        is_active=user.is_active,
+        created_at=user.created_at,
+        menu_permissions=get_user_menu_keys(db, user),
+    )
+
+
+@router.get("/menus", response_model=List[MenuDefinitionOut])
+def list_menus(_: User = Depends(get_current_admin)):
+    return list_menu_definitions()
+
+
+@router.get("", response_model=List[UserOut])
+def list_users(db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
+    users = db.query(User).order_by(User.id.asc()).all()
+    return [_user_out(user, db) for user in users]
+
+
+@router.post("", response_model=UserOut)
+def create_user(
+    data: UserCreateByAdmin,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    if data.role not in ALLOWED_ROLES:
+        raise HTTPException(status_code=400, detail="无效的用户角色")
+    if db.query(User).filter(User.username == data.username).first():
+        raise HTTPException(status_code=400, detail="用户名已存在")
+    if db.query(User).filter(User.email == data.email).first():
+        raise HTTPException(status_code=400, detail="邮箱已存在")
+
+    user = User(
+        username=data.username,
+        email=data.email,
+        full_name=data.full_name,
+        role=data.role,
+        hashed_password=get_password_hash(data.password),
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    ensure_default_permissions(db, user)
+    if data.menu_permissions is not None and user.role != "admin":
+        set_user_menu_keys(db, user.id, data.menu_permissions)
+    return _user_out(user, db)
+
+
+@router.put("/{user_id}", response_model=UserOut)
+def update_user(
+    user_id: int,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    if data.email and data.email != user.email:
+        if db.query(User).filter(User.email == data.email, User.id != user_id).first():
+            raise HTTPException(status_code=400, detail="邮箱已存在")
+        user.email = data.email
+
+    if data.full_name is not None:
+        user.full_name = data.full_name
+
+    if data.role is not None:
+        if data.role not in ALLOWED_ROLES:
+            raise HTTPException(status_code=400, detail="无效的用户角色")
+        if user.id == current_admin.id and data.role != "admin":
+            raise HTTPException(status_code=400, detail="不能修改自己的管理员角色")
+        user.role = data.role
+
+    if data.is_active is not None:
+        if user.id == current_admin.id and not data.is_active:
+            raise HTTPException(status_code=400, detail="不能禁用当前登录账号")
+        user.is_active = data.is_active
+
+    db.commit()
+    db.refresh(user)
+    return _user_out(user, db)
+
+
+@router.put("/{user_id}/password")
+def reset_password(
+    user_id: int,
+    data: UserPasswordReset,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    user.hashed_password = get_password_hash(data.password)
+    db.commit()
+    return {"message": "密码已重置"}
+
+
+@router.get("/{user_id}/permissions", response_model=UserPermissionsOut)
+def get_user_permissions(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return UserPermissionsOut(
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        menu_permissions=get_user_menu_keys(db, user),
+    )
+
+
+@router.put("/{user_id}/permissions", response_model=UserPermissionsOut)
+def update_user_permissions(
+    user_id: int,
+    data: UserPermissionsUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.role == "admin":
+        raise HTTPException(status_code=400, detail="管理员默认拥有全部菜单权限，无需单独授权")
+
+    invalid = [key for key in data.menu_permissions if key not in MENU_KEY_SET]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"无效菜单权限：{', '.join(invalid)}")
+
+    keys = set_user_menu_keys(db, user.id, data.menu_permissions)
+    return UserPermissionsOut(
+        user_id=user.id,
+        username=user.username,
+        role=user.role,
+        menu_permissions=keys,
+    )

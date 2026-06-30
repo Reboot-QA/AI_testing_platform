@@ -1,0 +1,15 @@
+# Shell scripts must use LF on Linux
+*.sh text eol=lf
+deploy.sh text eol=lf
+
+# Windows batch files keep CRLF
+*.bat text eol=crlf
+
+# Default for text files
+*.md text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.vue text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf

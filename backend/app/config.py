@@ -1,0 +1,20 @@
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    app_name: str = "AI质量平台"
+    secret_key: str = "dev-secret-key-change-in-production"
+    database_url: str = "sqlite:///./ai_testcase.db"
+    algorithm: str = "HS256"
+    access_token_expire_minutes: int = 60 * 24
+
+    llm_api_base: str = "https://api.openai.com/v1"
+    llm_api_key: str = ""
+    llm_model: str = "gpt-4o-mini"
+    llm_mock_mode: bool = True
+
+    class Config:
+        env_file = ".env"
+
+
+settings = Settings()

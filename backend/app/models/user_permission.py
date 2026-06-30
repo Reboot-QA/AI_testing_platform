@@ -1,0 +1,13 @@
+from sqlalchemy import ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.database import Base
+
+
+class UserMenuPermission(Base):
+    __tablename__ = "user_menu_permissions"
+    __table_args__ = (UniqueConstraint("user_id", "menu_key", name="uq_user_menu"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    menu_key: Mapped[str] = mapped_column(String(50), index=True)
