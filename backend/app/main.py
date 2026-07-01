@@ -1,11 +1,14 @@
 from contextlib import asynccontextmanager
+import logging
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
-from app.routers import auth, projects, requirements, testcases, users, api_automation, test_execution
+from app.routers import auth, projects, requirements, testcases, users, api_automation, test_execution, logs
 from app.routers import settings as settings_router
 from app.services.seed import seed_demo_data
 from app.services.settings_service import init_llm_settings_from_env
@@ -14,8 +17,39 @@ from app.services.permission_service import migrate_all_user_permissions
 from app.services.schedule_service import init_schedules_on_startup, start_scheduler, stop_scheduler
 
 
+def setup_logging() -> None:
+    project_root = Path(__file__).resolve().parent.parent.parent
+    log_dir = Path(settings.log_dir) if settings.log_dir else project_root / ".deploy" / "logs"
+    if not log_dir.is_absolute():
+        log_dir = (project_root / log_dir).resolve()
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "backend.log"
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
+
+    if not any(isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
+        file_handler = RotatingFileHandler(
+            log_file,
+            maxBytes=10 * 1024 * 1024,
+            backupCount=5,
+            encoding="utf-8",
+        )
+        file_handler.setFormatter(formatter)
+        root_logger.addHandler(file_handler)
+
+    if not any(isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
+
+    logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    setup_logging()
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
@@ -49,6 +83,7 @@ app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(api_automation.router, prefix="/api/v1")
 app.include_router(test_execution.router, prefix="/api/v1")
+app.include_router(logs.router, prefix="/api/v1")
 
 
 @app.get("/")

@@ -243,4 +243,9 @@ export const apiAutomationApi = {
   runScheduleNow: (id) => request.post(`/api-automation/schedules/${id}/run-now`),
 }
 
+export const logsApi = {
+  sources: () => request.get('/logs/sources'),
+  tail: (params = {}) => request.get('/logs/tail', { params }),
+}
+
 export default request

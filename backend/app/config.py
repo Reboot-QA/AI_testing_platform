@@ -13,6 +13,8 @@ class Settings(BaseSettings):
     llm_model: str = "gpt-4o-mini"
     llm_mock_mode: bool = True
 
+    log_dir: str = ""
+
     class Config:
         env_file = ".env"
 

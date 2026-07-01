@@ -106,6 +106,12 @@ const routes = [
         component: () => import('@/views/PermissionManagement.vue'),
         meta: { permission: 'system_permissions', requiresAdmin: true },
       },
+      {
+        path: 'system/logs',
+        name: 'LogMonitor',
+        component: () => import('@/views/LogMonitor.vue'),
+        meta: { permission: 'system_logs', requiresAdmin: true },
+      },
     ],
   },
 ]
