@@ -91,19 +91,6 @@ def _prepare_ai_generate(
                 status_code=400,
                 detail=f"仅已评审需求可关联生成用例：{', '.join(not_approved)}",
             )
-        requirement_ids_with_cases = {
-            row[0]
-            for row in db.query(TestCase.requirement_id)
-            .filter(TestCase.requirement_id.in_(requirement_ids))
-            .distinct()
-            .all()
-        }
-        has_cases = [req.title for req in selected_requirements if req.id in requirement_ids_with_cases]
-        if has_cases:
-            raise HTTPException(
-                status_code=400,
-                detail=f"以下需求已有关联用例，不能重复 AI 生成：{', '.join(has_cases)}",
-            )
         order_map = {item.id: item for item in selected_requirements}
         selected_requirements = [order_map[item_id] for item_id in requirement_ids if item_id in order_map]
         requirement_text = "\n\n".join(

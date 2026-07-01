@@ -50,16 +50,15 @@
                       :indeterminate="selectIndeterminate"
                       @change="handleSelectAllRequirements"
                     >
-                      全选可关联需求 ({{ selectableCount }})
+                      全选已评审需求 ({{ selectableCount }})
                     </el-checkbox>
                   </div>
                 </template>
                 <el-option
-                  v-for="r in requirements"
+                  v-for="r in approvedRequirements"
                   :key="r.id"
                   :label="r.title"
                   :value="r.id"
-                  :disabled="!canSelectRequirement(r)"
                 >
                   <div class="req-option">
                     <span class="req-option-title">{{ r.title }}</span>
@@ -67,7 +66,7 @@
                       <el-tag :type="statusType[r.status]" size="small">
                         {{ statusMap[r.status] || r.status }}
                       </el-tag>
-                      <el-tag v-if="r.testcase_count > 0" type="danger" size="small">
+                      <el-tag v-if="r.testcase_count > 0" type="info" size="small">
                         已有 {{ r.testcase_count }} 条用例
                       </el-tag>
                     </div>
@@ -84,9 +83,6 @@
               </div>
               <div v-else-if="form.project_id && !approvedCount" class="form-tip">
                 当前项目暂无已评审需求，请先在需求点中评审后再关联
-              </div>
-              <div v-else-if="form.project_id && !selectableCount" class="form-tip">
-                当前项目已评审需求均已有关联用例，不能重复 AI 生成。请先在需求点中清理关联用例
               </div>
             </el-form-item>
             <el-form-item label="需求描述" prop="requirement_text">
@@ -243,13 +239,12 @@ const progressPercent = computed(() => {
 
 const statusMap = { draft: '草稿', approved: '已评审', closed: '已关闭' }
 const statusType = { draft: 'info', approved: 'success', closed: 'warning' }
-const approvedCount = computed(() => requirements.value.filter((r) => r.status === 'approved').length)
-const selectableCount = computed(() =>
-  requirements.value.filter((r) => r.status === 'approved' && !r.testcase_count).length
+const approvedRequirements = computed(() =>
+  requirements.value.filter((r) => r.status === 'approved')
 )
-const selectableIds = computed(() =>
-  requirements.value.filter((r) => canSelectRequirement(r)).map((r) => r.id)
-)
+const approvedCount = computed(() => approvedRequirements.value.length)
+const selectableCount = computed(() => approvedCount.value)
+const selectableIds = computed(() => approvedRequirements.value.map((r) => r.id))
 const selectedSelectableCount = computed(() =>
   selectableIds.value.filter((id) => form.requirement_ids.includes(id)).length
 )
@@ -263,10 +258,6 @@ const selectIndeterminate = computed(
     selectedSelectableCount.value > 0 &&
     selectedSelectableCount.value < selectableIds.value.length
 )
-
-function canSelectRequirement(r) {
-  return r.status === 'approved' && !r.testcase_count
-}
 
 function handleSelectAllRequirements(checked) {
   if (checked) {
@@ -353,10 +344,10 @@ async function handleGenerate() {
     requirements.value = await requirementApi.list(form.project_id)
     const blocked = form.requirement_ids
       .map((id) => requirements.value.find((r) => r.id === id))
-      .filter((r) => r && !canSelectRequirement(r))
+      .filter((r) => r && r.status !== 'approved')
     if (blocked.length) {
       ElMessage.warning(
-        `需求「${blocked.map((r) => r.title).join('、')}」已有关联用例或非已评审状态，不能重复生成`
+        `需求「${blocked.map((r) => r.title).join('、')}」未评审，不能生成用例`
       )
       return
     }
