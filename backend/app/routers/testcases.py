@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import SessionLocal, get_db
@@ -436,18 +436,33 @@ def export_excel(
     current_user: User = Depends(get_current_user),
 ):
     project = _check_project(db, project_id, current_user.id)
-    cases = db.query(TestCase).filter(TestCase.project_id == project_id).all()
+    cases = (
+        db.query(TestCase)
+        .options(joinedload(TestCase.requirement))
+        .filter(TestCase.project_id == project_id)
+        .order_by(TestCase.id.asc())
+        .all()
+    )
 
     wb = Workbook()
     ws = wb.active
     ws.title = "测试用例"
-    headers = ["ID", "标题", "类型", "优先级", "前置条件", "步骤", "预期结果", "标签", "来源", "评审状态"]
+    headers = ["ID", "标题", "需求点", "类型", "优先级", "前置条件", "步骤", "预期结果", "标签", "来源", "评审状态"]
     ws.append(headers)
     for c in cases:
+        requirement_title = c.requirement.title if c.requirement else ""
         ws.append([
-            c.id, c.title, c.case_type, c.priority,
-            c.preconditions, c.steps, c.expected_results,
-            c.tags, c.source, c.review_status,
+            c.id,
+            c.title,
+            requirement_title,
+            c.case_type,
+            c.priority,
+            c.preconditions,
+            c.steps,
+            c.expected_results,
+            c.tags,
+            c.source,
+            c.review_status,
         ])
 
     buffer = BytesIO()
