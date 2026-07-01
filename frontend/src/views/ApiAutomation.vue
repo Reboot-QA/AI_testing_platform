@@ -467,7 +467,7 @@
             </div>
           </div>
         </el-form-item>
-        <el-form-item v-if="swaggerSourceType === 'content'" label="文档内容">
+        <el-form-item v-if="swaggerSourceType === 'content'" label="文档内容" required>
           <el-input
             v-model="swaggerRawText"
             type="textarea"
@@ -475,7 +475,7 @@
             placeholder="粘贴 Swagger / OpenAPI JSON 或 YAML..."
           />
         </el-form-item>
-        <el-form-item v-else label="文档 URL">
+        <el-form-item v-else label="文档 URL" required>
           <el-input
             v-model="swaggerUrl"
             placeholder="https://example.com/v3/api-docs 或 swagger.json"
