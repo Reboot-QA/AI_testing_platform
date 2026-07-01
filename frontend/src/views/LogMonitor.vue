@@ -352,7 +352,9 @@ async function downloadLog() {
 async function loadIntegrations() {
   integrationLoading.value = true
   try {
-    integrations.value = await logsApi.integrations()
+    integrations.value = await logsApi.integrations({
+      public_host: window.location.hostname,
+    })
   } finally {
     integrationLoading.value = false
   }

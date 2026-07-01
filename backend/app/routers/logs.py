@@ -1,6 +1,6 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, StreamingResponse
 
 from app.auth import get_current_admin
@@ -13,10 +13,16 @@ router = APIRouter(prefix="/logs", tags=["日志监控"])
 
 @router.get("/integrations")
 def log_integrations(
+    request: Request,
     public_host: Optional[str] = Query(None, max_length=200),
     _: User = Depends(get_current_admin),
 ):
-    return get_integration_status(public_host=public_host)
+    host = (public_host or "").strip()
+    if not host:
+        forwarded = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
+        raw_host = forwarded or (request.headers.get("host") or "")
+        host = raw_host.split(":")[0].strip()
+    return get_integration_status(public_host=host or None)
 
 
 @router.get("/sources")

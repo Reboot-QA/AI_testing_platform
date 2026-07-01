@@ -18,9 +18,11 @@ class Settings(BaseSettings):
     grafana_enabled: bool = True
     grafana_url: str = ""
     grafana_port: int = 3000
+    grafana_public_url: str = ""
     grafana_embed: bool = True
     loki_url: str = ""
     loki_port: int = 3100
+    loki_public_url: str = ""
 
     class Config:
         env_file = ".env"

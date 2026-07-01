@@ -13,6 +13,19 @@ def _build_url(base: str, port: int, default_host: str = "127.0.0.1") -> str:
     return f"http://{default_host}:{port}"
 
 
+def _apply_public_host(url: str, public_host: Optional[str]) -> str:
+    if not public_host or public_host in {"127.0.0.1", "localhost"}:
+        return url
+    return url.replace("127.0.0.1", public_host).replace("localhost", public_host)
+
+
+def _resolve_public_url(internal_url: str, public_url_setting: str, public_host: Optional[str]) -> str:
+    configured = (public_url_setting or "").strip().rstrip("/")
+    if configured:
+        return configured
+    return _apply_public_host(internal_url, public_host)
+
+
 def _probe(url: str, timeout: float = 2.0) -> bool:
     try:
         request = Request(url, method="GET")
@@ -36,10 +49,8 @@ def get_integration_status(public_host: Optional[str] = None) -> Dict:
     grafana_url = get_grafana_url()
     loki_url = get_loki_url()
 
-    if public_host and public_host not in {"127.0.0.1", "localhost"}:
-        public_grafana = grafana_url.replace("127.0.0.1", public_host).replace("localhost", public_host)
-    else:
-        public_grafana = grafana_url
+    public_grafana = _resolve_public_url(grafana_url, settings.grafana_public_url, public_host)
+    public_loki = _resolve_public_url(loki_url, settings.loki_public_url, public_host)
 
     dashboard_url = f"{public_grafana}/d/ai-platform-logs/ai-platform-logs?orgId=1&refresh=10s"
     explore_left = (
@@ -56,7 +67,7 @@ def get_integration_status(public_host: Optional[str] = None) -> Dict:
         "enabled": settings.grafana_enabled,
         "embed_enabled": settings.grafana_embed,
         "grafana_url": public_grafana,
-        "loki_url": loki_url,
+        "loki_url": public_loki,
         "dashboard_url": dashboard_url,
         "explore_url": explore_url,
         "embed_url": embed_url,

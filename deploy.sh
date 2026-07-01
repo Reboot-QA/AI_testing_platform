@@ -1116,6 +1116,8 @@ monitoring_status() {
   require_docker
   monitoring_write_env
   cd "$MONITORING_DIR"
+  local access_host
+  access_host="$(detect_access_host)"
   echo "========================================"
   echo "  Grafana + Loki 监控栈"
   echo "========================================"
@@ -1129,16 +1131,16 @@ monitoring_status() {
     echo
   fi
   if port_listening "$GRAFANA_PORT"; then
-    ok "Grafana  http://$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo 127.0.0.1):${GRAFANA_PORT}"
+    ok "Grafana  http://${access_host}:${GRAFANA_PORT}"
   else
     warn "Grafana 未监听 :${GRAFANA_PORT}"
   fi
   if port_listening "$LOKI_PORT"; then
-    ok "Loki     http://127.0.0.1:${LOKI_PORT}"
+    ok "Loki     http://${access_host}:${LOKI_PORT}"
   else
     warn "Loki 未监听 :${LOKI_PORT}"
   fi
-  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo 127.0.0.1):${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
+  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
 }
 
 monitoring_logs() {
