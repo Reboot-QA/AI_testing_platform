@@ -444,12 +444,51 @@ def _format_numbered_lines(text: Optional[str]) -> Optional[str]:
 
     value = re.sub(r"[；;]\s*(?=\d+\.)", "\n", value)
     value = re.sub(r"(?<=[^\n])\s+(?=\d+\.)", "\n", value)
-    return value
+    return value.strip()
+
+
+def _text_line_count(text: Optional[str], column_width: int) -> int:
+    content = _format_numbered_lines(text) or ""
+    if not content:
+        return 1
+    total = 0
+    for paragraph in content.split("\n"):
+        display_width = sum(2 if ord(char) > 127 else 1 for char in paragraph)
+        total += max(1, (display_width + column_width - 1) // column_width)
+    return max(1, total)
+
+
+def _autosize_excel_row(ws, row: int) -> None:
+    line_counts = [
+        _text_line_count(ws.cell(row, 6).value, 28),
+        _text_line_count(ws.cell(row, 7).value, 36),
+        _text_line_count(ws.cell(row, 8).value, 36),
+    ]
+    ws.row_dimensions[row].height = 15 * max(line_counts) + 4
 
 
 def _apply_multiline_cell_style(ws, row: int, column: int, value: Optional[str]) -> None:
     cell = ws.cell(row, column, _format_numbered_lines(value))
     cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+
+def _configure_excel_sheet(ws) -> None:
+    column_widths = {
+        "A": 8,
+        "B": 14,
+        "C": 24,
+        "D": 10,
+        "E": 8,
+        "F": 28,
+        "G": 36,
+        "H": 36,
+        "I": 16,
+        "J": 12,
+        "K": 10,
+    }
+    for column, width in column_widths.items():
+        ws.column_dimensions[column].width = width
+    ws.row_dimensions[1].height = 18
 
 
 def _merge_requirement_column(ws, row_keys: List[Optional[int]], *, column: int = 2) -> None:
@@ -471,7 +510,7 @@ def _merge_requirement_column(ws, row_keys: List[Optional[int]], *, column: int 
                     end_row=end_row,
                     end_column=column,
                 )
-                ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=True)
+                ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=False)
             merge_start = index
             current_key = key
 
@@ -484,7 +523,7 @@ def _merge_requirement_column(ws, row_keys: List[Optional[int]], *, column: int 
             end_row=end_row,
             end_column=column,
         )
-        ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=True)
+        ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=False)
 
 
 @router.get("/export/excel")
@@ -513,6 +552,7 @@ def export_excel(
     ws.title = "测试用例"
     headers = ["ID", "需求点", "标题", "类型", "优先级", "前置条件", "步骤", "预期结果", "标签", "来源", "评审状态"]
     ws.append(headers)
+    _configure_excel_sheet(ws)
 
     merge_keys: List[Optional[int]] = []
     for case in cases:
@@ -530,6 +570,7 @@ def export_excel(
         ws.cell(row_num, 9, case.tags)
         ws.cell(row_num, 10, case.source)
         ws.cell(row_num, 11, case.review_status)
+        _autosize_excel_row(ws, row_num)
 
     _merge_requirement_column(ws, merge_keys, column=2)
 
