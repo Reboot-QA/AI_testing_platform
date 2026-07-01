@@ -7,6 +7,8 @@
 #   ./deploy.sh stop     停止前后端
 #   ./deploy.sh restart  重启
 #   ./deploy.sh status   查看运行状态
+#   ./deploy.sh ensure   检测并自动拉起已挂掉的服务
+#   ./deploy.sh logs     查看最近日志
 #   ./deploy.sh prod     构建前端并以生产模式启动后端
 #   ./deploy.sh update   从 Git 仓库拉取最新代码并更新依赖
 #   ./deploy.sh clone [目录]  首次部署：克隆仓库到指定目录
@@ -88,6 +90,8 @@ AI质量平台 - 一键部署脚本
   stop            停止前后端服务
   restart         重启前后端服务
   status          查看服务状态
+  ensure          检测服务，挂掉则自动重启（可配合 cron 定时执行）
+  logs [行数]     查看前后端最近日志 (默认 50 行)
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
@@ -98,6 +102,7 @@ AI质量平台 - 一键部署脚本
   FRONTEND_PORT   前端端口 (默认 5173)
   FRONTEND_HOST   前端监听地址 (默认 0.0.0.0)
   PUBLIC_HOST     外网访问地址 (默认自动检测本机 IP)
+  DEV_RELOAD      设为 1 时后端启用 --reload（Linux 服务器建议保持 0）
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
   GIT_BRANCH      拉取分支 (默认当前分支，否则 main)
@@ -573,6 +578,41 @@ is_running() {
   return 1
 }
 
+kill_process_tree() {
+  local pid="$1"
+  local child
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    kill_process_tree "$child"
+  done
+  kill "$pid" 2>/dev/null || true
+}
+
+backend_healthy() {
+  is_running "$BACKEND_PID_FILE" || return 1
+  port_listening "$BACKEND_PORT" || return 1
+  if command -v curl >/dev/null 2>&1; then
+    curl -sf "http://127.0.0.1:${BACKEND_PORT}/" >/dev/null 2>&1
+    return $?
+  fi
+  return 0
+}
+
+frontend_healthy() {
+  is_running "$FRONTEND_PID_FILE" || return 1
+  port_listening "$FRONTEND_PORT"
+}
+
+show_log_tail() {
+  local name="$1"
+  local file="$2"
+  local lines="${3:-20}"
+  if [[ -f "$file" ]]; then
+    echo "--- ${name} (最近 ${lines} 行: ${file}) ---"
+    tail -n "$lines" "$file" 2>/dev/null || true
+    echo
+  fi
+}
+
 stop_pid_file() {
   local name="$1"
   local pid_file="$2"
@@ -580,7 +620,7 @@ stop_pid_file() {
     local pid
     pid="$(cat "$pid_file")"
     info "停止 $name (PID $pid)..."
-    kill "$pid" 2>/dev/null || true
+    kill_process_tree "$pid"
     for _ in $(seq 1 10); do
       kill -0 "$pid" 2>/dev/null || break
       sleep 0.5
@@ -661,19 +701,27 @@ urllib.request.urlopen('${url}', timeout=2)
 }
 
 start_backend() {
-  if is_running "$BACKEND_PID_FILE"; then
+  if backend_healthy; then
     warn "后端已在运行 (PID $(cat "$BACKEND_PID_FILE"))"
     return 0
+  fi
+  if is_running "$BACKEND_PID_FILE"; then
+    warn "后端 PID 存在但服务不可用，正在重启..."
+    stop_pid_file "后端" "$BACKEND_PID_FILE"
   fi
   free_port "$BACKEND_PORT" "backend"
   ensure_backend_venv
   info "启动后端 http://${BACKEND_HOST}:${BACKEND_PORT} ..."
   cd "$BACKEND_DIR"
-  nohup "$PYTHON" -m uvicorn app.main:app \
-    --reload \
-    --host "$BACKEND_HOST" \
-    --port "$BACKEND_PORT" \
-    >>"$BACKEND_LOG" 2>&1 &
+  local -a uvicorn_args=(
+    -m uvicorn app.main:app
+    --host "$BACKEND_HOST"
+    --port "$BACKEND_PORT"
+  )
+  if [[ "${DEV_RELOAD:-0}" == "1" ]]; then
+    uvicorn_args+=(--reload)
+  fi
+  nohup "$PYTHON" "${uvicorn_args[@]}" >>"$BACKEND_LOG" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
   if ! wait_backend; then
     stop_pid_file "后端" "$BACKEND_PID_FILE"
@@ -686,9 +734,13 @@ start_frontend_dev() {
     warn "SKIP_FRONTEND=1，跳过前端启动"
     return 0
   fi
-  if is_running "$FRONTEND_PID_FILE"; then
+  if frontend_healthy; then
     warn "前端已在运行 (PID $(cat "$FRONTEND_PID_FILE"))"
     return 0
+  fi
+  if is_running "$FRONTEND_PID_FILE"; then
+    warn "前端 PID 存在但服务不可用，正在重启..."
+    stop_pid_file "前端" "$FRONTEND_PID_FILE"
   fi
   free_port "$FRONTEND_PORT" "frontend"
   detect_node
@@ -770,7 +822,7 @@ show_status() {
   echo "========================================"
   echo "  AI质量平台 - 服务状态"
   echo "========================================"
-  if is_running "$BACKEND_PID_FILE"; then
+  if backend_healthy; then
     ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE")"
     echo "       本机  http://127.0.0.1:${BACKEND_PORT}"
     [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${BACKEND_PORT}"
@@ -779,8 +831,9 @@ show_status() {
     echo "       占用进程: $(pids_on_port "$BACKEND_PORT" | tr '\n' ' ')"
   else
     warn "后端未运行"
+    show_log_tail "后端" "$BACKEND_LOG" 10
   fi
-  if is_running "$FRONTEND_PID_FILE"; then
+  if frontend_healthy; then
     ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE")"
     echo "       本机  http://127.0.0.1:${FRONTEND_PORT}"
     [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${FRONTEND_PORT}"
@@ -789,10 +842,50 @@ show_status() {
     echo "       占用进程: $(pids_on_port "$FRONTEND_PORT" | tr '\n' ' ')"
   else
     warn "前端未运行"
-    [[ -f "$FRONTEND_LOG" ]] && echo "       日志: $FRONTEND_LOG"
+    show_log_tail "前端" "$FRONTEND_LOG" 10
   fi
   echo "Python: $PYTHON"
   echo "日志: $LOG_DIR"
+  echo "恢复: ./deploy.sh restart  |  自动巡检: ./deploy.sh ensure"
+}
+
+show_logs() {
+  local lines="${1:-50}"
+  prepare_dirs
+  show_log_tail "后端" "$BACKEND_LOG" "$lines"
+  show_log_tail "前端" "$FRONTEND_LOG" "$lines"
+}
+
+ensure_services() {
+  prepare_dirs
+  local restarted=0
+
+  if ! backend_healthy; then
+    warn "后端未运行或不可用，正在拉起..."
+    if is_running "$BACKEND_PID_FILE"; then
+      stop_pid_file "后端" "$BACKEND_PID_FILE"
+    fi
+    free_port "$BACKEND_PORT" "backend"
+    start_backend
+    restarted=1
+  fi
+
+  if [[ "${SKIP_FRONTEND:-0}" != "1" ]] && ! frontend_healthy; then
+    warn "前端未运行或不可用，正在拉起..."
+    if is_running "$FRONTEND_PID_FILE"; then
+      stop_pid_file "前端" "$FRONTEND_PID_FILE"
+    fi
+    free_port "$FRONTEND_PORT" "frontend"
+    start_frontend_dev
+    restarted=1
+  fi
+
+  if [[ "$restarted" == "0" ]]; then
+    ok "前后端服务均正常"
+  else
+    ok "已尝试恢复异常服务"
+  fi
+  show_status
 }
 
 print_banner() {
@@ -837,6 +930,12 @@ main() {
       start_backend
       start_frontend_dev
       print_banner
+      ;;
+    ensure)
+      ensure_services
+      ;;
+    logs)
+      show_logs "${2:-50}"
       ;;
     status)
       prepare_dirs
