@@ -394,12 +394,44 @@ pull_latest() {
     exit 1
   }
 
+  preserve_local_database_for_pull
+
   git merge --ff-only "$remote_ref" || {
     error "拉取失败，请手动解决后重试"
     exit 1
   }
+  restore_local_database_after_pull
   ok "代码已更新: $(git log -1 --oneline)"
 }
+
+preserve_local_database_for_pull() {
+  local db="$ROOT/backend/ai_testcase.db"
+  local stash="$ROOT/.deploy/ai_testcase.db.pullbak"
+  mkdir -p "$ROOT/.deploy"
+  rm -f "$stash"
+
+  if [[ ! -f "$db" ]]; then
+    return 0
+  fi
+
+  if git ls-files --error-unmatch backend/ai_testcase.db >/dev/null 2>&1 \
+    && ! git diff --quiet HEAD -- backend/ai_testcase.db 2>/dev/null; then
+    warn "检测到本地数据库变更，更新时将保留本地数据"
+    cp "$db" "$stash"
+    git checkout HEAD -- backend/ai_testcase.db 2>/dev/null \
+      || git restore --source=HEAD -- backend/ai_testcase.db 2>/dev/null \
+      || true
+  fi
+}
+
+restore_local_database_after_pull() {
+  local db="$ROOT/backend/ai_testcase.db"
+  local stash="$ROOT/.deploy/ai_testcase.db.pullbak"
+
+  if [[ -f "$stash" ]]; then
+    mv "$stash" "$db"
+    ok "已恢复本地数据库"
+  fi
 
 clone_project() {
   local target="${1:-}"
