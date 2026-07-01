@@ -109,7 +109,7 @@ AI质量平台 - 一键部署脚本
   BACKEND_PORT    后端端口 (默认 8000)
   FRONTEND_PORT   前端端口 (默认 5173)
   FRONTEND_HOST   前端监听地址 (默认 0.0.0.0)
-  PUBLIC_HOST     外网访问地址 (默认自动检测本机 IP)
+  PUBLIC_HOST     外网访问地址 (默认自动检测公网 IP，可手动指定)
   DEV_RELOAD      设为 1 时后端启用 --reload（Linux 服务器建议保持 0）
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
@@ -133,32 +133,99 @@ AI质量平台 - 一键部署脚本
 EOF
 }
 
-detect_access_host() {
+is_private_ip() {
+  local ip="$1"
+  [[ "$ip" =~ ^127\. ]] && return 0
+  [[ "$ip" =~ ^10\. ]] && return 0
+  [[ "$ip" =~ ^192\.168\. ]] && return 0
+  [[ "$ip" =~ ^172\.(1[6-9]|2[0-9]|3[0-1])\. ]] && return 0
+  [[ "$ip" =~ ^169\.254\. ]] && return 0
+  return 1
+}
+
+detect_public_ip() {
+  local ip url
+  if command -v curl >/dev/null 2>&1; then
+    for url in "https://api.ipify.org" "https://ifconfig.me/ip" "http://icanhazip.com"; do
+      ip="$(curl -fsS --max-time 3 "$url" 2>/dev/null | tr -d '[:space:]')"
+      if [[ "$ip" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && ! is_private_ip "$ip"; then
+        echo "$ip"
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
+detect_lan_ip() {
+  local ip candidate
+  if command -v hostname >/dev/null 2>&1; then
+    for candidate in $(hostname -I 2>/dev/null); do
+      candidate="${candidate%%/*}"
+      [[ -z "$candidate" || "$candidate" == "127.0.0.1" ]] && continue
+      echo "$candidate"
+      return 0
+    done
+  fi
+  if command -v ip >/dev/null 2>&1; then
+    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") { print $(i+1); exit }}')"
+    if [[ -n "$ip" && "$ip" != "127.0.0.1" ]]; then
+      echo "$ip"
+      return 0
+    fi
+  fi
+  return 1
+}
+
+detect_public_host() {
   if [[ -n "$PUBLIC_HOST" ]]; then
     echo "$PUBLIC_HOST"
-    return
+    return 0
   fi
-  local ip=""
-  if command -v hostname >/dev/null 2>&1; then
-    ip="$(hostname -I 2>/dev/null | awk '{print $1}')"
+  detect_public_ip
+}
+
+detect_access_host() {
+  local host
+  host="$(detect_public_host 2>/dev/null || true)"
+  if [[ -n "$host" ]]; then
+    echo "$host"
+    return 0
   fi
-  if [[ -z "$ip" ]] && command -v ip >/dev/null 2>&1; then
-    ip="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i=1; i<=NF; i++) if ($i=="src") { print $(i+1); exit }}')"
-  fi
-  echo "${ip:-127.0.0.1}"
+  host="$(detect_lan_ip 2>/dev/null || true)"
+  echo "${host:-127.0.0.1}"
+}
+
+print_host_urls() {
+  local label="$1"
+  local host="$2"
+  echo "  ${label}:"
+  echo "    前端  http://${host}:${FRONTEND_PORT}"
+  echo "    后端  http://${host}:${BACKEND_PORT}"
+  echo "    文档  http://${host}:${BACKEND_PORT}/docs"
 }
 
 print_access_urls() {
-  local access_host
-  access_host="$(detect_access_host)"
+  local public_host lan_host
+  public_host="$(detect_public_host 2>/dev/null || true)"
+  lan_host="$(detect_lan_ip 2>/dev/null || true)"
+
   echo "  本机访问:"
   echo "    前端  http://127.0.0.1:${FRONTEND_PORT}"
   echo "    后端  http://127.0.0.1:${BACKEND_PORT}"
-  if [[ "$access_host" != "127.0.0.1" ]]; then
-    echo "  外网/局域网访问:"
-    echo "    前端  http://${access_host}:${FRONTEND_PORT}"
-    echo "    后端  http://${access_host}:${BACKEND_PORT}"
-    echo "    文档  http://${access_host}:${BACKEND_PORT}/docs"
+
+  if [[ -n "$public_host" ]]; then
+    print_host_urls "公网访问" "$public_host"
+  fi
+
+  if [[ -n "$lan_host" && "$lan_host" != "$public_host" ]]; then
+    print_host_urls "局域网访问" "$lan_host"
+  elif [[ -z "$public_host" && -n "$lan_host" ]]; then
+    print_host_urls "局域网访问" "$lan_host"
+  fi
+
+  if [[ -z "$public_host" && -z "$lan_host" ]]; then
+    warn "未能自动检测公网 IP，请手动指定: PUBLIC_HOST=你的公网IP ./deploy.sh restart"
   fi
 }
 
@@ -840,15 +907,17 @@ stop_all() {
 
 show_status() {
   detect_python
-  local access_host
-  access_host="$(detect_access_host)"
+  local public_host lan_host
+  public_host="$(detect_public_host 2>/dev/null || true)"
+  lan_host="$(detect_lan_ip 2>/dev/null || true)"
   echo "========================================"
   echo "  AI质量平台 - 服务状态"
   echo "========================================"
   if backend_healthy; then
     ok "后端运行中 PID=$(cat "$BACKEND_PID_FILE")"
     echo "       本机  http://127.0.0.1:${BACKEND_PORT}"
-    [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${BACKEND_PORT}"
+    [[ -n "$public_host" ]] && echo "       公网  http://${public_host}:${BACKEND_PORT}"
+    [[ -n "$lan_host" && "$lan_host" != "$public_host" ]] && echo "       局域网 http://${lan_host}:${BACKEND_PORT}"
   elif port_listening "$BACKEND_PORT"; then
     warn "后端 PID 文件缺失，但端口 ${BACKEND_PORT} 仍被占用"
     echo "       占用进程: $(pids_on_port "$BACKEND_PORT" | tr '\n' ' ')"
@@ -859,7 +928,8 @@ show_status() {
   if frontend_healthy; then
     ok "前端运行中 PID=$(cat "$FRONTEND_PID_FILE")"
     echo "       本机  http://127.0.0.1:${FRONTEND_PORT}"
-    [[ "$access_host" != "127.0.0.1" ]] && echo "       外网  http://${access_host}:${FRONTEND_PORT}"
+    [[ -n "$public_host" ]] && echo "       公网  http://${public_host}:${FRONTEND_PORT}"
+    [[ -n "$lan_host" && "$lan_host" != "$public_host" ]] && echo "       局域网 http://${lan_host}:${FRONTEND_PORT}"
   elif port_listening "$FRONTEND_PORT"; then
     warn "前端 PID 文件缺失，但端口 ${FRONTEND_PORT} 仍被占用"
     echo "       占用进程: $(pids_on_port "$FRONTEND_PORT" | tr '\n' ' ')"
@@ -942,8 +1012,10 @@ require_docker() {
 
 monitoring_env() {
   local access_host
-  access_host="$(detect_access_host)"
-  export LOG_DIR_HOST="$LOG_DIR"
+  access_host="$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo "127.0.0.1")"
+  prepare_dirs
+  mkdir -p "$LOG_DIR"
+  export LOG_DIR_HOST="$(cd "$LOG_DIR" && pwd)"
   export LOG_DIR_CONTAINER="/var/log/ai-platform"
   export GRAFANA_PORT
   export LOKI_PORT
@@ -952,16 +1024,27 @@ monitoring_env() {
   export GRAFANA_ROOT_URL="${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}"
 }
 
+monitoring_validate() {
+  monitoring_env
+  if [[ -z "$LOG_DIR_HOST" ]]; then
+    error "LOG_DIR_HOST 未设置，请使用: ./deploy.sh monitoring start"
+    exit 1
+  fi
+  if [[ ! -d "$LOG_DIR_HOST" ]]; then
+    error "日志目录不存在: $LOG_DIR_HOST"
+    error "请先启动应用: ./deploy.sh start"
+    exit 1
+  fi
+}
+
 monitoring_start() {
   require_docker
-  prepare_dirs
-  mkdir -p "$LOG_DIR"
-  monitoring_env
+  monitoring_validate
   info "启动 Grafana + Loki + Promtail ..."
   info "  日志目录: $LOG_DIR_HOST -> $LOG_DIR_CONTAINER"
   info "  Grafana:  ${GRAFANA_ROOT_URL}"
   cd "$MONITORING_DIR"
-  docker compose up -d
+  LOG_DIR_HOST="$LOG_DIR_HOST" docker compose up -d
   ok "监控栈已启动"
   monitoring_status
   warn "Grafana 默认账号: ${GRAFANA_ADMIN_USER} / ${GRAFANA_ADMIN_PASSWORD} （生产环境请修改）"
@@ -970,6 +1053,7 @@ monitoring_start() {
 
 monitoring_stop() {
   require_docker
+  monitoring_env
   cd "$MONITORING_DIR"
   docker compose down
   ok "监控栈已停止"
@@ -982,6 +1066,7 @@ monitoring_restart() {
 
 monitoring_status() {
   require_docker
+  monitoring_env
   cd "$MONITORING_DIR"
   echo "========================================"
   echo "  Grafana + Loki 监控栈"
@@ -989,7 +1074,7 @@ monitoring_status() {
   docker compose ps
   echo
   if port_listening "$GRAFANA_PORT"; then
-    ok "Grafana  http://$(detect_access_host):${GRAFANA_PORT}"
+    ok "Grafana  http://$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo 127.0.0.1):${GRAFANA_PORT}"
   else
     warn "Grafana 未监听 :${GRAFANA_PORT}"
   fi
@@ -998,11 +1083,12 @@ monitoring_status() {
   else
     warn "Loki 未监听 :${LOKI_PORT}"
   fi
-  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://$(detect_access_host):${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
+  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo 127.0.0.1):${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
 }
 
 monitoring_logs() {
   require_docker
+  monitoring_env
   cd "$MONITORING_DIR"
   docker compose logs --tail="${1:-100}" -f
 }

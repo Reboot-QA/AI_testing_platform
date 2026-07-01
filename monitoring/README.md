@@ -10,10 +10,14 @@
 ## 快速启动
 
 ```bash
-# 在项目根目录
+# 在项目根目录（必须用 deploy.sh，不要直接 docker compose）
+./deploy.sh start
 ./deploy.sh monitoring start
 ./deploy.sh monitoring status
 ```
+
+> 若手动执行 `docker compose`，需先设置绝对路径：
+> `export LOG_DIR_HOST=/opt/AI_testing_platform/.deploy/logs`
 
 ## 访问地址
 
