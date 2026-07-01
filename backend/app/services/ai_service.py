@@ -9,6 +9,7 @@ from app.services.document_service import split_document_chunks
 
 SYSTEM_PROMPT = """你是一位资深测试工程师。根据用户提供的需求描述，生成结构化测试用例。
 每条用例必须包含：title、priority(P0/P1/P2/P3)、preconditions、steps、expected_results、tags。
+steps、preconditions、expected_results、tags 必须是字符串（不要用 JSON 数组）；步骤请用「1. 2. 3.」编号写在同一个字符串里，换行分隔。
 所有字段内容必须使用简体中文撰写，不要输出英文标题或英文步骤（priority 字段除外，仍使用 P0/P1/P2/P3）。
 只输出 JSON，格式为 {"testcases":[{"title":"...","priority":"P0","preconditions":"...","steps":"...","expected_results":"...","tags":"..."}]}，不要包含 markdown 代码块或其他说明文字。"""
 
@@ -128,6 +129,41 @@ def build_generation_tasks(
     ]
 
 
+def _normalize_text_field(value: Any) -> Optional[str]:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        text = value.strip()
+        return text or None
+    if isinstance(value, list):
+        lines: List[str] = []
+        for index, item in enumerate(value, start=1):
+            text = str(item).strip()
+            if not text:
+                continue
+            if re.match(r"^\d+\.", text):
+                lines.append(text)
+            else:
+                lines.append(f"{index}. {text}")
+        return "\n".join(lines) if lines else None
+    if isinstance(value, dict):
+        return json.dumps(value, ensure_ascii=False)
+    text = str(value).strip()
+    return text or None
+
+
+def normalize_testcase_item(item: Dict[str, Any]) -> Dict[str, Any]:
+    normalized = dict(item)
+    for field in ("preconditions", "steps", "expected_results", "tags"):
+        if field in normalized:
+            normalized[field] = _normalize_text_field(normalized[field])
+    title = str(normalized.get("title") or "未命名用例").strip()
+    normalized["title"] = title or "未命名用例"
+    priority = str(normalized.get("priority") or "P1").strip().upper()
+    normalized["priority"] = priority if priority in {"P0", "P1", "P2", "P3"} else "P1"
+    return normalized
+
+
 def _parse_llm_response(content: str) -> List[Dict]:
     content = content.strip()
     if not content:
@@ -151,10 +187,16 @@ def _parse_llm_response(content: str) -> List[Dict]:
             raise ValueError("LLM 返回内容不是有效 JSON") from None
 
     if isinstance(data, dict) and "testcases" in data:
-        return data["testcases"]
-    if isinstance(data, list):
-        return data
-    raise ValueError("LLM 返回格式不符合预期，需要 JSON 数组或包含 testcases 字段的对象")
+        cases = data["testcases"]
+    elif isinstance(data, list):
+        cases = data
+    else:
+        raise ValueError("LLM 返回格式不符合预期，需要 JSON 数组或包含 testcases 字段的对象")
+
+    if not isinstance(cases, list):
+        raise ValueError("LLM 返回格式不符合预期，testcases 必须是数组")
+
+    return [normalize_testcase_item(case) for case in cases if isinstance(case, dict)]
 
 
 def _parse_requirements_response(content: str) -> List[Dict]:
