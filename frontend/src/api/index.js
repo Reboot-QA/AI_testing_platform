@@ -246,6 +246,7 @@ export const apiAutomationApi = {
 export const logsApi = {
   sources: () => request.get('/logs/sources'),
   tail: (params = {}) => request.get('/logs/tail', { params }),
+  integrations: (params = {}) => request.get('/logs/integrations', { params }),
 }
 
 export default request

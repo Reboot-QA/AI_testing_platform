@@ -12,6 +12,7 @@
 #   ./deploy.sh prod     构建前端并以生产模式启动后端
 #   ./deploy.sh update   从 Git 仓库拉取最新代码并更新依赖
 #   ./deploy.sh clone [目录]  首次部署：克隆仓库到指定目录
+#   ./deploy.sh monitoring start  启动 Grafana + Loki 监控栈
 
 set -euo pipefail
 
@@ -33,6 +34,12 @@ BACKEND_PORT="${BACKEND_PORT:-8000}"
 FRONTEND_HOST="${FRONTEND_HOST:-0.0.0.0}"
 FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 PUBLIC_HOST="${PUBLIC_HOST:-}"
+
+MONITORING_DIR="$ROOT/monitoring"
+GRAFANA_PORT="${GRAFANA_PORT:-3000}"
+LOKI_PORT="${LOKI_PORT:-3100}"
+GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER:-admin}"
+GRAFANA_ADMIN_PASSWORD="${GRAFANA_ADMIN_PASSWORD:-admin123}"
 
 # 运行时 Python（优先使用 backend/venv）
 PYTHON=""
@@ -95,6 +102,7 @@ AI质量平台 - 一键部署脚本
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
+  monitoring      Grafana + Loki 监控栈 (start|stop|restart|status|logs)
 
 环境变量:
   BACKEND_HOST    后端监听地址 (默认 0.0.0.0)
@@ -106,6 +114,8 @@ AI质量平台 - 一键部署脚本
   SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
   GIT_BRANCH      拉取分支 (默认当前分支，否则 main)
+  GRAFANA_PORT    Grafana 端口 (默认 3000)
+  LOKI_PORT       Loki 端口 (默认 3100)
 
 首次部署示例:
   git clone $GIT_REPO_URL
@@ -565,6 +575,16 @@ prepare_dirs() {
   mkdir -p "$LOG_DIR" "$PID_DIR"
 }
 
+append_log_marker() {
+  local name="$1"
+  local file="$2"
+  mkdir -p "$(dirname "$file")"
+  {
+    echo ""
+    echo "======== $(date '+%Y-%m-%d %H:%M:%S') [$name] 服务启动（追加日志，保留历史） ========"
+  } >>"$file"
+}
+
 is_running() {
   local pid_file="$1"
   if [[ -f "$pid_file" ]]; then
@@ -721,6 +741,7 @@ start_backend() {
   if [[ "${DEV_RELOAD:-0}" == "1" ]]; then
     uvicorn_args+=(--reload)
   fi
+  append_log_marker "backend" "$BACKEND_LOG"
   nohup "$PYTHON" "${uvicorn_args[@]}" >>"$BACKEND_LOG" 2>&1 &
   echo $! >"$BACKEND_PID_FILE"
   if ! wait_backend; then
@@ -752,6 +773,7 @@ start_frontend_dev() {
     exit 1
   fi
   # 用 node 直接启动，避免 node_modules/.bin/vite 无执行权限 (Permission denied)
+  append_log_marker "frontend" "$FRONTEND_LOG"
   nohup node "$vite_js" --host "$FRONTEND_HOST" --port "$FRONTEND_PORT" \
     >>"$FRONTEND_LOG" 2>&1 &
   echo $! >"$FRONTEND_PID_FILE"
@@ -770,6 +792,7 @@ start_backend_prod() {
   ensure_backend_venv
   info "生产模式启动后端..."
   cd "$BACKEND_DIR"
+  append_log_marker "backend-prod" "$BACKEND_LOG"
   nohup "$PYTHON" -m uvicorn app.main:app \
     --host "$BACKEND_HOST" \
     --port "$BACKEND_PORT" \
@@ -906,6 +929,100 @@ EOF
   print_firewall_hint
 }
 
+require_docker() {
+  if ! command -v docker >/dev/null 2>&1; then
+    error "未找到 docker，请先安装 Docker: https://docs.docker.com/engine/install/"
+    exit 1
+  fi
+  if ! docker compose version >/dev/null 2>&1; then
+    error "未找到 docker compose 插件，请安装 Docker Compose v2"
+    exit 1
+  fi
+}
+
+monitoring_env() {
+  local access_host
+  access_host="$(detect_access_host)"
+  export LOG_DIR_HOST="$LOG_DIR"
+  export LOG_DIR_CONTAINER="/var/log/ai-platform"
+  export GRAFANA_PORT
+  export LOKI_PORT
+  export GRAFANA_ADMIN_USER
+  export GRAFANA_ADMIN_PASSWORD
+  export GRAFANA_ROOT_URL="${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}"
+}
+
+monitoring_start() {
+  require_docker
+  prepare_dirs
+  mkdir -p "$LOG_DIR"
+  monitoring_env
+  info "启动 Grafana + Loki + Promtail ..."
+  info "  日志目录: $LOG_DIR_HOST -> $LOG_DIR_CONTAINER"
+  info "  Grafana:  ${GRAFANA_ROOT_URL}"
+  cd "$MONITORING_DIR"
+  docker compose up -d
+  ok "监控栈已启动"
+  monitoring_status
+  warn "Grafana 默认账号: ${GRAFANA_ADMIN_USER} / ${GRAFANA_ADMIN_PASSWORD} （生产环境请修改）"
+  warn "安全组需放行端口 ${GRAFANA_PORT}、${LOKI_PORT}（如需外网访问 Grafana）"
+}
+
+monitoring_stop() {
+  require_docker
+  cd "$MONITORING_DIR"
+  docker compose down
+  ok "监控栈已停止"
+}
+
+monitoring_restart() {
+  monitoring_stop
+  monitoring_start
+}
+
+monitoring_status() {
+  require_docker
+  cd "$MONITORING_DIR"
+  echo "========================================"
+  echo "  Grafana + Loki 监控栈"
+  echo "========================================"
+  docker compose ps
+  echo
+  if port_listening "$GRAFANA_PORT"; then
+    ok "Grafana  http://$(detect_access_host):${GRAFANA_PORT}"
+  else
+    warn "Grafana 未监听 :${GRAFANA_PORT}"
+  fi
+  if port_listening "$LOKI_PORT"; then
+    ok "Loki     http://127.0.0.1:${LOKI_PORT}"
+  else
+    warn "Loki 未监听 :${LOKI_PORT}"
+  fi
+  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://$(detect_access_host):${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
+}
+
+monitoring_logs() {
+  require_docker
+  cd "$MONITORING_DIR"
+  docker compose logs --tail="${1:-100}" -f
+}
+
+monitoring_main() {
+  local action="${1:-status}"
+  case "$action" in
+    start) monitoring_start ;;
+    stop) monitoring_stop ;;
+    restart) monitoring_restart ;;
+    status) monitoring_status ;;
+    logs) monitoring_logs "${2:-100}" ;;
+    *)
+      error "未知 monitoring 子命令: $action"
+      echo "用法: $0 monitoring [start|stop|restart|status|logs]"
+      exit 1
+      ;;
+  esac
+}
+
 main() {
   local cmd="${1:-start}"
   case "$cmd" in
@@ -949,6 +1066,9 @@ main() {
       ;;
     clone)
       clone_project "${2:-}"
+      ;;
+    monitoring)
+      monitoring_main "${2:-status}"
       ;;
     *)
       error "未知命令: $cmd"

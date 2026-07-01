@@ -1,6 +1,8 @@
 <template>
   <div class="log-monitor">
-    <el-row :gutter="16" class="stats-row">
+    <el-tabs v-model="activeTab" class="monitor-tabs">
+      <el-tab-pane label="内置监控" name="builtin">
+        <el-row :gutter="16" class="stats-row">
       <el-col v-for="item in sources" :key="item.key" :xs="24" :sm="8">
         <el-card shadow="never" class="stat-card" :class="{ active: activeSource === item.key }" @click="switchSource(item.key)">
           <div class="stat-title">{{ item.label }}</div>
@@ -78,6 +80,87 @@
         </div>
       </div>
     </el-card>
+      </el-tab-pane>
+
+      <el-tab-pane label="Grafana Loki" name="grafana">
+        <el-card shadow="never" v-loading="integrationLoading">
+          <template #header>
+            <div class="grafana-header">
+              <span>Grafana + Loki 外部日志平台</span>
+              <el-button :loading="integrationLoading" @click="loadIntegrations">
+                <el-icon><Refresh /></el-icon>
+                刷新状态
+              </el-button>
+            </div>
+          </template>
+
+          <el-row :gutter="16" class="integration-stats">
+            <el-col :xs="24" :sm="8">
+              <el-card shadow="never" class="integration-card">
+                <div class="integration-title">Grafana</div>
+                <el-tag :type="integrations.grafana_online ? 'success' : 'danger'" size="small">
+                  {{ integrations.grafana_online ? '在线' : '离线' }}
+                </el-tag>
+                <div class="integration-url">{{ integrations.grafana_url || '-' }}</div>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :sm="8">
+              <el-card shadow="never" class="integration-card">
+                <div class="integration-title">Loki</div>
+                <el-tag :type="integrations.loki_online ? 'success' : 'danger'" size="small">
+                  {{ integrations.loki_online ? '在线' : '离线' }}
+                </el-tag>
+                <div class="integration-url">{{ integrations.loki_url || '-' }}</div>
+              </el-card>
+            </el-col>
+            <el-col :xs="24" :sm="8">
+              <el-card shadow="never" class="integration-card">
+                <div class="integration-title">采集状态</div>
+                <el-tag :type="integrations.monitoring_online ? 'success' : 'warning'" size="small">
+                  {{ integrations.monitoring_online ? '监控栈正常' : '未启动或异常' }}
+                </el-tag>
+                <div class="integration-url">Promtail → Loki → Grafana</div>
+              </el-card>
+            </el-col>
+          </el-row>
+
+          <div class="grafana-actions">
+            <el-button type="primary" :disabled="!integrations.dashboard_url" @click="openUrl(integrations.dashboard_url)">
+              打开 Grafana 仪表盘
+            </el-button>
+            <el-button :disabled="!integrations.explore_url" @click="openUrl(integrations.explore_url)">
+              打开 Explore 查询
+            </el-button>
+            <el-button :disabled="!integrations.grafana_url" @click="openUrl(integrations.grafana_url)">
+              打开 Grafana 控制台
+            </el-button>
+          </div>
+
+          <el-alert
+            v-if="!integrations.monitoring_online"
+            class="setup-alert"
+            type="info"
+            show-icon
+            :closable="false"
+            title="监控栈尚未启动"
+          >
+            <template #default>
+              <p>在 Linux 服务器上执行以下命令启动 Grafana + Loki + Promtail：</p>
+              <pre class="setup-code">{{ integrations.startup_hint || './deploy.sh monitoring start' }}</pre>
+              <p>默认 Grafana 账号：admin / admin123（请在生产环境修改密码）</p>
+              <p>详细说明见项目目录 <code>monitoring/README.md</code></p>
+            </template>
+          </el-alert>
+
+          <iframe
+            v-if="showEmbed && integrations.embed_url"
+            class="grafana-embed"
+            :src="integrations.embed_url"
+            title="Grafana Dashboard"
+          />
+        </el-card>
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
@@ -98,9 +181,29 @@ const autoScroll = ref(true)
 const displayLines = ref([])
 const totalMatched = ref(0)
 const logContainerRef = ref(null)
+const activeTab = ref('builtin')
+const integrationLoading = ref(false)
+const integrations = ref({
+  enabled: true,
+  embed_enabled: true,
+  grafana_url: '',
+  loki_url: '',
+  dashboard_url: '',
+  explore_url: '',
+  embed_url: '',
+  grafana_online: false,
+  loki_online: false,
+  monitoring_online: false,
+  startup_hint: './deploy.sh monitoring start',
+})
 
 let streamAbort = null
 let refreshTimer = null
+let integrationTimer = null
+
+const showEmbed = computed(
+  () => integrations.value.embed_enabled && integrations.value.monitoring_online && integrations.value.embed_url
+)
 
 const sourceOptions = computed(() =>
   sources.value.map((item) => ({ label: item.label, value: item.key }))
@@ -246,10 +349,24 @@ async function downloadLog() {
   URL.revokeObjectURL(url)
 }
 
+async function loadIntegrations() {
+  integrationLoading.value = true
+  try {
+    integrations.value = await logsApi.integrations()
+  } finally {
+    integrationLoading.value = false
+  }
+}
+
+function openUrl(url) {
+  if (!url) return
+  window.open(url, '_blank', 'noopener,noreferrer')
+}
+
 onMounted(async () => {
   loading.value = true
   try {
-    await loadSources()
+    await Promise.all([loadSources(), loadIntegrations()])
     if (liveMode.value) {
       await startStream()
     } else {
@@ -261,6 +378,7 @@ onMounted(async () => {
         await refreshLogs()
       }
     }, 10000)
+    integrationTimer = window.setInterval(loadIntegrations, 15000)
   } finally {
     loading.value = false
   }
@@ -270,6 +388,9 @@ onBeforeUnmount(() => {
   stopStream()
   if (refreshTimer) {
     clearInterval(refreshTimer)
+  }
+  if (integrationTimer) {
+    clearInterval(integrationTimer)
   }
 })
 </script>
@@ -402,5 +523,64 @@ onBeforeUnmount(() => {
 .level-debug .line-level,
 .level-debug .line-text {
   color: #86efac;
+}
+
+.monitor-tabs {
+  --el-tabs-header-height: 44px;
+}
+
+.grafana-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.integration-stats {
+  margin-bottom: 16px;
+}
+
+.integration-card {
+  min-height: 110px;
+}
+
+.integration-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.integration-url {
+  margin-top: 10px;
+  color: #909399;
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.grafana-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.setup-alert {
+  margin-bottom: 16px;
+}
+
+.setup-code {
+  margin: 8px 0;
+  padding: 10px 12px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+}
+
+.grafana-embed {
+  width: 100%;
+  height: 720px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #111;
 }
 </style>

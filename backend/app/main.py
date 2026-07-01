@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import logging
-from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -18,31 +17,22 @@ from app.services.schedule_service import init_schedules_on_startup, start_sched
 
 
 def setup_logging() -> None:
+    """配置日志输出到 stdout，由 deploy.sh 以追加方式写入 backend.log，部署时不覆盖历史。"""
     project_root = Path(__file__).resolve().parent.parent.parent
     log_dir = Path(settings.log_dir) if settings.log_dir else project_root / ".deploy" / "logs"
     if not log_dir.is_absolute():
         log_dir = (project_root / log_dir).resolve()
     log_dir.mkdir(parents=True, exist_ok=True)
-    log_file = log_dir / "backend.log"
 
     root_logger = logging.getLogger()
+    if root_logger.handlers:
+        return
     root_logger.setLevel(logging.INFO)
     formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
 
-    if not any(isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
-        file_handler = RotatingFileHandler(
-            log_file,
-            maxBytes=10 * 1024 * 1024,
-            backupCount=5,
-            encoding="utf-8",
-        )
-        file_handler.setFormatter(formatter)
-        root_logger.addHandler(file_handler)
-
-    if not any(isinstance(handler, logging.StreamHandler) and not isinstance(handler, RotatingFileHandler) for handler in root_logger.handlers):
-        console_handler = logging.StreamHandler()
-        console_handler.setFormatter(formatter)
-        root_logger.addHandler(console_handler)
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    root_logger.addHandler(console_handler)
 
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 

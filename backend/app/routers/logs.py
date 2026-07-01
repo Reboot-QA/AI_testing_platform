@@ -6,8 +6,17 @@ from fastapi.responses import FileResponse, StreamingResponse
 from app.auth import get_current_admin
 from app.models.user import User
 from app.services import log_service
+from app.services.log_integration_service import get_integration_status
 
 router = APIRouter(prefix="/logs", tags=["日志监控"])
+
+
+@router.get("/integrations")
+def log_integrations(
+    public_host: Optional[str] = Query(None, max_length=200),
+    _: User = Depends(get_current_admin),
+):
+    return get_integration_status(public_host=public_host)
 
 
 @router.get("/sources")

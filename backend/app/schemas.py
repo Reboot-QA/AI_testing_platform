@@ -216,6 +216,13 @@ class TestCaseOut(TestCaseBase):
         from_attributes = True
 
 
+class TestCasePageOut(BaseModel):
+    items: List[TestCaseOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class AIGenerateRequest(BaseModel):
     project_id: int
     requirement_id: Optional[int] = None

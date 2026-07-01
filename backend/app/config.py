@@ -15,6 +15,13 @@ class Settings(BaseSettings):
 
     log_dir: str = ""
 
+    grafana_enabled: bool = True
+    grafana_url: str = ""
+    grafana_port: int = 3000
+    grafana_embed: bool = True
+    loki_url: str = ""
+    loki_port: int = 3100
+
     class Config:
         env_file = ".env"
 

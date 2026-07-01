@@ -3,7 +3,7 @@ import json
 from io import BytesIO
 from urllib.parse import quote
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
@@ -25,6 +25,7 @@ from app.schemas import (
     TestCaseBatchReviewUpdate,
     TestCaseCreate,
     TestCaseOut,
+    TestCasePageOut,
     TestCaseUpdate,
 )
 from app.services.ai_service import build_generation_tasks, generate_testcases, stream_generate_batches
@@ -194,11 +195,13 @@ def _build_generation_tasks(ctx: Dict[str, Any], total_count: int) -> List[Dict[
     return build_generation_tasks(req_items, manual_text, total_count)
 
 
-@router.get("", response_model=List[TestCaseOut])
+@router.get("", response_model=Union[List[TestCaseOut], TestCasePageOut])
 def list_testcases(
     project_id: int = Query(...),
     requirement_id: Optional[int] = Query(None),
     review_status: Optional[str] = Query(None),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -208,7 +211,14 @@ def list_testcases(
         query = query.filter(TestCase.requirement_id == requirement_id)
     if review_status:
         query = query.filter(TestCase.review_status == review_status)
-    return query.order_by(TestCase.id.desc()).all()
+    query = query.order_by(TestCase.id.desc())
+
+    if page is not None:
+        total = query.count()
+        items = query.offset((page - 1) * page_size).limit(page_size).all()
+        return TestCasePageOut(items=items, total=total, page=page, page_size=page_size)
+
+    return query.all()
 
 
 @router.post("", response_model=TestCaseOut)

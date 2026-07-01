@@ -211,8 +211,11 @@ def stream_log_events(source: str, poll_interval: float = 1.0) -> Generator[str,
 
             current_size = path.stat().st_size
             if current_size < last_size:
-                last_size = 0
-                yield _sse_payload({"type": "reset", "message": "日志文件已轮转或截断"})
+                # 日志轮转或外部截断时，从当前文件末尾继续监听，不重读历史
+                last_size = current_size
+                yield _sse_payload({"type": "rotate", "message": "日志文件已轮转，继续监听新内容"})
+                time.sleep(poll_interval)
+                continue
 
             if current_size > last_size:
                 with path.open("r", encoding="utf-8", errors="replace") as handle:

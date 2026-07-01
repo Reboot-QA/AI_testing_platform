@@ -1,10 +1,10 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-select v-model="projectId" placeholder="选择项目" style="width: 200px" @change="loadData">
+      <el-select v-model="projectId" placeholder="选择项目" style="width: 200px" @change="handleFilterChange">
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-select v-model="filterStatus" placeholder="评审状态" clearable style="width: 140px" @change="loadData">
+      <el-select v-model="filterStatus" placeholder="评审状态" clearable style="width: 140px" @change="handleFilterChange">
         <el-option label="草稿" value="draft" />
         <el-option label="待评审" value="pending" />
         <el-option label="已通过" value="approved" />
@@ -92,6 +92,19 @@
       </el-table-column>
     </el-table>
 
+    <div class="pagination-bar">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="loadData"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
+
     <!-- 新建/编辑 -->
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用例' : '添加用例'" width="640px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -156,6 +169,9 @@ const selectedRows = ref([])
 const selectedIds = ref([])
 const projectId = ref(null)
 const filterStatus = ref('')
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
 const loading = ref(false)
 const batchReviewing = ref(false)
 const dialogVisible = ref(false)
@@ -222,14 +238,37 @@ async function loadData() {
   if (!projectId.value) return
   loading.value = true
   try {
-    const params = { project_id: projectId.value }
+    const params = {
+      project_id: projectId.value,
+      page: currentPage.value,
+      page_size: pageSize.value,
+    }
     if (filterStatus.value) params.review_status = filterStatus.value
-    testcases.value = await testcaseApi.list(params)
+    const data = await testcaseApi.list(params)
+    testcases.value = data.items || []
+    total.value = data.total || 0
+    const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage
+      if (maxPage !== params.page) {
+        return loadData()
+      }
+    }
     selectedRows.value = []
     selectedIds.value = []
   } finally {
     loading.value = false
   }
+}
+
+function handleFilterChange() {
+  currentPage.value = 1
+  loadData()
+}
+
+function handlePageSizeChange() {
+  currentPage.value = 1
+  loadData()
 }
 
 function openDialog(row = null) {
@@ -355,5 +394,11 @@ onMounted(loadProjects)
   font-family: inherit;
   margin: 0;
   line-height: 1.6;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>
