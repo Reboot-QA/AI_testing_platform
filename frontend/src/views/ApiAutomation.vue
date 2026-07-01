@@ -118,6 +118,9 @@
                     <el-button :disabled="!suiteId" @click="openImportDialog()">
                       <el-icon><Upload /></el-icon> 导入抓包
                     </el-button>
+                    <el-button :disabled="!suiteId" @click="openSwaggerDialog()">
+                      <el-icon><Upload /></el-icon> 导入 Swagger
+                    </el-button>
                     <el-button
                       type="success"
                       :disabled="!suiteId || running"
@@ -425,6 +428,94 @@
       </template>
     </el-dialog>
 
+    <!-- Swagger 导入 -->
+    <el-dialog v-model="swaggerDialogVisible" title="导入 Swagger 文档" width="760px">
+      <el-alert
+        title="支持 OpenAPI 2.0 / 3.x 的 JSON 或 YAML，可从文档内容或 URL 解析接口并批量生成用例"
+        type="info"
+        :closable="false"
+        show-icon
+        class="import-tip"
+      />
+      <el-form label-width="100px" class="import-form">
+        <el-form-item label="数据来源">
+          <div class="swagger-source-group">
+            <div
+              class="swagger-source-card"
+              :class="{ active: swaggerSourceType === 'content' }"
+              @click="swaggerSourceType = 'content'"
+            >
+              <div class="source-card-main">
+                <span class="source-card-icon">{{ '{}' }}</span>
+                <span class="source-card-label">Swagger</span>
+              </div>
+              <span class="source-card-radio" :class="{ checked: swaggerSourceType === 'content' }" />
+            </div>
+            <div
+              class="swagger-source-card"
+              :class="{ active: swaggerSourceType === 'url' }"
+              @click="swaggerSourceType = 'url'"
+            >
+              <div class="source-card-main">
+                <span class="source-card-icon">{{ '{}' }}</span>
+                <span class="source-card-label">Swagger URL</span>
+              </div>
+              <span class="source-card-radio" :class="{ checked: swaggerSourceType === 'url' }" />
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item v-if="swaggerSourceType === 'content'" label="文档内容">
+          <el-input
+            v-model="swaggerRawText"
+            type="textarea"
+            :rows="12"
+            placeholder="粘贴 Swagger / OpenAPI JSON 或 YAML..."
+          />
+        </el-form-item>
+        <el-form-item v-else label="文档 URL">
+          <el-input
+            v-model="swaggerUrl"
+            placeholder="https://example.com/v3/api-docs 或 swagger.json"
+          />
+        </el-form-item>
+        <el-form-item label="Base URL">
+          <el-input
+            v-model="swaggerBaseUrl"
+            placeholder="可选，文档未配置 servers/host 时可手动指定，如 https://api.example.com"
+          />
+        </el-form-item>
+        <el-form-item label="自动环境">
+          <el-switch v-model="swaggerAutoEnv" />
+          <span class="form-tip inline-tip">根据 Swagger servers/host 自动创建/关联环境 Base URL</span>
+        </el-form-item>
+      </el-form>
+
+      <div v-if="swaggerPreview.length" class="import-preview">
+        <div class="preview-title">解析预览（{{ swaggerPreview.length }} 条）</div>
+        <el-table :data="swaggerPreview" size="small" border max-height="280">
+          <el-table-column prop="name" label="用例名称" min-width="140" />
+          <el-table-column prop="method" label="方法" width="80" />
+          <el-table-column prop="path" label="路径" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="base_url" label="Base URL" min-width="180" show-overflow-tooltip />
+        </el-table>
+      </div>
+
+      <template #footer>
+        <el-button @click="swaggerDialogVisible = false">取消</el-button>
+        <el-button :disabled="!canParseSwagger" :loading="swaggerParsing" @click="handleParseSwagger">
+          解析预览
+        </el-button>
+        <el-button
+          type="primary"
+          :disabled="!swaggerPreview.length"
+          :loading="swaggerSaving"
+          @click="handleImportSwagger"
+        >
+          确认导入
+        </el-button>
+      </template>
+    </el-dialog>
+
     <!-- 定时任务对话框 -->
     <el-dialog v-model="scheduleDialogVisible" :title="scheduleEditing ? '编辑定时任务' : '新建定时任务'" width="560px">
       <el-form ref="scheduleFormRef" :model="scheduleForm" :rules="scheduleRules" label-width="100px">
@@ -628,6 +719,7 @@ const folderDialogVisible = ref(false)
 const suiteDialogVisible = ref(false)
 const reportVisible = ref(false)
 const importDialogVisible = ref(false)
+const swaggerDialogVisible = ref(false)
 const scheduleDialogVisible = ref(false)
 
 const envEditing = ref(null)
@@ -641,6 +733,8 @@ const suiteSaving = ref(false)
 const reportDetailLoading = ref(false)
 const importParsing = ref(false)
 const importSaving = ref(false)
+const swaggerParsing = ref(false)
+const swaggerSaving = ref(false)
 const scheduleSaving = ref(false)
 const scheduleTogglingId = ref(null)
 const scheduleRunningId = ref(null)
@@ -649,6 +743,21 @@ const importRawText = ref('')
 const importCaseName = ref('')
 const importAutoEnv = ref(true)
 const importPreview = ref([])
+
+const swaggerSourceType = ref('content')
+const swaggerRawText = ref('')
+const swaggerUrl = ref('')
+const swaggerBaseUrl = ref('')
+const swaggerAutoEnv = ref(true)
+const swaggerPreview = ref([])
+
+const canParseSwagger = computed(() => {
+  if (!suiteId.value) return false
+  if (swaggerSourceType.value === 'url') {
+    return Boolean(swaggerUrl.value.trim())
+  }
+  return Boolean(swaggerRawText.value.trim())
+})
 
 const reportDetail = ref(null)
 const expandedSteps = ref([])
@@ -1474,6 +1583,64 @@ async function handleImportCapture() {
   }
 }
 
+function openSwaggerDialog() {
+  swaggerSourceType.value = 'content'
+  swaggerRawText.value = ''
+  swaggerUrl.value = ''
+  swaggerBaseUrl.value = ''
+  swaggerAutoEnv.value = true
+  swaggerPreview.value = []
+  swaggerDialogVisible.value = true
+}
+
+function buildSwaggerPayload(preview) {
+  return {
+    suite_id: suiteId.value,
+    source_type: swaggerSourceType.value,
+    raw_text: swaggerSourceType.value === 'content' ? swaggerRawText.value : undefined,
+    swagger_url: swaggerSourceType.value === 'url' ? swaggerUrl.value : undefined,
+    base_url: swaggerBaseUrl.value || undefined,
+    auto_environment: swaggerAutoEnv.value,
+    preview,
+  }
+}
+
+async function handleParseSwagger() {
+  if (!canParseSwagger.value) return
+  swaggerParsing.value = true
+  try {
+    const data = await apiAutomationApi.parseSwagger(buildSwaggerPayload(true))
+    swaggerPreview.value = data.items || []
+    if (!swaggerPreview.value.length) {
+      ElMessage.warning('未解析到可导入的接口')
+    } else {
+      ElMessage.success(data.message || '解析成功')
+    }
+  } finally {
+    swaggerParsing.value = false
+  }
+}
+
+async function handleImportSwagger() {
+  if (!canParseSwagger.value || !swaggerPreview.value.length) return
+  swaggerSaving.value = true
+  try {
+    const data = await apiAutomationApi.importSwagger(buildSwaggerPayload(false))
+    ElMessage.success(data.message || '导入成功')
+    swaggerDialogVisible.value = false
+    await Promise.all([loadEnvironments(), loadCases(), loadSuites()])
+    if (data.case_ids?.length) {
+      activeCaseId.value = data.case_ids[data.case_ids.length - 1]
+    }
+    if (data.environment_id) {
+      const suite = suites.value.find((item) => item.id === suiteId.value)
+      if (suite) suite.environment_id = data.environment_id
+    }
+  } finally {
+    swaggerSaving.value = false
+  }
+}
+
 async function handleRunSuite() {
   running.value = true
   try {
@@ -1663,6 +1830,67 @@ onUnmounted(() => {
 
 .import-form {
   margin-top: 8px;
+}
+
+.swagger-source-group {
+  display: flex;
+  gap: 16px;
+  width: 100%;
+}
+
+.swagger-source-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+  background: #fff;
+}
+
+.swagger-source-card.active {
+  border-color: #f97316;
+  box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.15);
+}
+
+.source-card-main {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.source-card-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.source-card-label {
+  font-size: 15px;
+  color: #303133;
+}
+
+.source-card-radio {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #dcdfe6;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.source-card-radio.checked {
+  border-color: #f97316;
+  background: radial-gradient(circle at center, #f97316 0 5px, transparent 6px);
 }
 
 .case-workspace-card :deep(.el-card__body) {

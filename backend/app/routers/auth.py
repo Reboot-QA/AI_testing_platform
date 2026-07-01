@@ -19,7 +19,7 @@ def register(
 ):
     if db.query(User).filter(User.username == user_in.username).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
-    if db.query(User).filter(User.email == user_in.email).first():
+    if user_in.email and db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="邮箱已存在")
 
     user = User(

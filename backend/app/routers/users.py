@@ -6,6 +6,8 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_admin, get_password_hash
 from app.constants.menus import MENU_KEY_SET
 from app.database import get_db
+from app.models.project import Project
+from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.user import User
 from app.schemas import (
     MenuDefinitionOut,
@@ -62,7 +64,7 @@ def create_user(
         raise HTTPException(status_code=400, detail="无效的用户角色")
     if db.query(User).filter(User.username == data.username).first():
         raise HTTPException(status_code=400, detail="用户名已存在")
-    if db.query(User).filter(User.email == data.email).first():
+    if data.email and db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="邮箱已存在")
 
     user = User(
@@ -92,13 +94,15 @@ def update_user(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
 
-    if data.email and data.email != user.email:
-        if db.query(User).filter(User.email == data.email, User.id != user_id).first():
-            raise HTTPException(status_code=400, detail="邮箱已存在")
-        user.email = data.email
-
     if data.full_name is not None:
         user.full_name = data.full_name
+
+    if "email" in data.model_fields_set:
+        new_email = data.email
+        if new_email != user.email:
+            if new_email and db.query(User).filter(User.email == new_email, User.id != user_id).first():
+                raise HTTPException(status_code=400, detail="邮箱已存在")
+            user.email = new_email
 
     if data.role is not None:
         if data.role not in ALLOWED_ROLES:
@@ -130,6 +134,39 @@ def reset_password(
     user.hashed_password = get_password_hash(data.password)
     db.commit()
     return {"message": "密码已重置"}
+
+
+@router.delete("/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    if user.id == current_admin.id:
+        raise HTTPException(status_code=400, detail="不能删除当前登录账号")
+
+    project_count = db.query(Project).filter(Project.owner_id == user_id).count()
+    if project_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"该用户仍拥有 {project_count} 个项目，请先删除或转移项目后再删除用户",
+        )
+
+    db.query(ManualTestRun).filter(ManualTestRun.executor_id == user_id).update(
+        {ManualTestRun.executor_id: None},
+        synchronize_session=False,
+    )
+    db.query(ManualTestRunCase).filter(ManualTestRunCase.executed_by == user_id).update(
+        {ManualTestRunCase.executed_by: None},
+        synchronize_session=False,
+    )
+
+    db.delete(user)
+    db.commit()
+    return {"message": "用户已删除"}
 
 
 @router.get("/{user_id}/permissions", response_model=UserPermissionsOut)

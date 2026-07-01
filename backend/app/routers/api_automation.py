@@ -44,11 +44,14 @@ from app.schemas import (
     CaptureImportOut,
     CaptureImportRequest,
     CaptureParsedItemOut,
+    SwaggerImportOut,
+    SwaggerImportRequest,
     ApiScheduledTaskCreate,
     ApiScheduledTaskOut,
     ApiScheduledTaskUpdate,
 )
 from app.services.api_capture_service import parse_capture_text, parse_multiple_captures
+from app.services.api_swagger_service import parse_swagger_source
 from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.api_request_builder import extract_meta_from_headers, iter_data_drive_variable_sets, prepare_case_request
 from app.services.api_runner_service import run_api_suite, _execute_case, _dumps_json
@@ -1057,7 +1060,13 @@ def _to_capture_item(data: dict) -> CaptureParsedItemOut:
     )
 
 
-def _ensure_environment(db: Session, project_id: int, base_url: str) -> ApiEnvironment:
+def _ensure_environment(
+    db: Session,
+    project_id: int,
+    base_url: str,
+    *,
+    source_label: str = "抓包",
+) -> ApiEnvironment:
     env = (
         db.query(ApiEnvironment)
         .filter(ApiEnvironment.project_id == project_id, ApiEnvironment.base_url == base_url)
@@ -1070,10 +1079,10 @@ def _ensure_environment(db: Session, project_id: int, base_url: str) -> ApiEnvir
     host = urlparse(base_url).netloc or base_url
     env = ApiEnvironment(
         project_id=project_id,
-        name=f"抓包环境-{host}",
+        name=f"{source_label}环境-{host}",
         base_url=base_url,
         default_headers="{}",
-        description="由抓包数据自动创建",
+        description=f"由{source_label}数据自动创建",
     )
     db.add(env)
     db.commit()
@@ -1138,4 +1147,67 @@ def import_capture(
         case_ids=case_ids,
         items=preview_items,
         message=f"成功导入 {len(case_ids)} 条接口用例",
+    )
+
+
+@router.post("/import/swagger", response_model=SwaggerImportOut)
+def import_swagger(
+    data: SwaggerImportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    suite = _get_owned_executable_suite(db, data.suite_id, current_user)
+    try:
+        parsed_items = parse_swagger_source(
+            source_type=data.source_type,
+            raw_text=data.raw_text,
+            swagger_url=data.swagger_url,
+            base_url_override=data.base_url,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    preview_items = [_to_capture_item(item) for item in parsed_items]
+    if data.preview:
+        return SwaggerImportOut(
+            preview=True,
+            items=preview_items,
+            message=f"已解析 {len(preview_items)} 条接口，可确认导入",
+        )
+
+    environment_id = suite.environment_id
+    base_url = next((item["base_url"] for item in parsed_items if item.get("base_url")), "")
+    if data.auto_environment and base_url:
+        env = _ensure_environment(db, suite.project_id, base_url, source_label="Swagger")
+        environment_id = env.id
+        if suite.environment_id != environment_id:
+            suite.environment_id = environment_id
+            db.commit()
+
+    existing_count = db.query(ApiTestCase).filter(ApiTestCase.suite_id == suite.id).count()
+    case_ids: List[int] = []
+    for index, item in enumerate(parsed_items):
+        case = ApiTestCase(
+            suite_id=suite.id,
+            name=item["name"],
+            method=item["method"],
+            path=item["path"],
+            headers=item.get("headers") or None,
+            body=item.get("body") or None,
+            assertions=item.get("assertions") or None,
+            sort_order=existing_count + index,
+            enabled=True,
+        )
+        db.add(case)
+        db.commit()
+        db.refresh(case)
+        case_ids.append(case.id)
+
+    return SwaggerImportOut(
+        preview=False,
+        imported_count=len(case_ids),
+        environment_id=environment_id,
+        case_ids=case_ids,
+        items=preview_items,
+        message=f"成功导入 {len(case_ids)} 条 Swagger 接口用例",
     )

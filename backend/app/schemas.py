@@ -1,14 +1,34 @@
 from datetime import datetime
+import re
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
+
+USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 
 class UserBase(BaseModel):
     username: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     role: str = "tester"
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        value = value.strip()
+        if not value or not USERNAME_PATTERN.match(value):
+            raise ValueError("用户名只能包含字母、数字和下划线，不能包含中文或特殊符号")
+        return value
+
+    @field_validator("email", mode="before")
+    @classmethod
+    def normalize_email(cls, value: Any) -> Any:
+        if value is None:
+            return None
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
 
 class UserCreate(UserBase):
@@ -602,6 +622,25 @@ class CaptureParsedItemOut(BaseModel):
 
 
 class CaptureImportOut(BaseModel):
+    preview: bool = False
+    imported_count: int = 0
+    environment_id: Optional[int] = None
+    case_ids: List[int] = Field(default_factory=list)
+    items: List[CaptureParsedItemOut] = Field(default_factory=list)
+    message: str = ""
+
+
+class SwaggerImportRequest(BaseModel):
+    suite_id: int
+    source_type: str = "content"
+    raw_text: Optional[str] = None
+    swagger_url: Optional[str] = None
+    base_url: Optional[str] = None
+    auto_environment: bool = True
+    preview: bool = False
+
+
+class SwaggerImportOut(BaseModel):
     preview: bool = False
     imported_count: int = 0
     environment_id: Optional[int] = None

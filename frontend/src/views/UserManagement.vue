@@ -12,7 +12,9 @@
       <el-table-column prop="full_name" label="姓名" width="140">
         <template #default="{ row }">{{ row.full_name || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="email" label="邮箱" min-width="180" />
+      <el-table-column prop="email" label="邮箱" min-width="180">
+        <template #default="{ row }">{{ row.email || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="role" label="角色" width="100">
         <template #default="{ row }">
           <el-tag :type="row.role === 'admin' ? 'danger' : 'info'" size="small">
@@ -30,10 +32,18 @@
       <el-table-column prop="created_at" label="创建时间" width="170">
         <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
       </el-table-column>
-      <el-table-column label="操作" width="220" fixed="right">
+      <el-table-column label="操作" width="280" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
           <el-button link type="warning" @click="openPasswordDialog(row)">重置密码</el-button>
+          <el-button
+            v-if="row.id !== currentUserId"
+            link
+            type="danger"
+            @click="handleDelete(row)"
+          >
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -41,7 +51,7 @@
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用户' : '添加用户'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="用户名" prop="username">
-          <el-input v-model="form.username" :disabled="!!editing" />
+          <el-input v-model="form.username" :disabled="!!editing" placeholder="仅支持字母、数字、下划线" />
         </el-form-item>
         <el-form-item v-if="!editing" label="密码" prop="password">
           <el-input v-model="form.password" type="password" show-password />
@@ -50,7 +60,7 @@
           <el-input v-model="form.full_name" />
         </el-form-item>
         <el-form-item label="邮箱" prop="email">
-          <el-input v-model="form.email" />
+          <el-input v-model="form.email" placeholder="选填" />
         </el-form-item>
         <el-form-item label="角色" prop="role">
           <el-select v-model="form.role" style="width: 100%">
@@ -86,9 +96,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, onMounted, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi } from '@/api'
+import { useUserStore } from '@/stores/user'
+
+const userStore = useUserStore()
+const currentUserId = computed(() => userStore.user?.id)
 
 const users = ref([])
 const loading = ref(false)
@@ -102,6 +116,33 @@ const formRef = ref()
 const passwordFormRef = ref()
 
 const roleMap = { admin: '管理员', tester: '测试员' }
+const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/
+
+function validateUsername(_rule, value, callback) {
+  if (!value) {
+    callback(new Error('请输入用户名'))
+    return
+  }
+  if (!USERNAME_PATTERN.test(value)) {
+    callback(new Error('用户名只能包含字母、数字和下划线，不能包含中文或特殊符号'))
+    return
+  }
+  callback()
+}
+
+function validateEmail(_rule, value, callback) {
+  const email = (value || '').trim()
+  if (!email) {
+    callback()
+    return
+  }
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+  if (!emailPattern.test(email)) {
+    callback(new Error('邮箱格式不正确'))
+    return
+  }
+  callback()
+}
 
 const form = reactive({
   username: '',
@@ -117,12 +158,9 @@ const passwordForm = reactive({
 })
 
 const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ validator: validateUsername, trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { type: 'email', message: '邮箱格式不正确', trigger: 'blur' },
-  ],
+  email: [{ validator: validateEmail, trigger: 'blur' }],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
 }
 
@@ -170,7 +208,7 @@ async function handleSubmit() {
     if (editing.value) {
       await userApi.update(editing.value.id, {
         full_name: form.full_name,
-        email: form.email,
+        email: form.email.trim() || null,
         role: form.role,
         is_active: form.is_active,
       })
@@ -180,7 +218,7 @@ async function handleSubmit() {
         username: form.username,
         password: form.password,
         full_name: form.full_name,
-        email: form.email,
+        email: form.email.trim() || undefined,
         role: form.role,
       })
       ElMessage.success('创建成功')
@@ -204,7 +242,21 @@ async function handleResetPassword() {
   }
 }
 
-onMounted(loadData)
+async function handleDelete(row) {
+  await ElMessageBox.confirm(`确认删除用户「${row.username}」？此操作不可恢复。`, '提示', {
+    type: 'warning',
+  })
+  await userApi.delete(row.id)
+  ElMessage.success('删除成功')
+  loadData()
+}
+
+onMounted(async () => {
+  if (!userStore.user) {
+    await userStore.fetchUser()
+  }
+  loadData()
+})
 </script>
 
 <style scoped>
