@@ -432,6 +432,7 @@ restore_local_database_after_pull() {
     mv "$stash" "$db"
     ok "已恢复本地数据库"
   fi
+}
 
 clone_project() {
   local target="${1:-}"
