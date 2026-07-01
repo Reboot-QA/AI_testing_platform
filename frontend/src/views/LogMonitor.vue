@@ -152,7 +152,7 @@ function scrollToBottom() {
 }
 
 function stopStream() {
-  if streamAbort) {
+  if (streamAbort) {
     streamAbort.abort()
     streamAbort = null
   }
