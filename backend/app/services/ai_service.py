@@ -346,38 +346,62 @@ async def stream_generate_batches(
     api_key: str,
     model: str,
     mock_mode: bool,
-    batch_size: int = 5,
+    batch_size: int = 8,
+    concurrency: int = 4,
 ) -> AsyncIterator[Tuple[List[Dict], str, int, int, Optional[int], str, Optional[str]]]:
     existing_titles: List[str] = []
+    titles_lock = asyncio.Lock()
     mode = "mock" if mock_mode else "llm"
     batch_plan: List[Dict[str, Any]] = []
     for task in tasks:
         for batch_count in split_generation_batches(task["count"], batch_size):
             batch_plan.append({**task, "batch_count": batch_count})
     total_batches = len(batch_plan) or 1
+    worker_count = max(1, min(concurrency, total_batches))
+    semaphore = asyncio.Semaphore(worker_count)
 
-    for index, plan in enumerate(batch_plan, start=1):
-        try:
-            cases_data, current_mode = await generate_testcases(
-                plan["requirement_text"],
-                case_type,
-                plan["batch_count"],
-                api_base=api_base,
-                api_key=api_key,
-                model=model,
-                mock_mode=mock_mode,
-                existing_titles=existing_titles or None,
-                batch_index=index,
-                batch_total=total_batches,
-            )
-        except ValueError as exc:
-            yield [], mode, index, total_batches, plan["requirement_id"], plan["label"], str(exc)
-            continue
+    async def run_batch(index: int, plan: Dict[str, Any]):
+        async with semaphore:
+            async with titles_lock:
+                titles_snapshot = list(existing_titles) if existing_titles else None
+            try:
+                cases_data, current_mode = await generate_testcases(
+                    plan["requirement_text"],
+                    case_type,
+                    plan["batch_count"],
+                    api_base=api_base,
+                    api_key=api_key,
+                    model=model,
+                    mock_mode=mock_mode,
+                    existing_titles=titles_snapshot,
+                    batch_index=index,
+                    batch_total=total_batches,
+                )
+            except ValueError as exc:
+                return index, plan, [], mode, str(exc)
 
-        mode = current_mode
-        if cases_data:
-            existing_titles.extend(item.get("title", "") for item in cases_data if item.get("title"))
-        yield cases_data, mode, index, total_batches, plan["requirement_id"], plan["label"], None
+            async with titles_lock:
+                if cases_data:
+                    existing_titles.extend(item.get("title", "") for item in cases_data if item.get("title"))
+            return index, plan, cases_data, current_mode, None
+
+    pending = [
+        asyncio.create_task(run_batch(index, plan))
+        for index, plan in enumerate(batch_plan, start=1)
+    ]
+    for finished in asyncio.as_completed(pending):
+        index, plan, cases_data, batch_mode, task_error = await finished
+        if batch_mode:
+            mode = batch_mode
+        yield (
+            cases_data,
+            mode,
+            index,
+            total_batches,
+            plan["requirement_id"],
+            plan["label"],
+            task_error,
+        )
 
 
 async def extract_requirements_from_document(

@@ -28,7 +28,13 @@ from app.schemas import (
     TestCasePageOut,
     TestCaseUpdate,
 )
-from app.services.ai_service import build_generation_tasks, generate_testcases, stream_generate_batches
+from app.config import settings
+from app.services.ai_service import (
+    build_generation_tasks,
+    generate_testcases,
+    split_generation_batches,
+    stream_generate_batches,
+)
 from app.services.settings_service import get_effective_llm_config
 
 router = APIRouter(prefix="/testcases", tags=["用例"])
@@ -309,10 +315,17 @@ async def ai_generate_stream(
                 yield _sse_event({"type": "error", "message": "没有可生成的需求任务，请检查关联需求"})
                 return
 
+            batch_call_count = sum(
+                len(split_generation_batches(task["count"], settings.ai_generate_batch_size))
+                for task in tasks
+            )
             yield _sse_event(
                 {
                     "type": "status",
-                    "message": "开始生成用例...",
+                    "message": (
+                        f"正在调用大模型：{len(tasks)} 个需求，"
+                        f"{batch_call_count} 批请求（并发 {settings.ai_generate_concurrency}）..."
+                    ),
                     "current": 0,
                     "total": data.count,
                 }
@@ -325,6 +338,8 @@ async def ai_generate_stream(
                 api_key=llm_config["api_key"],
                 model=llm_config["model"],
                 mock_mode=llm_config["mock_mode"],
+                batch_size=settings.ai_generate_batch_size,
+                concurrency=settings.ai_generate_concurrency,
             ):
                 mode = batch_mode
                 if task_error:
@@ -358,7 +373,8 @@ async def ai_generate_stream(
                         mode=mode,
                         item=item,
                     )
-                    stream_db.commit()
+                    stream_db.flush()
+                    stream_db.refresh(case)
                     saved_count += 1
                     yield _sse_event(
                         {
@@ -369,8 +385,7 @@ async def ai_generate_stream(
                             "saved": True,
                         }
                     )
-                    if llm_config["mock_mode"]:
-                        await asyncio.sleep(0.08)
+                stream_db.commit()
 
             if saved_count == 0:
                 detail = failed_tasks[0] if len(failed_tasks) == 1 else "；".join(failed_tasks[:3])

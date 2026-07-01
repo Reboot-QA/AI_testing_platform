@@ -12,6 +12,8 @@ class Settings(BaseSettings):
     llm_api_key: str = ""
     llm_model: str = "gpt-4o-mini"
     llm_mock_mode: bool = True
+    ai_generate_batch_size: int = 8
+    ai_generate_concurrency: int = 4
 
     log_dir: str = ""
 
