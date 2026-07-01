@@ -1,9 +1,6 @@
-<img width="1875" height="799" alt="image" src="https://github.com/user-attachments/assets/3e0c93e9-07f2-4d9a-a081-bc50e6bc012d" /># AI测试平台
+# AI测试平台
 
 演示地址：http://38.12.6.230:5173/login
-
-![Uploading image.png…]()
-![Uploading image.png…]()
 
 
 基于 **Python FastAPI + Vue 3** 的智能质量与测试管理平台，覆盖需求管理、功能用例、AI 生成、手工执行与接口自动化测试。
