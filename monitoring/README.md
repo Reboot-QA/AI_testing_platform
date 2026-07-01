@@ -52,18 +52,28 @@ export LOG_DIR_HOST=/opt/AI_testing_platform/.deploy/logs
 
 ## 故障排查
 
-容器列表为空或端口未监听时：
+**容器列表为空** 通常表示尚未执行 `start`（仅 `status` 也会生成 `.env`，但不会启动容器）。
 
 ```bash
 cd /opt/AI_testing_platform
 git pull
-./deploy.sh monitoring restart
+./deploy.sh start
+PUBLIC_HOST=38.12.6.230 ./deploy.sh monitoring start
+# 或直接（未运行时会自动 start）：
+PUBLIC_HOST=38.12.6.230 ./deploy.sh monitoring
+```
+
+诊断命令：
+
+```bash
+./deploy.sh monitoring debug
 ./deploy.sh monitoring logs
 ```
 
 常见原因：
-- 未用 `./deploy.sh monitoring start` 导致 `LOG_DIR_HOST` 为空
-- 镜像拉取失败（检查网络 / Docker 镜像加速）
+- 只执行了 `./deploy.sh monitoring status`，未执行 `start`
+- 镜像拉取失败（国内服务器需配置 Docker 镜像加速）
+- Docker 未启动：`sudo systemctl start docker`
 - 安全组未放行 3000、3100 端口
 
 手动检查：
@@ -82,6 +92,7 @@ docker compose logs loki --tail=50
 ./deploy.sh monitoring stop     # 停止
 ./deploy.sh monitoring restart  # 重启
 ./deploy.sh monitoring status   # 查看容器状态
+./deploy.sh monitoring debug    # 诊断（配置、镜像、容器）
 ./deploy.sh monitoring logs     # 查看监控栈日志
 ```
 
