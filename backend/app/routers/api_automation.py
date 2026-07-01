@@ -2,12 +2,13 @@ import json
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.models.api_automation import (
     ApiEnvironment,
     ApiScheduledTask,
@@ -53,18 +54,26 @@ from app.schemas import (
     CaptureParsedItemOut,
     SwaggerImportOut,
     SwaggerImportRequest,
+    SwaggerPreviewGenerateOut,
+    SwaggerPreviewGenerateItemOut,
+    SwaggerPreviewGenerateRequest,
     ApiScheduledTaskCreate,
     ApiScheduledTaskOut,
     ApiScheduledTaskUpdate,
 )
 from app.services.api_capture_service import parse_capture_text, parse_multiple_captures
-from app.services.api_swagger_service import parse_swagger_source
-from app.services.api_data_ai_service import generate_api_request_data
+from app.services.api_swagger_service import (
+    apply_generated_to_swagger_item,
+    parse_swagger_source,
+    prepare_swagger_item_for_generate,
+    swagger_item_has_generatable_params,
+)
+from app.services.api_data_ai_service import _mock_generate_api_data, _normalize_body_type, generate_api_request_data
 from app.services.api_case_config_helper import apply_generated_data_to_case, parse_case_generation_context
 from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.settings_service import get_effective_llm_config
 from app.services.api_request_builder import extract_meta_from_headers, iter_data_drive_variable_sets, prepare_case_request
-from app.services.api_runner_service import run_api_suite, _execute_case, _dumps_json
+from app.services.api_runner_service import iter_api_suite_run, run_api_suite, _execute_case, _dumps_json
 from app.services.schedule_service import (
     execute_scheduled_task,
     format_schedule_desc,
@@ -1023,6 +1032,10 @@ async def batch_generate_case_data(
     )
 
 
+def _sse_event(payload: dict) -> str:
+    return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
+
+
 @router.post("/suites/{suite_id}/run", response_model=ApiRunTriggerOut)
 def run_suite(
     suite_id: int,
@@ -1035,6 +1048,33 @@ def run_suite(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return ApiRunTriggerOut(run_id=run.id, message="执行完成")
+
+
+@router.post("/suites/{suite_id}/run/stream")
+def run_suite_stream(
+    suite_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    suite = _get_owned_executable_suite(db, suite_id, current_user)
+
+    def event_generator():
+        stream_db = SessionLocal()
+        try:
+            stream_suite = stream_db.query(ApiTestSuite).filter(ApiTestSuite.id == suite_id).first()
+            if not stream_suite:
+                yield _sse_event({"type": "error", "message": "测试套件不存在"})
+                return
+            for event in iter_api_suite_run(stream_db, stream_suite, triggered_by=current_user.username):
+                yield _sse_event(event)
+        except ValueError as exc:
+            yield _sse_event({"type": "error", "message": str(exc)})
+        except Exception as exc:
+            yield _sse_event({"type": "error", "message": f"执行失败: {exc}"})
+        finally:
+            stream_db.close()
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.get("/runs", response_model=List[ApiTestRunSummaryOut])
@@ -1238,6 +1278,16 @@ def run_schedule_now(
 
 
 def _to_capture_item(data: dict) -> CaptureParsedItemOut:
+    query_params = [
+        ApiDataParamItem(**row)
+        for row in (data.get("query_params") or [])
+        if isinstance(row, dict)
+    ]
+    path_params = [
+        ApiDataParamItem(**row)
+        for row in (data.get("path_params") or [])
+        if isinstance(row, dict)
+    ]
     return CaptureParsedItemOut(
         name=data["name"],
         method=data["method"],
@@ -1246,9 +1296,29 @@ def _to_capture_item(data: dict) -> CaptureParsedItemOut:
         full_url=data["full_url"],
         headers=data.get("headers") or "",
         body=data.get("body") or "",
+        input_params=data.get("input_params") or "",
+        query_params=query_params,
+        path_params=path_params,
         assertions=data.get("assertions") or "",
         source=data.get("source") or "fetch",
     )
+
+
+def _capture_item_to_dict(item: CaptureParsedItemOut) -> dict:
+    return {
+        "name": item.name,
+        "method": item.method,
+        "path": item.path,
+        "base_url": item.base_url,
+        "full_url": item.full_url,
+        "headers": item.headers or "",
+        "body": item.body or "",
+        "input_params": item.input_params or "",
+        "query_params": [row.model_dump() for row in item.query_params],
+        "path_params": [row.model_dump() for row in item.path_params],
+        "assertions": item.assertions or "",
+        "source": item.source or "swagger",
+    }
 
 
 def _ensure_environment(
@@ -1341,6 +1411,138 @@ def import_capture(
     )
 
 
+@router.post("/import/swagger/generate-data", response_model=SwaggerPreviewGenerateOut)
+async def swagger_preview_generate_data(
+    data: SwaggerPreviewGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not data.items:
+        raise HTTPException(status_code=400, detail="没有可生成数据的接口")
+
+    llm_config = get_effective_llm_config(db, data.provider_id)
+    mode = "mock" if llm_config["mock_mode"] else "llm"
+    updated_items: List[CaptureParsedItemOut] = []
+    details: List[SwaggerPreviewGenerateItemOut] = []
+    updated_count = 0
+    skipped_count = 0
+    failed_count = 0
+    fallback_count = 0
+
+    for item in data.items:
+        item_dict = prepare_swagger_item_for_generate(_capture_item_to_dict(item))
+        if not swagger_item_has_generatable_params(item_dict):
+            updated_items.append(_to_capture_item(item_dict))
+            skipped_count += 1
+            details.append(
+                SwaggerPreviewGenerateItemOut(
+                    name=item.name,
+                    method=item.method,
+                    skipped=True,
+                    success=False,
+                    message="无 Body/Query/Path 入参",
+                    log=f"[跳过] {item.method} {item.name}：无 Body/Query/Path 入参",
+                )
+            )
+            continue
+
+        query_params = [row for row in item_dict.get("query_params") or [] if isinstance(row, dict)]
+        path_params = [row for row in item_dict.get("path_params") or [] if isinstance(row, dict)]
+        body_type = _normalize_body_type("json", item_dict.get("body"))
+        used_fallback = False
+
+        try:
+            generated, item_mode = await generate_api_request_data(
+                name=item.name,
+                method=item.method,
+                path=item.path,
+                url=item.full_url,
+                body=item_dict.get("body"),
+                body_type=body_type,
+                headers=item_dict.get("headers") or item.headers,
+                query_params=query_params,
+                path_params=path_params,
+                api_base=llm_config["api_base"],
+                api_key=llm_config["api_key"],
+                model=llm_config["model"],
+                mock_mode=llm_config["mock_mode"],
+            )
+            mode = item_mode
+        except ValueError as exc:
+            generated = _mock_generate_api_data(
+                method=item.method,
+                path=item.path,
+                body=item_dict.get("body"),
+                body_type=body_type,
+                query_params=query_params,
+                path_params=path_params,
+            )
+            mode = "mock"
+            used_fallback = True
+            fallback_count += 1
+        except Exception as exc:
+            failed_count += 1
+            updated_items.append(_to_capture_item(item_dict))
+            details.append(
+                SwaggerPreviewGenerateItemOut(
+                    name=item.name,
+                    method=item.method,
+                    success=False,
+                    message=str(exc),
+                    log=f"[失败] {item.method} {item.name}：{exc}",
+                )
+            )
+            continue
+
+        merged = apply_generated_to_swagger_item(item_dict, generated)
+        updated_items.append(_to_capture_item(merged))
+        updated_count += 1
+
+        detail_parts = []
+        if generated.get("body"):
+            detail_parts.append("Body")
+        if generated.get("query"):
+            detail_parts.append("Query")
+        if generated.get("path"):
+            detail_parts.append("Path")
+        detail_text = "、".join(detail_parts) or "Body"
+        suffix = "（Mock）" if used_fallback else ""
+        details.append(
+            SwaggerPreviewGenerateItemOut(
+                name=item.name,
+                method=item.method,
+                success=True,
+                message=f"已生成 {detail_text}{suffix}",
+                log=f"[成功] {item.method} {item.name}：已生成 {detail_text}{suffix}",
+            )
+        )
+
+    if updated_count:
+        message = f"已为 {updated_count} 条接口生成测试数据"
+        if skipped_count:
+            message += f"，跳过 {skipped_count} 条无入参接口"
+        if fallback_count:
+            message += f"（其中 {fallback_count} 条因 LLM 不可用已改用 Mock）"
+    elif failed_count:
+        message = f"生成失败 {failed_count} 条，请检查 LLM 配置或开启 Mock 模式"
+    elif skipped_count:
+        message = "所选接口均无 Body/Query/Path 入参，无法生成数据"
+    else:
+        message = "未生成任何接口数据"
+    if mode == "mock" and updated_count:
+        message = message.replace("生成测试数据", "使用 Mock 规则生成测试数据")
+    return SwaggerPreviewGenerateOut(
+        items=updated_items,
+        details=details,
+        updated_count=updated_count,
+        skipped_count=skipped_count,
+        failed_count=failed_count,
+        fallback_count=fallback_count,
+        mode=mode,
+        message=message,
+    )
+
+
 @router.post("/import/swagger", response_model=SwaggerImportOut)
 def import_swagger(
     data: SwaggerImportRequest,
@@ -1348,15 +1550,18 @@ def import_swagger(
     current_user: User = Depends(get_current_user),
 ):
     suite = _get_owned_executable_suite(db, data.suite_id, current_user)
-    try:
-        parsed_items = parse_swagger_source(
-            source_type=data.source_type,
-            raw_text=data.raw_text,
-            swagger_url=data.swagger_url,
-            base_url_override=data.base_url,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if data.items:
+        parsed_items = [_capture_item_to_dict(item) for item in data.items]
+    else:
+        try:
+            parsed_items = parse_swagger_source(
+                source_type=data.source_type,
+                raw_text=data.raw_text,
+                swagger_url=data.swagger_url,
+                base_url_override=data.base_url,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     preview_items = [_to_capture_item(item) for item in parsed_items]
     if data.preview:

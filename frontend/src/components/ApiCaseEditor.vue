@@ -11,6 +11,13 @@
         <el-button type="success" :loading="sending" :disabled="!canSend" @click="handleSend">
           <el-icon><Promotion /></el-icon> {{ sendButtonLabel }}
         </el-button>
+        <el-button
+          :disabled="!canTriggerAiGenerate"
+          :loading="aiGenerating || batchGenerating"
+          @click="handleAiGenerateClick"
+        >
+          <el-icon><MagicStick /></el-icon> {{ aiGenerateButtonLabel }}
+        </el-button>
         <el-select
           v-if="showDataDriveSelector"
           v-model="dataDriveRunMode"
@@ -25,9 +32,6 @@
             :value="option.value"
           />
         </el-select>
-        <el-button :disabled="!canAiGenerateData" :loading="aiGenerating" @click="handleAiGenerateData">
-          <el-icon><MagicStick /></el-icon> AI 生成数据
-        </el-button>
         <el-button :disabled="!suiteId" @click="$emit('import')">
           <el-icon><Upload /></el-icon> 导入
         </el-button>
@@ -120,11 +124,6 @@
               </template>
             </ApiKvParamTable>
             <div v-else-if="form.body_type === 'json'" class="body-editor-wrap">
-              <div class="body-editor-toolbar">
-                <el-button size="small" :loading="aiGenerating" :disabled="!canAiGenerateData" @click="handleAiGenerateData">
-                  AI 生成数据
-                </el-button>
-              </div>
               <el-input
                 v-model="bodyStores.json"
                 type="textarea"
@@ -134,11 +133,6 @@
               />
             </div>
             <div v-else-if="form.body_type === 'raw'" class="body-editor-wrap">
-              <div class="body-editor-toolbar">
-                <el-button size="small" :loading="aiGenerating" :disabled="!canAiGenerateData" @click="handleAiGenerateData">
-                  AI 生成数据
-                </el-button>
-              </div>
               <el-input
                 v-model="bodyStores.raw"
                 type="textarea"
@@ -433,9 +427,11 @@ const props = defineProps({
   environments: { type: Array, default: () => [] },
   suiteEnvironmentId: { type: Number, default: null },
   caseCount: { type: Number, default: 0 },
+  selectedCaseIds: { type: Array, default: () => [] },
+  batchGenerating: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['saved', 'new', 'import'])
+const emit = defineEmits(['saved', 'new', 'import', 'batch-generate-data'])
 
 const methods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS']
 const activeTab = ref('headers')
@@ -498,6 +494,16 @@ const selectedEnv = computed(() =>
 
 const canSend = computed(
   () => props.suiteId && form.environment_id && form.full_url.trim() && form.method
+)
+
+const aiGenerateButtonLabel = computed(() =>
+  props.selectedCaseIds.length > 0
+    ? `AI 生成数据(${props.selectedCaseIds.length})`
+    : 'AI 生成数据',
+)
+
+const canTriggerAiGenerate = computed(
+  () => props.selectedCaseIds.length > 0 || canAiGenerateData.value,
 )
 
 const canAiGenerateData = computed(
@@ -890,6 +896,14 @@ function applyGeneratedBody(bodyText) {
       // ignore invalid generated body
     }
   }
+}
+
+function handleAiGenerateClick() {
+  if (props.selectedCaseIds.length > 0) {
+    emit('batch-generate-data')
+    return
+  }
+  handleAiGenerateData()
 }
 
 async function handleAiGenerateData() {
@@ -1432,11 +1446,6 @@ defineExpose({ resetForm, applyCaptureItem, handleNew })
   display: flex;
   flex-direction: column;
   gap: 8px;
-}
-
-.body-editor-toolbar {
-  display: flex;
-  justify-content: flex-end;
 }
 
 .body-editor {

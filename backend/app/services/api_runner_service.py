@@ -1,7 +1,7 @@
 import json
 import time
 from app.utils.time_util import now_local
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import httpx
@@ -280,7 +280,9 @@ def _iter_case_executions(case: ApiTestCase) -> List[Tuple[str, Optional[Dict[st
     return [(label, variables) for label, variables in iter_data_drive_variable_sets(meta)]
 
 
-def run_api_suite(db: Session, suite: ApiTestSuite, triggered_by: str = "manual") -> ApiTestRun:
+def iter_api_suite_run(
+    db: Session, suite: ApiTestSuite, triggered_by: str = "manual"
+) -> Generator[Dict[str, Any], None, None]:
     environment = suite.environment
     if not environment and suite.environment_id:
         environment = db.query(ApiEnvironment).filter(ApiEnvironment.id == suite.environment_id).first()
@@ -311,11 +313,19 @@ def run_api_suite(db: Session, suite: ApiTestSuite, triggered_by: str = "manual"
     db.commit()
     db.refresh(run)
 
+    yield {
+        "type": "start",
+        "run_id": run.id,
+        "total": total_steps,
+        "message": f"开始执行套件「{suite.name}」，共 {total_steps} 个步骤",
+    }
+
     passed_count = 0
     failed_count = 0
     skipped_count = 0
     run_started = time.perf_counter()
     runtime_variables: Dict[str, str] = {}
+    step_index = 0
 
     for case in cases:
         if not case.enabled:
@@ -355,6 +365,19 @@ def run_api_suite(db: Session, suite: ApiTestSuite, triggered_by: str = "manual"
             db.add(step)
             db.commit()
 
+            step_index += 1
+            yield {
+                "type": "step",
+                "index": step_index,
+                "total": total_steps,
+                "case_name": case_name,
+                "method": detail["request"]["method"],
+                "status": status,
+                "duration_ms": detail["duration_ms"],
+                "response_status": detail.get("response_status"),
+                "error_message": detail.get("error_message"),
+            }
+
     elapsed_ms = (time.perf_counter() - run_started) * 1000
     total = passed_count + failed_count + skipped_count
     pass_rate = round((passed_count / total) * 100, 2) if total else 0.0
@@ -369,4 +392,31 @@ def run_api_suite(db: Session, suite: ApiTestSuite, triggered_by: str = "manual"
     run.finished_at = now_local()
     db.commit()
     db.refresh(run)
+
+    yield {
+        "type": "done",
+        "run_id": run.id,
+        "status": run.status,
+        "passed_count": passed_count,
+        "failed_count": failed_count,
+        "skipped_count": skipped_count,
+        "pass_rate": pass_rate,
+        "duration_ms": run.duration_ms,
+        "message": (
+            f"执行完成：通过 {passed_count}，失败 {failed_count}，"
+            f"通过率 {pass_rate}%，耗时 {round(run.duration_ms / 1000, 2)}s"
+        ),
+    }
+
+
+def run_api_suite(db: Session, suite: ApiTestSuite, triggered_by: str = "manual") -> ApiTestRun:
+    done_event = None
+    for event in iter_api_suite_run(db, suite, triggered_by):
+        if event.get("type") == "done":
+            done_event = event
+    if not done_event:
+        raise RuntimeError("套件执行未返回结果")
+    run = db.query(ApiTestRun).filter(ApiTestRun.id == done_event["run_id"]).first()
+    if not run:
+        raise RuntimeError("套件执行记录不存在")
     return run

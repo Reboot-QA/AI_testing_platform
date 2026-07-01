@@ -666,6 +666,9 @@ class CaptureParsedItemOut(BaseModel):
     full_url: str
     headers: str = ""
     body: str = ""
+    input_params: str = ""
+    query_params: List[ApiDataParamItem] = Field(default_factory=list)
+    path_params: List[ApiDataParamItem] = Field(default_factory=list)
     assertions: str = ""
     source: str = "fetch"
 
@@ -687,6 +690,32 @@ class SwaggerImportRequest(BaseModel):
     base_url: Optional[str] = None
     auto_environment: bool = True
     preview: bool = False
+    items: Optional[List[CaptureParsedItemOut]] = None
+
+
+class SwaggerPreviewGenerateRequest(BaseModel):
+    items: List[CaptureParsedItemOut] = Field(default_factory=list)
+    provider_id: Optional[int] = None
+
+
+class SwaggerPreviewGenerateItemOut(BaseModel):
+    name: str
+    method: str = ""
+    success: bool = False
+    skipped: bool = False
+    message: str = ""
+    log: str = ""
+
+
+class SwaggerPreviewGenerateOut(BaseModel):
+    items: List[CaptureParsedItemOut] = Field(default_factory=list)
+    details: List[SwaggerPreviewGenerateItemOut] = Field(default_factory=list)
+    updated_count: int = 0
+    skipped_count: int = 0
+    failed_count: int = 0
+    fallback_count: int = 0
+    mode: str = "mock"
+    message: str = ""
 
 
 class SwaggerImportOut(BaseModel):

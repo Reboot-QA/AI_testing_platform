@@ -233,6 +233,45 @@ export const apiAutomationApi = {
   debugPreScript: (data) => request.post('/api-automation/scripts/pre/debug', data),
   debugPostScript: (data) => request.post('/api-automation/scripts/post/debug', data),
   runSuite: (suiteId) => request.post(`/api-automation/suites/${suiteId}/run`),
+  runSuiteStream: (suiteId, onEvent, options = {}) => {
+    const token = localStorage.getItem('token')
+    return fetch(`/api/v1/api-automation/suites/${suiteId}/run/stream`, {
+      method: 'POST',
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      signal: options.signal,
+    }).then(async (response) => {
+      if (!response.ok) {
+        let message = '请求失败'
+        try {
+          const body = await response.json()
+          message = body.detail || message
+        } catch {
+          // ignore parse error
+        }
+        throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() || ''
+        for (const chunk of chunks) {
+          const line = chunk.trim()
+          if (!line.startsWith('data:')) continue
+          const event = JSON.parse(line.slice(5).trim())
+          onEvent(event)
+        }
+      }
+    })
+  },
   listRuns: (params = {}) => request.get('/api-automation/runs', { params }),
   getRun: (id) => request.get(`/api-automation/runs/${id}`),
   deleteRun: (id) => request.delete(`/api-automation/runs/${id}`),
@@ -240,6 +279,7 @@ export const apiAutomationApi = {
   importCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: false }),
   parseSwagger: (data) => request.post('/api-automation/import/swagger', { ...data, preview: true }),
   importSwagger: (data) => request.post('/api-automation/import/swagger', { ...data, preview: false }),
+  swaggerGenerateData: (data) => request.post('/api-automation/import/swagger/generate-data', data, { timeout: 300000 }),
   listSchedules: (projectId) => request.get('/api-automation/schedules', { params: { project_id: projectId } }),
   createSchedule: (data) => request.post('/api-automation/schedules', data),
   updateSchedule: (id, data) => request.put(`/api-automation/schedules/${id}`, data),

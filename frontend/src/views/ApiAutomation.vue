@@ -146,16 +146,6 @@
                     <el-button
                       v-if="selectedCaseIds.length"
                       link
-                      type="primary"
-                      size="small"
-                      :loading="caseBatchGenerating"
-                      @click="batchGenerateCaseData"
-                    >
-                      AI 生成数据({{ selectedCaseIds.length }})
-                    </el-button>
-                    <el-button
-                      v-if="selectedCaseIds.length"
-                      link
                       type="danger"
                       size="small"
                       :loading="caseBatchDeleting"
@@ -201,9 +191,12 @@
                     :environments="environments"
                     :suite-environment-id="currentSuite?.environment_id"
                     :case-count="cases.length"
+                    :selected-case-ids="selectedCaseIds"
+                    :batch-generating="caseBatchGenerating"
                     @saved="onCaseSaved"
                     @new="onNewCase"
                     @import="openImportDialog()"
+                    @batch-generate-data="batchGenerateCaseData"
                   />
                   <el-empty v-else description="请先选择测试套件" />
                 </div>
@@ -439,7 +432,7 @@
     </el-dialog>
 
     <!-- Swagger 导入 -->
-    <el-dialog v-model="swaggerDialogVisible" title="导入 Swagger 文档" width="760px">
+    <el-dialog v-model="swaggerDialogVisible" title="导入 Swagger 文档" width="920px">
       <el-alert
         title="支持 OpenAPI 2.0 / 3.x 的 JSON 或 YAML，可从文档内容或 URL 解析接口并批量生成用例"
         type="info"
@@ -506,6 +499,7 @@
           <el-table-column prop="name" label="用例名称" min-width="140" />
           <el-table-column prop="method" label="方法" width="80" />
           <el-table-column prop="path" label="路径" min-width="160" show-overflow-tooltip />
+          <el-table-column prop="input_params" label="入参" min-width="260" show-overflow-tooltip />
           <el-table-column prop="base_url" label="Base URL" min-width="180" show-overflow-tooltip />
         </el-table>
       </div>
@@ -516,6 +510,13 @@
           解析预览
         </el-button>
         <el-button
+          :disabled="!swaggerPreview.length"
+          :loading="swaggerAiGenerating"
+          @click="handleSwaggerAiGenerate"
+        >
+          <el-icon><MagicStick /></el-icon> AI 造数
+        </el-button>
+        <el-button
           type="primary"
           :disabled="!swaggerPreview.length"
           :loading="swaggerSaving"
@@ -523,6 +524,43 @@
         >
           确认导入
         </el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Swagger AI 造数日志 -->
+    <el-dialog
+      v-model="swaggerAiLogVisible"
+      title="Swagger AI 造数日志"
+      width="680px"
+      :close-on-click-modal="!swaggerAiGenerating"
+      :show-close="!swaggerAiGenerating"
+    >
+      <div class="ai-generate-progress-block">
+        <div class="ai-generate-progress-head">
+          <span>{{ swaggerAiStatusText }}</span>
+          <span>{{ swaggerAiProgress }}%</span>
+        </div>
+        <el-progress
+          :percentage="swaggerAiProgress"
+          :status="swaggerAiProgress >= 100 && !swaggerAiGenerating ? 'success' : undefined"
+          :striped="swaggerAiGenerating"
+          :striped-flow="swaggerAiGenerating"
+        />
+      </div>
+      <div ref="swaggerAiLogRef" class="ai-generate-log-panel">
+        <div
+          v-for="(line, index) in swaggerAiLogs"
+          :key="index"
+          class="ai-generate-log-line"
+          :class="`log-${line.type}`"
+        >
+          <span class="log-time">{{ line.time }}</span>
+          <span class="log-text">{{ line.text }}</span>
+        </div>
+        <el-empty v-if="!swaggerAiLogs.length" description="等待开始..." :image-size="48" />
+      </div>
+      <template #footer>
+        <el-button :disabled="swaggerAiGenerating" @click="swaggerAiLogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
@@ -560,6 +598,51 @@
       </div>
       <template #footer>
         <el-button :disabled="caseBatchGenerating" @click="aiGenerateLogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 套件执行日志 -->
+    <el-dialog
+      v-model="suiteRunLogVisible"
+      title="套件执行日志"
+      width="720px"
+      :close-on-click-modal="!running"
+      :show-close="!running"
+    >
+      <div class="ai-generate-progress-block">
+        <div class="ai-generate-progress-head">
+          <span>{{ suiteRunStatusText }}</span>
+          <span>{{ suiteRunProgress }}%</span>
+        </div>
+        <el-progress
+          :percentage="suiteRunProgress"
+          :status="suiteRunProgress >= 100 && !running ? (suiteRunFailedCount > 0 ? 'exception' : 'success') : undefined"
+          :striped="running"
+          :striped-flow="running"
+        />
+      </div>
+      <div ref="suiteRunLogRef" class="ai-generate-log-panel">
+        <div
+          v-for="(line, index) in suiteRunLogs"
+          :key="index"
+          class="ai-generate-log-line"
+          :class="`log-${line.type}`"
+        >
+          <span class="log-time">{{ line.time }}</span>
+          <span class="log-text">{{ line.text }}</span>
+        </div>
+        <el-empty v-if="!suiteRunLogs.length" description="等待开始..." :image-size="48" />
+      </div>
+      <template #footer>
+        <el-button :disabled="running" @click="suiteRunLogVisible = false">关闭</el-button>
+        <el-button
+          v-if="suiteRunResultId"
+          type="primary"
+          :disabled="running"
+          @click="openSuiteRunReport"
+        >
+          查看报告
+        </el-button>
       </template>
     </el-dialog>
 
@@ -760,7 +843,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Document, Folder } from '@element-plus/icons-vue'
+import { ArrowDown, Document, Folder, MagicStick } from '@element-plus/icons-vue'
 import { projectApi, apiAutomationApi } from '@/api'
 import ApiCaseEditor from '@/components/ApiCaseEditor.vue'
 
@@ -797,6 +880,13 @@ const aiGenerateLogs = ref([])
 const aiGenerateLogRef = ref(null)
 const aiGenerateProgress = ref(0)
 const aiGenerateStatusText = ref('等待开始')
+const suiteRunLogVisible = ref(false)
+const suiteRunLogs = ref([])
+const suiteRunLogRef = ref(null)
+const suiteRunProgress = ref(0)
+const suiteRunStatusText = ref('等待开始')
+const suiteRunResultId = ref(null)
+const suiteRunFailedCount = ref(0)
 const AI_GENERATE_CHUNK_SIZE = 8
 const caseEditorRef = ref(null)
 const suiteTreeRef = ref(null)
@@ -837,6 +927,13 @@ const swaggerUrl = ref('')
 const swaggerBaseUrl = ref('')
 const swaggerAutoEnv = ref(true)
 const swaggerPreview = ref([])
+const swaggerAiGenerating = ref(false)
+const swaggerAiLogVisible = ref(false)
+const swaggerAiLogs = ref([])
+const swaggerAiLogRef = ref(null)
+const swaggerAiProgress = ref(0)
+const swaggerAiStatusText = ref('等待开始')
+const SWAGGER_AI_CHUNK_SIZE = 8
 
 const canParseSwagger = computed(() => {
   if (!suiteId.value) return false
@@ -1780,6 +1877,7 @@ function buildSwaggerPayload(preview) {
     base_url: swaggerBaseUrl.value || undefined,
     auto_environment: swaggerAutoEnv.value,
     preview,
+    items: preview ? undefined : swaggerPreview.value,
   }
 }
 
@@ -1797,6 +1895,89 @@ async function handleParseSwagger() {
   } finally {
     swaggerParsing.value = false
   }
+}
+
+async function handleSwaggerAiGenerate() {
+  if (!swaggerPreview.value.length) return
+
+  swaggerAiLogs.value = []
+  swaggerAiProgress.value = 0
+  swaggerAiStatusText.value = '准备生成...'
+  swaggerAiLogVisible.value = true
+  swaggerAiGenerating.value = true
+
+  const items = [...swaggerPreview.value]
+  appendSwaggerAiLog(`开始为 ${items.length} 条接口生成测试数据`, 'info')
+
+  let totalUpdated = 0
+  let totalSkipped = 0
+  let totalFailed = 0
+  let totalFallback = 0
+  let processed = 0
+
+  try {
+    for (let offset = 0; offset < items.length; offset += SWAGGER_AI_CHUNK_SIZE) {
+      const chunk = items.slice(offset, offset + SWAGGER_AI_CHUNK_SIZE)
+      const end = Math.min(offset + SWAGGER_AI_CHUNK_SIZE, items.length)
+      swaggerAiProgress.value = Math.round((offset / items.length) * 100)
+      swaggerAiStatusText.value = `正在处理 ${offset + 1}-${end} / ${items.length} 条接口`
+      appendSwaggerAiLog(`正在处理第 ${offset + 1}-${end} 条...`, 'info')
+
+      const data = await apiAutomationApi.swaggerGenerateData({ items: chunk })
+      for (let i = 0; i < (data.items || []).length; i++) {
+        swaggerPreview.value[offset + i] = data.items[i]
+      }
+      processed = end
+      totalUpdated += data.updated_count || 0
+      totalSkipped += data.skipped_count || 0
+      totalFailed += data.failed_count || 0
+      totalFallback += data.fallback_count || 0
+      swaggerAiProgress.value = Math.round((processed / items.length) * 100)
+      swaggerAiStatusText.value = `已完成 ${processed} / ${items.length} 条`
+
+      for (const detail of data.details || []) {
+        const logType = detail.success ? 'success' : detail.skipped ? 'warn' : 'error'
+        appendSwaggerAiLog(detail.log || `[${detail.name}] ${detail.message}`, logType)
+      }
+    }
+
+    swaggerAiProgress.value = 100
+    swaggerAiStatusText.value = `造数完成：成功 ${totalUpdated} 条，跳过 ${totalSkipped} 条，失败 ${totalFailed} 条`
+    appendSwaggerAiLog(
+      `造数完成：成功 ${totalUpdated} 条，跳过 ${totalSkipped} 条，失败 ${totalFailed} 条`
+      + (totalFallback ? `，${totalFallback} 条改用 Mock` : ''),
+      totalUpdated > 0 ? 'success' : 'warn',
+    )
+
+    if (totalUpdated > 0) {
+      ElMessage.success(`已为 ${totalUpdated} 条接口生成测试数据`)
+    } else if (totalSkipped > 0 && !totalFailed) {
+      ElMessage.warning('所选接口均无入参，无法生成数据')
+    } else {
+      ElMessage.warning('未生成任何接口数据，请查看日志')
+    }
+  } catch (error) {
+    swaggerAiProgress.value = 100
+    swaggerAiStatusText.value = '造数失败'
+    appendSwaggerAiLog(error?.response?.data?.detail || error?.message || 'AI 造数失败', 'error')
+    ElMessage.error('AI 造数失败，请查看日志')
+  } finally {
+    swaggerAiGenerating.value = false
+  }
+}
+
+function appendSwaggerAiLog(text, type = 'info') {
+  swaggerAiLogs.value.push({
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    text,
+    type,
+  })
+  nextTick(() => {
+    const panel = swaggerAiLogRef.value
+    if (panel) {
+      panel.scrollTop = panel.scrollHeight
+    }
+  })
 }
 
 async function handleImportSwagger() {
@@ -1820,16 +2001,87 @@ async function handleImportSwagger() {
 }
 
 async function handleRunSuite() {
+  if (!suiteId.value) return
+
+  suiteRunLogs.value = []
+  suiteRunProgress.value = 0
+  suiteRunStatusText.value = '准备执行...'
+  suiteRunResultId.value = null
+  suiteRunFailedCount.value = 0
+  suiteRunLogVisible.value = true
   running.value = true
+
   try {
-    const result = await apiAutomationApi.runSuite(suiteId.value)
-    ElMessage.success(result.message || '执行完成')
-    await router.push('/api-automation/reports')
-    await Promise.all([loadSuites(), loadRuns()])
-    await viewReport({ id: result.run_id })
+    await apiAutomationApi.runSuiteStream(suiteId.value, handleSuiteRunEvent)
+  } catch (error) {
+    suiteRunProgress.value = 100
+    suiteRunStatusText.value = '执行失败'
+    appendSuiteRunLog(error?.message || '套件执行失败', 'error')
+    ElMessage.error(error?.message || '套件执行失败')
   } finally {
     running.value = false
   }
+}
+
+function handleSuiteRunEvent(event) {
+  if (event.type === 'start') {
+    suiteRunStatusText.value = event.message || '开始执行...'
+    appendSuiteRunLog(event.message || '开始执行...', 'info')
+    return
+  }
+
+  if (event.type === 'step') {
+    const total = event.total || 1
+    suiteRunProgress.value = Math.min(99, Math.round((event.index / total) * 100))
+    suiteRunStatusText.value = `正在执行 ${event.index}/${total}`
+    const statusText = statusLabel[event.status] || event.status
+    const httpPart = event.response_status ? `，HTTP ${event.response_status}` : ''
+    const errPart = event.error_message ? ` — ${event.error_message}` : ''
+    appendSuiteRunLog(
+      `[${event.index}/${total}] ${event.method} ${event.case_name} — ${statusText} (${Math.round(event.duration_ms || 0)}ms${httpPart})${errPart}`,
+      event.status === 'passed' ? 'success' : 'error',
+    )
+    return
+  }
+
+  if (event.type === 'done') {
+    suiteRunProgress.value = 100
+    suiteRunResultId.value = event.run_id
+    suiteRunFailedCount.value = event.failed_count || 0
+    suiteRunStatusText.value = event.message || '执行完成'
+    appendSuiteRunLog(event.message || '执行完成', event.failed_count > 0 ? 'warn' : 'success')
+    ElMessage.success(event.message || '执行完成')
+    Promise.all([loadSuites(), loadRuns()])
+    return
+  }
+
+  if (event.type === 'error') {
+    suiteRunProgress.value = 100
+    suiteRunStatusText.value = '执行失败'
+    appendSuiteRunLog(event.message || '执行失败', 'error')
+    throw new Error(event.message || '执行失败')
+  }
+}
+
+function appendSuiteRunLog(text, type = 'info') {
+  suiteRunLogs.value.push({
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    text,
+    type,
+  })
+  nextTick(() => {
+    const panel = suiteRunLogRef.value
+    if (panel) {
+      panel.scrollTop = panel.scrollHeight
+    }
+  })
+}
+
+async function openSuiteRunReport() {
+  if (!suiteRunResultId.value) return
+  suiteRunLogVisible.value = false
+  await router.push('/api-automation/reports')
+  await viewReport({ id: suiteRunResultId.value })
 }
 
 async function viewReport(row) {
