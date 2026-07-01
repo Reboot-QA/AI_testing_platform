@@ -1048,6 +1048,33 @@ monitoring_validate() {
     error "请先启动应用: ./deploy.sh start"
     exit 1
   fi
+  touch "$LOG_DIR_HOST/backend.log" "$LOG_DIR_HOST/frontend.log" 2>/dev/null || true
+}
+
+monitoring_verify_loki() {
+  local labels query_resp
+  if ! curl -sf "http://127.0.0.1:${LOKI_PORT}/ready" >/dev/null 2>&1; then
+    warn "Loki 未就绪 (:${LOKI_PORT})"
+    return 1
+  fi
+  labels="$(curl -sf "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/labels" 2>/dev/null || true)"
+  if [[ -z "$labels" ]] || ! echo "$labels" | grep -q 'ai-platform'; then
+    warn "Loki 暂无日志数据，请检查:"
+    echo "  1. 宿主机日志: ls -la $LOG_DIR_HOST"
+    echo "  2. 容器内路径: docker exec ai-platform-promtail ls -la /var/log/ai-platform/"
+    echo "  3. Promtail 日志: docker logs ai-platform-promtail --tail=50"
+    echo "  4. 重置采集: docker compose -f $MONITORING_DIR/docker-compose.yml down -v && ./deploy.sh monitoring start"
+    return 1
+  fi
+  query_resp="$(curl -sf -G "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/query" \
+    --data-urlencode 'query={job="ai-platform"}' \
+    --data-urlencode 'limit=1' 2>/dev/null || true)"
+  if [[ -z "$query_resp" ]] || ! echo "$query_resp" | grep -q '"values"'; then
+    warn "Loki 有标签但暂无日志行，请产生一些应用访问后再查看 Grafana"
+    return 1
+  fi
+  ok "Loki 日志采集正常"
+  return 0
 }
 
 monitoring_write_env() {
@@ -1093,6 +1120,7 @@ monitoring_start() {
     docker compose logs --tail=80 || true
     exit 1
   fi
+  monitoring_verify_loki || true
   ok "监控栈已启动"
   monitoring_status
   warn "Grafana 默认账号: ${GRAFANA_ADMIN_USER} / ${GRAFANA_ADMIN_PASSWORD} （生产环境请修改）"
@@ -1177,8 +1205,14 @@ monitoring_debug() {
   echo "--- docker compose ps -a ---"
   docker compose ps -a 2>&1 || true
   echo
-  echo "--- 尝试拉取镜像 ---"
-  docker compose pull 2>&1 || true
+  echo "--- 容器内日志目录 ---"
+  docker exec ai-platform-promtail ls -la /var/log/ai-platform/ 2>&1 || true
+  echo
+  echo "--- Loki labels ---"
+  curl -sf "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/labels" 2>&1 || true
+  echo
+  echo "--- Promtail 最近日志 ---"
+  docker logs ai-platform-promtail --tail=30 2>&1 || true
   echo
   echo "若镜像拉取失败，请配置 /etc/docker/daemon.json 镜像加速后: systemctl restart docker"
 }

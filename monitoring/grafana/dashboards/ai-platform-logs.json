@@ -169,7 +169,7 @@
   "style": "dark",
   "tags": ["ai-platform", "logs", "loki"],
   "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
+  "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
   "title": "AI质量平台日志",

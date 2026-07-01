@@ -7,27 +7,34 @@ positions:
 
 clients:
   - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
 
 scrape_configs:
-  - job_name: ai-platform
+  - job_name: ai-platform-backend
     static_configs:
       - targets:
           - localhost
         labels:
           job: ai-platform
           app: ai-testing-platform
-          __path__: /var/log/ai-platform/*.log
+          source: backend
+          __path__: /var/log/ai-platform/backend.log
     pipeline_stages:
       - regex:
-          expression: '.*/(?P<source>[^/]+)\.log'
-          source: filename
-      - labels:
-          source:
-      # 应用日志: [2026-07-01 10:00:00] [WARNING] [app.api] message
-      - regex:
-          expression: '^\[(?P<timestamp>[^\]]+)\] \[(?P<level>[^\]]+)\](?: \[(?P<logger>[^\]]+)\])? (?P<message>.*)$'
+          expression: '^\[(?P<timestamp>[^\]]+)\] \[(?P<level>[^\]]+)\]'
       - labels:
           level:
-      # Uvicorn 日志: INFO:     127.0.0.1:8000 - "GET /api HTTP/1.1" 400 Bad Request
       - regex:
-          expression: '^(?P<level>INFO|WARNING|ERROR|DEBUG|CRITICAL):\s+(?P<uvicorn_message>.*)$'
+          expression: '^(?P<level>INFO|WARNING|ERROR|DEBUG|CRITICAL):'
+      - labels:
+          level:
+
+  - job_name: ai-platform-frontend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ai-platform
+          app: ai-testing-platform
+          source: frontend
+          __path__: /var/log/ai-platform/frontend.log

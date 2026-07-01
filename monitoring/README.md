@@ -52,6 +52,34 @@ export LOG_DIR_HOST=/opt/AI_testing_platform/.deploy/logs
 
 ## 故障排查
 
+**Grafana 显示 No data**：
+
+```bash
+cd /opt/AI_testing_platform
+./deploy.sh start
+ls -la .deploy/logs/
+PUBLIC_HOST=38.12.6.230 ./deploy.sh monitoring restart
+./deploy.sh monitoring debug
+```
+
+验证 Loki 是否有日志：
+
+```bash
+curl -s http://127.0.0.1:3100/loki/api/v1/labels
+curl -G -s 'http://127.0.0.1:3100/loki/api/v1/query' \
+  --data-urlencode 'query={job="ai-platform"}' --data-urlencode 'limit=5'
+```
+
+仍无数据时重置 Promtail 采集进度：
+
+```bash
+cd monitoring && docker compose down
+docker volume rm ai-platform-monitoring_promtail-positions 2>/dev/null || true
+cd .. && PUBLIC_HOST=38.12.6.230 ./deploy.sh monitoring start
+```
+
+Grafana 时间范围选 **Last 6 hours** 或 **Last 24 hours**。
+
 **容器列表为空** 通常表示尚未执行 `start`（仅 `status` 也会生成 `.env`，但不会启动容器）。
 
 ```bash
