@@ -23,7 +23,11 @@ scrape_configs:
           source: filename
       - labels:
           source:
+      # 应用日志: [2026-07-01 10:00:00] [WARNING] [app.api] message
       - regex:
           expression: '^\[(?P<timestamp>[^\]]+)\] \[(?P<level>[^\]]+)\](?: \[(?P<logger>[^\]]+)\])? (?P<message>.*)$'
       - labels:
           level:
+      # Uvicorn 日志: INFO:     127.0.0.1:8000 - "GET /api HTTP/1.1" 400 Bad Request
+      - regex:
+          expression: '^(?P<level>INFO|WARNING|ERROR|DEBUG|CRITICAL):\s+(?P<uvicorn_message>.*)$'

@@ -14,6 +14,7 @@ from app.services.settings_service import init_llm_settings_from_env
 from app.services.api_automation_migration import migrate_api_test_suite_tree
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.schedule_service import init_schedules_on_startup, start_scheduler, stop_scheduler
+from app.request_logging import register_request_logging
 
 
 def setup_logging() -> None:
@@ -34,7 +35,13 @@ def setup_logging() -> None:
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
+    for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
+        uvicorn_logger = logging.getLogger(logger_name)
+        uvicorn_logger.handlers.clear()
+        uvicorn_logger.propagate = True
+
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.error").setLevel(logging.INFO)
 
 
 @asynccontextmanager
@@ -74,6 +81,8 @@ app.include_router(users.router, prefix="/api/v1")
 app.include_router(api_automation.router, prefix="/api/v1")
 app.include_router(test_execution.router, prefix="/api/v1")
 app.include_router(logs.router, prefix="/api/v1")
+
+register_request_logging(app)
 
 
 @app.get("/")

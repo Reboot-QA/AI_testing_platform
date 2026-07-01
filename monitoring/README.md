@@ -31,9 +31,9 @@
 Explore 示例 LogQL：
 
 ```logql
-{job="ai-platform"}
-{job="ai-platform", source="backend"}
-{job="ai-platform"} |~ "error|exception"
+{job="ai-platform", source="backend"} |~ "HTTP [45][0-9]{2}|-> HTTP"
+{job="ai-platform", source="backend", level="WARNING"}
+{job="ai-platform"} |~ "error|exception|traceback"
 ```
 
 ## 环境变量

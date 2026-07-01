@@ -118,6 +118,30 @@
     {
       "datasource": { "type": "loki", "uid": "loki" },
       "gridPos": { "h": 8, "w": 24, "x": 0, "y": 26 },
+      "id": 6,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": true,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "targets": [
+        {
+          "datasource": { "type": "loki", "uid": "loki" },
+          "expr": "{job=\"ai-platform\", source=\"backend\"} |~ \"(?i)HTTP [45][0-9]{2}|validation:|Unhandled|-> HTTP\"",
+          "refId": "A"
+        }
+      ],
+      "title": "接口错误 (后端)",
+      "type": "logs"
+    },
+    {
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 34 },
       "id": 5,
       "options": {
         "dedupStrategy": "none",
@@ -132,7 +156,7 @@
       "targets": [
         {
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "{job=\"ai-platform\"} |~ \"(?i)error|exception|traceback|failed\"",
+          "expr": "{job=\"ai-platform\"} |~ \"(?i)\\[ERROR\\]|\\[WARNING\\].*HTTP|exception|traceback|Unhandled|失败\"",
           "refId": "A"
         }
       ],
