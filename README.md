@@ -2,6 +2,22 @@
 
 演示地址：http://38.12.6.230:5173/login
 
+![Snipaste_01](./images/Snipaste_01.png)
+![Snipaste_02](./images/Snipaste_02.png)
+![Snipaste_03](./images/Snipaste_03.png)
+![Snipaste_04](./images/Snipaste_04.png)
+![Snipaste_05](./images/Snipaste_05.png)
+![Snipaste_06](./images/Snipaste_06.png)
+![Snipaste_07](./images/Snipaste_07.png)
+![Snipaste_08](./images/Snipaste_08.png)
+![Snipaste_09](./images/Snipaste_09.png)
+![Snipaste_10](./images/Snipaste_10.png)
+![Snipaste_11](./images/Snipaste_11.png)
+![Snipaste_12](./images/Snipaste_12.png)
+![Snipaste_13](./images/Snipaste_13.png)
+![Snipaste_14](./images/Snipaste_14.png)
+![Snipaste_15](./images/Snipaste_15.png)
+![Snipaste_16](./images/Snipaste_16.png)
 
 基于 **Python FastAPI + Vue 3** 的智能质量与测试管理平台，覆盖需求管理、功能用例、AI 生成、手工执行与接口自动化测试。
 
