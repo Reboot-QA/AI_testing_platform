@@ -118,6 +118,10 @@ AI质量平台 - 一键部署脚本
   LOKI_PORT       Loki 端口 (默认 3100)
 
 首次部署示例:
+  # 推荐：一键安装脚本（Linux 服务器）
+  curl -fsSL https://raw.githubusercontent.com/Reboot-QA/AI_testing_platform/main/install-server.sh | bash
+  PUBLIC_HOST=你的公网IP INSTALL_DIR=/opt/AI_testing_platform ./install-server.sh
+
   git clone $GIT_REPO_URL
   cd AI_testing_platform && ./deploy.sh
 
