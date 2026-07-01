@@ -8,6 +8,7 @@ from typing import Any, Dict, List, Optional, Union
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
+from openpyxl.styles import Alignment
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
@@ -429,6 +430,41 @@ async def ai_generate_stream(
     )
 
 
+def _merge_requirement_column(ws, row_keys: List[Optional[int]], *, column: int = 2) -> None:
+    """合并需求点列中连续相同 requirement_id 的单元格。"""
+    if not row_keys:
+        return
+
+    merge_start = 0
+    current_key = row_keys[0]
+    for index in range(1, len(row_keys)):
+        key = row_keys[index]
+        if key != current_key or key is None:
+            if current_key is not None and index - merge_start > 1:
+                start_row = merge_start + 2
+                end_row = index + 1
+                ws.merge_cells(
+                    start_row=start_row,
+                    start_column=column,
+                    end_row=end_row,
+                    end_column=column,
+                )
+                ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=True)
+            merge_start = index
+            current_key = key
+
+    if current_key is not None and len(row_keys) - merge_start > 1:
+        start_row = merge_start + 2
+        end_row = len(row_keys) + 1
+        ws.merge_cells(
+            start_row=start_row,
+            start_column=column,
+            end_row=end_row,
+            end_column=column,
+        )
+        ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=True)
+
+
 @router.get("/export/excel")
 def export_excel(
     project_id: int = Query(...),
@@ -440,30 +476,41 @@ def export_excel(
         db.query(TestCase)
         .options(joinedload(TestCase.requirement))
         .filter(TestCase.project_id == project_id)
-        .order_by(TestCase.id.asc())
         .all()
+    )
+    cases.sort(
+        key=lambda item: (
+            item.requirement.title if item.requirement else "",
+            item.requirement_id or 0,
+            item.id,
+        )
     )
 
     wb = Workbook()
     ws = wb.active
     ws.title = "测试用例"
-    headers = ["ID", "标题", "需求点", "类型", "优先级", "前置条件", "步骤", "预期结果", "标签", "来源", "评审状态"]
+    headers = ["ID", "需求点", "标题", "类型", "优先级", "前置条件", "步骤", "预期结果", "标签", "来源", "评审状态"]
     ws.append(headers)
-    for c in cases:
-        requirement_title = c.requirement.title if c.requirement else ""
+
+    merge_keys: List[Optional[int]] = []
+    for case in cases:
+        requirement_title = case.requirement.title if case.requirement else ""
+        merge_keys.append(case.requirement_id)
         ws.append([
-            c.id,
-            c.title,
+            case.id,
             requirement_title,
-            c.case_type,
-            c.priority,
-            c.preconditions,
-            c.steps,
-            c.expected_results,
-            c.tags,
-            c.source,
-            c.review_status,
+            case.title,
+            case.case_type,
+            case.priority,
+            case.preconditions,
+            case.steps,
+            case.expected_results,
+            case.tags,
+            case.source,
+            case.review_status,
         ])
+
+    _merge_requirement_column(ws, merge_keys, column=2)
 
     buffer = BytesIO()
     wb.save(buffer)
