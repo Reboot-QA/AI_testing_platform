@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 from io import BytesIO
 from urllib.parse import quote
 
@@ -430,6 +431,27 @@ async def ai_generate_stream(
     )
 
 
+def _format_numbered_lines(text: Optional[str]) -> Optional[str]:
+    """将「1. …；2. …」或同一行多个编号项转为换行显示。"""
+    if not text:
+        return text
+    value = str(text).strip()
+    if not value:
+        return value
+    if "\n" in value:
+        lines = [line.strip() for line in value.splitlines() if line.strip()]
+        return "\n".join(lines)
+
+    value = re.sub(r"[；;]\s*(?=\d+\.)", "\n", value)
+    value = re.sub(r"(?<=[^\n])\s+(?=\d+\.)", "\n", value)
+    return value
+
+
+def _apply_multiline_cell_style(ws, row: int, column: int, value: Optional[str]) -> None:
+    cell = ws.cell(row, column, _format_numbered_lines(value))
+    cell.alignment = Alignment(vertical="top", wrap_text=True)
+
+
 def _merge_requirement_column(ws, row_keys: List[Optional[int]], *, column: int = 2) -> None:
     """合并需求点列中连续相同 requirement_id 的单元格。"""
     if not row_keys:
@@ -496,19 +518,18 @@ def export_excel(
     for case in cases:
         requirement_title = case.requirement.title if case.requirement else ""
         merge_keys.append(case.requirement_id)
-        ws.append([
-            case.id,
-            requirement_title,
-            case.title,
-            case.case_type,
-            case.priority,
-            case.preconditions,
-            case.steps,
-            case.expected_results,
-            case.tags,
-            case.source,
-            case.review_status,
-        ])
+        row_num = ws.max_row + 1
+        ws.cell(row_num, 1, case.id)
+        ws.cell(row_num, 2, requirement_title)
+        ws.cell(row_num, 3, case.title)
+        ws.cell(row_num, 4, case.case_type)
+        ws.cell(row_num, 5, case.priority)
+        _apply_multiline_cell_style(ws, row_num, 6, case.preconditions)
+        _apply_multiline_cell_style(ws, row_num, 7, case.steps)
+        _apply_multiline_cell_style(ws, row_num, 8, case.expected_results)
+        ws.cell(row_num, 9, case.tags)
+        ws.cell(row_num, 10, case.source)
+        ws.cell(row_num, 11, case.review_status)
 
     _merge_requirement_column(ws, merge_keys, column=2)
 
