@@ -360,11 +360,47 @@
         <el-button type="primary" @click="copyExportedJson">复制</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog
+      v-model="aiGenerateLogVisible"
+      title="AI 生成数据日志"
+      width="620px"
+      append-to-body
+      :close-on-click-modal="!aiGenerating"
+      :show-close="!aiGenerating"
+    >
+      <div class="ai-generate-progress-block">
+        <div class="ai-generate-progress-head">
+          <span>{{ aiGenerateStatusText }}</span>
+          <span>{{ aiGenerateProgress }}%</span>
+        </div>
+        <el-progress
+          :percentage="aiGenerateProgress"
+          :status="aiGenerateProgress >= 100 && !aiGenerating ? 'success' : undefined"
+          :striped="aiGenerating"
+          :striped-flow="aiGenerating"
+        />
+      </div>
+      <div ref="aiGenerateLogRef" class="ai-generate-log-panel">
+        <div
+          v-for="(line, index) in aiGenerateLogs"
+          :key="index"
+          class="ai-generate-log-line"
+          :class="`log-${line.type}`"
+        >
+          <span class="log-time">{{ line.time }}</span>
+          <span class="log-text">{{ line.text }}</span>
+        </div>
+      </div>
+      <template #footer>
+        <el-button :disabled="aiGenerating" @click="aiGenerateLogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, nextTick, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { CopyDocument, DocumentChecked, MagicStick, Plus, Promotion, Upload } from '@element-plus/icons-vue'
 import { apiAutomationApi } from '@/api'
@@ -409,6 +445,11 @@ const saving = ref(false)
 const copying = ref(false)
 const sending = ref(false)
 const aiGenerating = ref(false)
+const aiGenerateLogVisible = ref(false)
+const aiGenerateLogs = ref([])
+const aiGenerateLogRef = ref(null)
+const aiGenerateProgress = ref(0)
+const aiGenerateStatusText = ref('等待开始')
 const debugResult = ref(null)
 const headerRows = ref([emptyKvRow()])
 const queryRows = ref([emptyKvRow()])
@@ -853,10 +894,32 @@ function applyGeneratedBody(bodyText) {
 
 async function handleAiGenerateData() {
   if (!canAiGenerateData.value) return
+
+  const hasBody = form.body_type !== 'none' && (
+    (form.body_type === 'json' && bodyStores.json?.trim())
+    || (form.body_type === 'raw' && bodyStores.raw?.trim())
+    || ((form.body_type === 'form-data' || form.body_type === 'urlencoded') && countActiveKvRows(currentFormBodyRows.value))
+  )
+  if (!hasBody && !activeQueryCount.value && !activePathCount.value) {
+    ElMessage.warning('当前用例没有 Body/Query/Path 参数，无法生成数据')
+    return
+  }
+
+  aiGenerateLogs.value = []
+  aiGenerateProgress.value = 0
+  aiGenerateStatusText.value = '准备生成...'
+  aiGenerateLogVisible.value = true
   aiGenerating.value = true
+  appendAiGenerateLog(`开始为「${form.name || '当前用例'}」生成测试数据`, 'info')
+
   try {
+    aiGenerateProgress.value = 10
+    aiGenerateStatusText.value = '正在解析用例参数...'
     const payload = buildCasePayload()
     const pathOnly = pathFromFullUrl(form.full_url, selectedEnv.value).split('?')[0]
+    aiGenerateProgress.value = 25
+    aiGenerateStatusText.value = '正在调用 AI 接口...'
+    appendAiGenerateLog('正在调用 AI 接口...', 'info')
     const data = await apiAutomationApi.generateCaseData({
       name: form.name,
       method: form.method,
@@ -868,18 +931,69 @@ async function handleAiGenerateData() {
       query_params: queryRows.value.filter((row) => row.key?.trim()),
       path_params: pathRows.value.filter((row) => row.key?.trim()),
     })
+
+    aiGenerateProgress.value = 65
+    aiGenerateStatusText.value = '正在填充 Body/Query/Path...'
     applyGeneratedBody(data.body)
     applyGeneratedParams(queryRows.value, data.query)
     applyGeneratedParams(pathRows.value, data.path)
+
+    if (data.body) {
+      appendAiGenerateLog('已填充 Body 数据', 'success')
+    }
+    if (data.query?.length) {
+      appendAiGenerateLog(`已更新 ${data.query.length} 个 Query 参数`, 'success')
+    }
+    if (data.path?.length) {
+      appendAiGenerateLog(`已更新 ${data.path.length} 个 Path 变量`, 'success')
+    }
+
     if (data.body || data.query?.length || data.path?.length) {
       activeTab.value = 'body'
-      ElMessage.success(data.message || 'AI 生成成功')
+      if (editingId.value) {
+        aiGenerateProgress.value = 85
+        aiGenerateStatusText.value = '正在自动保存用例...'
+        appendAiGenerateLog('正在自动保存用例...', 'info')
+        await apiAutomationApi.updateCase(editingId.value, buildCasePayload())
+        appendAiGenerateLog('已自动保存到用例', 'success')
+        emit('saved', editingId.value)
+        aiGenerateProgress.value = 100
+        aiGenerateStatusText.value = '已完成'
+        ElMessage.success(data.message || 'AI 生成并保存成功')
+      } else {
+        aiGenerateProgress.value = 100
+        aiGenerateStatusText.value = '生成完成，请手动保存'
+        appendAiGenerateLog('生成完成，请手动保存用例', 'warn')
+        ElMessage.success(data.message || 'AI 生成成功，请保存用例')
+      }
     } else {
+      aiGenerateProgress.value = 100
+      aiGenerateStatusText.value = '未生成可填充的数据'
+      appendAiGenerateLog('未生成可填充的数据', 'warn')
       ElMessage.warning('未生成可填充的数据')
     }
+  } catch (error) {
+    aiGenerateProgress.value = 100
+    aiGenerateStatusText.value = '生成失败'
+    appendAiGenerateLog(error?.response?.data?.detail || error?.message || 'AI 生成失败', 'error')
+    ElMessage.error('AI 生成失败，请查看日志')
   } finally {
     aiGenerating.value = false
   }
+}
+
+function appendAiGenerateLog(text, type = 'info') {
+  aiGenerateLogs.value.push({
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    text,
+    type,
+  })
+  nextTick(() => {
+    const panel = aiGenerateLogRef.value
+    if (panel) {
+      panel.scrollTop = panel.scrollHeight
+    }
+  })
 }
 
 async function handlePreScriptDebug(operation) {
@@ -1327,6 +1441,57 @@ defineExpose({ resetForm, applyCaptureItem, handleNew })
 
 .body-editor {
   font-family: Consolas, Monaco, monospace;
+}
+
+.ai-generate-progress-block {
+  margin-bottom: 12px;
+}
+
+.ai-generate-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.ai-generate-log-panel {
+  max-height: 360px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #0f172a;
+  border-radius: 8px;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+}
+
+.ai-generate-log-line {
+  display: flex;
+  gap: 10px;
+  line-height: 1.7;
+  color: #e2e8f0;
+}
+
+.ai-generate-log-line .log-time {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.ai-generate-log-line.log-success .log-text {
+  color: #4ade80;
+}
+
+.ai-generate-log-line.log-warn .log-text {
+  color: #fbbf24;
+}
+
+.ai-generate-log-line.log-error .log-text {
+  color: #f87171;
+}
+
+.ai-generate-log-line.log-info .log-text {
+  color: #cbd5e1;
 }
 
 .form-tip {

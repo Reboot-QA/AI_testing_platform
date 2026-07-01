@@ -570,6 +570,28 @@ class ApiDataGenerateOut(BaseModel):
     message: str = ""
 
 
+class ApiDataBatchGenerateRequest(BaseModel):
+    case_ids: List[int] = Field(default_factory=list)
+    provider_id: Optional[int] = None
+
+
+class ApiDataBatchGenerateItemOut(BaseModel):
+    case_id: int
+    case_name: str
+    success: bool
+    message: str = ""
+    log: str = ""
+
+
+class ApiDataBatchGenerateOut(BaseModel):
+    updated_count: int = 0
+    failed_count: int = 0
+    skipped_count: int = 0
+    items: List[ApiDataBatchGenerateItemOut] = Field(default_factory=list)
+    mode: str = "mock"
+    message: str = ""
+
+
 class ApiPreScriptDebugRequest(BaseModel):
     script: str = ""
     language: str = "javascript"

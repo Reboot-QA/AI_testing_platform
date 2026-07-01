@@ -146,6 +146,16 @@
                     <el-button
                       v-if="selectedCaseIds.length"
                       link
+                      type="primary"
+                      size="small"
+                      :loading="caseBatchGenerating"
+                      @click="batchGenerateCaseData"
+                    >
+                      AI 生成数据({{ selectedCaseIds.length }})
+                    </el-button>
+                    <el-button
+                      v-if="selectedCaseIds.length"
+                      link
                       type="danger"
                       size="small"
                       :loading="caseBatchDeleting"
@@ -516,6 +526,43 @@
       </template>
     </el-dialog>
 
+    <!-- AI 生成数据日志 -->
+    <el-dialog
+      v-model="aiGenerateLogVisible"
+      title="AI 生成数据日志"
+      width="680px"
+      :close-on-click-modal="!caseBatchGenerating"
+      :show-close="!caseBatchGenerating"
+    >
+      <div class="ai-generate-progress-block">
+        <div class="ai-generate-progress-head">
+          <span>{{ aiGenerateStatusText }}</span>
+          <span>{{ aiGenerateProgress }}%</span>
+        </div>
+        <el-progress
+          :percentage="aiGenerateProgress"
+          :status="aiGenerateProgress >= 100 && !caseBatchGenerating ? 'success' : undefined"
+          :striped="caseBatchGenerating"
+          :striped-flow="caseBatchGenerating"
+        />
+      </div>
+      <div ref="aiGenerateLogRef" class="ai-generate-log-panel">
+        <div
+          v-for="(line, index) in aiGenerateLogs"
+          :key="index"
+          class="ai-generate-log-line"
+          :class="`log-${line.type}`"
+        >
+          <span class="log-time">{{ line.time }}</span>
+          <span class="log-text">{{ line.text }}</span>
+        </div>
+        <el-empty v-if="!aiGenerateLogs.length" description="等待开始..." :image-size="48" />
+      </div>
+      <template #footer>
+        <el-button :disabled="caseBatchGenerating" @click="aiGenerateLogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 定时任务对话框 -->
     <el-dialog v-model="scheduleDialogVisible" :title="scheduleEditing ? '编辑定时任务' : '新建定时任务'" width="560px">
       <el-form ref="scheduleFormRef" :model="scheduleForm" :rules="scheduleRules" label-width="100px">
@@ -578,12 +625,33 @@
           </div>
           <div class="summary-card">
             <div class="summary-label">通过 / 失败 / 总数</div>
-            <div class="summary-value">
-              <span class="text-success">{{ reportDetail.passed_count }}</span>
+            <div class="summary-value report-count-value">
+              <button
+                type="button"
+                class="report-count-btn text-success"
+                :class="{ active: reportStepFilter === 'passed' }"
+                @click="setReportStepFilter('passed')"
+              >
+                {{ reportDetail.passed_count }}
+              </button>
               /
-              <span class="text-danger">{{ reportDetail.failed_count }}</span>
+              <button
+                type="button"
+                class="report-count-btn text-danger"
+                :class="{ active: reportStepFilter === 'failed' }"
+                @click="setReportStepFilter('failed')"
+              >
+                {{ reportDetail.failed_count }}
+              </button>
               /
-              {{ reportDetail.total_count }}
+              <button
+                type="button"
+                class="report-count-btn"
+                :class="{ active: reportStepFilter === 'all' }"
+                @click="setReportStepFilter('all')"
+              >
+                {{ reportDetail.total_count }}
+              </button>
             </div>
           </div>
           <div class="summary-card">
@@ -592,16 +660,28 @@
           </div>
         </div>
 
-        <el-divider content-position="left">用例执行明细</el-divider>
+        <el-divider content-position="left">
+          用例执行明细
+          <span v-if="reportStepFilter !== 'all'" class="report-filter-tip">
+            （{{ reportStepFilter === 'passed' ? '仅通过' : '仅失败' }}，共 {{ filteredReportSteps.length }} 条）
+          </span>
+        </el-divider>
 
-        <el-collapse v-model="expandedSteps">
+        <el-empty
+          v-if="!filteredReportSteps.length"
+          :description="reportStepFilter === 'passed' ? '暂无通过用例' : reportStepFilter === 'failed' ? '暂无失败用例' : '暂无用例'"
+          :image-size="64"
+        />
+
+        <el-collapse v-else v-model="expandedSteps">
           <el-collapse-item
-            v-for="step in reportDetail.step_results"
+            v-for="(step, index) in filteredReportSteps"
             :key="step.id"
             :name="step.id"
           >
             <template #title>
               <div class="step-title">
+                <span class="step-index">{{ index + 1 }}</span>
                 <el-tag :type="statusType[step.status]" size="small">
                   {{ statusLabel[step.status] || step.status }}
                 </el-tag>
@@ -711,6 +791,13 @@ const caseDragOverId = ref(null)
 const caseMoving = ref(false)
 const selectedCaseIds = ref([])
 const caseBatchDeleting = ref(false)
+const caseBatchGenerating = ref(false)
+const aiGenerateLogVisible = ref(false)
+const aiGenerateLogs = ref([])
+const aiGenerateLogRef = ref(null)
+const aiGenerateProgress = ref(0)
+const aiGenerateStatusText = ref('等待开始')
+const AI_GENERATE_CHUNK_SIZE = 8
 const caseEditorRef = ref(null)
 const suiteTreeRef = ref(null)
 
@@ -761,6 +848,18 @@ const canParseSwagger = computed(() => {
 
 const reportDetail = ref(null)
 const expandedSteps = ref([])
+const reportStepFilter = ref('all')
+
+const filteredReportSteps = computed(() => {
+  const steps = reportDetail.value?.step_results || []
+  if (reportStepFilter.value === 'passed') {
+    return steps.filter((step) => step.status === 'passed')
+  }
+  if (reportStepFilter.value === 'failed') {
+    return steps.filter((step) => step.status === 'failed')
+  }
+  return steps
+})
 
 const envFormRef = ref()
 const folderFormRef = ref()
@@ -1042,6 +1141,85 @@ function toggleCaseSelection(id, checked) {
     return
   }
   selectedCaseIds.value = selectedCaseIds.value.filter((item) => item !== id)
+}
+
+async function batchGenerateCaseData() {
+  if (!selectedCaseIds.value.length) return
+
+  const caseIds = [...selectedCaseIds.value]
+  aiGenerateLogs.value = []
+  aiGenerateProgress.value = 0
+  aiGenerateStatusText.value = '准备批量生成...'
+  aiGenerateLogVisible.value = true
+  caseBatchGenerating.value = true
+
+  appendAiGenerateLog(`开始批量生成，共 ${caseIds.length} 条用例`, 'info')
+
+  let totalUpdated = 0
+  let totalFailed = 0
+  let totalSkipped = 0
+  let processed = 0
+
+  try {
+    for (let offset = 0; offset < caseIds.length; offset += AI_GENERATE_CHUNK_SIZE) {
+      const chunk = caseIds.slice(offset, offset + AI_GENERATE_CHUNK_SIZE)
+      const end = Math.min(offset + AI_GENERATE_CHUNK_SIZE, caseIds.length)
+      const percent = Math.round((offset / caseIds.length) * 100)
+      aiGenerateProgress.value = percent
+      aiGenerateStatusText.value = `正在处理 ${offset + 1}-${end} / ${caseIds.length} 条用例`
+      appendAiGenerateLog(`正在处理第 ${offset + 1}-${end} 条...`, 'info')
+
+      const result = await apiAutomationApi.batchGenerateCaseData({ case_ids: chunk })
+      processed = end
+      totalUpdated += result.updated_count || 0
+      totalFailed += result.failed_count || 0
+      totalSkipped += result.skipped_count || 0
+      aiGenerateProgress.value = Math.round((processed / caseIds.length) * 100)
+      aiGenerateStatusText.value = `已完成 ${processed} / ${caseIds.length} 条`
+
+      for (const item of result.items || []) {
+        appendAiGenerateLog(item.log || `[${item.case_name}] ${item.message}`, item.success ? 'success' : 'warn')
+      }
+    }
+
+    aiGenerateStatusText.value = '正在刷新用例列表...'
+    aiGenerateProgress.value = 98
+    await loadCases()
+    aiGenerateProgress.value = 100
+    aiGenerateStatusText.value = `批量生成完成：成功 ${totalUpdated} 条，跳过 ${totalSkipped} 条，失败 ${totalFailed} 条`
+
+    appendAiGenerateLog(
+      `批量生成完成：成功 ${totalUpdated} 条，跳过 ${totalSkipped} 条，失败 ${totalFailed} 条`,
+      totalUpdated > 0 ? 'success' : 'warn',
+    )
+
+    if (totalUpdated > 0) {
+      ElMessage.success(`成功为 ${totalUpdated} 条用例生成并保存数据`)
+    } else {
+      ElMessage.warning('未成功保存任何用例数据，请查看日志')
+    }
+  } catch (error) {
+    aiGenerateProgress.value = 100
+    aiGenerateStatusText.value = '批量生成失败'
+    appendAiGenerateLog(error?.response?.data?.detail || error?.message || '批量生成失败', 'error')
+    ElMessage.error('批量生成失败，请查看日志')
+  } finally {
+    caseBatchGenerating.value = false
+  }
+}
+
+function appendAiGenerateLog(text, type = 'info') {
+  aiGenerateLogs.value.push({
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
+    text,
+    type,
+  })
+  nextTick(() => {
+    const panel = aiGenerateLogRef.value
+    if (panel) {
+      panel.scrollTop = panel.scrollHeight
+    }
+  })
 }
 
 async function batchRemoveCases() {
@@ -1659,15 +1837,16 @@ async function viewReport(row) {
   reportDetailLoading.value = true
   try {
     reportDetail.value = await apiAutomationApi.getRun(row.id)
-    expandedSteps.value = reportDetail.value.step_results
-      .filter((item) => item.status === 'failed')
-      .map((item) => item.id)
-    if (!expandedSteps.value.length && reportDetail.value.step_results.length) {
-      expandedSteps.value = [reportDetail.value.step_results[0].id]
-    }
+    reportStepFilter.value = 'all'
+    expandedSteps.value = []
   } finally {
     reportDetailLoading.value = false
   }
+}
+
+function setReportStepFilter(filter) {
+  reportStepFilter.value = filter
+  expandedSteps.value = []
 }
 
 async function removeRun(row) {
@@ -1912,6 +2091,7 @@ onUnmounted(() => {
 .panel-title-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 10px 12px;
   border-bottom: 1px solid #ebeef5;
@@ -2021,6 +2201,57 @@ onUnmounted(() => {
   margin-bottom: 10px;
 }
 
+.ai-generate-progress-block {
+  margin-bottom: 12px;
+}
+
+.ai-generate-progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #475569;
+}
+
+.ai-generate-log-panel {
+  max-height: 420px;
+  overflow-y: auto;
+  padding: 12px;
+  background: #0f172a;
+  border-radius: 8px;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 12px;
+}
+
+.ai-generate-log-line {
+  display: flex;
+  gap: 10px;
+  line-height: 1.7;
+  color: #e2e8f0;
+}
+
+.ai-generate-log-line .log-time {
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.ai-generate-log-line.log-success .log-text {
+  color: #4ade80;
+}
+
+.ai-generate-log-line.log-warn .log-text {
+  color: #fbbf24;
+}
+
+.ai-generate-log-line.log-error .log-text {
+  color: #f87171;
+}
+
+.ai-generate-log-line.log-info .log-text {
+  color: #cbd5e1;
+}
+
 .report-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2048,11 +2279,51 @@ onUnmounted(() => {
   color: #1a365d;
 }
 
+.report-count-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.report-count-btn {
+  border: none;
+  background: transparent;
+  padding: 0 4px;
+  font: inherit;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.report-count-btn:hover {
+  background: rgba(49, 130, 206, 0.08);
+}
+
+.report-count-btn.active {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.report-filter-tip {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
+  color: #909399;
+}
+
 .step-title {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
+}
+
+.step-index {
+  flex-shrink: 0;
+  min-width: 28px;
+  text-align: center;
+  font-size: 13px;
+  font-weight: 600;
+  color: #64748b;
 }
 
 .step-method {

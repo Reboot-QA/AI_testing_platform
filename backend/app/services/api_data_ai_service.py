@@ -9,18 +9,52 @@ from app.services.ai_service import _build_request_payload, _extract_llm_error
 API_DATA_SYSTEM_PROMPT = """你是一位资深接口测试工程师。根据接口信息，为请求参数生成可直接用于调试的真实测试数据。
 
 要求：
-1. 将占位符（如 "string"、0、false、空字符串）替换为合理、可运行的测试值
-2. username/account 类字段优先使用 admin；password 类字段优先使用 admin123
-3. email 使用 test@example.com 格式；手机号使用合法 11 位数字
-4. 保持原有 JSON 结构与字段名不变，只替换值
-5. 只输出 JSON 对象，格式如下：
+1. 必须替换所有占位符（如 "string"、0、false、空字符串），包括嵌套对象和数组内的字段
+2. project_id 使用 1；username 使用 admin；password 使用 admin123
+3. file 字段使用示例文件名，如 需求文档示例.txt
+4. requirements/items 等数组至少生成 1 条完整对象，title/description 使用中文业务描述
+5. 保持原有 JSON 结构与字段名不变，只替换值
+6. 只输出 JSON 对象，格式如下：
 {
-  "body": <JSON对象或字符串，与原 body 类型一致>,
+  "body": <JSON对象>,
   "query": {"参数名": "参数值"},
   "path": {"变量名": "变量值"}
 }
 若无 query/path 参数则返回空对象 {}。
 不要输出 markdown 代码块或其它说明文字。"""
+
+LIST_OBJECT_KEYS = {
+    "requirements",
+    "items",
+    "records",
+    "list",
+    "cases",
+    "data",
+    "rows",
+    "entries",
+}
+
+
+def _infer_body_type(body: Optional[str]) -> str:
+    text = (body or "").strip()
+    if not text:
+        return "none"
+    try:
+        parsed = json.loads(text)
+        if isinstance(parsed, list) and parsed and all(isinstance(item, dict) and "key" in item for item in parsed):
+            return "form-data"
+    except json.JSONDecodeError:
+        pass
+    if text.startswith("{") or text.startswith("["):
+        return "json"
+    return "raw"
+
+
+def _normalize_body_type(body_type: str, body: Optional[str]) -> str:
+    normalized = (body_type or "none").strip().lower()
+    if body and body.strip() and normalized in {"none", ""}:
+        return _infer_body_type(body)
+    return normalized or "none"
 
 
 def _is_placeholder(value: Any) -> bool:
@@ -36,18 +70,39 @@ def _is_placeholder(value: Any) -> bool:
     return False
 
 
-def _guess_value(key: str, value: Any, fake: Any) -> Any:
+def _guess_value(key: str, value: Any, fake: Any, *, force: bool = False) -> Any:
     if isinstance(value, dict):
-        return {child_key: _guess_value(child_key, child_value, fake) for child_key, child_value in value.items()}
-    if isinstance(value, list):
-        if not value:
-            return [_guess_value(key, "string", fake)]
-        return [_guess_value(key, value[0], fake)]
+        return {
+            child_key: _guess_value(child_key, child_value, fake, force=force)
+            for child_key, child_value in value.items()
+        }
 
-    if not _is_placeholder(value):
+    if isinstance(value, list):
+        key_lower = (key or "").lower()
+        if not value:
+            template: Any = "string"
+            if key_lower in LIST_OBJECT_KEYS:
+                template = {"title": "示例需求标题", "description": "示例需求描述"}
+            return [_guess_value(key, template, fake, force=force)]
+        first = value[0]
+        generated = _guess_value(key, first, fake, force=force)
+        if key_lower in LIST_OBJECT_KEYS and isinstance(first, dict) and isinstance(generated, dict):
+            second = dict(generated)
+            if "title" in second:
+                second["title"] = fake.sentence(nb_words=5)
+            return [generated, second]
+        return [generated]
+
+    if not force and not _is_placeholder(value):
         return value
 
-    key_lower = key.lower()
+    key_lower = (key or "").lower()
+    if key_lower in {"project_id"} or key_lower.endswith("_project_id"):
+        return 1
+    if key_lower in {"file", "filename", "filepath", "document", "attachment"} or key_lower.endswith("_file"):
+        return "需求文档示例.txt"
+    if key_lower in {"provider_id", "suite_id", "case_id", "user_id", "requirement_id"}:
+        return 1
     if "password" in key_lower or key_lower.endswith("pwd"):
         return "admin123"
     if any(token in key_lower for token in ("username", "account", "loginname", "user_name")):
@@ -58,17 +113,21 @@ def _guess_value(key: str, value: Any, fake: Any) -> Any:
         return "test@example.com"
     if any(token in key_lower for token in ("phone", "mobile", "tel")):
         return fake.phone_number()
+    if "title" in key_lower or key_lower.endswith("_title"):
+        return fake.sentence(nb_words=5)
     if any(token in key_lower for token in ("name", "nickname", "fullname", "full_name")):
         return fake.name()
-    if any(token in key_lower for token in ("title", "subject")):
+    if any(token in key_lower for token in ("subject",)):
         return fake.sentence(nb_words=4)
-    if any(token in key_lower for token in ("desc", "remark", "comment", "content")):
+    if any(token in key_lower for token in ("desc", "description", "remark", "comment", "content")):
         return fake.text(max_nb_chars=32)
     if any(token in key_lower for token in ("address", "addr")):
         return fake.address()
     if any(token in key_lower for token in ("city",)):
         return fake.city()
-    if any(token in key_lower for token in ("id", "code", "no", "num")):
+    if key_lower.endswith("_id") or key_lower == "id":
+        return fake.random_int(min=1, max=9999)
+    if any(token in key_lower for token in ("code", "no", "num")):
         return fake.random_int(min=1000, max=999999)
     if any(token in key_lower for token in ("amount", "price", "money", "fee")):
         return round(fake.random_number(digits=2, fix_len=False) / 100, 2)
@@ -87,6 +146,19 @@ def _guess_value(key: str, value: Any, fake: Any) -> Any:
     return fake.word()
 
 
+def _fill_json_body(body: Optional[str], fake: Any) -> Optional[str]:
+    if not body or not str(body).strip():
+        return body
+    try:
+        parsed = json.loads(body)
+    except json.JSONDecodeError:
+        if _is_placeholder(body):
+            return fake.text(max_nb_chars=64)
+        return body
+    filled = _guess_value("", parsed, fake, force=True)
+    return json.dumps(filled, ensure_ascii=False, indent=2)
+
+
 def _mock_generate_api_data(
     *,
     method: str,
@@ -99,44 +171,41 @@ def _mock_generate_api_data(
     from faker import Faker
 
     fake = Faker("zh_CN")
+    effective_type = _normalize_body_type(body_type, body)
     result: Dict[str, Any] = {"body": body, "query": {}, "path": {}}
 
-    if body_type == "json" and body and body.strip():
-        try:
-            parsed = json.loads(body)
-            generated = _guess_value("", parsed, fake)
-            result["body"] = json.dumps(generated, ensure_ascii=False, indent=2)
-        except json.JSONDecodeError:
-            result["body"] = body
-    elif body_type in {"form-data", "urlencoded"} and body and body.strip():
-        try:
-            parsed = json.loads(body)
-            if isinstance(parsed, list):
-                generated_rows = []
-                for row in parsed:
-                    key = str(row.get("key") or "")
-                    if not key:
-                        generated_rows.append(row)
-                        continue
-                    current = row.get("value", "")
-                    generated_rows.append({**row, "value": str(_guess_value(key, current, fake))})
-                result["body"] = json.dumps(generated_rows, ensure_ascii=False)
-        except json.JSONDecodeError:
-            result["body"] = body
-    elif body_type == "raw" and body and _is_placeholder(body):
-        result["body"] = fake.text(max_nb_chars=64)
+    if body and str(body).strip():
+        if effective_type in {"json", "none", "raw"}:
+            result["body"] = _fill_json_body(body, fake)
+        elif effective_type in {"form-data", "urlencoded"}:
+            try:
+                parsed = json.loads(body)
+                if isinstance(parsed, list):
+                    generated_rows = []
+                    for row in parsed:
+                        key = str(row.get("key") or "")
+                        if not key:
+                            generated_rows.append(row)
+                            continue
+                        current = row.get("value", "")
+                        generated_rows.append(
+                            {**row, "value": str(_guess_value(key, current, fake, force=True))}
+                        )
+                    result["body"] = json.dumps(generated_rows, ensure_ascii=False)
+            except json.JSONDecodeError:
+                result["body"] = body
 
     for row in query_params or []:
         key = str(row.get("key") or "").strip()
         if not key:
             continue
-        result["query"][key] = str(_guess_value(key, row.get("value", ""), fake))
+        result["query"][key] = str(_guess_value(key, row.get("value", ""), fake, force=True))
 
     for row in path_params or []:
         key = str(row.get("key") or "").strip()
         if not key:
             continue
-        result["path"][key] = str(_guess_value(key, row.get("value", ""), fake))
+        result["path"][key] = str(_guess_value(key, row.get("value", ""), fake, force=True))
 
     return result
 
@@ -173,6 +242,28 @@ def _parse_api_data_response(content: str) -> Dict[str, Any]:
     return {"body": body, "query": query, "path": path}
 
 
+def _post_process_generated(data: Dict[str, Any]) -> Dict[str, Any]:
+    from faker import Faker
+
+    fake = Faker("zh_CN")
+    body = data.get("body")
+    if body:
+        data["body"] = _fill_json_body(body, fake)
+    query = data.get("query") if isinstance(data.get("query"), dict) else {}
+    path = data.get("path") if isinstance(data.get("path"), dict) else {}
+    data["query"] = {
+        key: str(_guess_value(str(key), value, fake, force=True))
+        for key, value in query.items()
+        if str(key).strip()
+    }
+    data["path"] = {
+        key: str(_guess_value(str(key), value, fake, force=True))
+        for key, value in path.items()
+        if str(key).strip()
+    }
+    return data
+
+
 def _build_user_prompt(
     *,
     name: Optional[str],
@@ -206,9 +297,9 @@ def _build_user_prompt(
             ensure_ascii=False,
         )
         lines.append(f"Path 变量：{path_text}")
-    lines.append(f"Body 类型：{body_type}")
+    lines.append(f"Body 类型：{_normalize_body_type(body_type, body)}")
     lines.append(f"当前 Body：{body or '(空)'}")
-    lines.append("请生成可直接发送的测试数据。")
+    lines.append("请将所有占位符替换为可直接发送的中文测试数据，不要保留 string 或 0。")
     return "\n".join(lines)
 
 
@@ -228,12 +319,13 @@ async def generate_api_request_data(
     model: str,
     mock_mode: bool,
 ) -> Tuple[Dict[str, Any], str]:
+    normalized_type = _normalize_body_type(body_type, body)
     if mock_mode:
         return _mock_generate_api_data(
             method=method,
             path=path,
             body=body,
-            body_type=body_type,
+            body_type=normalized_type,
             query_params=query_params,
             path_params=path_params,
         ), "mock"
@@ -247,7 +339,7 @@ async def generate_api_request_data(
         path=path,
         url=url,
         body=body,
-        body_type=body_type,
+        body_type=normalized_type,
         headers=headers,
         query_params=query_params,
         path_params=path_params,
@@ -275,7 +367,8 @@ async def generate_api_request_data(
             content = message.get("content") or ""
             if not content.strip():
                 raise ValueError("LLM 返回内容为空，请检查模型名称或 API 配置")
-            return _parse_api_data_response(content), "llm"
+            parsed = _parse_api_data_response(content)
+            return _post_process_generated(parsed), "llm"
     except httpx.TimeoutException as exc:
         raise ValueError("LLM 请求超时，请稍后重试或检查网络连接") from exc
     except httpx.HTTPError as exc:

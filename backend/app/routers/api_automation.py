@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Body, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -27,6 +28,9 @@ from app.schemas import (
     ApiCaseDebugRequest,
     ApiDataGenerateOut,
     ApiDataGenerateRequest,
+    ApiDataBatchGenerateOut,
+    ApiDataBatchGenerateRequest,
+    ApiDataBatchGenerateItemOut,
     ApiDataParamItem,
     ApiEnvironmentCreate,
     ApiEnvironmentOut,
@@ -56,6 +60,7 @@ from app.schemas import (
 from app.services.api_capture_service import parse_capture_text, parse_multiple_captures
 from app.services.api_swagger_service import parse_swagger_source
 from app.services.api_data_ai_service import generate_api_request_data
+from app.services.api_case_config_helper import apply_generated_data_to_case, parse_case_generation_context
 from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.settings_service import get_effective_llm_config
 from app.services.api_request_builder import extract_meta_from_headers, iter_data_drive_variable_sets, prepare_case_request
@@ -878,6 +883,141 @@ async def generate_case_data(
         body=generated.get("body"),
         query=_params_from_mapping(generated.get("query") or {}),
         path=_params_from_mapping(generated.get("path") or {}),
+        mode=mode,
+        message=message,
+    )
+
+
+@router.post("/cases/batch/generate-data", response_model=ApiDataBatchGenerateOut)
+async def batch_generate_case_data(
+    data: ApiDataBatchGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not data.case_ids:
+        raise HTTPException(status_code=400, detail="请选择要生成数据的用例")
+
+    unique_ids = list(dict.fromkeys(data.case_ids))
+    cases = (
+        db.query(ApiTestCase)
+        .join(ApiTestSuite, ApiTestSuite.id == ApiTestCase.suite_id)
+        .join(Project, Project.id == ApiTestSuite.project_id)
+        .filter(ApiTestCase.id.in_(unique_ids), Project.owner_id == current_user.id)
+        .all()
+    )
+    if not cases:
+        raise HTTPException(status_code=404, detail="未找到可操作的用例")
+
+    case_map = {case.id: case for case in cases}
+    llm_config = get_effective_llm_config(db, data.provider_id)
+    mode = "mock" if llm_config["mock_mode"] else "llm"
+    items: List[ApiDataBatchGenerateItemOut] = []
+    updated_count = 0
+    failed_count = 0
+    skipped_count = 0
+
+    for case_id in unique_ids:
+        case = case_map.get(case_id)
+        if not case:
+            failed_count += 1
+            items.append(
+                ApiDataBatchGenerateItemOut(
+                    case_id=case_id,
+                    case_name="",
+                    success=False,
+                    message="用例不存在或无权限",
+                    log=f"[失败] 用例 #{case_id} 不存在或无权限",
+                )
+            )
+            continue
+
+        context = parse_case_generation_context(case)
+        has_body = bool((context.get("body") or "").strip())
+        has_params = bool(context.get("query_params") or context.get("path_params"))
+        if not has_body and not has_params:
+            skipped_count += 1
+            items.append(
+                ApiDataBatchGenerateItemOut(
+                    case_id=case.id,
+                    case_name=case.name,
+                    success=False,
+                    message="无 Body/Query/Path 参数，已跳过",
+                    log=f"[跳过] {case.name}：无 Body/Query/Path 参数",
+                )
+            )
+            continue
+
+        try:
+            generated, current_mode = await generate_api_request_data(
+                name=context["name"],
+                method=context["method"],
+                path=context["path"],
+                body=context["body"],
+                body_type=context["body_type"],
+                headers=context["headers"],
+                query_params=context["query_params"],
+                path_params=context["path_params"],
+                api_base=llm_config["api_base"],
+                api_key=llm_config["api_key"],
+                model=llm_config["model"],
+                mock_mode=llm_config["mock_mode"],
+            )
+            mode = current_mode
+            if apply_generated_data_to_case(case, generated):
+                flag_modified(case, "headers")
+                db.commit()
+                db.refresh(case)
+                updated_count += 1
+                detail_parts = []
+                if generated.get("body"):
+                    detail_parts.append("Body")
+                if generated.get("query"):
+                    detail_parts.append("Query")
+                if generated.get("path"):
+                    detail_parts.append("Path")
+                detail = "、".join(detail_parts) or "Body"
+                items.append(
+                    ApiDataBatchGenerateItemOut(
+                        case_id=case.id,
+                        case_name=case.name,
+                        success=True,
+                        message="生成并保存成功",
+                        log=f"[成功] {case.name}：已写入 {detail}",
+                    )
+                )
+            else:
+                failed_count += 1
+                items.append(
+                    ApiDataBatchGenerateItemOut(
+                        case_id=case.id,
+                        case_name=case.name,
+                        success=False,
+                        message="未产生可写入的数据",
+                        log=f"[失败] {case.name}：未产生可写入的数据",
+                    )
+                )
+        except ValueError as exc:
+            failed_count += 1
+            items.append(
+                ApiDataBatchGenerateItemOut(
+                    case_id=case.id,
+                    case_name=case.name,
+                    success=False,
+                    message=str(exc),
+                    log=f"[失败] {case.name}：{exc}",
+                )
+            )
+
+    message = f"成功为 {updated_count} 条用例生成并保存测试数据"
+    if skipped_count:
+        message += f"，跳过 {skipped_count} 条"
+    if failed_count:
+        message += f"，失败 {failed_count} 条"
+    return ApiDataBatchGenerateOut(
+        updated_count=updated_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+        items=items,
         mode=mode,
         message=message,
     )

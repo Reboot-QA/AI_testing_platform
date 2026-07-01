@@ -229,6 +229,7 @@ export const apiAutomationApi = {
   copyCase: (id, data = {}) => request.post(`/api-automation/cases/${id}/copy`, data),
   debugCase: (data) => request.post('/api-automation/cases/debug', data),
   generateCaseData: (data) => request.post('/api-automation/cases/generate-data', data),
+  batchGenerateCaseData: (data) => request.post('/api-automation/cases/batch/generate-data', data),
   debugPreScript: (data) => request.post('/api-automation/scripts/pre/debug', data),
   debugPostScript: (data) => request.post('/api-automation/scripts/post/debug', data),
   runSuite: (suiteId) => request.post(`/api-automation/suites/${suiteId}/run`),
