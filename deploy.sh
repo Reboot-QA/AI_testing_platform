@@ -1037,14 +1037,39 @@ monitoring_validate() {
   fi
 }
 
+monitoring_write_env() {
+  monitoring_env
+  cat >"$MONITORING_DIR/.env" <<EOF
+LOG_DIR_HOST=${LOG_DIR_HOST}
+GRAFANA_PORT=${GRAFANA_PORT}
+LOKI_PORT=${LOKI_PORT}
+GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}
+GRAFANA_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
+GRAFANA_ROOT_URL=${GRAFANA_ROOT_URL}
+EOF
+}
+
 monitoring_start() {
   require_docker
   monitoring_validate
+  monitoring_write_env
   info "启动 Grafana + Loki + Promtail ..."
   info "  日志目录: $LOG_DIR_HOST -> $LOG_DIR_CONTAINER"
   info "  Grafana:  ${GRAFANA_ROOT_URL}"
   cd "$MONITORING_DIR"
-  LOG_DIR_HOST="$LOG_DIR_HOST" docker compose up -d
+  if ! docker compose up -d; then
+    error "监控栈启动失败，详情如下:"
+    docker compose ps -a || true
+    docker compose logs --tail=50 || true
+    exit 1
+  fi
+  sleep 3
+  if ! docker compose ps --status running 2>/dev/null | grep -qE 'loki|grafana|promtail'; then
+    error "监控容器未正常运行，请查看日志: ./deploy.sh monitoring logs"
+    docker compose ps -a || true
+    docker compose logs --tail=80 || true
+    exit 1
+  fi
   ok "监控栈已启动"
   monitoring_status
   warn "Grafana 默认账号: ${GRAFANA_ADMIN_USER} / ${GRAFANA_ADMIN_PASSWORD} （生产环境请修改）"
@@ -1053,7 +1078,7 @@ monitoring_start() {
 
 monitoring_stop() {
   require_docker
-  monitoring_env
+  monitoring_write_env
   cd "$MONITORING_DIR"
   docker compose down
   ok "监控栈已停止"
@@ -1066,7 +1091,7 @@ monitoring_restart() {
 
 monitoring_status() {
   require_docker
-  monitoring_env
+  monitoring_write_env
   cd "$MONITORING_DIR"
   echo "========================================"
   echo "  Grafana + Loki 监控栈"
@@ -1088,7 +1113,7 @@ monitoring_status() {
 
 monitoring_logs() {
   require_docker
-  monitoring_env
+  monitoring_write_env
   cd "$MONITORING_DIR"
   docker compose logs --tail="${1:-100}" -f
 }

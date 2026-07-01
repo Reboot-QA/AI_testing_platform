@@ -50,6 +50,31 @@ export LOG_DIR_HOST=/opt/AI_testing_platform/.deploy/logs
 
 `deploy.sh monitoring start` 会自动设置 `LOG_DIR_HOST` 与 `GRAFANA_ROOT_URL`。
 
+## 故障排查
+
+容器列表为空或端口未监听时：
+
+```bash
+cd /opt/AI_testing_platform
+git pull
+./deploy.sh monitoring restart
+./deploy.sh monitoring logs
+```
+
+常见原因：
+- 未用 `./deploy.sh monitoring start` 导致 `LOG_DIR_HOST` 为空
+- 镜像拉取失败（检查网络 / Docker 镜像加速）
+- 安全组未放行 3000、3100 端口
+
+手动检查：
+
+```bash
+cd /opt/AI_testing_platform/monitoring
+cat .env
+docker compose ps -a
+docker compose logs loki --tail=50
+```
+
 ## 常用命令
 
 ```bash
