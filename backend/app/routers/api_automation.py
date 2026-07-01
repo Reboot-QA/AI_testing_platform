@@ -25,6 +25,9 @@ from app.schemas import (
     ApiCaseDebugIterationOut,
     ApiCaseDebugOut,
     ApiCaseDebugRequest,
+    ApiDataGenerateOut,
+    ApiDataGenerateRequest,
+    ApiDataParamItem,
     ApiEnvironmentCreate,
     ApiEnvironmentOut,
     ApiEnvironmentUpdate,
@@ -52,7 +55,9 @@ from app.schemas import (
 )
 from app.services.api_capture_service import parse_capture_text, parse_multiple_captures
 from app.services.api_swagger_service import parse_swagger_source
+from app.services.api_data_ai_service import generate_api_request_data
 from app.services.api_script_runner import run_post_script, run_pre_script
+from app.services.settings_service import get_effective_llm_config
 from app.services.api_request_builder import extract_meta_from_headers, iter_data_drive_variable_sets, prepare_case_request
 from app.services.api_runner_service import run_api_suite, _execute_case, _dumps_json
 from app.services.schedule_service import (
@@ -829,6 +834,52 @@ def debug_case(
         extracted_variables=primary.extracted_variables,
         pre_script_logs=primary.pre_script_logs,
         iterations=iteration_results if len(iteration_results) > 1 else [],
+    )
+
+
+def _params_from_mapping(mapping: Dict[str, Any]) -> List[ApiDataParamItem]:
+    return [
+        ApiDataParamItem(key=str(key), value=str(value or ""), enabled=True)
+        for key, value in mapping.items()
+        if str(key).strip()
+    ]
+
+
+@router.post("/cases/generate-data", response_model=ApiDataGenerateOut)
+async def generate_case_data(
+    data: ApiDataGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    llm_config = get_effective_llm_config(db, data.provider_id)
+    try:
+        generated, mode = await generate_api_request_data(
+            name=data.name,
+            method=data.method,
+            path=data.path,
+            url=data.url,
+            body=data.body,
+            body_type=data.body_type,
+            headers=data.headers,
+            query_params=[item.model_dump() for item in data.query_params],
+            path_params=[item.model_dump() for item in data.path_params],
+            api_base=llm_config["api_base"],
+            api_key=llm_config["api_key"],
+            model=llm_config["model"],
+            mock_mode=llm_config["mock_mode"],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"AI 生成失败: {exc}") from exc
+
+    message = "已生成接口测试数据" if mode == "llm" else "已使用 Mock 规则生成测试数据"
+    return ApiDataGenerateOut(
+        body=generated.get("body"),
+        query=_params_from_mapping(generated.get("query") or {}),
+        path=_params_from_mapping(generated.get("path") or {}),
+        mode=mode,
+        message=message,
     )
 
 

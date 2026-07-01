@@ -25,6 +25,9 @@
             :value="option.value"
           />
         </el-select>
+        <el-button :disabled="!canAiGenerateData" :loading="aiGenerating" @click="handleAiGenerateData">
+          <el-icon><MagicStick /></el-icon> AI 生成数据
+        </el-button>
         <el-button :disabled="!suiteId" @click="$emit('import')">
           <el-icon><Upload /></el-icon> 导入
         </el-button>
@@ -116,22 +119,34 @@
                 <el-button size="small" @click="handleExportJson">导出 JSON</el-button>
               </template>
             </ApiKvParamTable>
-            <el-input
-              v-else-if="form.body_type === 'json'"
-              v-model="bodyStores.json"
-              type="textarea"
-              :rows="10"
-              class="body-editor"
-              placeholder='{"key":"value"}'
-            />
-            <el-input
-              v-else-if="form.body_type === 'raw'"
-              v-model="bodyStores.raw"
-              type="textarea"
-              :rows="10"
-              class="body-editor"
-              placeholder="raw body"
-            />
+            <div v-else-if="form.body_type === 'json'" class="body-editor-wrap">
+              <div class="body-editor-toolbar">
+                <el-button size="small" :loading="aiGenerating" :disabled="!canAiGenerateData" @click="handleAiGenerateData">
+                  AI 生成数据
+                </el-button>
+              </div>
+              <el-input
+                v-model="bodyStores.json"
+                type="textarea"
+                :rows="10"
+                class="body-editor"
+                placeholder='{"key":"value"}'
+              />
+            </div>
+            <div v-else-if="form.body_type === 'raw'" class="body-editor-wrap">
+              <div class="body-editor-toolbar">
+                <el-button size="small" :loading="aiGenerating" :disabled="!canAiGenerateData" @click="handleAiGenerateData">
+                  AI 生成数据
+                </el-button>
+              </div>
+              <el-input
+                v-model="bodyStores.raw"
+                type="textarea"
+                :rows="10"
+                class="body-editor"
+                placeholder="raw body"
+              />
+            </div>
           </el-tab-pane>
 
           <el-tab-pane label="认证" name="auth">
@@ -351,7 +366,7 @@
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { CopyDocument, DocumentChecked, Plus, Promotion, Upload } from '@element-plus/icons-vue'
+import { CopyDocument, DocumentChecked, MagicStick, Plus, Promotion, Upload } from '@element-plus/icons-vue'
 import { apiAutomationApi } from '@/api'
 import ApiKvParamTable from '@/components/ApiKvParamTable.vue'
 import ApiDataDriveTable from '@/components/ApiDataDriveTable.vue'
@@ -393,6 +408,7 @@ const formRef = ref()
 const saving = ref(false)
 const copying = ref(false)
 const sending = ref(false)
+const aiGenerating = ref(false)
 const debugResult = ref(null)
 const headerRows = ref([emptyKvRow()])
 const queryRows = ref([emptyKvRow()])
@@ -441,6 +457,10 @@ const selectedEnv = computed(() =>
 
 const canSend = computed(
   () => props.suiteId && form.environment_id && form.full_url.trim() && form.method
+)
+
+const canAiGenerateData = computed(
+  () => props.suiteId && form.method && (form.full_url.trim() || form.name.trim())
 )
 
 const activeQueryCount = computed(() => countActiveKvRows(queryRows.value))
@@ -787,6 +807,78 @@ function buildCasePayload() {
     assertions: synced.assertions,
     sort_order: form.sort_order,
     enabled: form.enabled,
+  }
+}
+
+function applyGeneratedParams(rows, generated) {
+  if (!generated?.length) return
+  const map = Object.fromEntries(generated.map((item) => [item.key, item.value]))
+  rows.forEach((row) => {
+    if (row.key && Object.prototype.hasOwnProperty.call(map, row.key)) {
+      row.value = map[row.key]
+    }
+  })
+}
+
+function applyGeneratedBody(bodyText) {
+  if (!bodyText) return
+  if (form.body_type === 'json') {
+    bodyStores.json = formatBodyText(bodyText, 'json')
+    return
+  }
+  if (form.body_type === 'raw') {
+    bodyStores.raw = bodyText
+    return
+  }
+  if (form.body_type === 'form-data' || form.body_type === 'urlencoded') {
+    try {
+      const rows = JSON.parse(bodyText)
+      if (!Array.isArray(rows)) return
+      const mapped = rows.map((row) => ({
+        key: row.key || '',
+        value: row.value || '',
+        enabled: row.enabled !== false,
+        desc: row.desc || '',
+      }))
+      if (form.body_type === 'form-data') {
+        bodyStores.formData = ensureKvRows(mapped)
+      } else {
+        bodyStores.urlencoded = ensureKvRows(mapped)
+      }
+    } catch {
+      // ignore invalid generated body
+    }
+  }
+}
+
+async function handleAiGenerateData() {
+  if (!canAiGenerateData.value) return
+  aiGenerating.value = true
+  try {
+    const payload = buildCasePayload()
+    const pathOnly = pathFromFullUrl(form.full_url, selectedEnv.value).split('?')[0]
+    const data = await apiAutomationApi.generateCaseData({
+      name: form.name,
+      method: form.method,
+      path: pathOnly || payload.path || '/',
+      url: form.full_url,
+      body: payload.body,
+      body_type: form.body_type,
+      headers: payload.headers,
+      query_params: queryRows.value.filter((row) => row.key?.trim()),
+      path_params: pathRows.value.filter((row) => row.key?.trim()),
+    })
+    applyGeneratedBody(data.body)
+    applyGeneratedParams(queryRows.value, data.query)
+    applyGeneratedParams(pathRows.value, data.path)
+    if (data.body || data.query?.length || data.path?.length) {
+      activeTab.value = 'body'
+      ElMessage.success(data.message || 'AI 生成成功')
+    } else {
+      ElMessage.warning('未生成可填充的数据')
+    }
+  } finally {
+    aiGenerating.value = false
   }
 }
 
@@ -1220,6 +1312,17 @@ defineExpose({ resetForm, applyCaptureItem, handleNew })
 
 .body-type-group {
   margin-bottom: 8px;
+}
+
+.body-editor-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.body-editor-toolbar {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .body-editor {

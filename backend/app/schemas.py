@@ -543,6 +543,33 @@ class ApiCaseDebugRequest(BaseModel):
     run_all_data_sets: bool = False
 
 
+class ApiDataParamItem(BaseModel):
+    key: str = ""
+    value: str = ""
+    enabled: bool = True
+
+
+class ApiDataGenerateRequest(BaseModel):
+    name: Optional[str] = None
+    method: str = "GET"
+    path: str = ""
+    url: Optional[str] = None
+    body: Optional[str] = None
+    body_type: str = "json"
+    headers: Optional[str] = None
+    query_params: List[ApiDataParamItem] = Field(default_factory=list)
+    path_params: List[ApiDataParamItem] = Field(default_factory=list)
+    provider_id: Optional[int] = None
+
+
+class ApiDataGenerateOut(BaseModel):
+    body: Optional[str] = None
+    query: List[ApiDataParamItem] = Field(default_factory=list)
+    path: List[ApiDataParamItem] = Field(default_factory=list)
+    mode: str = "mock"
+    message: str = ""
+
+
 class ApiPreScriptDebugRequest(BaseModel):
     script: str = ""
     language: str = "javascript"
