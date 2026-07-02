@@ -95,6 +95,11 @@ cmd_up() {
   info "构建并启动 Docker 服务..."
   # shellcheck disable=SC2086
   "${COMPOSE[@]}" $profiles up -d --build
+  if ! "${COMPOSE[@]}" ps backend 2>/dev/null | grep -q "Up"; then
+    error "backend 容器启动失败，最近日志："
+    "${COMPOSE[@]}" logs backend --tail=60 >&2 || true
+    exit 1
+  fi
   ok "服务已启动"
   print_access
 }

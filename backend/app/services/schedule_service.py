@@ -212,5 +212,7 @@ def init_schedules_on_startup(db: Session) -> None:
             logger.info("定时任务 %s 已过期，等待调度器补跑: %s", task.id, task.next_run_at)
     if changed:
         db.commit()
-    # 启动后立即检查一次（在线程启动前的同步补跑）
-    run_due_tasks(db)
+    try:
+        run_due_tasks(db)
+    except Exception:
+        logger.exception("启动时执行定时任务失败（已忽略，不影响服务启动）")

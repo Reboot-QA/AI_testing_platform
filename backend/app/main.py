@@ -48,18 +48,24 @@ def setup_logging() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
+    logger = logging.getLogger(__name__)
     try:
-        seed_demo_data(db)
-        init_llm_settings_from_env(db)
-        migrate_api_test_suite_tree(db)
-        migrate_user_optional_email()
-        migrate_all_user_permissions(db)
-        init_schedules_on_startup(db)
-    finally:
-        db.close()
-    start_scheduler()
+        Base.metadata.create_all(bind=engine)
+        db = SessionLocal()
+        try:
+            seed_demo_data(db)
+            init_llm_settings_from_env(db)
+            migrate_api_test_suite_tree(db)
+            migrate_user_optional_email()
+            migrate_all_user_permissions(db)
+            init_schedules_on_startup(db)
+        finally:
+            db.close()
+        start_scheduler()
+        logger.info("应用启动完成")
+    except Exception:
+        logger.exception("应用启动失败")
+        raise
     yield
     stop_scheduler()
 
