@@ -113,6 +113,7 @@ AI质量平台 - 一键部署脚本
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
   monitoring      Grafana + Loki 监控栈 (start|stop|restart|status|logs|debug)
+  docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
 
 环境变量:
   BACKEND_HOST    后端监听地址 (默认 0.0.0.0)
@@ -121,7 +122,9 @@ AI质量平台 - 一键部署脚本
   FRONTEND_HOST   前端监听地址 (默认 0.0.0.0)
   PUBLIC_HOST     外网访问地址 (默认自动检测公网 IP，可手动指定)
   DEV_RELOAD      设为 1 时后端启用 --reload（Linux 服务器建议保持 0）
-  SKIP_FRONTEND   设为 1 时仅部署后端（无需 Node.js）
+  USE_DOCKER_MYSQL  设为 0 时 deploy.sh 不自动同步/启动 Docker MySQL
+  SKIP_MYSQL_CHECK  设为 1 时跳过后端启动前的 MySQL 连接检查
+  SKIP_FRONTEND     设为 1 时仅部署后端（无需 Node.js）
   GIT_REPO_URL    Git 仓库地址 (默认 $GIT_REPO_URL)
   GIT_BRANCH      拉取分支 (默认当前分支，否则 main)
   GRAFANA_PORT    Grafana 端口 (默认 3000)
@@ -700,6 +703,154 @@ pip_install_requirements() {
   exit 1
 }
 
+sync_db_env_from_docker() {
+  local docker_env="$ROOT/.env.docker"
+  [[ -f "$docker_env" ]] || return 0
+  [[ "${USE_DOCKER_MYSQL:-1}" == "0" ]] && return 0
+
+  detect_python
+  ensure_backend_venv
+  "$PYTHON" - <<PY
+from pathlib import Path
+
+root = Path(${ROOT@Q})
+docker_file = root / ".env.docker"
+backend_env_path = root / "backend" / ".env"
+
+docker_env = {}
+for line in docker_file.read_text(encoding="utf-8").splitlines():
+    line = line.strip()
+    if not line or line.startswith("#") or "=" not in line:
+        continue
+    key, value = line.split("=", 1)
+    docker_env[key.strip()] = value.strip()
+
+if not backend_env_path.exists():
+    backend_env_path.write_text(
+        (root / "backend" / ".env.example").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+updates = {
+    "DB_HOST": "127.0.0.1",
+    "DB_PORT": docker_env.get("MYSQL_PORT", "3306"),
+    "DB_USER": docker_env.get("DB_USER", "ai_testcase"),
+    "DB_PASSWORD": docker_env.get("DB_PASSWORD", ""),
+    "DB_NAME": docker_env.get("DB_NAME", "ai_testcase"),
+}
+
+lines = backend_env_path.read_text(encoding="utf-8").splitlines()
+seen = set()
+out = []
+for line in lines:
+    if "=" in line and not line.lstrip().startswith("#"):
+        key = line.split("=", 1)[0].strip()
+        if key in updates:
+            out.append(f"{key}={updates[key]}")
+            seen.add(key)
+            continue
+    out.append(line)
+for key, value in updates.items():
+    if key not in seen:
+        out.append(f"{key}={value}")
+backend_env_path.write_text("\\n".join(out) + "\\n", encoding="utf-8")
+PY
+  info "已从 .env.docker 同步 MySQL 配置到 backend/.env"
+}
+
+test_mysql_connection() {
+  detect_python
+  ensure_backend_venv
+  cd "$BACKEND_DIR"
+  "$PYTHON" - <<'PY'
+from pathlib import Path
+import pymysql
+import sys
+
+def load_env(path: Path) -> dict:
+    data = {}
+    if not path.exists():
+        return data
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        data[key.strip()] = value.strip()
+    return data
+
+env = load_env(Path(".env"))
+try:
+    conn = pymysql.connect(
+        host=env.get("DB_HOST", "127.0.0.1"),
+        port=int(env.get("DB_PORT", "3306")),
+        user=env.get("DB_USER", "root"),
+        password=env.get("DB_PASSWORD", ""),
+        database=env.get("DB_NAME", "ai_testcase"),
+        charset="utf8mb4",
+        connect_timeout=3,
+    )
+    conn.close()
+except Exception as exc:
+    print(exc, file=sys.stderr)
+    raise SystemExit(1)
+raise SystemExit(0)
+PY
+}
+
+start_docker_mysql_if_needed() {
+  local docker_env="$ROOT/.env.docker"
+  [[ -f "$docker_env" ]] || return 1
+  [[ "${USE_DOCKER_MYSQL:-1}" == "0" ]] && return 1
+  command -v docker >/dev/null 2>&1 || return 1
+  docker compose version >/dev/null 2>&1 || return 1
+  [[ -f "$ROOT/docker-compose.yml" ]] || return 1
+
+  info "MySQL 未就绪，正在启动 Docker MySQL 容器..."
+  docker compose --env-file "$docker_env" -f "$ROOT/docker-compose.yml" up -d mysql
+
+  local i
+  for i in $(seq 1 60); do
+    if docker compose --env-file "$docker_env" -f "$ROOT/docker-compose.yml" ps mysql 2>/dev/null | grep -q "(healthy)"; then
+      ok "Docker MySQL 已就绪"
+      return 0
+    fi
+    sleep 2
+  done
+  warn "Docker MySQL 启动超时"
+  return 1
+}
+
+ensure_mysql_ready() {
+  [[ "${SKIP_MYSQL_CHECK:-0}" == "1" ]] && return 0
+
+  sync_db_env_from_docker
+
+  if test_mysql_connection 2>/dev/null; then
+    ok "MySQL 连接正常"
+    return 0
+  fi
+
+  if start_docker_mysql_if_needed; then
+    sync_db_env_from_docker
+    if test_mysql_connection; then
+      ok "MySQL 连接正常（Docker）"
+      return 0
+    fi
+  fi
+
+  error "无法连接 MySQL，后端未启动"
+  cat <<'EOF' >&2
+
+修复方式（任选其一）：
+  1) Docker 全栈:     bash docker/deploy.sh up
+  2) 自动 Docker MySQL: 配置 .env.docker 后直接 ./deploy.sh start（脚本会自动拉起 MySQL）
+  3) 宿主机 MySQL:    apt install -y mysql-server && 配置 backend/.env
+  4) 跳过检查:        SKIP_MYSQL_CHECK=1 ./deploy.sh start
+EOF
+  exit 1
+}
+
 check_prerequisites() {
   detect_python
   if [[ "${SKIP_FRONTEND:-0}" != "1" ]]; then
@@ -808,6 +959,7 @@ install_backend() {
     cp .env.example .env
     warn "已创建 backend/.env，请按需配置 LLM 等参数"
   fi
+  sync_db_env_from_docker
   pip_install_requirements
   ok "后端依赖就绪 (venv: $VENV_DIR, $($PYTHON --version 2>&1))"
 }
@@ -877,6 +1029,7 @@ start_backend() {
   fi
   free_port "$BACKEND_PORT" "backend"
   ensure_backend_venv
+  ensure_mysql_ready
   info "启动后端 http://${BACKEND_HOST}:${BACKEND_PORT} ..."
   cd "$BACKEND_DIR"
   local -a uvicorn_args=(
@@ -936,6 +1089,7 @@ start_backend_prod() {
   fi
   free_port "$BACKEND_PORT" "backend"
   ensure_backend_venv
+  ensure_mysql_ready
   info "生产模式启动后端..."
   cd "$BACKEND_DIR"
   append_log_marker "backend-prod" "$BACKEND_LOG"
@@ -1371,6 +1525,13 @@ main() {
       ;;
     monitoring)
       monitoring_main "${2:-}"
+      ;;
+    docker)
+      shift
+      if [[ $# -eq 0 ]]; then
+        set -- up
+      fi
+      bash "$ROOT/docker/deploy.sh" "$@"
       ;;
     *)
       error "未知命令: $cmd"
