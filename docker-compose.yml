@@ -1,0 +1,147 @@
+name: ai-testing-platform
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ai-platform-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env.docker}
+      MYSQL_DATABASE: ${DB_NAME:-ai_testcase}
+      MYSQL_USER: ${DB_USER:-ai_testcase}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+    networks:
+      - app
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ai-platform-backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${APP_NAME:-AI质量平台}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.docker}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-ai_testcase}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker}
+      DB_NAME: ${DB_NAME:-ai_testcase}
+      LLM_API_BASE: ${LLM_API_BASE:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_MOCK_MODE: ${LLM_MOCK_MODE:-true}
+      AI_GENERATE_BATCH_SIZE: ${AI_GENERATE_BATCH_SIZE:-8}
+      AI_GENERATE_CONCURRENCY: ${AI_GENERATE_CONCURRENCY:-4}
+      LOG_DIR: /app/logs
+      GRAFANA_ENABLED: ${GRAFANA_ENABLED:-false}
+      GRAFANA_URL: http://grafana:3000
+      GRAFANA_PORT: ${GRAFANA_PORT:-3000}
+      GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-}
+      GRAFANA_EMBED: "true"
+      LOKI_URL: http://loki:3100
+      LOKI_PORT: ${LOKI_PORT:-3100}
+      LOKI_PUBLIC_URL: ${LOKI_PUBLIC_URL:-}
+      TZ: Asia/Shanghai
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    networks:
+      - app
+      - monitoring
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-platform-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "${HTTP_PORT:-8080}:80"
+    networks:
+      - app
+
+  loki:
+    profiles: ["monitoring"]
+    image: grafana/loki:3.0.0
+    container_name: ai-platform-loki
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring
+
+  promtail:
+    profiles: ["monitoring"]
+    image: grafana/promtail:3.0.0
+    container_name: ai-platform-promtail
+    restart: unless-stopped
+    volumes:
+      - app-logs:/var/log/ai-platform:ro
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - promtail-positions:/tmp
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:11.0.0
+    container_name: ai-platform-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin123}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://127.0.0.1:3000}
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+networks:
+  app:
+    driver: bridge
+  monitoring:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  app-logs:
+  loki-data:
+  grafana-data:
+  promtail-positions:

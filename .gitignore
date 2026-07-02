@@ -2,6 +2,7 @@
 文档/
 monitoring/.env
 backend/.env
+.env.docker
 backend/ai_testcase.db
 backend/*.db
 *.db-journal

@@ -47,7 +47,7 @@
 
 | 层 | 技术 |
 |----|------|
-| 后端 | FastAPI、SQLAlchemy、MySQL、JWT、httpx |
+| 后端 | FastAPI、SQLAlchemy、MySQL、JWT、httpx、Docker |
 | 前端 | Vue 3、Vite、Element Plus、Pinia、Vue Router、Axios |
 | AI | OpenAI 兼容 Chat Completions API（可 Mock） |
 | 调度 | 内置后台线程定时调度 |
@@ -89,6 +89,14 @@ AI质量平台/
 │   ├── index.html
 │   └── package.json
 ├── deploy.sh                     # Linux / macOS / Git Bash 部署脚本
+├── docker-compose.yml            # Docker Compose 编排
+├── docker/
+│   ├── deploy.sh                 # Docker 一键部署脚本
+│   └── mysql/init.sql            # MySQL 初始化
+├── .env.docker.example           # Docker 环境变量模板
+├── backend/Dockerfile            # 后端镜像
+├── frontend/Dockerfile           # 前端镜像（Nginx）
+├── frontend/nginx.conf           # 前端 Nginx 反代配置
 ├── start-all.bat                 # Windows 一键启动
 ├── start-backend.bat
 ├── start-frontend.bat
@@ -100,8 +108,16 @@ AI质量平台/
 
 ## 环境要求
 
+**方式一：Docker 部署（推荐，无需本地 Python/Node/MySQL）**
+
+- **Docker** 20.10+
+- **Docker Compose** 插件 v2+
+
+**方式二：传统部署**
+
 - **Python** 3.8+（推荐 3.10 / 3.11）
 - **Node.js** 18+（仅前端开发或完整部署时需要）
+- **MySQL** 8.0+
 - **操作系统**：Windows / Linux / macOS
 
 ## 快速启动
@@ -160,6 +176,59 @@ npm run dev
 cd frontend && npm run build
 # 后端可使用 deploy.sh prod，或由 Nginx 等托管 frontend/dist
 ```
+
+### Docker 一键部署（推荐）
+
+无需手动安装 Python / Node / MySQL，Docker 会自动构建并启动全部服务。
+
+**前置条件：** 已安装 [Docker](https://docs.docker.com/get-docker/) 与 Docker Compose 插件。
+
+```bash
+# 1. 复制环境变量并修改密码
+cp .env.docker.example .env.docker
+
+# 2. 构建并启动（MySQL + 后端 + 前端 Nginx）
+chmod +x docker/deploy.sh
+./docker/deploy.sh up
+
+# 3. 可选：同时启动 Grafana + Loki 监控
+./docker/deploy.sh up --monitoring
+# 或
+WITH_MONITORING=1 ./docker/deploy.sh up
+```
+
+**访问地址（默认端口）：**
+
+| 服务 | 地址 |
+|------|------|
+| 前端 | http://127.0.0.1:8080 |
+| 后端 API | http://127.0.0.1:8000 |
+| Swagger | http://127.0.0.1:8080/docs |
+| Grafana（monitoring） | http://127.0.0.1:3000 |
+
+**演示账号：** `admin` / `admin123`
+
+**常用命令：**
+
+```bash
+./docker/deploy.sh status          # 查看容器状态
+./docker/deploy.sh logs backend    # 查看后端日志
+./docker/deploy.sh restart         # 重启
+./docker/deploy.sh down            # 停止并移除容器
+```
+
+**`.env.docker` 主要配置：**
+
+| 变量 | 说明 |
+|------|------|
+| `HTTP_PORT` | 前端 Nginx 对外端口（默认 8080） |
+| `BACKEND_PORT` | 后端 API 对外端口（默认 8000） |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 |
+| `DB_PASSWORD` | 应用数据库密码 |
+| `SECRET_KEY` | JWT 签名密钥 |
+| `LLM_API_KEY` | LLM API Key（留空则 Mock 模式） |
+
+服务架构：`frontend (Nginx)` → 反代 `/api` → `backend (FastAPI)` → `mysql`
 
 ## 配置说明
 

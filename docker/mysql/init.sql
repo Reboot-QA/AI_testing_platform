@@ -1,0 +1,1 @@
+-- MySQL 字符集由 docker-compose command 参数配置，此文件保留用于后续初始化扩展

@@ -13,6 +13,7 @@
 #   ./deploy.sh update   从 Git 仓库拉取最新代码并更新依赖
 #   ./deploy.sh clone [目录]  首次部署：克隆仓库到指定目录
 #   ./deploy.sh monitoring start  启动 Grafana + Loki 监控栈
+#   ./docker/deploy.sh up         Docker 一键部署（推荐）
 
 set -euo pipefail
 
