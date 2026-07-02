@@ -1,6 +1,6 @@
 from urllib.parse import quote_plus
 
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -34,8 +34,11 @@ class Settings(BaseSettings):
     loki_port: int = 3100
     loki_public_url: str = ""
 
-    class Config:
-        env_file = ".env"
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
     @property
     def sqlalchemy_database_url(self) -> str:

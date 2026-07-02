@@ -67,11 +67,11 @@ services:
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5)\""]
+      test: ["CMD-SHELL", "python -c \"import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5); exit(0 if r.status==200 else 1)\""]
       interval: 10s
       timeout: 5s
-      retries: 24
-      start_period: 120s
+      retries: 30
+      start_period: 180s
     networks:
       - app
       - monitoring
@@ -84,7 +84,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_healthy
+        condition: service_started
     ports:
       - "${HTTP_PORT:-5173}:80"
     networks:

@@ -1,8 +1,9 @@
 from contextlib import asynccontextmanager
 import logging
+import threading
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -45,9 +46,12 @@ def setup_logging() -> None:
     logging.getLogger("uvicorn.error").setLevel(logging.INFO)
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    setup_logging()
+_app_ready = threading.Event()
+_app_init_error: str | None = None
+
+
+def _run_startup() -> None:
+    global _app_init_error
     logger = logging.getLogger(__name__)
     try:
         Base.metadata.create_all(bind=engine)
@@ -62,12 +66,21 @@ async def lifespan(app: FastAPI):
         finally:
             db.close()
         start_scheduler()
+        _app_ready.set()
         logger.info("应用启动完成")
-    except Exception:
+    except Exception as exc:
+        _app_init_error = str(exc)
         logger.exception("应用启动失败")
-        raise
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    setup_logging()
+    _app_ready.clear()
+    threading.Thread(target=_run_startup, daemon=True, name="app-bootstrap").start()
     yield
     stop_scheduler()
+    _app_ready.clear()
 
 
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
@@ -95,6 +108,10 @@ register_request_logging(app)
 
 @app.get("/health")
 def health():
+    if _app_init_error:
+        raise HTTPException(status_code=500, detail=_app_init_error)
+    if not _app_ready.is_set():
+        raise HTTPException(status_code=503, detail="starting")
     return {"status": "ok"}
 
 

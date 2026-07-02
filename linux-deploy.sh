@@ -205,7 +205,7 @@ wait_backend_ready() {
   url="http://127.0.0.1:$(read_env_value BACKEND_PORT 8000)/health"
   http_port="$(read_env_value HTTP_PORT 5173)"
   info "等待后端就绪..."
-  for i in $(seq 1 90); do
+  for i in $(seq 1 120); do
     if curl -sf "$url" >/dev/null 2>&1; then
       ok "后端 API 已就绪 (端口 $(read_env_value BACKEND_PORT 8000))"
       break
@@ -215,7 +215,7 @@ wait_backend_ready() {
       compose_cmd logs backend --tail=40 >&2 || true
       return 1
     fi
-    if (( i == 90 )); then
+    if (( i == 120 )); then
       warn "后端启动超时"
       compose_cmd logs backend --tail=40 >&2 || true
       return 1
@@ -298,9 +298,13 @@ cmd_up() {
   stop_legacy_services
 
   if [[ "$RESET_MYSQL" == "1" ]]; then
-    warn "RESET_MYSQL=1，将删除 MySQL 数据卷..."
+    warn "RESET_MYSQL=1，将删除 MySQL 数据卷（清空数据库）..."
     compose_cmd --profile monitoring down -v 2>/dev/null || compose_cmd down -v 2>/dev/null || true
     docker volume rm ai-testing-platform_mysql-data 2>/dev/null || true
+  fi
+
+  if compose_cmd logs backend 2>/dev/null | tail -20 | grep -q "Access denied for user"; then
+    warn "检测到 MySQL 密码不匹配，建议执行: RESET_MYSQL=1 ./linux-deploy.sh up"
   fi
 
   info "构建并启动 Docker 服务（MySQL + 后端 + 前端）..."
