@@ -53,6 +53,7 @@ AI质量平台 - Linux 一键部署（Docker）
   status | ps       查看容器状态
   logs [服务名]     查看日志（backend/frontend/mysql）
   diagnose          诊断 502 / 连接问题
+  fix-db            修复 MySQL 密码不一致（清空库并重建）
   init-env          仅生成 .env.docker
   help              显示帮助
 
@@ -165,6 +166,11 @@ ensure_env_file() {
     ok "已创建 $ENV_FILE"
   fi
 
+  if grep -q $'\r' "$ENV_FILE" 2>/dev/null; then
+    warn "检测到 .env.docker 含 Windows 换行(CRLF)，正在修复..."
+    sed -i 's/\r$//' "$ENV_FILE"
+  fi
+
   local secret
   if grep -q '^SECRET_KEY=change-this-to-a-random-secret-key' "$ENV_FILE" 2>/dev/null; then
     if command -v openssl >/dev/null 2>&1; then
@@ -260,6 +266,37 @@ cmd_diagnose() {
   compose_cmd logs backend --tail=30 || true
 }
 
+reset_mysql_volume() {
+  info "停止服务并删除 MySQL 数据卷..."
+  compose_cmd --profile monitoring down -v 2>/dev/null || true
+  compose_cmd down -v 2>/dev/null || true
+  docker rm -f ai-platform-mysql ai-platform-backend ai-platform-frontend 2>/dev/null || true
+  local vol
+  for vol in ai-testing-platform_mysql-data; do
+    docker volume rm "$vol" 2>/dev/null || true
+  done
+  while read -r vol; do
+    [[ -n "$vol" ]] && docker volume rm "$vol" 2>/dev/null || true
+  done < <(docker volume ls -q | grep -E 'mysql-data|ai-testing-platform' || true)
+  ok "MySQL 数据卷已删除"
+}
+
+check_backend_mysql_auth_error() {
+  compose_cmd logs backend 2>/dev/null | tail -30 | grep -q "Access denied for user"
+}
+
+cmd_fix_db() {
+  fix_script_permissions
+  ensure_docker
+  ensure_env_file
+  stop_legacy_services
+  reset_mysql_volume
+  info "将使用 .env.docker 中的密码重新初始化 MySQL："
+  grep -E '^MYSQL_ROOT_PASSWORD=|^DB_PASSWORD=' "$ENV_FILE" || true
+  RESET_MYSQL=0
+  cmd_up
+}
+
 print_banner() {
   local host http_port backend_port grafana_port
   host="$(detect_public_host)"
@@ -298,17 +335,24 @@ cmd_up() {
   stop_legacy_services
 
   if [[ "$RESET_MYSQL" == "1" ]]; then
-    warn "RESET_MYSQL=1，将删除 MySQL 数据卷（清空数据库）..."
-    compose_cmd --profile monitoring down -v 2>/dev/null || compose_cmd down -v 2>/dev/null || true
-    docker volume rm ai-testing-platform_mysql-data 2>/dev/null || true
-  fi
-
-  if compose_cmd logs backend 2>/dev/null | tail -20 | grep -q "Access denied for user"; then
-    warn "检测到 MySQL 密码不匹配，建议执行: RESET_MYSQL=1 ./linux-deploy.sh up"
+    reset_mysql_volume
   fi
 
   info "构建并启动 Docker 服务（MySQL + 后端 + 前端）..."
   compose_cmd up -d --build
+
+  if check_backend_mysql_auth_error; then
+    cat <<'EOF' >&2
+
+[ERR] MySQL 密码与已有数据卷不一致（Access denied）。
+      修改 .env.docker 里的 DB_PASSWORD 不会自动改库内密码。
+
+修复（会清空数据库）:
+  ./linux-deploy.sh fix-db
+
+EOF
+    exit 1
+  fi
 
   if ! compose_cmd ps backend 2>/dev/null | grep -q "Up"; then
     error "backend 启动失败，日志如下:"
@@ -359,6 +403,7 @@ main() {
     status|ps) cmd_status ;;
   logs) shift || true; cmd_logs "${1:-}" ;;
   diagnose|check) cmd_diagnose ;;
+  fix-db|fixdb) cmd_fix_db ;;
   init-env|init) cmd_init_env ;;
     -h|--help|help) usage ;;
     *) error "未知命令: $cmd"; usage ;;
