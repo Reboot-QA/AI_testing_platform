@@ -47,7 +47,7 @@
 
 | 层 | 技术 |
 |----|------|
-| 后端 | FastAPI、SQLAlchemy、SQLite、JWT、httpx |
+| 后端 | FastAPI、SQLAlchemy、MySQL、JWT、httpx |
 | 前端 | Vue 3、Vite、Element Plus、Pinia、Vue Router、Axios |
 | AI | OpenAI 兼容 Chat Completions API（可 Mock） |
 | 调度 | 内置后台线程定时调度 |
@@ -168,7 +168,13 @@ cd frontend && npm run build
 ```env
 APP_NAME=AI质量平台
 SECRET_KEY=change-this-to-a-random-secret-key
-DATABASE_URL=sqlite:///./ai_testcase.db
+
+# MySQL 数据库
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=your-password-here
+DB_NAME=ai_testcase
 
 # LLM（OpenAI 兼容 API）
 LLM_API_BASE=https://api.openai.com/v1
@@ -179,7 +185,8 @@ LLM_MOCK_MODE=true
 
 - 未配置 `LLM_API_KEY` 或 `LLM_MOCK_MODE=true` 时，AI 生成走 Mock 模式。
 - LLM 也可在系统「全局设置」中配置多 Provider，优先级高于环境变量。
-- 数据库默认 SQLite，文件位于 `backend/ai_testcase.db`，可按需改为其他 SQLAlchemy 支持的 URL。
+- 数据库使用 **MySQL**，启动前请先创建库：`CREATE DATABASE ai_testcase CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`
+- 也可直接设置 `DATABASE_URL=mysql+pymysql://user:pass@host:3306/ai_testcase?charset=utf8mb4` 覆盖上述 `DB_*` 参数。
 
 ## 主要路由（前端）
 

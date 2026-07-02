@@ -85,6 +85,15 @@ ok()    { echo -e "${GREEN}[ OK ]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERR ]${NC} $*" >&2; }
 
+bootstrap_deploy() {
+  if grep -q $'\r' "$0" 2>/dev/null; then
+    echo "[ERR] deploy.sh 含有 Windows 换行(CRLF)，Linux 无法执行。" >&2
+    echo "  修复: sed -i 's/\\r$//' deploy.sh && chmod +x deploy.sh" >&2
+    exit 1
+  fi
+  info "deploy.sh 开始执行 (命令: ${1:-start})"
+}
+
 usage() {
   cat <<EOF
 AI质量平台 - 一键部署脚本
@@ -405,6 +414,14 @@ pull_latest() {
 }
 
 preserve_local_database_for_pull() {
+  local env_file="$ROOT/backend/.env"
+  if [[ -f "$env_file" ]] && grep -qE '^DATABASE_URL=.*mysql' "$env_file" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -f "$env_file" ]] && grep -qE '^DB_HOST=' "$env_file" 2>/dev/null; then
+    return 0
+  fi
+
   local db="$ROOT/backend/ai_testcase.db"
   local stash="$ROOT/.deploy/ai_testcase.db.pullbak"
   mkdir -p "$ROOT/.deploy"
@@ -425,6 +442,14 @@ preserve_local_database_for_pull() {
 }
 
 restore_local_database_after_pull() {
+  local env_file="$ROOT/backend/.env"
+  if [[ -f "$env_file" ]] && grep -qE '^DATABASE_URL=.*mysql' "$env_file" 2>/dev/null; then
+    return 0
+  fi
+  if [[ -f "$env_file" ]] && grep -qE '^DB_HOST=' "$env_file" 2>/dev/null; then
+    return 0
+  fi
+
   local db="$ROOT/backend/ai_testcase.db"
   local stash="$ROOT/.deploy/ai_testcase.db.pullbak"
 
@@ -498,7 +523,15 @@ update_project() {
 
 detect_node() {
   # 扩展 PATH（nvm、NodeSource 常见路径）
-  export PATH="/usr/local/bin:/usr/bin:/bin:${HOME}/.nvm/versions/node/$(ls "${HOME}/.nvm/versions/node" 2>/dev/null | tail -1)/bin:${PATH}"
+  local nvm_node=""
+  if [[ -d "${HOME}/.nvm/versions/node" ]]; then
+    nvm_node="$(ls "${HOME}/.nvm/versions/node" 2>/dev/null | tail -1 || true)"
+  fi
+  if [[ -n "$nvm_node" ]]; then
+    export PATH="${HOME}/.nvm/versions/node/${nvm_node}/bin:/usr/local/bin:/usr/bin:/bin:${PATH}"
+  else
+    export PATH="/usr/local/bin:/usr/bin:/bin:${PATH}"
+  fi
 
   if [[ -n "${NODE_BIN_DIR:-}" && -x "${NODE_BIN_DIR}/node" ]]; then
     export PATH="${NODE_BIN_DIR}:${PATH}"
@@ -514,13 +547,21 @@ detect_node() {
     exit 1
   fi
 
-  # 尝试加载 nvm
-  for nvm_sh in "${NVM_DIR:-$HOME/.nvm}/nvm.sh" "/root/.nvm/nvm.sh" "$HOME/.bashrc" "$HOME/.profile"; do
+  # 仅加载 nvm（勿 source .bashrc/.profile，set -e 下失败会被静默吞掉）
+  local nvm_sh
+  for nvm_sh in "${NVM_DIR:-$HOME/.nvm}/nvm.sh" "/root/.nvm/nvm.sh"; do
     if [[ -s "$nvm_sh" ]]; then
+      set +e
       # shellcheck source=/dev/null
-      source "$nvm_sh" 2>/dev/null || true
+      source "$nvm_sh"
+      local source_status=$?
+      set -e
+      if (( source_status != 0 )); then
+        warn "加载 nvm 失败: $nvm_sh (exit $source_status)"
+        continue
+      fi
       if command -v node >/dev/null 2>&1 && command -v npm >/dev/null 2>&1; then
-        ok "已加载环境: Node $(node -v) | npm $(npm -v)"
+        ok "已加载 nvm: Node $(node -v) | npm $(npm -v)"
         return 0
       fi
     fi
@@ -1338,4 +1379,5 @@ main() {
   esac
 }
 
+bootstrap_deploy "${1:-start}"
 main "${1:-start}"

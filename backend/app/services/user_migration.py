@@ -12,6 +12,15 @@ def migrate_user_optional_email() -> None:
     if not email_col or email_col.get("nullable"):
         return
 
+    dialect = engine.dialect.name
+    if dialect == "mysql":
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE users MODIFY email VARCHAR(100) NULL"))
+        return
+
+    if dialect != "sqlite":
+        return
+
     with engine.begin() as conn:
         conn.execute(text("PRAGMA foreign_keys=OFF"))
         conn.execute(
