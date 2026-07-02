@@ -223,12 +223,25 @@ WITH_MONITORING=1 ./docker/deploy.sh up
 |------|------|
 | `HTTP_PORT` | 前端 Nginx 对外端口（默认 5173） |
 | `BACKEND_PORT` | 后端 API 对外端口（默认 8000） |
+| `MYSQL_PORT` | MySQL 对外端口（默认 3306，Navicat 远程连接） |
 | `MYSQL_ROOT_PASSWORD` | MySQL root 密码 |
 | `DB_PASSWORD` | 应用数据库密码 |
 | `SECRET_KEY` | JWT 签名密钥 |
 | `LLM_API_KEY` | LLM API Key（留空则 Mock 模式） |
 
 服务架构：`frontend (Nginx)` → 反代 `/api` → `backend (FastAPI)` → `mysql`
+
+**Navicat / 远程连接 MySQL：**
+
+| 项 | 值 |
+|----|-----|
+| 主机 | 服务器公网 IP |
+| 端口 | 3306（`.env.docker` 中 `MYSQL_PORT`） |
+| 用户名 | `ai_testcase`（不要用 root，root 默认仅容器内可连） |
+| 密码 | `.env.docker` 中 `DB_PASSWORD` |
+| 数据库 | `ai_testcase` |
+
+需在云服务器安全组放行 **3306** 端口，并重启 Docker 使端口映射生效：`./docker/deploy.sh restart`
 
 ## 配置说明
 
