@@ -2,7 +2,6 @@
 set -e
 
 mkdir -p /app/logs
-touch /app/logs/backend.log
 
 echo "[INFO] Waiting for MySQL at ${DB_HOST:-mysql}:${DB_PORT:-3306} ..."
 python - <<'PY'
@@ -41,4 +40,5 @@ sys.exit(1)
 PY
 
 echo "[INFO] Starting backend on 0.0.0.0:8000 ..."
-exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2 2>&1 | tee -a /app/logs/backend.log
+# 单 worker：避免 lifespan/定时任务在多进程下重复执行导致异常
+exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
