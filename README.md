@@ -95,9 +95,6 @@ AI质量平台/
 ├── docker/deploy.sh              # Docker 子命令（兼容保留）
 ├── .env.docker.example           # Docker 环境变量模板
 ├── docker/mysql/init.sql         # MySQL 初始化
-├── start-all.bat                 # Windows 一键启动
-├── start-backend.bat
-├── start-frontend.bat
 ├── .gitignore
 └── README.md
 ```
@@ -111,24 +108,15 @@ AI质量平台/
 - **Docker** 20.10+
 - **Docker Compose** 插件 v2+
 
-**方式二：传统部署**
+**方式二：传统部署（Linux / macOS / WSL 本地开发）**
 
 - **Python** 3.8+（推荐 3.10 / 3.11）
 - **Node.js** 18+（仅前端开发或完整部署时需要）
-- **MySQL** 8.0+
-- **操作系统**：Windows / Linux / macOS
+- **MySQL** 8.0+（或配合 Docker 仅启动 MySQL 容器）
 
 ## 快速启动
 
-### 一键启动（推荐）
-
-**Windows：**
-
-```bat
-start-all.bat
-```
-
-**Linux / macOS / Git Bash / WSL：**
+### 本地开发（Linux / macOS / WSL）
 
 ```bash
 chmod +x deploy.sh
@@ -137,7 +125,10 @@ chmod +x deploy.sh
 ./deploy.sh restart  # 重启
 ./deploy.sh status   # 查看状态
 ./deploy.sh prod     # 构建前端 + 生产模式后端
+./deploy.sh docker up   # Docker 全栈（同 linux-deploy.sh）
 ```
+
+> **生产环境请使用 Docker**：`./linux-deploy.sh`（见下文）。Windows 本机请安装 [Docker Desktop](https://docs.docker.com/desktop/setup/install/windows-install/) 后执行 `docker compose --env-file .env.docker up -d --build`。
 
 启动后访问：
 
