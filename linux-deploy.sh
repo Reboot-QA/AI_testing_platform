@@ -202,7 +202,7 @@ cmd_init_env() {
 
 wait_backend_ready() {
   local i url http_port
-  url="http://127.0.0.1:$(read_env_value BACKEND_PORT 8000)/"
+  url="http://127.0.0.1:$(read_env_value BACKEND_PORT 8000)/health"
   http_port="$(read_env_value HTTP_PORT 5173)"
   info "等待后端就绪..."
   for i in $(seq 1 90); do
