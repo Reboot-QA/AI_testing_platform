@@ -77,7 +77,7 @@ services:
     depends_on:
       - backend
     ports:
-      - "${HTTP_PORT:-8080}:80"
+      - "${HTTP_PORT:-5173}:80"
     networks:
       - app
 

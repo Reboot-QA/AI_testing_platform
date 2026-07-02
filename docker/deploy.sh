@@ -69,7 +69,7 @@ read_env_value() {
 
 print_access() {
   local http_port backend_port
-  http_port="$(read_env_value HTTP_PORT 8080)"
+  http_port="$(read_env_value HTTP_PORT 5173)"
   backend_port="$(read_env_value BACKEND_PORT 8000)"
   echo
   echo "========================================"

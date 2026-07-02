@@ -201,9 +201,9 @@ WITH_MONITORING=1 ./docker/deploy.sh up
 
 | 服务 | 地址 |
 |------|------|
-| 前端 | http://127.0.0.1:8080 |
+| 前端 | http://127.0.0.1:5173 |
 | 后端 API | http://127.0.0.1:8000 |
-| Swagger | http://127.0.0.1:8080/docs |
+| Swagger | http://127.0.0.1:5173/docs |
 | Grafana（monitoring） | http://127.0.0.1:3000 |
 
 **演示账号：** `admin` / `admin123`
@@ -221,7 +221,7 @@ WITH_MONITORING=1 ./docker/deploy.sh up
 
 | 变量 | 说明 |
 |------|------|
-| `HTTP_PORT` | 前端 Nginx 对外端口（默认 8080） |
+| `HTTP_PORT` | 前端 Nginx 对外端口（默认 5173） |
 | `BACKEND_PORT` | 后端 API 对外端口（默认 8000） |
 | `MYSQL_ROOT_PASSWORD` | MySQL root 密码 |
 | `DB_PASSWORD` | 应用数据库密码 |
