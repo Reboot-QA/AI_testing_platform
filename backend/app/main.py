@@ -93,6 +93,11 @@ app.include_router(logs.router, prefix="/api/v1")
 register_request_logging(app)
 
 
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
 @app.get("/")
 def root():
     return {"message": "AI质量平台 API", "docs": "/docs"}
