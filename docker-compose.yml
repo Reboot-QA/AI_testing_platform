@@ -84,7 +84,7 @@ services:
     restart: unless-stopped
     depends_on:
       backend:
-        condition: service_started
+        condition: service_healthy
     ports:
       - "${HTTP_PORT:-5173}:80"
     networks:

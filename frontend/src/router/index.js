@@ -126,7 +126,7 @@ router.beforeEach(async (to, _from, next) => {
   if (!to.meta.public && !userStore.token) {
     return next('/login')
   }
-  if (userStore.token && !userStore.user) {
+  if (!to.meta.public && userStore.token && !userStore.user) {
     try {
       await userStore.fetchUser()
     } catch {

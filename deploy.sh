@@ -13,7 +13,8 @@
 #   ./deploy.sh update   从 Git 仓库拉取最新代码并更新依赖
 #   ./deploy.sh clone [目录]  首次部署：克隆仓库到指定目录
 #   ./deploy.sh monitoring start  启动 Grafana + Loki 监控栈
-#   ./docker/deploy.sh up         Docker 一键部署（推荐）
+#   ./linux-deploy.sh             Linux Docker 一键部署（推荐）
+#   ./deploy.sh docker up         同上（别名）
 
 set -euo pipefail
 
@@ -1531,7 +1532,7 @@ main() {
       if [[ $# -eq 0 ]]; then
         set -- up
       fi
-      bash "$ROOT/docker/deploy.sh" "$@"
+      bash "$ROOT/linux-deploy.sh" "$@"
       ;;
     *)
       error "未知命令: $cmd"

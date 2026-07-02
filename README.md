@@ -88,15 +88,13 @@ AI质量平台/
 │   │   └── utils/apiCaseConfig.js
 │   ├── index.html
 │   └── package.json
-├── deploy.sh                     # Linux / macOS / Git Bash 部署脚本
+├── linux-deploy.sh               # Linux Docker 一键部署（推荐）
+├── install-server.sh             # 远程服务器克隆 + 一键部署
+├── deploy.sh                     # 传统开发部署 / docker 别名
 ├── docker-compose.yml            # Docker Compose 编排
-├── docker/
-│   ├── deploy.sh                 # Docker 一键部署脚本
-│   └── mysql/init.sql            # MySQL 初始化
+├── docker/deploy.sh              # Docker 子命令（兼容保留）
 ├── .env.docker.example           # Docker 环境变量模板
-├── backend/Dockerfile            # 后端镜像
-├── frontend/Dockerfile           # 前端镜像（Nginx）
-├── frontend/nginx.conf           # 前端 Nginx 反代配置
+├── docker/mysql/init.sql         # MySQL 初始化
 ├── start-all.bat                 # Windows 一键启动
 ├── start-backend.bat
 ├── start-frontend.bat
@@ -177,45 +175,52 @@ cd frontend && npm run build
 # 后端可使用 deploy.sh prod，或由 Nginx 等托管 frontend/dist
 ```
 
-### Docker 一键部署（推荐）
+### Linux 一键部署（推荐）
 
-无需手动安装 Python / Node / MySQL，Docker 会自动构建并启动全部服务。
-
-**前置条件：** 已安装 [Docker](https://docs.docker.com/get-docker/) 与 Docker Compose 插件。
+无需手动安装 Python / Node / MySQL，脚本会自动安装 Docker（Ubuntu/Debian）并启动全部服务。
 
 ```bash
-# 1. 复制环境变量并修改密码
+cd /opt/AI_testing_platform
+
+# 首次：复制环境变量（可选，脚本也会自动生成）
 cp .env.docker.example .env.docker
+vi .env.docker   # 修改 MYSQL_ROOT_PASSWORD、DB_PASSWORD
 
-# 2. 构建并启动（MySQL + 后端 + 前端 Nginx）
-chmod +x docker/deploy.sh
-./docker/deploy.sh up
-
-# 3. 可选：同时启动 Grafana + Loki 监控
-./docker/deploy.sh up --monitoring
-# 或
-WITH_MONITORING=1 ./docker/deploy.sh up
+# 一键部署
+chmod +x linux-deploy.sh
+./linux-deploy.sh
 ```
+
+**远程服务器首次安装：**
+
+```bash
+PUBLIC_HOST=你的公网IP INSTALL_DIR=/opt/AI_testing_platform ./install-server.sh
+```
+
+**常用命令：**
+
+```bash
+./linux-deploy.sh              # 安装并启动
+./linux-deploy.sh status       # 查看状态
+./linux-deploy.sh logs backend
+./linux-deploy.sh restart
+./linux-deploy.sh stop
+WITH_MONITORING=1 ./linux-deploy.sh up   # 含 Grafana + Loki
+RESET_MYSQL=1 ./linux-deploy.sh up       # 清空数据库后重建
+```
+
+也可使用：`./deploy.sh docker up`（等价于 `./linux-deploy.sh up`）
 
 **访问地址（默认端口）：**
 
 | 服务 | 地址 |
 |------|------|
-| 前端 | http://127.0.0.1:5173 |
-| 后端 API | http://127.0.0.1:8000 |
-| Swagger | http://127.0.0.1:5173/docs |
-| Grafana（monitoring） | http://127.0.0.1:3000 |
+| 前端 | http://服务器IP:5173 |
+| 后端 API | http://服务器IP:8000 |
+| Swagger | http://服务器IP:5173/docs |
+| Grafana（monitoring） | http://服务器IP:3000 |
 
 **演示账号：** `admin` / `admin123`
-
-**常用命令：**
-
-```bash
-./docker/deploy.sh status          # 查看容器状态
-./docker/deploy.sh logs backend    # 查看后端日志
-./docker/deploy.sh restart         # 重启
-./docker/deploy.sh down            # 停止并移除容器
-```
 
 **`.env.docker` 主要配置：**
 
