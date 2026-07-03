@@ -202,6 +202,21 @@ ensure_env_file() {
   if [[ "$host" != "127.0.0.1" ]]; then
     set_env_value "GRAFANA_ROOT_URL" "http://${host}:$(read_env_value GRAFANA_PORT 3000)"
   fi
+
+  local mysql_pass db_pass
+  mysql_pass="$(read_env_value MYSQL_ROOT_PASSWORD)"
+  db_pass="$(read_env_value DB_PASSWORD)"
+  for weak in 123456 password change-me-to-a-strong-password; do
+    if [[ "$mysql_pass" == "$weak" || "$db_pass" == "$weak" ]]; then
+      warn "检测到弱密码（${weak}），请修改 .env.docker 中 MYSQL_ROOT_PASSWORD / DB_PASSWORD"
+      break
+    fi
+  done
+
+  if ! grep -q '^MYSQL_PUBLISH_HOST=' "$ENV_FILE" 2>/dev/null; then
+    set_env_value "MYSQL_PUBLISH_HOST" "127.0.0.1"
+    ok "已设置 MYSQL_PUBLISH_HOST=127.0.0.1（仅本机/SSH 可连 MySQL）"
+  fi
 }
 
 stop_legacy_services() {

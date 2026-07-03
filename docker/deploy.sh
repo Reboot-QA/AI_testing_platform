@@ -82,7 +82,7 @@ print_access() {
   if [[ "${WITH_MONITORING:-0}" == "1" ]]; then
     local grafana_port
     grafana_port="$(read_env_value GRAFANA_PORT 3000)"
-    echo "  Grafana: http://127.0.0.1:${grafana_port} (admin / $(read_env_value GRAFANA_ADMIN_PASSWORD admin123))"
+    echo "  Grafana: http://127.0.0.1:${grafana_port} (admin / $(read_env_value GRAFANA_ADMIN_PASSWORD change-me-grafana-password))"
   fi
   echo "========================================"
 }
