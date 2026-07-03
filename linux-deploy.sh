@@ -16,6 +16,8 @@
 #   WITH_MONITORING=1    同时启动 Grafana + Loki
 #   RESET_MYSQL=1        删除 MySQL 数据卷后重建（会清空数据库）
 #   ENV_FILE=.env.docker 指定 env 文件
+#   BACKUP_DIR=路径      备份目录（默认 .deploy/backups/mysql）
+#   BACKUP_KEEP_DAYS=30  自动清理超过 N 天的备份
 
 set -euo pipefail
 
@@ -28,6 +30,9 @@ PUBLIC_HOST="${PUBLIC_HOST:-}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-1}"
 WITH_MONITORING="${WITH_MONITORING:-0}"
 RESET_MYSQL="${RESET_MYSQL:-0}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT/.deploy/backups/mysql}"
+BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+MYSQL_CONTAINER="${MYSQL_CONTAINER:-ai-platform-mysql}"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -53,7 +58,11 @@ AI质量平台 - Linux 一键部署（Docker）
   status | ps       查看容器状态
   logs [服务名]     查看日志（backend/frontend/mysql）
   diagnose          诊断 502 / 连接问题
-  fix-db            修复 MySQL 密码不一致（清空库并重建）
+  fix-db            修复 MySQL 密码不一致（清空前自动备份）
+  backup-db         备份 MySQL 数据库（mysqldump + gzip）
+  backup-list       列出本地备份文件
+  backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
+  restore-db <文件> 从 .sql / .sql.gz 恢复数据库
   init-env          仅生成 .env.docker
   help              显示帮助
 
@@ -61,14 +70,19 @@ AI质量平台 - Linux 一键部署（Docker）
   PUBLIC_HOST       外网 IP/域名（默认自动检测）
   INSTALL_DOCKER=1  自动安装 Docker（Ubuntu/Debian）
   WITH_MONITORING=1 启动 Grafana + Loki
-  RESET_MYSQL=1     清空 MySQL 数据卷后重建
+  RESET_MYSQL=1     清空 MySQL 数据卷前自动备份
   ENV_FILE          env 文件路径（默认 .env.docker）
+  BACKUP_DIR        备份目录（默认 .deploy/backups/mysql）
+  BACKUP_KEEP_DAYS  保留天数（默认 30）
+  RESTORE_CONFIRM=1 恢复数据库时跳过交互确认
 
 示例:
   chmod +x linux-deploy.sh && ./linux-deploy.sh
   PUBLIC_HOST=38.12.6.230 ./linux-deploy.sh up
   WITH_MONITORING=1 ./linux-deploy.sh up
   ./linux-deploy.sh logs backend
+  ./linux-deploy.sh backup-db
+  ./linux-deploy.sh restore-db .deploy/backups/mysql/ai_testcase_20260703_030000.sql.gz
 EOF
 }
 
@@ -200,6 +214,117 @@ stop_legacy_services() {
   done
 }
 
+ensure_mysql_container() {
+  if docker ps --format '{{.Names}}' | grep -qx "$MYSQL_CONTAINER"; then
+    return 0
+  fi
+  error "MySQL 容器未运行: $MYSQL_CONTAINER（请先执行: ./linux-deploy.sh up）"
+}
+
+backup_timestamp() {
+  date +%Y%m%d_%H%M%S
+}
+
+cmd_backup_db() {
+  fix_script_permissions
+  ensure_docker
+  ensure_env_file
+  ensure_mysql_container
+
+  local db_name tag outfile tmpfile
+  db_name="$(read_env_value DB_NAME ai_testcase)"
+  tag="${BACKUP_TAG:-}"
+  mkdir -p "$BACKUP_DIR"
+
+  if [[ -n "$tag" ]]; then
+    outfile="$BACKUP_DIR/${db_name}_${tag}_$(backup_timestamp).sql.gz"
+  else
+    outfile="$BACKUP_DIR/${db_name}_$(backup_timestamp).sql.gz"
+  fi
+  tmpfile="$(mktemp)"
+
+  info "正在备份数据库 ${db_name} ..."
+  if ! docker exec "$MYSQL_CONTAINER" sh -c \
+    'mysqldump -uroot -p"$MYSQL_ROOT_PASSWORD" --single-transaction --routines --triggers --databases "$MYSQL_DATABASE"' \
+    >"$tmpfile" 2>/dev/null; then
+    rm -f "$tmpfile"
+    error "备份失败，请确认 MySQL 容器健康: ./linux-deploy.sh logs mysql"
+  fi
+
+  if [[ ! -s "$tmpfile" ]]; then
+    rm -f "$tmpfile"
+    error "备份文件为空，请检查数据库是否存在"
+  fi
+
+  gzip -c "$tmpfile" >"$outfile"
+  rm -f "$tmpfile"
+  ok "备份完成: $outfile ($(du -h "$outfile" | awk '{print $1}'))"
+}
+
+cmd_backup_list() {
+  fix_script_permissions
+  mkdir -p "$BACKUP_DIR"
+  echo "备份目录: $BACKUP_DIR"
+  echo
+  if ! ls -lh "$BACKUP_DIR"/*.sql.gz "$BACKUP_DIR"/*.sql 2>/dev/null; then
+    warn "暂无备份文件，执行: ./linux-deploy.sh backup-db"
+  fi
+}
+
+cmd_backup_prune() {
+  fix_script_permissions
+  mkdir -p "$BACKUP_DIR"
+  local count
+  count="$(find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -mtime +"$BACKUP_KEEP_DAYS" | wc -l | tr -d ' ')"
+  if [[ "$count" == "0" ]]; then
+    ok "无需清理（保留 ${BACKUP_KEEP_DAYS} 天内备份）"
+    return 0
+  fi
+  info "将删除 ${count} 个超过 ${BACKUP_KEEP_DAYS} 天的备份..."
+  find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -mtime +"$BACKUP_KEEP_DAYS" -print -delete
+  ok "旧备份已清理"
+}
+
+cmd_restore_db() {
+  fix_script_permissions
+  ensure_docker
+  ensure_env_file
+  ensure_mysql_container
+
+  local file="${1:-}"
+  [[ -n "$file" ]] || error "用法: $0 restore-db <备份文件.sql|.sql.gz>"
+  [[ -f "$file" ]] || error "备份文件不存在: $file"
+
+  local db_name
+  db_name="$(read_env_value DB_NAME ai_testcase)"
+
+  warn "即将用备份覆盖数据库「${db_name}」中的数据: $file"
+  if [[ "${RESTORE_CONFIRM:-}" != "1" ]]; then
+    local ans
+    read -rp "确认恢复? 输入 yes 继续: " ans
+    [[ "$ans" == "yes" ]] || error "已取消"
+  fi
+
+  info "正在恢复数据库..."
+  if [[ "$file" == *.gz ]]; then
+    gunzip -c "$file" | docker exec -i "$MYSQL_CONTAINER" sh -c \
+      'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"' || error "恢复失败"
+  else
+    docker exec -i "$MYSQL_CONTAINER" sh -c \
+      'mysql -uroot -p"$MYSQL_ROOT_PASSWORD"' <"$file" || error "恢复失败"
+  fi
+
+  info "重启后端使应用重新连接数据库..."
+  docker restart ai-platform-backend >/dev/null 2>&1 || compose_cmd restart backend || true
+  ok "数据库恢复完成"
+}
+
+auto_backup_before_destructive() {
+  local reason="${1:-maintenance}"
+  info "破坏性操作前先备份数据库（${reason}）..."
+  BACKUP_TAG="$reason" cmd_backup_db || warn "自动备份失败，仍将继续操作"
+}
+
 cmd_init_env() {
   ensure_env_file
   ok "环境文件就绪: $ENV_FILE"
@@ -267,6 +392,7 @@ cmd_diagnose() {
 }
 
 reset_mysql_volume() {
+  auto_backup_before_destructive "pre-reset"
   info "停止服务并删除 MySQL 数据卷..."
   compose_cmd --profile monitoring down -v 2>/dev/null || true
   compose_cmd down -v 2>/dev/null || true
@@ -325,6 +451,7 @@ print_banner() {
   echo "    ./linux-deploy.sh logs backend"
   echo "    ./linux-deploy.sh restart"
   echo "    ./linux-deploy.sh stop"
+  echo "    ./linux-deploy.sh backup-db"
   echo "========================================"
 }
 
@@ -404,6 +531,10 @@ main() {
   logs) shift || true; cmd_logs "${1:-}" ;;
   diagnose|check) cmd_diagnose ;;
   fix-db|fixdb) cmd_fix_db ;;
+  backup-db|backup) cmd_backup_db ;;
+  backup-list|backups) cmd_backup_list ;;
+  backup-prune|prune-backups) cmd_backup_prune ;;
+  restore-db|restore) shift || true; cmd_restore_db "${1:-}" ;;
   init-env|init) cmd_init_env ;;
     -h|--help|help) usage ;;
     *) error "未知命令: $cmd"; usage ;;

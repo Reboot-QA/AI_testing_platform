@@ -197,10 +197,46 @@ PUBLIC_HOST=你的公网IP INSTALL_DIR=/opt/AI_testing_platform ./install-server
 ./linux-deploy.sh restart
 ./linux-deploy.sh stop
 WITH_MONITORING=1 ./linux-deploy.sh up   # 含 Grafana + Loki
-RESET_MYSQL=1 ./linux-deploy.sh up       # 清空数据库后重建
+RESET_MYSQL=1 ./linux-deploy.sh up       # 清空前自动备份并重建 MySQL
+./linux-deploy.sh backup-db              # 手动备份数据库
+./linux-deploy.sh restore-db <文件>      # 从备份恢复
 ```
 
 也可使用：`./deploy.sh docker up`（等价于 `./linux-deploy.sh up`）
+
+### 数据库备份策略
+
+备份文件默认保存在 `.deploy/backups/mysql/`（已加入 `.gitignore`）。
+
+| 命令 | 说明 |
+|------|------|
+| `./linux-deploy.sh backup-db` | 立即备份（`mysqldump` + gzip，含 `CREATE DATABASE`） |
+| `./linux-deploy.sh backup-list` | 查看已有备份 |
+| `./linux-deploy.sh backup-prune` | 删除超过 30 天的旧备份（`BACKUP_KEEP_DAYS` 可调） |
+| `./linux-deploy.sh restore-db <文件>` | 从 `.sql` / `.sql.gz` 恢复 |
+
+**自动备份时机**：执行 `fix-db`、`RESET_MYSQL=1` 清空数据卷前，脚本会**先自动备份**一份（文件名带 `pre-reset` 标记）。
+
+**推荐定时任务**（每天凌晨 3 点备份并清理旧文件）：
+
+```bash
+crontab -e
+# 加入：
+0 3 * * * cd /opt/AI_testing_platform && ./linux-deploy.sh backup-db && ./linux-deploy.sh backup-prune >> .deploy/logs/backup.log 2>&1
+```
+
+**异地备份**（建议同步到对象存储或另一台机器）：
+
+```bash
+rsync -avz .deploy/backups/mysql/ user@backup-server:/data/ai-platform/mysql/
+```
+
+**恢复示例**：
+
+```bash
+./linux-deploy.sh backup-list
+RESTORE_CONFIRM=1 ./linux-deploy.sh restore-db .deploy/backups/mysql/ai_testcase_pre-reset_20260703_120000.sql.gz
+```
 
 **访问地址（默认端口）：**
 
@@ -219,25 +255,37 @@ RESET_MYSQL=1 ./linux-deploy.sh up       # 清空数据库后重建
 |------|------|
 | `HTTP_PORT` | 前端 Nginx 对外端口（默认 5173） |
 | `BACKEND_PORT` | 后端 API 对外端口（默认 8000） |
-| `MYSQL_PORT` | MySQL 对外端口（默认 3306，Navicat 远程连接） |
-| `MYSQL_ROOT_PASSWORD` | MySQL root 密码 |
-| `DB_PASSWORD` | 应用数据库密码 |
+| `MYSQL_PORT` | MySQL 映射端口（默认 3306） |
+| `MYSQL_PUBLISH_HOST` | MySQL 绑定地址（默认 `127.0.0.1`，仅 SSH 隧道；勿设 `0.0.0.0` 对公网） |
+| `MYSQL_ROOT_PASSWORD` | MySQL root 密码（**必须强密码**） |
+| `DB_PASSWORD` | 应用数据库密码（**必须强密码**） |
 | `SECRET_KEY` | JWT 签名密钥 |
 | `LLM_API_KEY` | LLM API Key（留空则 Mock 模式） |
 
 服务架构：`frontend (Nginx)` → 反代 `/api` → `backend (FastAPI)` → `mysql`
 
-**Navicat / 远程连接 MySQL：**
+**Navicat 连接 MySQL（推荐 SSH 隧道，不要对公网开放 3306）：**
 
 | 项 | 值 |
 |----|-----|
-| 主机 | 服务器公网 IP |
-| 端口 | 3306（`.env.docker` 中 `MYSQL_PORT`） |
-| 用户名 | `ai_testcase`（不要用 root，root 默认仅容器内可连） |
+| SSH | 先 SSH 登录服务器 |
+| 主机 | `127.0.0.1`（通过隧道，不是公网 IP） |
+| 端口 | 3306 |
+| 用户名 | `ai_testcase` |
 | 密码 | `.env.docker` 中 `DB_PASSWORD` |
 | 数据库 | `ai_testcase` |
 
-需在云服务器安全组放行 **3306** 端口，并重启 Docker 使端口映射生效：`./docker/deploy.sh restart`
+`.env.docker` 中保持 `MYSQL_PUBLISH_HOST=127.0.0.1`，云安全组**不要**放行 3306。若曾对外开放且使用弱密码（如 `123456`），库可能被扫描脚本删除并留下 `RECOVER_YOUR_DATA` 勒索库。
+
+### MySQL 安全（重要）
+
+若 `SHOW DATABASES` 出现 **`RECOVER_YOUR_DATA`**，说明数据库曾被公网暴力破解，**不是应用删库**：
+
+1. **立即**在云安全组关闭 3306 入站
+2. 修改 `.env.docker` 中 `MYSQL_ROOT_PASSWORD`、`DB_PASSWORD` 为强密码
+3. 设置 `MYSQL_PUBLISH_HOST=127.0.0.1`
+4. 有备份则 `./linux-deploy.sh restore-db <文件>`，否则 `./linux-deploy.sh fix-db` 重建
+5. **不要支付赎金**，勒索库无法恢复原始数据
 
 ## 配置说明
 

@@ -46,6 +46,25 @@ for attempt in range(1, 61):
             # 避免 exit 触发 restart 策略导致日志刷屏
             while True:
                 time.sleep(86400)
+        if "1049" in err or "Unknown database" in err:
+            print(
+                "[ERR] 数据库不存在（Unknown database）。应用不会自动删库，常见原因：",
+                file=sys.stderr,
+            )
+            print(
+                "[ERR]   1) 执行过 fix-db / RESET_MYSQL=1 / docker compose down -v 清空数据卷",
+                file=sys.stderr,
+            )
+            print(
+                "[ERR]   2) 数据卷仍在但库被手动 DROP，MySQL 不会自动重建（仅首次空卷初始化）",
+                file=sys.stderr,
+            )
+            print(
+                "[ERR] 修复: 在 MySQL 容器内 CREATE DATABASE，或 ./linux-deploy.sh fix-db 重建",
+                file=sys.stderr,
+            )
+            while True:
+                time.sleep(86400)
         print(f"[INFO] MySQL not ready ({attempt}/60): {exc}")
         time.sleep(2)
 
