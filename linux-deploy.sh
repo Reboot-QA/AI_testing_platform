@@ -63,6 +63,7 @@ AI质量平台 - Linux 一键部署（Docker）
   backup-list       列出本地备份文件
   backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
   restore-db <文件> 从 .sql / .sql.gz 恢复数据库
+  update | pull     从 Git 拉取代码并重新构建部署
   init-env          仅生成 .env.docker
   help              显示帮助
 
@@ -521,6 +522,33 @@ cmd_logs() {
   fi
 }
 
+cmd_update() {
+  fix_script_permissions
+  ensure_docker
+  ensure_env_file
+  stop_legacy_services
+
+  if [[ -d "$ROOT/.git" ]]; then
+    info "拉取 GitHub 最新代码..."
+    git pull --ff-only origin "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)" || \
+      git pull --ff-only || error "git pull 失败，请检查网络或手动 git pull"
+    ok "代码已更新: $(git log -1 --oneline 2>/dev/null || true)"
+  else
+    warn "当前目录不是 git 仓库，跳过 git pull"
+  fi
+
+  info "重新构建并启动 Docker 服务..."
+  compose_cmd up -d --build
+
+  if check_backend_mysql_auth_error; then
+    error "MySQL 密码不一致，请执行: ./linux-deploy.sh fix-db"
+  fi
+
+  wait_backend_ready || error "更新后服务未就绪，请执行: ./linux-deploy.sh diagnose"
+  ok "更新完成"
+  compose_cmd ps
+}
+
 main() {
   local cmd="${1:-up}"
   case "$cmd" in
@@ -535,6 +563,7 @@ main() {
   backup-list|backups) cmd_backup_list ;;
   backup-prune|prune-backups) cmd_backup_prune ;;
   restore-db|restore) shift || true; cmd_restore_db "${1:-}" ;;
+  update|pull) cmd_update ;;
   init-env|init) cmd_init_env ;;
     -h|--help|help) usage ;;
     *) error "未知命令: $cmd"; usage ;;

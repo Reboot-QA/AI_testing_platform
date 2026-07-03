@@ -89,6 +89,7 @@ AI质量平台/
 │   ├── index.html
 │   └── package.json
 ├── linux-deploy.sh               # Linux Docker 一键部署（推荐）
+├── update.sh                     # 一键更新（git pull + 重新部署）
 ├── install-server.sh             # 远程服务器克隆 + 一键部署
 ├── deploy.sh                     # 传统开发部署 / docker 别名
 ├── docker-compose.yml            # Docker Compose 编排
@@ -196,6 +197,8 @@ PUBLIC_HOST=你的公网IP INSTALL_DIR=/opt/AI_testing_platform ./install-server
 ./linux-deploy.sh logs backend
 ./linux-deploy.sh restart
 ./linux-deploy.sh stop
+./linux-deploy.sh update              # 从 GitHub 拉代码并重新部署
+bash update.sh                        # 同上（推荐，自动处理权限与 git 冲突）
 WITH_MONITORING=1 ./linux-deploy.sh up   # 含 Grafana + Loki
 RESET_MYSQL=1 ./linux-deploy.sh up       # 清空前自动备份并重建 MySQL
 ./linux-deploy.sh backup-db              # 手动备份数据库
