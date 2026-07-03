@@ -64,7 +64,7 @@ AI质量平台 - Linux 一键部署（Docker）
   backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
   restore-db <文件> 从 .sql / .sql.gz 恢复数据库
   update | pull     从 Git 拉取代码并重新构建部署
-  init-env          仅生成 .env.docker
+  init-env          生成 .env.docker 并自动创建随机密码
   help              显示帮助
 
 环境变量:
@@ -144,6 +144,55 @@ set_env_value() {
   fi
 }
 
+generate_password() {
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -hex 16
+  else
+    python3 -c 'import secrets; print(secrets.token_hex(16))'
+  fi
+}
+
+is_weak_password() {
+  case "$1" in
+    ""|123456|password|admin123|your-password-here|change-me-to-a-strong-password|change-me-grafana-password)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+ensure_mysql_passwords() {
+  local mysql_pass db_pass generated
+  mysql_pass="$(read_env_value MYSQL_ROOT_PASSWORD)"
+  db_pass="$(read_env_value DB_PASSWORD)"
+
+  if is_weak_password "$mysql_pass" || is_weak_password "$db_pass"; then
+    generated="$(generate_password)"
+    if is_weak_password "$mysql_pass"; then
+      set_env_value "MYSQL_ROOT_PASSWORD" "$generated"
+    fi
+    if is_weak_password "$db_pass"; then
+      set_env_value "DB_PASSWORD" "$generated"
+    fi
+    ok "已自动生成 MySQL 密码（MYSQL_ROOT_PASSWORD / DB_PASSWORD）"
+    echo "       密码: $generated"
+    warn "请保存上述密码；若 MySQL 数据卷已用旧密码初始化，需执行: ./linux-deploy.sh fix-db"
+  fi
+}
+
+ensure_grafana_password() {
+  local grafana_pass
+  grafana_pass="$(read_env_value GRAFANA_ADMIN_PASSWORD)"
+  if is_weak_password "$grafana_pass"; then
+    grafana_pass="$(generate_password)"
+    set_env_value "GRAFANA_ADMIN_PASSWORD" "$grafana_pass"
+    ok "已自动生成 GRAFANA_ADMIN_PASSWORD"
+    echo "       密码: $grafana_pass"
+  fi
+}
+
 compose_cmd() {
   local profiles=()
   if [[ "$WITH_MONITORING" == "1" ]]; then
@@ -203,20 +252,13 @@ ensure_env_file() {
     set_env_value "GRAFANA_ROOT_URL" "http://${host}:$(read_env_value GRAFANA_PORT 3000)"
   fi
 
-  local mysql_pass db_pass
-  mysql_pass="$(read_env_value MYSQL_ROOT_PASSWORD)"
-  db_pass="$(read_env_value DB_PASSWORD)"
-  for weak in 123456 password change-me-to-a-strong-password; do
-    if [[ "$mysql_pass" == "$weak" || "$db_pass" == "$weak" ]]; then
-      warn "检测到弱密码（${weak}），请修改 .env.docker 中 MYSQL_ROOT_PASSWORD / DB_PASSWORD"
-      break
-    fi
-  done
-
   if ! grep -q '^MYSQL_PUBLISH_HOST=' "$ENV_FILE" 2>/dev/null; then
     set_env_value "MYSQL_PUBLISH_HOST" "127.0.0.1"
     ok "已设置 MYSQL_PUBLISH_HOST=127.0.0.1（仅本机/SSH 可连 MySQL）"
   fi
+
+  ensure_mysql_passwords
+  ensure_grafana_password
 }
 
 stop_legacy_services() {
@@ -344,7 +386,9 @@ auto_backup_before_destructive() {
 cmd_init_env() {
   ensure_env_file
   ok "环境文件就绪: $ENV_FILE"
-  warn "请确认 MYSQL_ROOT_PASSWORD 和 DB_PASSWORD 已修改（生产环境勿用默认密码）"
+  echo
+  grep -E '^MYSQL_ROOT_PASSWORD=|^DB_PASSWORD=|^SECRET_KEY=|^GRAFANA_ADMIN_PASSWORD=' "$ENV_FILE" || true
+  warn "请妥善保存上述密码，勿提交到 Git"
 }
 
 wait_backend_ready() {
