@@ -308,10 +308,19 @@ export function parsePreOperations(meta, preScriptStores, preScriptLang) {
 }
 
 export function parsePostOperations(meta, postScript, extractRows, assertions) {
+  const legacyExtractSource = inferExtractSource(meta?.response_extract || extractRows)
   const stored = sanitizeStoredPostOperations(
     (meta?.post_operations || []).map(normalizeOperation).filter(Boolean)
   )
-  if (stored.length) return stored
+  if (stored.length) {
+    return stored.map((operation) => {
+      if (operation.type !== 'extract') return operation
+      return createOperation('extract', {
+        ...operation,
+        source: operation.source || legacyExtractSource,
+      })
+    })
+  }
 
   const ops = []
   if (postScript?.trim()) {
@@ -794,6 +803,23 @@ export function parseCaseConfig(headersText, bodyText, assertions = DEFAULT_ASSE
   }
   headerRows = headerRows.filter((r) => !['authorization', 'cookie'].includes(r.key.toLowerCase()))
 
+  const authorizationHeader = meta.authorization_header ?? authHeader?.value ?? ''
+  if (authorizationHeader) {
+    headerRows.push({
+      key: 'authorization',
+      value: String(authorizationHeader),
+      enabled: true,
+      desc: '',
+    })
+  } else if (auth.type === 'bearer' && auth.token) {
+    headerRows.push({
+      key: 'authorization',
+      value: auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`,
+      enabled: true,
+      desc: '',
+    })
+  }
+
   const bodyType = resolveBodyType(meta.body_type, bodyText)
   const formBodyRows = meta.form_body || []
   const bodyStores = parseBodyStores(meta, bodyType, bodyText, formBodyRows)
@@ -964,6 +990,14 @@ export function serializeCaseConfig({
     bodyType === 'json' ? stores.json : bodyType === 'raw' ? stores.raw : rawBody
   const headersObj = {}
 
+  const authHeaderRow = headerRows.find(
+    (row) => row.enabled !== false && (row.key || '').trim().toLowerCase() === 'authorization'
+  )
+  let authorizationHeader = authHeaderRow?.value == null ? '' : String(authHeaderRow.value)
+  if (!authorizationHeader && auth?.type === 'bearer' && auth.token) {
+    authorizationHeader = auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`
+  }
+
   headerRows.forEach(({ key, value, enabled }) => {
     const k = (key || '').trim()
     if (!k || enabled === false) return
@@ -976,6 +1010,7 @@ export function serializeCaseConfig({
     path_vars: pathRows.filter((r) => (r.key || '').trim()),
     cookies: cookieRows.filter((r) => (r.key || '').trim()),
     variables: filterFormRows(variableRows || []),
+    authorization_header: authorizationHeader,
     data_drive: {
       enabled: Boolean(dataDriveEnabled),
       rows: (dataDriveRows || [])
@@ -1017,7 +1052,14 @@ export function serializeCaseConfig({
     },
     post_script: resolvedPostScript || '',
     pre_operations: resolvedPreOperations,
-    post_operations: resolvedPostOperations,
+    post_operations: (resolvedPostOperations || []).map((operation) => {
+      if (operation.type !== 'extract') return operation
+      return createOperation('extract', {
+        ...operation,
+        source: extractSource,
+        rows: operation.rows || resolvedExtractRows,
+      })
+    }),
   }
 
   const body = buildBody(bodyType, activeFormRows, activeRawBody)

@@ -202,6 +202,8 @@ def prepare_case_request(
     elif auth_type == "basic" and auth.get("username"):
         token = base64.b64encode(f"{auth['username']}:{auth.get('password', '')}".encode()).decode()
         headers["Authorization"] = f"Basic {token}"
+    elif meta.get("authorization_header"):
+        headers["Authorization"] = _apply_variables(str(meta["authorization_header"]), variables)
 
     cookies = _substitute_kv_rows(meta.get("cookies") or [], variables)
     cookie_pairs = []
