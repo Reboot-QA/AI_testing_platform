@@ -255,6 +255,8 @@ def _execute_case(
     extracted_variables, scoped_items, extract_results = apply_response_extractors(
         meta.get("response_extract") or [],
         response,
+        request=request_snapshot,
+        duration_ms=duration_ms,
     )
     assertion_results = [_evaluate_assertion(item, response, duration_ms) for item in assertions]
     if not assertion_results:

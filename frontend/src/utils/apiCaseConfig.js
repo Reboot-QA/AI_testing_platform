@@ -7,7 +7,45 @@ export function emptyKvRow() {
 }
 
 export function emptyExtractRow() {
-  return { key: '', source: 'body', path: '$.code', enabled: true, desc: '', scope: 'environment' }
+  return {
+    key: '',
+    source: 'response_json',
+    path: '$.code',
+    enabled: true,
+    desc: '',
+    scope: 'environment',
+  }
+}
+
+export const EXTRACT_SOURCE_OPTIONS = [
+  { value: 'response_json', label: 'Response JSON', pathLabel: 'JSONPath 表达式', placeholder: '$.data.token' },
+  { value: 'response_xml', label: 'Response XML', pathLabel: 'XML 路径', placeholder: 'token 或 //token' },
+  { value: 'response_text', label: 'Response Text', pathLabel: '正则/留空', placeholder: '留空取全文，或 regex:pattern' },
+  { value: 'response_header', label: 'Response Header', pathLabel: 'Header 名称', placeholder: 'X-Trace-Id' },
+  { value: 'response_cookie', label: 'Response Cookie', pathLabel: 'Cookie 名称', placeholder: 'session_id' },
+  { value: 'response_time', label: '响应时间', pathLabel: '（无需填写）', placeholder: '自动提取毫秒数' },
+  { value: 'request_header', label: 'Request Header', pathLabel: 'Header 名称', placeholder: 'Authorization' },
+  { value: 'request_body', label: 'Request Body', pathLabel: 'JSONPath 表达式', placeholder: '$.username' },
+]
+
+const LEGACY_EXTRACT_SOURCE_MAP = {
+  body: 'response_json',
+  header: 'response_header',
+}
+
+export function normalizeExtractSource(source) {
+  const normalized = String(source || 'response_json').toLowerCase()
+  const mapped = LEGACY_EXTRACT_SOURCE_MAP[normalized] || normalized
+  return EXTRACT_SOURCE_OPTIONS.some((item) => item.value === mapped) ? mapped : 'response_json'
+}
+
+export function getExtractSourceMeta(source) {
+  const normalized = normalizeExtractSource(source)
+  return EXTRACT_SOURCE_OPTIONS.find((item) => item.value === normalized) || EXTRACT_SOURCE_OPTIONS[0]
+}
+
+export function extractRowNeedsPath(source) {
+  return normalizeExtractSource(source) !== 'response_time'
 }
 
 export const VARIABLE_SCOPE_OPTIONS = [
@@ -24,7 +62,7 @@ export function normalizeExtractScope(scope) {
 export function ensureExtractRows(rows) {
   return rows?.length ? rows.map((row) => ({
     key: row.key || '',
-    source: row.source || 'body',
+    source: normalizeExtractSource(row.source),
     path: row.path || '',
     enabled: row.enabled !== false,
     desc: row.desc || '',
@@ -33,7 +71,11 @@ export function ensureExtractRows(rows) {
 }
 
 export function countActiveExtractRows(rows) {
-  return (rows || []).filter((row) => row.enabled !== false && row.key?.trim() && row.path?.trim()).length
+  return (rows || []).filter((row) => {
+    if (row.enabled === false || !row.key?.trim()) return false
+    if (!extractRowNeedsPath(row.source)) return true
+    return Boolean(row.path?.trim())
+  }).length
 }
 
 export const PRE_OPERATION_OPTIONS = [
@@ -863,13 +905,18 @@ export function serializeCaseConfig({
         })),
     },
     response_extract: (extractRows || resolvedExtractRows || [])
-      .filter((row) => (row.key || '').trim() && (row.path || '').trim())
+      .filter((row) => {
+        if (!(row.key || '').trim()) return false
+        if (!extractRowNeedsPath(row.source)) return true
+        return Boolean((row.path || '').trim())
+      })
       .map((row) => ({
         key: row.key.trim(),
-        source: row.source || 'body',
-        path: row.path.trim(),
+        source: normalizeExtractSource(row.source),
+        path: (row.path || '').trim(),
         enabled: row.enabled !== false,
         desc: row.desc || '',
+        scope: normalizeExtractScope(row.scope),
       })),
     auth,
     body_type: bodyType,

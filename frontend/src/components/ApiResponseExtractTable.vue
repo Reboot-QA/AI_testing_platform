@@ -79,6 +79,18 @@
           <el-checkbox v-model="row.enabled" />
         </template>
       </el-table-column>
+      <el-table-column label="提取来源" width="150">
+        <template #default="{ row }">
+          <el-select v-model="row.source" size="small" @change="handleSourceChange(row)">
+            <el-option
+              v-for="item in EXTRACT_SOURCE_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+        </template>
+      </el-table-column>
       <el-table-column label="变量名" min-width="120">
         <template #default="{ row }">
           <el-input v-model="row.key" placeholder="access_token" size="small" />
@@ -96,19 +108,12 @@
           </el-select>
         </template>
       </el-table-column>
-      <el-table-column label="来源" width="110">
-        <template #default="{ row }">
-          <el-select v-model="row.source" size="small">
-            <el-option label="响应体 JSON" value="body" />
-            <el-option label="响应头" value="header" />
-          </el-select>
-        </template>
-      </el-table-column>
-      <el-table-column label="JSON Path / Header" min-width="180">
+      <el-table-column :label="pathColumnLabel" min-width="180">
         <template #default="{ row }">
           <el-input
             v-model="row.path"
-            :placeholder="row.source === 'header' ? 'X-Trace-Id' : '$.data.token'"
+            :placeholder="pathPlaceholder(row.source)"
+            :disabled="!extractRowNeedsPath(row.source)"
             size="small"
           />
         </template>
@@ -133,9 +138,13 @@ import { ElMessage } from 'element-plus'
 import {
   buildExtractExpression,
   emptyExtractRow,
+  extractRowNeedsPath,
+  getExtractSourceMeta,
   jsonPathExists,
   looksLikeRequestBody,
+  normalizeExtractSource,
   normalizeJsonText,
+  EXTRACT_SOURCE_OPTIONS,
   VARIABLE_SCOPE_OPTIONS,
 } from '@/utils/apiCaseConfig'
 
@@ -244,6 +253,25 @@ function toggleSelect(index, checked) {
   selectedIndexes.value = next
 }
 
+const pathColumnLabel = computed(() => {
+  const sources = [...new Set((rows.value || []).map((row) => normalizeExtractSource(row.source)))]
+  if (sources.length === 1) {
+    return getExtractSourceMeta(sources[0]).pathLabel
+  }
+  return '提取表达式'
+})
+
+function pathPlaceholder(source) {
+  return getExtractSourceMeta(source).placeholder
+}
+
+function handleSourceChange(row) {
+  row.source = normalizeExtractSource(row.source)
+  if (!extractRowNeedsPath(row.source)) {
+    row.path = ''
+  }
+}
+
 function addRow() {
   rows.value.push(emptyExtractRow())
 }
@@ -270,7 +298,7 @@ function applyGeneratedRow() {
 
     rows.value.push({
       key: result.variableName,
-      source: 'body',
+      source: 'response_json',
       path: result.path,
       enabled: true,
       desc: '表达式生成器',

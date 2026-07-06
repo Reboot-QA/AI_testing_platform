@@ -189,7 +189,10 @@
 
               <template v-else-if="operation.type === 'extract'">
                 <ApiResponseExtractTable v-model:rows="operation.rows" :response-body="responseBody" />
-                <div class="form-tip">响应体使用 JSON Path（如 $.code、$.data.token）；响应头填写 Header 名称</div>
+                <div class="form-tip">
+                  提取来源决定从哪读取数据；变量类型决定保存到临时/环境/全局变量。
+                  Response JSON / Request Body 用 JSONPath；Header / Cookie 填名称；响应时间无需填写表达式。
+                </div>
               </template>
             </div>
           </div>

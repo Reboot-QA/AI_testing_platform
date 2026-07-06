@@ -74,10 +74,54 @@ def test_extract_scope_preserved():
     assert "环境变量" in results[0]["message"]
 
 
+def test_extract_response_time():
+    response = httpx.Response(200, json={"ok": True})
+    request = {"headers": {"Authorization": "Bearer abc"}, "body": '{"user":"demo"}'}
+    extractors = [{"key": "elapsed", "source": "response_time", "path": "", "enabled": True}]
+    extracted, scoped_items, results = apply_response_extractors(
+        extractors,
+        response,
+        request=request,
+        duration_ms=222.6,
+    )
+    assert extracted["elapsed"] == "223"
+    assert results[0]["passed"] is True
+
+
+def test_extract_request_header_and_body():
+    response = httpx.Response(200, content=b"{}")
+    request = {
+        "headers": {"Authorization": "Bearer token-xyz"},
+        "body": '{"username":"admin","password":"123"}',
+    }
+    extractors = [
+        {"key": "auth", "source": "request_header", "path": "Authorization", "enabled": True},
+        {"key": "username", "source": "request_body", "path": "$.username", "enabled": True},
+    ]
+    extracted, scoped_items, results = apply_response_extractors(
+        extractors,
+        response,
+        request=request,
+    )
+    assert extracted["auth"] == "Bearer token-xyz"
+    assert extracted["username"] == "admin"
+
+
+def test_extract_legacy_source_values():
+    response = httpx.Response(200, json={"token": "legacy"})
+    extractors = [{"key": "token", "source": "body", "path": "$.token", "enabled": True}]
+    extracted, scoped_items, results = apply_response_extractors(extractors, response)
+    assert extracted["token"] == "legacy"
+    assert results[0]["source"] == "response_json"
+
+
 if __name__ == "__main__":
     test_extract_json_path_from_body()
     test_extract_header()
     test_extract_missing_path()
     test_extract_null_and_false()
     test_extract_scope_preserved()
+    test_extract_response_time()
+    test_extract_request_header_and_body()
+    test_extract_legacy_source_values()
     print("OK")

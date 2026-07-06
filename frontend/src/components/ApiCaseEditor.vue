@@ -302,9 +302,10 @@
             size="small"
             border
           >
-            <el-table-column prop="key" label="变量名" min-width="140" />
-            <el-table-column prop="scope" label="变量类型" width="110" />
-            <el-table-column prop="value" label="提取值" min-width="240" show-overflow-tooltip />
+            <el-table-column prop="key" label="变量名" min-width="120" />
+            <el-table-column prop="source" label="提取来源" width="130" />
+            <el-table-column prop="scope" label="变量类型" width="100" />
+            <el-table-column prop="value" label="提取值" min-width="220" show-overflow-tooltip />
           </el-table>
           <div v-else class="form-tip">暂无提取结果，请在后执行操作中配置提取规则后重新发送</div>
         </el-tab-pane>
@@ -573,16 +574,31 @@ const displayedDebug = computed(() => activeDebugDetail.value || debugResult.val
 const extractedVariableRows = computed(() => {
   const vars = displayedDebug.value?.extracted_variables || {}
   const scopeMap = {}
+  const sourceMap = {}
   for (const item of displayedDebug.value?.assertion_results || []) {
     if (item.type === 'extract' && item.expected) {
       scopeMap[item.expected] = item.scope
+      sourceMap[item.expected] = item.source
     }
   }
   const scopeLabel = { temporary: '临时变量', environment: '环境变量', global: '全局变量' }
+  const sourceLabel = {
+    response_json: 'Response JSON',
+    response_xml: 'Response XML',
+    response_text: 'Response Text',
+    response_header: 'Response Header',
+    response_cookie: 'Response Cookie',
+    response_time: '响应时间',
+    request_header: 'Request Header',
+    request_body: 'Request Body',
+    body: 'Response JSON',
+    header: 'Response Header',
+  }
   return Object.entries(vars).map(([key, value]) => ({
     key,
     value,
     scope: scopeLabel[scopeMap[key]] || scopeMap[key] || '临时变量',
+    source: sourceLabel[sourceMap[key]] || sourceMap[key] || '-',
   }))
 })
 const activeHeaderCount = computed(() => countActiveKvRows(headerRows.value))
