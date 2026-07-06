@@ -25,6 +25,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
 ENV_FILE="${ENV_FILE:-$ROOT/.env.docker}"
+DEFAULT_MYSQL_PASSWORD='siscUTBE7250@Prod!2026'
 COMPOSE_FILE="$ROOT/docker-compose.yml"
 PUBLIC_HOST="${PUBLIC_HOST:-}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-1}"
@@ -64,7 +65,7 @@ AI质量平台 - Linux 一键部署（Docker）
   backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
   restore-db <文件> 从 .sql / .sql.gz 恢复数据库
   update | pull     从 Git 拉取代码并重新构建部署
-  init-env          生成 .env.docker 并自动创建随机密码
+  init-env          生成 .env.docker 并写入默认 MySQL 密码
   help              显示帮助
 
 环境变量:
@@ -164,21 +165,20 @@ is_weak_password() {
 }
 
 ensure_mysql_passwords() {
-  local mysql_pass db_pass generated
+  local mysql_pass db_pass
   mysql_pass="$(read_env_value MYSQL_ROOT_PASSWORD)"
   db_pass="$(read_env_value DB_PASSWORD)"
 
   if is_weak_password "$mysql_pass" || is_weak_password "$db_pass"; then
-    generated="$(generate_password)"
     if is_weak_password "$mysql_pass"; then
-      set_env_value "MYSQL_ROOT_PASSWORD" "$generated"
+      set_env_value "MYSQL_ROOT_PASSWORD" "$DEFAULT_MYSQL_PASSWORD"
     fi
     if is_weak_password "$db_pass"; then
-      set_env_value "DB_PASSWORD" "$generated"
+      set_env_value "DB_PASSWORD" "$DEFAULT_MYSQL_PASSWORD"
     fi
-    ok "已自动生成 MySQL 密码（MYSQL_ROOT_PASSWORD / DB_PASSWORD）"
-    echo "       密码: $generated"
-    warn "请保存上述密码；若 MySQL 数据卷已用旧密码初始化，需执行: ./linux-deploy.sh fix-db"
+    ok "已设置 MySQL 默认密码（MYSQL_ROOT_PASSWORD / DB_PASSWORD）"
+    echo "       密码: $DEFAULT_MYSQL_PASSWORD"
+    warn "若 MySQL 数据卷已用旧密码初始化，需执行: ./linux-deploy.sh fix-db"
   fi
 }
 
