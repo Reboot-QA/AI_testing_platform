@@ -155,11 +155,11 @@
             </div>
           </el-tab-pane>
 
-          <el-tab-pane label="认证" name="auth">
+          <el-tab-pane :label="`认证 (${activeAuthCount})`" name="auth">
             <el-form label-width="90px" class="auth-form">
               <el-form-item label="认证方式">
                 <el-select v-model="form.auth.type" style="width: 220px">
-                  <el-option label="No Auth" value="none" />
+                  <el-option label="无需认证" value="none" />
                   <el-option label="Bearer Token" value="bearer" />
                   <el-option label="Basic Auth" value="basic" />
                 </el-select>
@@ -168,17 +168,23 @@
                 <VariableSuggestInput
                   v-model="form.auth.token"
                   :variables="editorVariables"
-                  placeholder="Bearer Token 或 {{access_token}}"
+                  placeholder="Token（支持变量）"
                 />
+                <div class="form-tip auth-token-tip">只需填写 Token 值，发送时自动添加 Bearer 前缀</div>
               </el-form-item>
               <template v-if="form.auth.type === 'basic'">
                 <el-form-item label="用户名">
-                  <VariableSuggestInput v-model="form.auth.username" :variables="editorVariables" />
+                  <VariableSuggestInput
+                    v-model="form.auth.username"
+                    :variables="editorVariables"
+                    placeholder="Username（支持变量）"
+                  />
                 </el-form-item>
                 <el-form-item label="密码">
                   <VariableSuggestInput
                     v-model="form.auth.password"
                     :variables="editorVariables"
+                    placeholder="Password（支持变量）"
                     show-password
                   />
                 </el-form-item>
@@ -447,6 +453,7 @@ import {
   syncLegacyFromOperations,
   operationHasContent,
   collectEditorVariables,
+  stripBearerTokenPrefix,
 } from '@/utils/apiCaseConfig'
 import VariableSuggestInput from '@/components/VariableSuggestInput.vue'
 
@@ -543,6 +550,19 @@ const canAiGenerateData = computed(
 const activeQueryCount = computed(() => countActiveKvRows(queryRows.value))
 const activePathCount = computed(() => countActiveKvRows(pathRows.value))
 const activeCookieCount = computed(() => countActiveKvRows(cookieRows.value))
+const activeAuthCount = computed(() => {
+  const auth = form.auth || {}
+  if (auth.type === 'bearer' && String(stripBearerTokenPrefix(auth.token) || '').trim()) return 1
+  if (auth.type === 'basic' && String(auth.username || '').trim()) return 1
+  const authHeader = headerRows.value.find(
+    (row) =>
+      row.enabled !== false
+      && (row.key || '').trim().toLowerCase() === 'authorization'
+      && String(row.value || '').trim()
+  )
+  if (auth.type === 'none' && authHeader) return 1
+  return 0
+})
 const activeVariableCount = computed(() => {
   const base = countActiveKvRows(variableRows.value)
   if (!dataDriveEnabled.value) return base
@@ -1260,6 +1280,17 @@ function applyCaptureItem(item) {
 }
 
 watch(
+  () => form.auth.token,
+  (value) => {
+    if (form.auth.type !== 'bearer' || !value) return
+    const normalized = stripBearerTokenPrefix(value)
+    if (normalized !== value) {
+      form.auth.token = normalized
+    }
+  }
+)
+
+watch(
   () => form.body_type,
   (type) => {
     if (suppressBodyTypeWatch.value) return
@@ -1392,6 +1423,10 @@ defineExpose({ resetForm, applyCaptureItem, handleNew })
 .auth-form {
   max-width: 520px;
   padding-top: 8px;
+}
+
+.auth-token-tip {
+  margin-top: 6px;
 }
 
 .script-editor {

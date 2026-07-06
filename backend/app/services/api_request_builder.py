@@ -198,7 +198,10 @@ def prepare_case_request(
     }
     auth_type = (auth.get("type") or "none").lower()
     if auth_type == "bearer" and auth.get("token"):
-        headers["Authorization"] = f"Bearer {auth['token']}"
+        token = str(auth["token"]).strip()
+        if token.lower().startswith("bearer "):
+            token = token[7:].strip()
+        headers["Authorization"] = f"Bearer {token}"
     elif auth_type == "basic" and auth.get("username"):
         token = base64.b64encode(f"{auth['username']}:{auth.get('password', '')}".encode()).decode()
         headers["Authorization"] = f"Basic {token}"

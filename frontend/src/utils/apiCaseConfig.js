@@ -71,6 +71,14 @@ export const VARIABLE_SCOPE_LABELS = {
   extract: '提取变量',
 }
 
+export function stripBearerTokenPrefix(token) {
+  return String(token || '').trim().replace(/^Bearer\s+/i, '')
+}
+
+export function normalizeBearerAuthToken(token) {
+  return stripBearerTokenPrefix(token)
+}
+
 export function parseVariablesJson(text) {
   if (!text) return {}
   try {
@@ -793,31 +801,32 @@ export function parseCaseConfig(headersText, bodyText, assertions = DEFAULT_ASSE
   }))
 
   let auth = meta.auth || { type: 'none', token: '', username: '', password: '' }
-  const authHeader = headerRows.find((r) => r.key.toLowerCase() === 'authorization')
-  if (auth.type === 'none' && authHeader?.value) {
-    if (authHeader.value.startsWith('Bearer ')) {
-      auth = { type: 'bearer', token: authHeader.value.slice(7).trim(), username: '', password: '' }
-    } else if (authHeader.value.startsWith('Basic ')) {
-      auth = { type: 'basic', token: '', username: '', password: '' }
-    }
+  if (auth.type === 'bearer' && auth.token) {
+    auth = { ...auth, token: stripBearerTokenPrefix(auth.token) }
   }
+
+  const authHeader = headerRows.find((r) => r.key.toLowerCase() === 'authorization')
   headerRows = headerRows.filter((r) => !['authorization', 'cookie'].includes(r.key.toLowerCase()))
 
   const authorizationHeader = meta.authorization_header ?? authHeader?.value ?? ''
-  if (authorizationHeader) {
-    headerRows.push({
-      key: 'authorization',
-      value: String(authorizationHeader),
-      enabled: true,
-      desc: '',
-    })
-  } else if (auth.type === 'bearer' && auth.token) {
-    headerRows.push({
-      key: 'authorization',
-      value: auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`,
-      enabled: true,
-      desc: '',
-    })
+  if (auth.type === 'none' && authorizationHeader) {
+    if (/^Bearer\s+/i.test(authorizationHeader)) {
+      auth = {
+        type: 'bearer',
+        token: stripBearerTokenPrefix(authorizationHeader),
+        username: '',
+        password: '',
+      }
+    } else if (/^Basic\s+/i.test(authorizationHeader)) {
+      auth = { type: 'basic', token: '', username: '', password: '' }
+    } else {
+      headerRows.push({
+        key: 'authorization',
+        value: String(authorizationHeader),
+        enabled: true,
+        desc: '',
+      })
+    }
   }
 
   const bodyType = resolveBodyType(meta.body_type, bodyText)
@@ -993,9 +1002,13 @@ export function serializeCaseConfig({
   const authHeaderRow = headerRows.find(
     (row) => row.enabled !== false && (row.key || '').trim().toLowerCase() === 'authorization'
   )
-  let authorizationHeader = authHeaderRow?.value == null ? '' : String(authHeaderRow.value)
-  if (!authorizationHeader && auth?.type === 'bearer' && auth.token) {
-    authorizationHeader = auth.token.startsWith('Bearer ') ? auth.token : `Bearer ${auth.token}`
+  const authForMeta = {
+    ...auth,
+    token: auth?.type === 'bearer' ? stripBearerTokenPrefix(auth.token || '') : (auth?.token || ''),
+  }
+  let authorizationHeader = ''
+  if (authForMeta.type === 'none' && authHeaderRow?.value?.trim()) {
+    authorizationHeader = String(authHeaderRow.value)
   }
 
   headerRows.forEach(({ key, value, enabled }) => {
@@ -1035,7 +1048,7 @@ export function serializeCaseConfig({
         desc: row.desc || '',
         scope: normalizeExtractScope(row.scope),
       })),
-    auth,
+    auth: authForMeta,
     body_type: bodyType,
     form_body: filterFormRows(activeFormRows),
     body_stores: {
