@@ -210,7 +210,26 @@
 
       <div v-else-if="activeTab === 'report'">
         <el-card shadow="never">
-          <el-table v-loading="reportLoading" :data="runs" stripe @row-click="viewReport">
+          <div class="pane-toolbar">
+            <el-button
+              type="danger"
+              plain
+              :disabled="!selectedRunIds.length"
+              :loading="runBatchDeleting"
+              @click="batchRemoveRuns"
+            >
+              批量删除{{ selectedRunIds.length ? `(${selectedRunIds.length})` : '' }}
+            </el-button>
+          </div>
+          <el-table
+            ref="reportTableRef"
+            v-loading="reportLoading"
+            :data="runs"
+            stripe
+            @row-click="viewReport"
+            @selection-change="onRunSelectionChange"
+          >
+            <el-table-column type="selection" width="48" />
             <el-table-column prop="id" label="报告 ID" width="90" />
             <el-table-column prop="suite_name" label="套件" min-width="160" />
             <el-table-column prop="status" label="结果" width="100">
@@ -896,7 +915,9 @@ const draggingCaseId = ref(null)
 const caseDragOverId = ref(null)
 const caseMoving = ref(false)
 const selectedCaseIds = ref([])
+const selectedRunIds = ref([])
 const caseBatchDeleting = ref(false)
+const runBatchDeleting = ref(false)
 const caseBatchGenerating = ref(false)
 const aiGenerateLogVisible = ref(false)
 const aiGenerateLogs = ref([])
@@ -912,6 +933,7 @@ const suiteRunResultId = ref(null)
 const suiteRunFailedCount = ref(0)
 const AI_GENERATE_CHUNK_SIZE = 8
 const caseEditorRef = ref(null)
+const reportTableRef = ref(null)
 const suiteTreeRef = ref(null)
 
 const envDialogVisible = ref(false)
@@ -1387,6 +1409,8 @@ async function loadRuns() {
   reportLoading.value = true
   try {
     runs.value = await apiAutomationApi.listRuns({ project_id: projectId.value })
+    selectedRunIds.value = []
+    reportTableRef.value?.clearSelection()
   } finally {
     reportLoading.value = false
   }
@@ -2212,6 +2236,27 @@ async function removeRun(row) {
   await apiAutomationApi.deleteRun(row.id)
   ElMessage.success('删除成功')
   await loadRuns()
+}
+
+function onRunSelectionChange(rows) {
+  selectedRunIds.value = (rows || []).map((row) => row.id)
+}
+
+async function batchRemoveRuns() {
+  if (!selectedRunIds.value.length) return
+  await ElMessageBox.confirm(
+    `确认删除选中的 ${selectedRunIds.value.length} 条测试报告？此操作不可恢复。`,
+    '批量删除',
+    { type: 'warning' },
+  )
+  runBatchDeleting.value = true
+  try {
+    const result = await apiAutomationApi.batchDeleteRuns({ run_ids: selectedRunIds.value })
+    ElMessage.success(result.message || '删除成功')
+    await loadRuns()
+  } finally {
+    runBatchDeleting.value = false
+  }
 }
 
 onMounted(loadProjects)

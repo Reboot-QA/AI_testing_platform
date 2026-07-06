@@ -481,6 +481,15 @@ class ApiCaseBatchDeleteResponse(BaseModel):
     message: str
 
 
+class ApiRunBatchDeleteRequest(BaseModel):
+    run_ids: List[int]
+
+
+class ApiRunBatchDeleteResponse(BaseModel):
+    deleted_count: int
+    message: str
+
+
 class ApiTestCaseOut(ApiTestCaseBase):
     id: int
     suite_id: int

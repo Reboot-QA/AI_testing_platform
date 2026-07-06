@@ -43,6 +43,8 @@ from app.schemas import (
     ApiTestCaseCopyRequest,
     ApiCaseBatchDeleteRequest,
     ApiCaseBatchDeleteResponse,
+    ApiRunBatchDeleteRequest,
+    ApiRunBatchDeleteResponse,
     ApiTestCaseOut,
     ApiTestCaseUpdate,
     ApiTestRunDetailOut,
@@ -1185,6 +1187,34 @@ def delete_run(
     db.delete(run)
     db.commit()
     return {"message": "删除成功"}
+
+
+@router.post("/runs/batch/delete", response_model=ApiRunBatchDeleteResponse)
+def batch_delete_runs(
+    data: ApiRunBatchDeleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not data.run_ids:
+        raise HTTPException(status_code=400, detail="请选择要删除的报告")
+    unique_ids = list(dict.fromkeys(data.run_ids))
+    runs = (
+        db.query(ApiTestRun)
+        .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
+        .join(Project, Project.id == ApiTestSuite.project_id)
+        .filter(ApiTestRun.id.in_(unique_ids), Project.owner_id == current_user.id)
+        .all()
+    )
+    if not runs:
+        raise HTTPException(status_code=404, detail="未找到可删除的报告")
+    for run in runs:
+        db.delete(run)
+    db.commit()
+    deleted_count = len(runs)
+    return ApiRunBatchDeleteResponse(
+        deleted_count=deleted_count,
+        message=f"成功删除 {deleted_count} 条报告",
+    )
 
 
 @router.get("/schedules", response_model=List[ApiScheduledTaskOut])

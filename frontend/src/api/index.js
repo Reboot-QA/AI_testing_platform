@@ -279,6 +279,7 @@ export const apiAutomationApi = {
   listRuns: (params = {}) => request.get('/api-automation/runs', { params }),
   getRun: (id) => request.get(`/api-automation/runs/${id}`),
   deleteRun: (id) => request.delete(`/api-automation/runs/${id}`),
+  batchDeleteRuns: (data) => request.post('/api-automation/runs/batch/delete', data),
   parseCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: true }),
   importCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: false }),
   parseSwagger: (data) => request.post('/api-automation/import/swagger', { ...data, preview: true }),
