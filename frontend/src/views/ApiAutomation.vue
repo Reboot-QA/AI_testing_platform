@@ -227,6 +227,8 @@
               <template #dropdown>
                 <el-dropdown-menu>
                   <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+                  <el-dropdown-item command="word">导出 Word</el-dropdown-item>
+                  <el-dropdown-item command="pdf">导出 PDF</el-dropdown-item>
                   <el-dropdown-item command="json">导出 JSON</el-dropdown-item>
                 </el-dropdown-menu>
               </template>
@@ -288,6 +290,8 @@
                   <template #dropdown>
                     <el-dropdown-menu>
                       <el-dropdown-item command="excel">Excel</el-dropdown-item>
+                      <el-dropdown-item command="word">Word</el-dropdown-item>
+                      <el-dropdown-item command="pdf">PDF</el-dropdown-item>
                       <el-dropdown-item command="json">JSON</el-dropdown-item>
                     </el-dropdown-menu>
                   </template>
@@ -2255,7 +2259,8 @@ function downloadBlob(blob, filename) {
 }
 
 function buildRunExportFilename(row, format, count = 1) {
-  const ext = format === 'json' ? 'json' : 'xlsx'
+  const extMap = { excel: 'xlsx', word: 'docx', pdf: 'pdf', json: 'json' }
+  const ext = extMap[format] || 'xlsx'
   if (count === 1 && row?.id) {
     const suite = String(row.suite_name || 'report').replace(/[/\\]/g, '_')
     return `测试报告_${row.id}_${suite}.${ext}`

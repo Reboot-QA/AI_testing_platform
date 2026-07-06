@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
@@ -12,8 +13,7 @@ from app.services.api_run_maintenance import after_api_test_runs_deleted
 from app.services.api_run_export_service import (
     build_content_disposition,
     build_export_filename,
-    build_run_export_excel,
-    build_run_export_json,
+    build_run_export,
 )
 from app.database import SessionLocal, get_db
 from app.models.api_automation import (
@@ -303,24 +303,28 @@ def _query_owned_runs(db: Session, run_ids: List[int], user: User) -> List[ApiTe
 
 def _export_run_reports(reports: List[ApiTestRunDetailOut], export_format: str):
     normalized_format = (export_format or "excel").lower()
-    if normalized_format not in {"excel", "json"}:
+    if normalized_format not in {"excel", "json", "word", "pdf"}:
         raise HTTPException(status_code=400, detail="不支持的导出格式")
+    try:
+        content, media_type, ext = build_run_export(reports, normalized_format)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    if normalized_format == "json":
-        filename = build_export_filename(reports, "json")
-        content = build_run_export_json(reports, single=len(reports) == 1)
-        return Response(
-            content=content,
-            media_type="application/json; charset=utf-8",
-            headers={"Content-Disposition": build_content_disposition(filename, "report.json")},
+    filename = build_export_filename(reports, ext)
+    fallback = f"report.{ext}"
+    if isinstance(content, BytesIO):
+        content.seek(0)
+        return StreamingResponse(
+            content,
+            media_type=media_type,
+            headers={"Content-Disposition": build_content_disposition(filename, fallback)},
         )
-
-    buffer = build_run_export_excel(reports)
-    filename = build_export_filename(reports, "xlsx")
-    return StreamingResponse(
-        buffer,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": build_content_disposition(filename, "report.xlsx")},
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": build_content_disposition(filename, fallback)},
     )
 
 
@@ -1226,7 +1230,7 @@ def get_run_detail(
 @router.get("/runs/{run_id}/export")
 def export_run(
     run_id: int,
-    format: str = Query("excel", pattern="^(excel|json)$"),
+    format: str = Query("excel", pattern="^(excel|json|word|pdf)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
