@@ -211,6 +211,26 @@
       <div v-else-if="activeTab === 'report'">
         <el-card shadow="never">
           <div class="pane-toolbar">
+            <el-dropdown
+              :disabled="!selectedRunIds.length"
+              @command="batchExportRuns"
+            >
+              <el-button
+                type="primary"
+                plain
+                :disabled="!selectedRunIds.length"
+                :loading="runBatchExporting"
+              >
+                批量导出{{ selectedRunIds.length ? `(${selectedRunIds.length})` : '' }}
+                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+                  <el-dropdown-item command="json">导出 JSON</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
             <el-button
               type="danger"
               plain
@@ -253,9 +273,25 @@
             <el-table-column prop="started_at" label="执行时间" min-width="170">
               <template #default="{ row }">{{ formatTime(row.started_at) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="140" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right">
               <template #default="{ row }">
                 <el-button link type="primary" @click.stop="viewReport(row)">查看报告</el-button>
+                <el-dropdown trigger="click" @command="(format) => exportRun(row, format)">
+                  <el-button
+                    link
+                    type="success"
+                    :loading="runExportingId === row.id"
+                    @click.stop
+                  >
+                    导出
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="excel">Excel</el-dropdown-item>
+                      <el-dropdown-item command="json">JSON</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
                 <el-button link type="danger" @click.stop="removeRun(row)">删除</el-button>
               </template>
             </el-table-column>
@@ -881,6 +917,8 @@ const selectedCaseIds = ref([])
 const selectedRunIds = ref([])
 const caseBatchDeleting = ref(false)
 const runBatchDeleting = ref(false)
+const runBatchExporting = ref(false)
+const runExportingId = ref(null)
 const caseBatchGenerating = ref(false)
 const aiGenerateLogVisible = ref(false)
 const aiGenerateLogs = ref([])
@@ -2205,6 +2243,50 @@ async function removeRun(row) {
 
 function onRunSelectionChange(rows) {
   selectedRunIds.value = (rows || []).map((row) => row.id)
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = filename
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+function buildRunExportFilename(row, format, count = 1) {
+  const ext = format === 'json' ? 'json' : 'xlsx'
+  if (count === 1 && row?.id) {
+    const suite = String(row.suite_name || 'report').replace(/[/\\]/g, '_')
+    return `测试报告_${row.id}_${suite}.${ext}`
+  }
+  return `测试报告_批量导出_${count}条.${ext}`
+}
+
+async function exportRun(row, format = 'excel') {
+  runExportingId.value = row.id
+  try {
+    const blob = await apiAutomationApi.exportRun(row.id, format)
+    downloadBlob(blob, buildRunExportFilename(row, format))
+    ElMessage.success('导出成功')
+  } finally {
+    runExportingId.value = null
+  }
+}
+
+async function batchExportRuns(format = 'excel') {
+  if (!selectedRunIds.value.length) return
+  runBatchExporting.value = true
+  try {
+    const blob = await apiAutomationApi.batchExportRuns({
+      run_ids: selectedRunIds.value,
+      format,
+    })
+    downloadBlob(blob, buildRunExportFilename(null, format, selectedRunIds.value.length))
+    ElMessage.success('导出成功')
+  } finally {
+    runBatchExporting.value = false
+  }
 }
 
 async function batchRemoveRuns() {

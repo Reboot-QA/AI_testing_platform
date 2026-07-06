@@ -1,14 +1,20 @@
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi.responses import Response, StreamingResponse
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
 from app.services.api_run_maintenance import after_api_test_runs_deleted
+from app.services.api_run_export_service import (
+    build_content_disposition,
+    build_export_filename,
+    build_run_export_excel,
+    build_run_export_json,
+)
 from app.database import SessionLocal, get_db
 from app.models.api_automation import (
     ApiEnvironment,
@@ -46,6 +52,7 @@ from app.schemas import (
     ApiCaseBatchDeleteResponse,
     ApiRunBatchDeleteRequest,
     ApiRunBatchDeleteResponse,
+    ApiRunBatchExportRequest,
     ApiTestCaseOut,
     ApiTestCaseUpdate,
     ApiTestRunDetailOut,
@@ -265,6 +272,56 @@ def _get_owned_case(db: Session, case_id: int, user: User) -> ApiTestCase:
     if not case:
         raise HTTPException(status_code=404, detail="接口用例不存在")
     return case
+
+
+def _get_owned_run(db: Session, run_id: int, user: User) -> ApiTestRun:
+    run = (
+        db.query(ApiTestRun)
+        .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
+        .join(Project, Project.id == ApiTestSuite.project_id)
+        .filter(ApiTestRun.id == run_id, Project.owner_id == user.id)
+        .first()
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="执行记录不存在")
+    return run
+
+
+def _query_owned_runs(db: Session, run_ids: List[int], user: User) -> List[ApiTestRun]:
+    unique_ids = list(dict.fromkeys(run_ids))
+    runs = (
+        db.query(ApiTestRun)
+        .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
+        .join(Project, Project.id == ApiTestSuite.project_id)
+        .filter(ApiTestRun.id.in_(unique_ids), Project.owner_id == user.id)
+        .all()
+    )
+    order = {run_id: index for index, run_id in enumerate(unique_ids)}
+    runs.sort(key=lambda item: order.get(item.id, item.id))
+    return runs
+
+
+def _export_run_reports(reports: List[ApiTestRunDetailOut], export_format: str):
+    normalized_format = (export_format or "excel").lower()
+    if normalized_format not in {"excel", "json"}:
+        raise HTTPException(status_code=400, detail="不支持的导出格式")
+
+    if normalized_format == "json":
+        filename = build_export_filename(reports, "json")
+        content = build_run_export_json(reports, single=len(reports) == 1)
+        return Response(
+            content=content,
+            media_type="application/json; charset=utf-8",
+            headers={"Content-Disposition": build_content_disposition(filename, "report.json")},
+        )
+
+    buffer = build_run_export_excel(reports)
+    filename = build_export_filename(reports, "xlsx")
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": build_content_disposition(filename, "report.xlsx")},
+    )
 
 
 def _parse_assertion_results(text: Optional[str]) -> List[ApiAssertionResultOut]:
@@ -1162,16 +1219,35 @@ def get_run_detail(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    run = (
-        db.query(ApiTestRun)
-        .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
-        .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestRun.id == run_id, Project.owner_id == current_user.id)
-        .first()
-    )
-    if not run:
-        raise HTTPException(status_code=404, detail="执行记录不存在")
+    run = _get_owned_run(db, run_id, current_user)
     return _run_detail_out(db, run)
+
+
+@router.get("/runs/{run_id}/export")
+def export_run(
+    run_id: int,
+    format: str = Query("excel", pattern="^(excel|json)$"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    run = _get_owned_run(db, run_id, current_user)
+    detail = _run_detail_out(db, run)
+    return _export_run_reports([detail], format)
+
+
+@router.post("/runs/batch/export")
+def batch_export_runs(
+    data: ApiRunBatchExportRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if not data.run_ids:
+        raise HTTPException(status_code=400, detail="请选择要导出的报告")
+    runs = _query_owned_runs(db, data.run_ids, current_user)
+    if not runs:
+        raise HTTPException(status_code=404, detail="未找到可导出的报告")
+    reports = [_run_detail_out(db, run) for run in runs]
+    return _export_run_reports(reports, data.format)
 
 
 @router.delete("/runs/{run_id}")
@@ -1180,15 +1256,7 @@ def delete_run(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    run = (
-        db.query(ApiTestRun)
-        .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
-        .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestRun.id == run_id, Project.owner_id == current_user.id)
-        .first()
-    )
-    if not run:
-        raise HTTPException(status_code=404, detail="执行记录不存在")
+    run = _get_owned_run(db, run_id, current_user)
     deleted_run_id = run.id
     db.delete(run)
     after_api_test_runs_deleted(db, [deleted_run_id])
@@ -1204,14 +1272,7 @@ def batch_delete_runs(
 ):
     if not data.run_ids:
         raise HTTPException(status_code=400, detail="请选择要删除的报告")
-    unique_ids = list(dict.fromkeys(data.run_ids))
-    runs = (
-        db.query(ApiTestRun)
-        .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
-        .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestRun.id.in_(unique_ids), Project.owner_id == current_user.id)
-        .all()
-    )
+    runs = _query_owned_runs(db, data.run_ids, current_user)
     if not runs:
         raise HTTPException(status_code=404, detail="未找到可删除的报告")
     deleted_run_ids = [run.id for run in runs]

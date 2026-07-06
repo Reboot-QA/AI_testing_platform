@@ -490,6 +490,11 @@ class ApiRunBatchDeleteResponse(BaseModel):
     message: str
 
 
+class ApiRunBatchExportRequest(BaseModel):
+    run_ids: List[int]
+    format: str = "excel"
+
+
 class ApiTestCaseOut(ApiTestCaseBase):
     id: int
     suite_id: int

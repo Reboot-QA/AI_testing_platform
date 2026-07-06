@@ -280,6 +280,13 @@ export const apiAutomationApi = {
   getRun: (id) => request.get(`/api-automation/runs/${id}`),
   deleteRun: (id) => request.delete(`/api-automation/runs/${id}`),
   batchDeleteRuns: (data) => request.post('/api-automation/runs/batch/delete', data),
+  exportRun: (id, format = 'excel') =>
+    request.get(`/api-automation/runs/${id}/export`, {
+      params: { format },
+      responseType: 'blob',
+    }),
+  batchExportRuns: (data) =>
+    request.post('/api-automation/runs/batch/export', data, { responseType: 'blob' }),
   parseCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: true }),
   importCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: false }),
   parseSwagger: (data) => request.post('/api-automation/import/swagger', { ...data, preview: true }),
