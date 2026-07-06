@@ -15,6 +15,7 @@ class ApiEnvironment(Base):
     name: Mapped[str] = mapped_column(String(100))
     base_url: Mapped[str] = mapped_column(String(500))
     default_headers: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    variables: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

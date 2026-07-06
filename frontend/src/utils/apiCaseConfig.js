@@ -7,7 +7,18 @@ export function emptyKvRow() {
 }
 
 export function emptyExtractRow() {
-  return { key: '', source: 'body', path: '$.code', enabled: true, desc: '' }
+  return { key: '', source: 'body', path: '$.code', enabled: true, desc: '', scope: 'environment' }
+}
+
+export const VARIABLE_SCOPE_OPTIONS = [
+  { value: 'temporary', label: '临时变量', tip: '单次运行结束后消失，仅在当前流程内有效' },
+  { value: 'environment', label: '环境变量', tip: '随环境保存，切换环境后互不影响（推荐 Token 等）' },
+  { value: 'global', label: '全局变量', tip: '跨所有环境永久有效，除非手动删除' },
+]
+
+export function normalizeExtractScope(scope) {
+  const normalized = String(scope || 'temporary').toLowerCase()
+  return VARIABLE_SCOPE_OPTIONS.some((item) => item.value === normalized) ? normalized : 'temporary'
 }
 
 export function ensureExtractRows(rows) {
@@ -17,6 +28,7 @@ export function ensureExtractRows(rows) {
     path: row.path || '',
     enabled: row.enabled !== false,
     desc: row.desc || '',
+    scope: normalizeExtractScope(row.scope),
   })) : [emptyExtractRow()]
 }
 
@@ -68,7 +80,7 @@ export const POST_OPERATION_OPTIONS = [
     type: 'extract',
     label: '提取变量',
     color: '#9b59b6',
-    description: '从响应体或响应头提取字段到 variables，套件执行时后续用例可引用',
+    description: '从响应体或响应头提取字段，可按临时/环境/全局变量保存，供后续步骤 {{变量名}} 引用',
   },
   {
     type: 'wait',

@@ -449,6 +449,25 @@ cmd_diagnose() {
   echo
   echo "========== backend 最近日志 =========="
   compose_cmd logs backend --tail=30 || true
+  echo
+  echo "========== MySQL 健康检查 =========="
+  docker inspect ai-platform-mysql --format '状态: {{.State.Status}} | 健康: {{if .State.Health}}{{.State.Health.Status}}{{else}}无{{end}}' 2>/dev/null || warn "MySQL 容器不存在"
+  docker inspect ai-platform-mysql --format '{{range .State.Health.Log}}{{.ExitCode}} {{.Output}}{{println}}{{end}}' 2>/dev/null | tail -5 || true
+  echo
+  echo "========== mysql 最近日志 =========="
+  compose_cmd logs mysql --tail=40 || true
+  echo
+  echo "========== MySQL 连接测试 =========="
+  if docker ps --format '{{.Names}}' | grep -qx ai-platform-mysql; then
+    if docker exec ai-platform-mysql sh /healthcheck.sh 2>/dev/null; then
+      ok "MySQL 健康检查脚本通过"
+    else
+      warn "MySQL 健康检查失败，常见原因："
+      echo "  1) .env.docker 密码与数据卷不一致 → ./linux-deploy.sh fix-db"
+      echo "  2) 密码含特殊字符导致旧版 healthcheck 失败 → git pull 后重新 up"
+      docker exec ai-platform-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW DATABASES;"' 2>&1 | tail -5 || true
+    fi
+  fi
 }
 
 reset_mysql_volume() {

@@ -26,6 +26,27 @@ def migrate_api_test_suite_tree(db: Session) -> None:
     if "sort_order" not in columns:
         statements.append("ALTER TABLE api_test_suites ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0")
 
+    if statements:
+        with engine.begin() as conn:
+            for statement in statements:
+                conn.execute(text(statement))
+
+
+def migrate_api_variable_stores(db: Session) -> None:
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+
+    statements = []
+    if "api_environments" in table_names:
+        env_columns = {column["name"] for column in inspector.get_columns("api_environments")}
+        if "variables" not in env_columns:
+            statements.append("ALTER TABLE api_environments ADD COLUMN variables TEXT")
+
+    if "projects" in table_names:
+        project_columns = {column["name"] for column in inspector.get_columns("projects")}
+        if "api_global_variables" not in project_columns:
+            statements.append("ALTER TABLE projects ADD COLUMN api_global_variables TEXT")
+
     if not statements:
         return
 

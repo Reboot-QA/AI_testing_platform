@@ -36,6 +36,8 @@ from app.schemas import (
     ApiEnvironmentCreate,
     ApiEnvironmentOut,
     ApiEnvironmentUpdate,
+    ApiGlobalVariablesOut,
+    ApiGlobalVariablesUpdate,
     ApiRunTriggerOut,
     ApiTestCaseCreate,
     ApiTestCaseCopyRequest,
@@ -74,6 +76,15 @@ from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.settings_service import get_effective_llm_config
 from app.services.api_request_builder import extract_meta_from_headers, iter_data_drive_variable_sets, prepare_case_request
 from app.services.api_runner_service import iter_api_suite_run, run_api_suite, _execute_case, _dumps_json
+from app.services.api_variable_service import (
+    apply_scoped_extractions,
+    load_environment_variables,
+    load_global_variables,
+    merge_variable_context,
+    persist_variable_context,
+    dump_variables_json,
+    load_variables_json,
+)
 from app.services.schedule_service import (
     execute_scheduled_task,
     format_schedule_desc,
@@ -443,6 +454,30 @@ def delete_environment(
     db.delete(env)
     db.commit()
     return {"message": "删除成功"}
+
+
+@router.get("/projects/{project_id}/global-variables", response_model=ApiGlobalVariablesOut)
+def get_global_variables(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _get_owned_project(db, project_id, current_user)
+    return ApiGlobalVariablesOut(variables=load_global_variables(db, project_id))
+
+
+@router.put("/projects/{project_id}/global-variables", response_model=ApiGlobalVariablesOut)
+def update_global_variables(
+    project_id: int,
+    data: ApiGlobalVariablesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _get_owned_project(db, project_id, current_user)
+    project.api_global_variables = dump_variables_json(data.variables or {})
+    db.commit()
+    db.refresh(project)
+    return ApiGlobalVariablesOut(variables=load_variables_json(project.api_global_variables))
 
 
 @router.get("/suites", response_model=List[ApiTestSuiteOut])
@@ -821,15 +856,29 @@ def debug_case(
     total_duration = 0.0
     overall_status = "passed"
     runtime_variables: Dict[str, str] = {}
+    global_variables = load_global_variables(db, environment.project_id)
+    env_variables = load_environment_variables(environment)
 
     for label, variables in selected_sets:
-        merged_variables = {**runtime_variables, **variables}
+        merged_variables = merge_variable_context(
+            global_variables,
+            env_variables,
+            runtime_variables,
+            variables or {},
+        )
         status, detail = _execute_case(temp_case, environment, variables=merged_variables)
-        runtime_variables.update(detail.get("extracted_variables") or {})
+        apply_scoped_extractions(
+            detail.get("scoped_extractions") or [],
+            runtime_variables,
+            env_variables,
+            global_variables,
+        )
         total_duration += detail["duration_ms"]
         if status != "passed":
             overall_status = "failed"
         iteration_results.append(build_debug_out(label, status, detail))
+
+    persist_variable_context(db, environment, env_variables, global_variables)
 
     primary = iteration_results[0]
     return ApiCaseDebugOut(

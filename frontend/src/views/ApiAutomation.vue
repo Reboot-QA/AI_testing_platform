@@ -16,6 +16,7 @@
             <el-button type="primary" :disabled="!projectId" @click="openEnvDialog()">
               <el-icon><Plus /></el-icon> 新建环境
             </el-button>
+            <el-button :disabled="!projectId" @click="openGlobalVarDialog()">全局变量</el-button>
           </div>
           <el-table v-loading="envLoading" :data="environments" stripe>
             <el-table-column prop="name" label="环境名称" min-width="140" />
@@ -298,7 +299,7 @@
     </div>
 
     <!-- 环境对话框 -->
-    <el-dialog v-model="envDialogVisible" :title="envEditing ? '编辑环境' : '新建环境'" width="560px">
+    <el-dialog v-model="envDialogVisible" :title="envEditing ? '编辑环境' : '新建环境'" width="720px">
       <el-form ref="envFormRef" :model="envForm" :rules="envRules" label-width="100px">
         <el-form-item label="环境名称" prop="name">
           <el-input v-model="envForm.name" />
@@ -309,6 +310,12 @@
         <el-form-item label="默认请求头">
           <el-input v-model="envForm.default_headers" type="textarea" :rows="4" placeholder='{"Content-Type":"application/json"}' />
         </el-form-item>
+        <el-form-item label="环境变量">
+          <div class="env-variables-panel">
+            <div class="form-tip">在当前环境下可用，可用 <code v-pre>{{变量名}}</code> 引用；接口提取为「环境变量」时会自动写入此处</div>
+            <ApiKvParamTable v-model:rows="envVariableRows" key-label="变量名" value-label="变量值" />
+          </div>
+        </el-form-item>
         <el-form-item label="描述">
           <el-input v-model="envForm.description" type="textarea" :rows="2" />
         </el-form-item>
@@ -316,6 +323,18 @@
       <template #footer>
         <el-button @click="envDialogVisible = false">取消</el-button>
         <el-button type="primary" :loading="envSaving" @click="saveEnv">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 全局变量对话框 -->
+    <el-dialog v-model="globalVarDialogVisible" title="全局变量" width="720px">
+      <div class="form-tip global-var-tip">
+        跨所有环境永久有效，除非手动删除。适合存放与环境无关的固定配置。
+      </div>
+      <ApiKvParamTable v-model:rows="globalVariableRows" key-label="变量名" value-label="变量值" />
+      <template #footer>
+        <el-button @click="globalVarDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="globalVarSaving" @click="saveGlobalVariables">保存</el-button>
       </template>
     </el-dialog>
 
@@ -846,6 +865,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Document, Folder, MagicStick } from '@element-plus/icons-vue'
 import { projectApi, apiAutomationApi } from '@/api'
 import ApiCaseEditor from '@/components/ApiCaseEditor.vue'
+import ApiKvParamTable from '@/components/ApiKvParamTable.vue'
+import { emptyKvRow } from '@/utils/apiCaseConfig'
 
 const route = useRoute()
 const router = useRouter()
@@ -892,6 +913,7 @@ const caseEditorRef = ref(null)
 const suiteTreeRef = ref(null)
 
 const envDialogVisible = ref(false)
+const globalVarDialogVisible = ref(false)
 const folderDialogVisible = ref(false)
 const suiteDialogVisible = ref(false)
 const reportVisible = ref(false)
@@ -905,6 +927,7 @@ const suiteEditing = ref(null)
 const scheduleEditing = ref(null)
 
 const envSaving = ref(false)
+const globalVarSaving = ref(false)
 const folderSaving = ref(false)
 const suiteSaving = ref(false)
 const reportDetailLoading = ref(false)
@@ -975,6 +998,9 @@ const weekDays = [
 const statusLabel = { passed: '通过', failed: '失败', running: '执行中' }
 const statusType = { passed: 'success', failed: 'danger', running: 'warning' }
 const methodType = { GET: 'success', POST: 'primary', PUT: 'warning', DELETE: 'danger', PATCH: 'info' }
+
+const envVariableRows = ref([emptyKvRow()])
+const globalVariableRows = ref([emptyKvRow()])
 
 const envForm = reactive({
   name: '',
@@ -1654,24 +1680,87 @@ async function onCaseSaved(savedId) {
   }
 }
 
+function variablesJsonToRows(jsonText) {
+  try {
+    const parsed = JSON.parse(jsonText || '{}')
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return [emptyKvRow()]
+    }
+    const entries = Object.entries(parsed)
+    if (!entries.length) return [emptyKvRow()]
+    return entries.map(([key, value]) => ({
+      key,
+      value: value == null ? '' : String(value),
+      enabled: true,
+      desc: '',
+    }))
+  } catch {
+    return [emptyKvRow()]
+  }
+}
+
+function variableRowsToJson(rows) {
+  const result = {}
+  for (const row of rows || []) {
+    if (row.enabled === false) continue
+    const key = row.key?.trim()
+    if (key) result[key] = row.value ?? ''
+  }
+  return JSON.stringify(result, null, 2)
+}
+
 function openEnvDialog(row = null) {
   envEditing.value = row
   envForm.name = row?.name || ''
   envForm.base_url = row?.base_url || ''
   envForm.default_headers = row?.default_headers || '{"Content-Type":"application/json"}'
   envForm.description = row?.description || ''
+  envVariableRows.value = variablesJsonToRows(row?.variables || '{}')
   envDialogVisible.value = true
+}
+
+async function openGlobalVarDialog() {
+  if (!projectId.value) return
+  globalVarDialogVisible.value = true
+  try {
+    const data = await apiAutomationApi.getGlobalVariables(projectId.value)
+    globalVariableRows.value = variablesJsonToRows(JSON.stringify(data.variables || {}))
+  } catch {
+    globalVariableRows.value = [emptyKvRow()]
+  }
+}
+
+async function saveGlobalVariables() {
+  if (!projectId.value) return
+  globalVarSaving.value = true
+  try {
+    const payload = {}
+    for (const row of globalVariableRows.value) {
+      if (row.enabled === false) continue
+      const key = row.key?.trim()
+      if (key) payload[key] = row.value ?? ''
+    }
+    await apiAutomationApi.updateGlobalVariables(projectId.value, { variables: payload })
+    ElMessage.success('全局变量已保存')
+    globalVarDialogVisible.value = false
+  } finally {
+    globalVarSaving.value = false
+  }
 }
 
 async function saveEnv() {
   await envFormRef.value.validate()
   envSaving.value = true
   try {
+    const payload = {
+      ...envForm,
+      variables: variableRowsToJson(envVariableRows.value),
+    }
     if (envEditing.value) {
-      await apiAutomationApi.updateEnvironment(envEditing.value.id, { ...envForm })
+      await apiAutomationApi.updateEnvironment(envEditing.value.id, payload)
       ElMessage.success('环境已更新')
     } else {
-      await apiAutomationApi.createEnvironment({ ...envForm, project_id: projectId.value })
+      await apiAutomationApi.createEnvironment({ ...payload, project_id: projectId.value })
       ElMessage.success('环境已创建')
     }
     envDialogVisible.value = false
@@ -2244,6 +2333,20 @@ onUnmounted(() => {
   color: #909399;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.env-variables-panel {
+  width: 100%;
+}
+
+.env-variables-panel .form-tip {
+  margin-top: 0;
+  margin-bottom: 8px;
+}
+
+.global-var-tip {
+  margin-top: 0;
+  margin-bottom: 12px;
 }
 
 .inline-tip {

@@ -372,6 +372,7 @@ class ApiEnvironmentBase(BaseModel):
     name: str
     base_url: str
     default_headers: Optional[str] = None
+    variables: Optional[str] = None
     description: Optional[str] = None
 
 
@@ -383,6 +384,7 @@ class ApiEnvironmentUpdate(BaseModel):
     name: Optional[str] = None
     base_url: Optional[str] = None
     default_headers: Optional[str] = None
+    variables: Optional[str] = None
     description: Optional[str] = None
 
 
@@ -394,6 +396,14 @@ class ApiEnvironmentOut(ApiEnvironmentBase):
 
     class Config:
         from_attributes = True
+
+
+class ApiGlobalVariablesOut(BaseModel):
+    variables: Dict[str, str] = {}
+
+
+class ApiGlobalVariablesUpdate(BaseModel):
+    variables: Dict[str, str] = {}
 
 
 class ApiTestSuiteBase(BaseModel):
@@ -487,6 +497,7 @@ class ApiAssertionResultOut(BaseModel):
     expected: Optional[Any] = None
     actual: Optional[Any] = None
     message: str = ""
+    scope: Optional[str] = None
 
 
 class ApiTestStepResultOut(BaseModel):

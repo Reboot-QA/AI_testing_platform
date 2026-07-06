@@ -21,6 +21,13 @@ from app.services.api_request_builder import (
     iter_data_drive_variable_sets,
     prepare_case_request,
 )
+from app.services.api_variable_service import (
+    apply_scoped_extractions,
+    load_environment_variables,
+    load_global_variables,
+    merge_variable_context,
+    persist_variable_context,
+)
 
 
 def _loads_json(text: Optional[str], default: Any = None) -> Any:
@@ -193,6 +200,7 @@ def _execute_case(
                 }
             ],
             "extracted_variables": {},
+            "scoped_extractions": [],
             "pre_script_logs": pre_script_logs,
             "error_message": pre_script_error,
         }
@@ -239,11 +247,12 @@ def _execute_case(
             "duration_ms": duration_ms,
             "assertion_results": [],
             "extracted_variables": {},
+            "scoped_extractions": [],
             "pre_script_logs": pre_script_logs,
             "error_message": str(exc),
         }
 
-    extracted_variables, extract_results = apply_response_extractors(
+    extracted_variables, scoped_items, extract_results = apply_response_extractors(
         meta.get("response_extract") or [],
         response,
     )
@@ -270,6 +279,7 @@ def _execute_case(
         "duration_ms": duration_ms,
         "assertion_results": assertion_results,
         "extracted_variables": extracted_variables,
+        "scoped_extractions": scoped_items,
         "pre_script_logs": pre_script_logs,
         "error_message": None,
     }
@@ -325,6 +335,8 @@ def iter_api_suite_run(
     skipped_count = 0
     run_started = time.perf_counter()
     runtime_variables: Dict[str, str] = {}
+    global_variables = load_global_variables(db, suite.project_id)
+    env_variables = load_environment_variables(environment)
     step_index = 0
 
     for case in cases:
@@ -334,9 +346,19 @@ def iter_api_suite_run(
 
         iterations = _iter_case_executions(case)
         for data_label, variables in iterations:
-            merged_variables = {**runtime_variables, **(variables or {})}
+            merged_variables = merge_variable_context(
+                global_variables,
+                env_variables,
+                runtime_variables,
+                variables or {},
+            )
             status, detail = _execute_case(case, environment, variables=merged_variables)
-            runtime_variables.update(detail.get("extracted_variables") or {})
+            apply_scoped_extractions(
+                detail.get("scoped_extractions") or [],
+                runtime_variables,
+                env_variables,
+                global_variables,
+            )
             if status == "passed":
                 passed_count += 1
             else:
@@ -390,6 +412,7 @@ def iter_api_suite_run(
     run.duration_ms = round(elapsed_ms, 2)
     run.pass_rate = pass_rate
     run.finished_at = now_local()
+    persist_variable_context(db, environment, env_variables, global_variables)
     db.commit()
     db.refresh(run)
 

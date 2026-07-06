@@ -81,7 +81,19 @@
       </el-table-column>
       <el-table-column label="变量名" min-width="120">
         <template #default="{ row }">
-          <el-input v-model="row.key" placeholder="login_code" size="small" />
+          <el-input v-model="row.key" placeholder="access_token" size="small" />
+        </template>
+      </el-table-column>
+      <el-table-column label="变量类型" width="130">
+        <template #default="{ row }">
+          <el-select v-model="row.scope" size="small">
+            <el-option
+              v-for="item in VARIABLE_SCOPE_OPTIONS"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
         </template>
       </el-table-column>
       <el-table-column label="来源" width="110">
@@ -124,6 +136,7 @@ import {
   jsonPathExists,
   looksLikeRequestBody,
   normalizeJsonText,
+  VARIABLE_SCOPE_OPTIONS,
 } from '@/utils/apiCaseConfig'
 
 const rows = defineModel('rows', { type: Array, required: true })
@@ -261,6 +274,7 @@ function applyGeneratedRow() {
       path: result.path,
       enabled: true,
       desc: '表达式生成器',
+      scope: 'environment',
     })
     ElMessage.success(`已添加 ${result.path}`)
     fieldInput.value = ''

@@ -215,6 +215,10 @@ export const apiAutomationApi = {
   createEnvironment: (data) => request.post('/api-automation/environments', data),
   updateEnvironment: (id, data) => request.put(`/api-automation/environments/${id}`, data),
   deleteEnvironment: (id) => request.delete(`/api-automation/environments/${id}`),
+  getGlobalVariables: (projectId) =>
+    request.get(`/api-automation/projects/${projectId}/global-variables`),
+  updateGlobalVariables: (projectId, data) =>
+    request.put(`/api-automation/projects/${projectId}/global-variables`, data),
   listSuites: (projectId) =>
     request.get('/api-automation/suites', { params: { project_id: projectId } }),
   createSuite: (data) => request.post('/api-automation/suites', data),
