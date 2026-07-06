@@ -69,10 +69,12 @@
           <el-select v-model="form.method" class="method-select">
             <el-option v-for="m in methods" :key="m" :label="m" :value="m" />
           </el-select>
-          <el-input
+          <VariableSuggestInput
             v-model="form.full_url"
-            placeholder="https://api.example.com/path"
+            :variables="editorVariables"
             class="url-input"
+            placeholder="https://api.example.com/path"
+            size="default"
             @blur="syncQueryFromUrl"
             @paste="onUrlPaste"
           />
@@ -82,6 +84,7 @@
           <el-tab-pane :label="`Header (${activeHeaderCount})`" name="headers">
             <ApiKvParamTable
               v-model:rows="headerRows"
+              :variables="editorVariables"
               key-label="Header 名"
               value-label="Header 值"
               key-placeholder="Content-Type"
@@ -89,13 +92,19 @@
           </el-tab-pane>
 
           <el-tab-pane :label="`Query (${activeQueryCount})`" name="query">
-            <ApiKvParamTable v-model:rows="queryRows" key-placeholder="param" value-placeholder="value" />
+            <ApiKvParamTable
+              v-model:rows="queryRows"
+              :variables="editorVariables"
+              key-placeholder="param"
+              value-placeholder="value"
+            />
           </el-tab-pane>
 
           <el-tab-pane :label="`Path (${activePathCount})`" name="path">
             <div class="form-tip path-tip">路径变量用于替换 URL 中的 {变量名}，如 /users/{id}</div>
             <ApiKvParamTable
               v-model:rows="pathRows"
+              :variables="editorVariables"
               key-label="变量名"
               value-label="变量值"
               :show-desc="false"
@@ -114,6 +123,7 @@
             <ApiKvParamTable
               v-if="form.body_type === 'form-data' || form.body_type === 'urlencoded'"
               v-model:rows="currentFormBodyRows"
+              :variables="editorVariables"
               :show-desc="false"
               :show-bulk="false"
               show-batch-delete
@@ -124,8 +134,9 @@
               </template>
             </ApiKvParamTable>
             <div v-else-if="form.body_type === 'json'" class="body-editor-wrap">
-              <el-input
+              <VariableSuggestInput
                 v-model="bodyStores.json"
+                :variables="editorVariables"
                 type="textarea"
                 :rows="10"
                 class="body-editor"
@@ -133,8 +144,9 @@
               />
             </div>
             <div v-else-if="form.body_type === 'raw'" class="body-editor-wrap">
-              <el-input
+              <VariableSuggestInput
                 v-model="bodyStores.raw"
+                :variables="editorVariables"
                 type="textarea"
                 :rows="10"
                 class="body-editor"
@@ -153,26 +165,39 @@
                 </el-select>
               </el-form-item>
               <el-form-item v-if="form.auth.type === 'bearer'" label="Token">
-                <el-input v-model="form.auth.token" placeholder="Bearer Token" />
+                <VariableSuggestInput
+                  v-model="form.auth.token"
+                  :variables="editorVariables"
+                  placeholder="Bearer Token 或 {{access_token}}"
+                />
               </el-form-item>
               <template v-if="form.auth.type === 'basic'">
                 <el-form-item label="用户名">
-                  <el-input v-model="form.auth.username" />
+                  <VariableSuggestInput v-model="form.auth.username" :variables="editorVariables" />
                 </el-form-item>
                 <el-form-item label="密码">
-                  <el-input v-model="form.auth.password" type="password" show-password />
+                  <VariableSuggestInput
+                    v-model="form.auth.password"
+                    :variables="editorVariables"
+                    show-password
+                  />
                 </el-form-item>
               </template>
             </el-form>
           </el-tab-pane>
 
           <el-tab-pane :label="`Cookie (${activeCookieCount})`" name="cookie">
-            <ApiKvParamTable v-model:rows="cookieRows" key-placeholder="cookie名" value-placeholder="cookie值" />
+            <ApiKvParamTable
+              v-model:rows="cookieRows"
+              :variables="editorVariables"
+              key-placeholder="cookie名"
+              value-placeholder="cookie值"
+            />
           </el-tab-pane>
 
           <el-tab-pane :label="`参数化 (${activeVariableCount})`" name="variables">
             <div class="form-tip">
-              在 URL、Header、Query、Body 中使用 <code v-pre>{{变量名}}</code> 引用，发送/执行时自动替换
+              在 URL、Header、Query、Body 中使用 <code v-pre>{{变量名}}</code> 引用；输入 <code v-pre>{</code> 可自动弹出可用变量
             </div>
             <div class="section-label">变量定义</div>
             <ApiKvParamTable
@@ -421,12 +446,15 @@ import {
   variablesMapFromRows,
   syncLegacyFromOperations,
   operationHasContent,
+  collectEditorVariables,
 } from '@/utils/apiCaseConfig'
+import VariableSuggestInput from '@/components/VariableSuggestInput.vue'
 
 const props = defineProps({
   suiteId: { type: Number, default: null },
   caseData: { type: Object, default: null },
   environments: { type: Array, default: () => [] },
+  globalVariables: { type: Object, default: () => ({}) },
   suiteEnvironmentId: { type: Number, default: null },
   caseCount: { type: Number, default: 0 },
   selectedCaseIds: { type: Array, default: () => [] },
@@ -570,6 +598,16 @@ const postScriptVariableRows = computed(() => {
 })
 
 const displayedDebug = computed(() => activeDebugDetail.value || debugResult.value)
+
+const editorVariables = computed(() =>
+  collectEditorVariables({
+    variableRows: variableRows.value,
+    postOperations: postOperations.value,
+    environment: selectedEnv.value,
+    globalVariables: props.globalVariables,
+    extractedVariables: displayedDebug.value?.extracted_variables || {},
+  })
+)
 
 const extractedVariableRows = computed(() => {
   const vars = displayedDebug.value?.extracted_variables || {}

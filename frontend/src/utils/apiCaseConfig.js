@@ -9,12 +9,16 @@ export function emptyKvRow() {
 export function emptyExtractRow() {
   return {
     key: '',
-    source: 'response_json',
     path: '$.code',
     enabled: true,
     desc: '',
     scope: 'environment',
   }
+}
+
+export function inferExtractSource(rows, fallback = 'response_json') {
+  const fromRow = (rows || []).find((row) => row?.source)?.source
+  return normalizeExtractSource(fromRow || fallback)
 }
 
 export const EXTRACT_SOURCE_OPTIONS = [
@@ -59,10 +63,75 @@ export function normalizeExtractScope(scope) {
   return VARIABLE_SCOPE_OPTIONS.some((item) => item.value === normalized) ? normalized : 'temporary'
 }
 
+export const VARIABLE_SCOPE_LABELS = {
+  case: '用例变量',
+  temporary: '临时变量',
+  environment: '环境变量',
+  global: '全局变量',
+  extract: '提取变量',
+}
+
+export function parseVariablesJson(text) {
+  if (!text) return {}
+  try {
+    const parsed = typeof text === 'string' ? JSON.parse(text) : text
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {}
+    return Object.fromEntries(
+      Object.entries(parsed)
+        .filter(([key]) => String(key || '').trim())
+        .map(([key, value]) => [String(key).trim(), value == null ? '' : String(value)])
+    )
+  } catch {
+    return {}
+  }
+}
+
+export function collectEditorVariables({
+  variableRows = [],
+  postOperations = [],
+  environment = null,
+  globalVariables = {},
+  extractedVariables = {},
+} = {}) {
+  const map = new Map()
+  const add = (name, value, scope) => {
+    const key = String(name || '').trim()
+    if (!key) return
+    map.set(key, {
+      name: key,
+      value: value == null ? '' : String(value),
+      scope,
+      scopeLabel: VARIABLE_SCOPE_LABELS[scope] || scope,
+    })
+  }
+
+  Object.entries(parseVariablesJson(globalVariables)).forEach(([key, value]) => add(key, value, 'global'))
+  Object.entries(parseVariablesJson(environment?.variables)).forEach(([key, value]) => add(key, value, 'environment'))
+
+  ;(variableRows || []).forEach((row) => {
+    if (row?.enabled === false) return
+    add(row.key, row.value, 'case')
+  })
+
+  ;(postOperations || [])
+    .filter((operation) => operation?.type === 'extract')
+    .forEach((operation) => {
+      ;(operation.rows || []).forEach((row) => {
+        if (row?.enabled === false || !row.key?.trim()) return
+        const name = row.key.trim()
+        const value = extractedVariables[name] ?? '（运行后提取）'
+        add(name, value, normalizeExtractScope(row.scope))
+      })
+    })
+
+  Object.entries(extractedVariables || {}).forEach(([key, value]) => add(key, value, 'extract'))
+
+  return Array.from(map.values())
+}
+
 export function ensureExtractRows(rows) {
   return rows?.length ? rows.map((row) => ({
     key: row.key || '',
-    source: normalizeExtractSource(row.source),
     path: row.path || '',
     enabled: row.enabled !== false,
     desc: row.desc || '',
@@ -70,10 +139,11 @@ export function ensureExtractRows(rows) {
   })) : [emptyExtractRow()]
 }
 
-export function countActiveExtractRows(rows) {
+export function countActiveExtractRows(rows, source = 'response_json') {
+  const normalizedSource = normalizeExtractSource(source)
   return (rows || []).filter((row) => {
     if (row.enabled === false || !row.key?.trim()) return false
-    if (!extractRowNeedsPath(row.source)) return true
+    if (!extractRowNeedsPath(normalizedSource)) return true
     return Boolean(row.path?.trim())
   }).length
 }
@@ -177,6 +247,7 @@ export function createOperation(type, partial = {}) {
       return {
         ...base,
         expanded: Boolean(partial.expanded),
+        source: normalizeExtractSource(partial.source || inferExtractSource(partial.rows)),
         rows: ensureExtractRows(partial.rows),
       }
     default:
@@ -209,7 +280,7 @@ export function operationHasContent(operation) {
     case 'assertion':
       return Boolean((operation.content || '').trim())
     case 'extract':
-      return countActiveExtractRows(operation.rows) > 0
+      return countActiveExtractRows(operation.rows, operation.source) > 0
     default:
       return false
   }
@@ -248,8 +319,11 @@ export function parsePostOperations(meta, postScript, extractRows, assertions) {
     stores.javascript = postScript
     ops.push(createOperation('script', { stores, lang: 'javascript' }))
   }
-  if (countActiveExtractRows(extractRows) > 0) {
-    ops.push(createOperation('extract', { rows: extractRows }))
+  if (countActiveExtractRows(extractRows, inferExtractSource(extractRows)) > 0) {
+    ops.push(createOperation('extract', {
+      rows: ensureExtractRows(extractRows),
+      source: inferExtractSource(extractRows),
+    }))
   }
   const assertionText = (assertions || '').trim()
   if (
@@ -266,15 +340,19 @@ export function syncLegacyFromOperations(preOperations = [], postOperations = []
   const postScriptOp = postOperations.find((item) => item.type === 'script')
   const assertionOp = postOperations.find((item) => item.type === 'assertion')
   const extractOps = postOperations.filter((item) => item.type === 'extract')
-  const extractRows = extractOps.length
-    ? ensureExtractRows(extractOps.flatMap((item) => item.rows || []))
-    : [emptyExtractRow()]
+  const extractOp = extractOps[0]
+  const rawExtractRows = extractOps.flatMap((item) => item.rows || [])
+  const extractSource = normalizeExtractSource(
+    extractOp?.source || inferExtractSource(rawExtractRows)
+  )
+  const extractRows = extractOps.length ? ensureExtractRows(rawExtractRows) : [emptyExtractRow()]
 
   return {
     preScriptStores: preScriptOp?.stores || emptyPreScriptStores(),
     preScriptLang: preScriptOp?.lang || 'javascript',
     postScript: postScriptOp ? activePreScript(postScriptOp.stores, postScriptOp.lang || 'javascript') : '',
     extractRows,
+    extractSource,
     assertions: assertionOp?.content || DEFAULT_ASSERTIONS,
     preOperations,
     postOperations,
@@ -743,7 +821,7 @@ export function parseCaseConfig(headersText, bodyText, assertions = DEFAULT_ASSE
     postOperations: parsePostOperations(
       meta,
       meta.post_script || '',
-      ensureExtractRows(meta.response_extract || []),
+      meta.response_extract || [],
       assertions
     ),
   }
@@ -871,6 +949,10 @@ export function serializeCaseConfig({
   const resolvedExtractRows = synced.extractRows
   const resolvedPreOperations = synced.preOperations
   const resolvedPostOperations = synced.postOperations
+  const extractOp = (resolvedPostOperations || []).find((item) => item.type === 'extract')
+  const extractSource = normalizeExtractSource(
+    extractOp?.source || synced.extractSource || inferExtractSource(resolvedExtractRows)
+  )
   const stores = bodyStores || emptyBodyStores()
   const activeFormRows =
     bodyType === 'form-data'
@@ -907,12 +989,12 @@ export function serializeCaseConfig({
     response_extract: (extractRows || resolvedExtractRows || [])
       .filter((row) => {
         if (!(row.key || '').trim()) return false
-        if (!extractRowNeedsPath(row.source)) return true
+        if (!extractRowNeedsPath(extractSource)) return true
         return Boolean((row.path || '').trim())
       })
       .map((row) => ({
         key: row.key.trim(),
-        source: normalizeExtractSource(row.source),
+        source: extractSource,
         path: (row.path || '').trim(),
         enabled: row.enabled !== false,
         desc: row.desc || '',

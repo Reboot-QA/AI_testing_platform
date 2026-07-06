@@ -29,7 +29,14 @@
       </el-table-column>
       <el-table-column :label="valueLabel" min-width="180">
         <template #default="{ row }">
+          <VariableSuggestInput
+            v-if="enableVariableSuggest"
+            v-model="row.value"
+            :variables="variables"
+            :placeholder="row.key?.trim() ? '(空值)' : valuePlaceholder"
+          />
           <el-input
+            v-else
             v-model="row.value"
             :placeholder="row.key?.trim() ? '(空值)' : valuePlaceholder"
             size="small"
@@ -63,9 +70,10 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
+import VariableSuggestInput from '@/components/VariableSuggestInput.vue'
 
 const rows = defineModel('rows', { type: Array, required: true })
-defineProps({
+const props = defineProps({
   keyLabel: { type: String, default: '参数名' },
   valueLabel: { type: String, default: '参数值' },
   keyPlaceholder: { type: String, default: 'Key' },
@@ -74,7 +82,10 @@ defineProps({
   showDesc: { type: Boolean, default: true },
   showBulk: { type: Boolean, default: true },
   showBatchDelete: { type: Boolean, default: false },
+  variables: { type: Array, default: () => [] },
 })
+
+const enableVariableSuggest = computed(() => (props.variables || []).length > 0)
 const bulkDialogVisible = ref(false)
 const bulkText = ref('')
 const selectedIndexes = ref(new Set())

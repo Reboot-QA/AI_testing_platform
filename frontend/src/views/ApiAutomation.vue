@@ -190,6 +190,7 @@
                     :suite-id="suiteId"
                     :case-data="activeCase"
                     :environments="environments"
+                    :global-variables="globalVariablesMap"
                     :suite-environment-id="currentSuite?.environment_id"
                     :case-count="cases.length"
                     :selected-case-ids="selectedCaseIds"
@@ -875,6 +876,7 @@ const projectId = ref(null)
 const activeTab = computed(() => route.meta.apiTab || 'suite')
 
 const environments = ref([])
+const globalVariablesMap = ref({})
 const suites = ref([])
 const cases = ref([])
 const runs = ref([])
@@ -1196,7 +1198,7 @@ async function loadProjects() {
 
 async function reloadAll() {
   if (!projectId.value) return
-  await Promise.all([loadEnvironments(), loadSuites(), loadRuns(), loadSchedules()])
+  await Promise.all([loadEnvironments(), loadGlobalVariables(), loadSuites(), loadRuns(), loadSchedules()])
 }
 
 function handleProjectChange() {
@@ -1214,6 +1216,19 @@ async function loadEnvironments() {
     environments.value = await apiAutomationApi.listEnvironments(projectId.value)
   } finally {
     envLoading.value = false
+  }
+}
+
+async function loadGlobalVariables() {
+  if (!projectId.value) {
+    globalVariablesMap.value = {}
+    return
+  }
+  try {
+    const data = await apiAutomationApi.getGlobalVariables(projectId.value)
+    globalVariablesMap.value = data.variables || {}
+  } catch {
+    globalVariablesMap.value = {}
   }
 }
 
@@ -1671,6 +1686,7 @@ function onNewCase() {
 
 async function onCaseSaved(savedId) {
   await loadEnvironments()
+  await loadGlobalVariables()
   await loadCases()
   await loadSuites()
   if (savedId) {
@@ -1743,6 +1759,7 @@ async function saveGlobalVariables() {
     await apiAutomationApi.updateGlobalVariables(projectId.value, { variables: payload })
     ElMessage.success('全局变量已保存')
     globalVarDialogVisible.value = false
+    await loadGlobalVariables()
   } finally {
     globalVarSaving.value = false
   }

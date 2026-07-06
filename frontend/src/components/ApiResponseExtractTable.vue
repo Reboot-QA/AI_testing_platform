@@ -1,6 +1,19 @@
 <template>
   <div class="response-extract-table">
-    <div class="path-generator">
+    <div class="extract-source-bar">
+      <span class="source-label">提取来源</span>
+      <el-select v-model="extractSource" size="small" class="source-select" @change="handleSourceChange">
+        <el-option
+          v-for="item in EXTRACT_SOURCE_OPTIONS"
+          :key="item.value"
+          :label="item.label"
+          :value="item.value"
+        />
+      </el-select>
+      <span v-if="extractSource === 'response_json'" class="source-tip">XML(类XML)会智能转 JSON</span>
+    </div>
+
+    <div v-if="showPathGenerator" class="path-generator">
       <div class="generator-header">
         <span class="generator-title">表达式生成</span>
         <span class="generator-tip">请粘贴<strong>响应体</strong> JSON（不是请求体），或点击「填入最近响应」</span>
@@ -59,6 +72,7 @@
       <div v-else-if="generateError" class="generated-error">{{ generateError }}</div>
     </div>
 
+    <div class="extract-table-head">提取变量</div>
     <div class="kv-toolbar">
       <el-button size="small" @click="addRow">添加提取</el-button>
       <el-button size="small" type="danger" plain :disabled="!selectedIndexes.size" @click="batchDelete">
@@ -77,18 +91,6 @@
       <el-table-column label="启用" width="60" align="center">
         <template #default="{ row }">
           <el-checkbox v-model="row.enabled" />
-        </template>
-      </el-table-column>
-      <el-table-column label="提取来源" width="150">
-        <template #default="{ row }">
-          <el-select v-model="row.source" size="small" @change="handleSourceChange(row)">
-            <el-option
-              v-for="item in EXTRACT_SOURCE_OPTIONS"
-              :key="item.value"
-              :label="item.label"
-              :value="item.value"
-            />
-          </el-select>
         </template>
       </el-table-column>
       <el-table-column label="变量名" min-width="120">
@@ -112,8 +114,8 @@
         <template #default="{ row }">
           <el-input
             v-model="row.path"
-            :placeholder="pathPlaceholder(row.source)"
-            :disabled="!extractRowNeedsPath(row.source)"
+            :placeholder="pathPlaceholder"
+            :disabled="!extractRowNeedsPath(extractSource)"
             size="small"
           />
         </template>
@@ -149,6 +151,7 @@ import {
 } from '@/utils/apiCaseConfig'
 
 const rows = defineModel('rows', { type: Array, required: true })
+const extractSource = defineModel('source', { type: String, default: 'response_json' })
 const props = defineProps({
   responseBody: { type: String, default: '' },
 })
@@ -253,22 +256,20 @@ function toggleSelect(index, checked) {
   selectedIndexes.value = next
 }
 
-const pathColumnLabel = computed(() => {
-  const sources = [...new Set((rows.value || []).map((row) => normalizeExtractSource(row.source)))]
-  if (sources.length === 1) {
-    return getExtractSourceMeta(sources[0]).pathLabel
-  }
-  return '提取表达式'
-})
+const showPathGenerator = computed(
+  () => normalizeExtractSource(extractSource.value) === 'response_json'
+)
 
-function pathPlaceholder(source) {
-  return getExtractSourceMeta(source).placeholder
-}
+const pathColumnLabel = computed(() => getExtractSourceMeta(extractSource.value).pathLabel)
 
-function handleSourceChange(row) {
-  row.source = normalizeExtractSource(row.source)
-  if (!extractRowNeedsPath(row.source)) {
-    row.path = ''
+const pathPlaceholder = computed(() => getExtractSourceMeta(extractSource.value).placeholder)
+
+function handleSourceChange() {
+  extractSource.value = normalizeExtractSource(extractSource.value)
+  if (!extractRowNeedsPath(extractSource.value)) {
+    rows.value.forEach((row) => {
+      row.path = ''
+    })
   }
 }
 
@@ -298,7 +299,6 @@ function applyGeneratedRow() {
 
     rows.value.push({
       key: result.variableName,
-      source: 'response_json',
       path: result.path,
       enabled: true,
       desc: '表达式生成器',
@@ -316,6 +316,40 @@ function applyGeneratedRow() {
 </script>
 
 <style scoped>
+.extract-source-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  background: #fafafa;
+  border: 1px solid #ebeef5;
+  border-radius: 6px;
+}
+
+.source-label {
+  font-size: 13px;
+  color: #606266;
+  white-space: nowrap;
+}
+
+.source-select {
+  width: 180px;
+}
+
+.source-tip {
+  font-size: 12px;
+  color: #909399;
+}
+
+.extract-table-head {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #303133;
+}
+
 .path-generator {
   margin-bottom: 12px;
   padding: 12px;

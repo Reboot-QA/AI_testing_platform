@@ -188,10 +188,14 @@
               </template>
 
               <template v-else-if="operation.type === 'extract'">
-                <ApiResponseExtractTable v-model:rows="operation.rows" :response-body="responseBody" />
+                <ApiResponseExtractTable
+                  v-model:rows="operation.rows"
+                  v-model:source="operation.source"
+                  :response-body="responseBody"
+                />
                 <div class="form-tip">
                   提取来源决定从哪读取数据；变量类型决定保存到临时/环境/全局变量。
-                  Response JSON / Request Body 用 JSONPath；Header / Cookie 填名称；响应时间无需填写表达式。
+                  配置后在 Header / Body 等输入框中输入 <code v-pre>{</code> 可引用 <code v-pre>{{变量名}}</code>。
                 </div>
               </template>
             </div>
