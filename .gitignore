@@ -6,3 +6,9 @@ backend/.env
 backend/ai_testcase.db
 backend/*.db
 *.db-journal
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
