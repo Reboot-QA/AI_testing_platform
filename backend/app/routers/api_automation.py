@@ -307,10 +307,12 @@ def _export_run_reports(reports: List[ApiTestRunDetailOut], export_format: str):
         raise HTTPException(status_code=400, detail="不支持的导出格式")
     try:
         content, media_type, ext = build_run_export(reports, normalized_format)
-    except RuntimeError as exc:
+    except (RuntimeError, ImportError) as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"导出失败: {exc}") from exc
 
     filename = build_export_filename(reports, ext)
     fallback = f"report.{ext}"

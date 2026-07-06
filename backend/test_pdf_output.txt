@@ -1,0 +1,12 @@
+﻿python : Traceback (most recent call last):
+所在位置 C:\Users\latt132\AppData\Local\Temp\ps-script-b5fc0347-1a66-4e34-9edf-21e308d77a9e.ps1:112 字符: 62
++ ...  pip install reportlab -q; python test_pdf_export_tmp.py 2>&1 | Out-F ...
++                                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "test_pdf_export_tmp.py", line 3, in <module>
+    from app.schemas import ApiAssertionResultOut, ApiTestRunDetailOut, ApiTestStepResultOut
+  File "D:\AI_testing_platform\backend\app\schemas.py", line 5, in <module>
+    from pydantic import BaseModel, EmailStr, Field, field_validator
+ImportError: cannot import name 'field_validator' from 'pydantic' (C:\Python\lib\site-packages\pydantic\__init__.py)

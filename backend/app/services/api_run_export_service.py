@@ -1,3 +1,4 @@
+import glob
 import json
 import os
 import platform
@@ -62,6 +63,7 @@ def build_run_export(
     if normalized == "word":
         return build_run_export_word(reports), EXPORT_MEDIA_TYPES["word"], EXPORT_EXTENSIONS["word"]
     if normalized == "pdf":
+        _ensure_reportlab()
         return build_run_export_pdf(reports), EXPORT_MEDIA_TYPES["pdf"], EXPORT_EXTENSIONS["pdf"]
     content = build_run_export_json(reports, single=len(reports) == 1)
     return content, EXPORT_MEDIA_TYPES["json"], EXPORT_EXTENSIONS["json"]
@@ -385,12 +387,20 @@ def build_run_export_word(reports: List[ApiTestRunDetailOut]) -> BytesIO:
     return buffer
 
 
+def _ensure_reportlab() -> None:
+    try:
+        import reportlab  # noqa: F401
+    except ImportError as exc:
+        raise RuntimeError("PDF 导出依赖 reportlab，请执行 pip install -r requirements.txt 并重启后端") from exc
+
+
 def _pdf_font_candidates() -> List[str]:
     candidates = [
         "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
         "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
         "C:/Windows/Fonts/msyh.ttc",
+        "C:/Windows/Fonts/msyhbd.ttc",
         "C:/Windows/Fonts/simsun.ttc",
     ]
     if platform.system() == "Darwin":
@@ -400,12 +410,31 @@ def _pdf_font_candidates() -> List[str]:
                 "/Library/Fonts/Arial Unicode.ttf",
             ]
         )
-    return candidates
+    for pattern in (
+        "/usr/share/fonts/**/NotoSansCJK*.ttc",
+        "/usr/share/fonts/**/NotoSansSC*.otf",
+        "/usr/share/fonts/**/wqy-microhei*.ttc",
+    ):
+        candidates.extend(glob.glob(pattern, recursive=True))
+    seen = set()
+    unique: List[str] = []
+    for path in candidates:
+        normalized = os.path.normpath(path)
+        if normalized not in seen:
+            seen.add(normalized)
+            unique.append(normalized)
+    return unique
 
 
 def _register_pdf_font() -> str:
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
+
+    registered = set(pdfmetrics.getRegisteredFontNames())
+    if "ReportCJK" in registered:
+        return "ReportCJK"
+    if "STSong-Light" in registered:
+        return "STSong-Light"
 
     for path in _pdf_font_candidates():
         if not os.path.exists(path):
@@ -419,11 +448,23 @@ def _register_pdf_font() -> str:
             return font_name
         except Exception:
             continue
-    raise RuntimeError("未找到可用的中文字体，PDF 导出失败。请在服务器安装 fonts-noto-cjk。")
+
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+    pdfmetrics.registerFont(UnicodeCIDFont("STSong-Light"))
+    return "STSong-Light"
+
+
+def _pdf_code_text(text: Optional[str], limit: int = 12000) -> str:
+    pretty = _pretty_json_text(text)
+    if len(pretty) <= limit:
+        return pretty
+    return f"{pretty[:limit]}\n... (内容过长，PDF 中已截断)"
 
 
 def _pdf_escape(text: Any) -> str:
-    return escape(str(text if text is not None else "-")).replace("\n", "<br/>")
+    raw = str(text if text is not None else "-").replace("\x00", "")
+    return escape(raw).replace("\n", "<br/>")
 
 
 def _build_pdf_styles(font_name: str):
@@ -466,15 +507,17 @@ def _build_pdf_styles(font_name: str):
             fontSize=10,
             leading=14,
             spaceAfter=6,
+            wordWrap="CJK",
         ),
         "code": ParagraphStyle(
             "ReportCode",
-            parent=base["Code"],
+            parent=base["BodyText"],
             fontName=font_name,
             fontSize=8,
             leading=11,
             leftIndent=12,
             spaceAfter=8,
+            wordWrap="CJK",
         ),
         "table": ParagraphStyle(
             "ReportTable",
@@ -482,6 +525,7 @@ def _build_pdf_styles(font_name: str):
             fontName=font_name,
             fontSize=9,
             leading=12,
+            wordWrap="CJK",
         ),
     }
 
@@ -559,7 +603,7 @@ def _append_report_pdf(story: List[Any], report: ApiTestRunDetailOut, styles) ->
             ("响应体", step.response_body),
         ]:
             story.append(Paragraph(_pdf_escape(title), styles["body"]))
-            story.append(Paragraph(_pdf_escape(_pretty_json_text(content)), styles["code"]))
+            story.append(Paragraph(_pdf_escape(_pdf_code_text(content)), styles["code"]))
 
         assertion_rows = _assertion_table_rows(step)
         if assertion_rows:
@@ -597,6 +641,9 @@ def build_run_export_pdf(reports: List[ApiTestRunDetailOut]) -> BytesIO:
             story.append(PageBreak())
         _append_report_pdf(story, report, styles)
     story.append(Spacer(1, 12))
-    doc.build(story)
+    try:
+        doc.build(story)
+    except Exception as exc:
+        raise RuntimeError(f"PDF 生成失败: {exc}") from exc
     buffer.seek(0)
     return buffer
