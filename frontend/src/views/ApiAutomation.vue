@@ -732,7 +732,21 @@
     </el-dialog>
 
     <!-- 可视化报告 -->
-    <el-drawer v-model="reportVisible" size="72%" title="测试报告">
+    <el-drawer v-model="reportVisible" size="75%" class="report-drawer">
+      <template #header>
+        <div v-if="reportDetail" class="report-drawer-header">
+          <div>
+            <div class="report-drawer-title">测试报告 #{{ reportDetail.id }}</div>
+            <div class="report-drawer-sub">
+              <span v-if="reportDetail.suite_name">{{ reportDetail.suite_name }}</span>
+              <span v-if="reportDetail.started_at" class="report-drawer-time">
+                {{ formatTime(reportDetail.started_at) }}
+              </span>
+            </div>
+          </div>
+        </div>
+        <span v-else>测试报告</span>
+      </template>
       <div v-if="reportDetail" v-loading="reportDetailLoading" class="report-panel">
         <div class="report-summary">
           <div class="summary-card">
@@ -795,7 +809,7 @@
           :image-size="64"
         />
 
-        <el-collapse v-else v-model="expandedSteps">
+        <el-collapse v-else v-model="expandedSteps" class="report-steps">
           <el-collapse-item
             v-for="(step, index) in filteredReportSteps"
             :key="step.id"
@@ -804,73 +818,21 @@
             <template #title>
               <div class="step-title">
                 <span class="step-index">{{ index + 1 }}</span>
-                <el-tag :type="statusType[step.status]" size="small">
+                <el-tag :type="statusType[step.status]" size="small" effect="light">
                   {{ statusLabel[step.status] || step.status }}
                 </el-tag>
-                <span class="step-method">{{ step.method }}</span>
+                <span :class="['step-method', `step-method-${(step.method || '').toLowerCase()}`]">
+                  {{ step.method }}
+                </span>
                 <span class="step-name">{{ step.case_name }}</span>
+                <span v-if="step.response_status != null" :class="['step-status-code', stepStatusClass(step.response_status)]">
+                  {{ step.response_status }}
+                </span>
                 <span class="step-duration">{{ formatDuration(step.duration_ms) }}</span>
               </div>
             </template>
 
-            <div class="step-detail">
-              <div class="detail-block">
-                <div class="detail-label">请求 URL</div>
-                <div class="detail-url">{{ step.url }}</div>
-              </div>
-
-              <el-row :gutter="16">
-                <el-col :span="12">
-                  <div class="detail-block">
-                    <div class="detail-label">请求头</div>
-                    <pre class="code-block">{{ step.request_headers || '-' }}</pre>
-                  </div>
-                  <div class="detail-block">
-                    <div class="detail-label">请求体</div>
-                    <pre class="code-block">{{ step.request_body || '-' }}</pre>
-                  </div>
-                </el-col>
-                <el-col :span="12">
-                  <div class="detail-block">
-                    <div class="detail-label">响应状态</div>
-                    <div>{{ step.response_status ?? '-' }}</div>
-                  </div>
-                  <div class="detail-block">
-                    <div class="detail-label">响应头</div>
-                    <pre class="code-block">{{ step.response_headers || '-' }}</pre>
-                  </div>
-                  <div class="detail-block">
-                    <div class="detail-label">响应体</div>
-                    <pre class="code-block">{{ step.response_body || '-' }}</pre>
-                  </div>
-                </el-col>
-              </el-row>
-
-              <div v-if="step.error_message" class="detail-block">
-                <el-alert :title="step.error_message" type="error" show-icon :closable="false" />
-              </div>
-
-              <div class="detail-block">
-                <div class="detail-label">断言结果</div>
-                <el-table :data="step.assertion_results" size="small" border>
-                  <el-table-column prop="type" label="类型" width="120" />
-                  <el-table-column prop="message" label="说明" min-width="220" />
-                  <el-table-column label="期望" min-width="120">
-                    <template #default="{ row }">{{ formatValue(row.expected) }}</template>
-                  </el-table-column>
-                  <el-table-column label="实际" min-width="120">
-                    <template #default="{ row }">{{ formatValue(row.actual) }}</template>
-                  </el-table-column>
-                  <el-table-column label="结果" width="80">
-                    <template #default="{ row }">
-                      <el-tag :type="row.passed ? 'success' : 'danger'" size="small">
-                        {{ row.passed ? '通过' : '失败' }}
-                      </el-tag>
-                    </template>
-                  </el-table-column>
-                </el-table>
-              </div>
-            </div>
+            <ApiReportStepDetail :step="step" />
           </el-collapse-item>
         </el-collapse>
       </div>
@@ -886,6 +848,7 @@ import { ArrowDown, Document, Folder, MagicStick } from '@element-plus/icons-vue
 import { projectApi, apiAutomationApi } from '@/api'
 import ApiCaseEditor from '@/components/ApiCaseEditor.vue'
 import ApiKvParamTable from '@/components/ApiKvParamTable.vue'
+import ApiReportStepDetail from '@/components/ApiReportStepDetail.vue'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
 
 const route = useRoute()
@@ -1204,10 +1167,12 @@ function formatTime(value) {
   return new Date(value).toLocaleString()
 }
 
-function formatValue(value) {
-  if (value === null || value === undefined) return '-'
-  if (typeof value === 'object') return JSON.stringify(value)
-  return String(value)
+function stepStatusClass(statusCode) {
+  const code = Number(statusCode)
+  if (code >= 200 && code < 300) return 'is-success'
+  if (code >= 400 && code < 500) return 'is-warning'
+  if (code >= 500) return 'is-danger'
+  return 'is-muted'
 }
 
 async function loadProjects() {
@@ -2676,6 +2641,68 @@ onUnmounted(() => {
   margin-bottom: 20px;
 }
 
+.report-drawer-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.report-drawer-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1e293b;
+  line-height: 1.3;
+}
+
+.report-drawer-sub {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 13px;
+  color: #64748b;
+}
+
+.report-drawer-time {
+  padding-left: 10px;
+  border-left: 1px solid #e2e8f0;
+}
+
+.report-panel {
+  padding-bottom: 8px;
+}
+
+.report-steps :deep(.el-collapse-item) {
+  margin-bottom: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.report-steps :deep(.el-collapse-item__header) {
+  height: auto;
+  min-height: 52px;
+  padding: 10px 16px;
+  background: #fafbfc;
+  border-bottom: none;
+  line-height: 1.4;
+}
+
+.report-steps :deep(.el-collapse-item.is-active .el-collapse-item__header) {
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.report-steps :deep(.el-collapse-item__wrap) {
+  border-top: none;
+}
+
+.report-steps :deep(.el-collapse-item__content) {
+  padding: 16px 18px 18px;
+}
+
 .summary-card {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -2732,57 +2759,65 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   width: 100%;
+  padding-right: 8px;
 }
 
 .step-index {
   flex-shrink: 0;
-  min-width: 28px;
-  text-align: center;
-  font-size: 13px;
-  font-weight: 600;
-  color: #64748b;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #eef2ff;
+  font-size: 12px;
+  font-weight: 700;
+  color: #4338ca;
 }
 
 .step-method {
-  font-weight: 600;
-  color: #3182ce;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 6px;
 }
+
+.step-method-get { background: #dcfce7; color: #166534; }
+.step-method-post { background: #dbeafe; color: #1d4ed8; }
+.step-method-put { background: #fef3c7; color: #b45309; }
+.step-method-patch { background: #e0e7ff; color: #4338ca; }
+.step-method-delete { background: #fee2e2; color: #b91c1c; }
 
 .step-name {
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #334155;
+  font-weight: 500;
 }
+
+.step-status-code {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.step-status-code.is-success { background: #dcfce7; color: #15803d; }
+.step-status-code.is-warning { background: #ffedd5; color: #c2410c; }
+.step-status-code.is-danger { background: #fee2e2; color: #b91c1c; }
+.step-status-code.is-muted { background: #f1f5f9; color: #64748b; }
 
 .step-duration {
-  color: #718096;
+  flex-shrink: 0;
+  color: #64748b;
   font-size: 12px;
-}
-
-.detail-block {
-  margin-bottom: 14px;
-}
-
-.detail-label {
-  font-weight: 600;
-  color: #4a5568;
-  margin-bottom: 6px;
-}
-
-.detail-url {
-  word-break: break-all;
-  color: #2d3748;
-}
-
-.code-block {
-  background: #1a202c;
-  color: #e2e8f0;
-  padding: 12px;
-  border-radius: 8px;
-  overflow: auto;
-  max-height: 220px;
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .text-success {

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
+from app.services.api_run_maintenance import after_api_test_runs_deleted
 from app.database import SessionLocal, get_db
 from app.models.api_automation import (
     ApiEnvironment,
@@ -583,7 +584,11 @@ def delete_suite(
     suite = _get_owned_suite(db, suite_id, current_user)
     if suite.is_folder and _suite_has_children(db, suite.id):
         raise HTTPException(status_code=400, detail="目录非空，请先删除或移出子项")
+    deleted_run_ids = [
+        run.id for run in db.query(ApiTestRun).filter(ApiTestRun.suite_id == suite_id).all()
+    ]
     db.delete(suite)
+    after_api_test_runs_deleted(db, deleted_run_ids)
     db.commit()
     return {"message": "删除成功"}
 
@@ -1184,7 +1189,9 @@ def delete_run(
     )
     if not run:
         raise HTTPException(status_code=404, detail="执行记录不存在")
+    deleted_run_id = run.id
     db.delete(run)
+    after_api_test_runs_deleted(db, [deleted_run_id])
     db.commit()
     return {"message": "删除成功"}
 
@@ -1207,8 +1214,10 @@ def batch_delete_runs(
     )
     if not runs:
         raise HTTPException(status_code=404, detail="未找到可删除的报告")
+    deleted_run_ids = [run.id for run in runs]
     for run in runs:
         db.delete(run)
+    after_api_test_runs_deleted(db, deleted_run_ids)
     db.commit()
     deleted_count = len(runs)
     return ApiRunBatchDeleteResponse(
