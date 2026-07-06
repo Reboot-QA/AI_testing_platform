@@ -275,28 +275,30 @@
             <el-table-column prop="started_at" label="执行时间" min-width="170">
               <template #default="{ row }">{{ formatTime(row.started_at) }}</template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="220" fixed="right" align="center">
               <template #default="{ row }">
-                <el-button link type="primary" @click.stop="viewReport(row)">查看报告</el-button>
-                <el-dropdown trigger="click" @command="(format) => exportRun(row, format)">
-                  <el-button
-                    link
-                    type="success"
-                    :loading="runExportingId === row.id"
-                    @click.stop
-                  >
-                    导出
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <el-dropdown-item command="excel">Excel</el-dropdown-item>
-                      <el-dropdown-item command="word">Word</el-dropdown-item>
-                      <el-dropdown-item command="pdf">PDF</el-dropdown-item>
-                      <el-dropdown-item command="json">JSON</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-                <el-button link type="danger" @click.stop="removeRun(row)">删除</el-button>
+                <div class="report-row-actions">
+                  <el-button link type="primary" @click.stop="viewReport(row)">查看报告</el-button>
+                  <el-dropdown trigger="click" @command="(format) => exportRun(row, format)">
+                    <el-button
+                      link
+                      type="success"
+                      :loading="runExportingId === row.id"
+                      @click.stop
+                    >
+                      导出
+                    </el-button>
+                    <template #dropdown>
+                      <el-dropdown-menu>
+                        <el-dropdown-item command="excel">Excel</el-dropdown-item>
+                        <el-dropdown-item command="word">Word</el-dropdown-item>
+                        <el-dropdown-item command="pdf">PDF</el-dropdown-item>
+                        <el-dropdown-item command="json">JSON</el-dropdown-item>
+                      </el-dropdown-menu>
+                    </template>
+                  </el-dropdown>
+                  <el-button link type="danger" @click.stop="removeRun(row)">删除</el-button>
+                </div>
               </template>
             </el-table-column>
           </el-table>
@@ -2363,6 +2365,27 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.report-row-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.report-row-actions :deep(.el-dropdown) {
+  display: inline-flex;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.report-row-actions :deep(.el-button.is-link) {
+  vertical-align: middle;
+  height: auto;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .suite-card {
