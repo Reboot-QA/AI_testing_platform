@@ -102,6 +102,7 @@
     </transition>
 
     <div
+      v-show="!open"
       class="assistant-fab-wrap"
       :class="{ dragging, active: open }"
       :style="{ bottom: `${fabBottom}px` }"
