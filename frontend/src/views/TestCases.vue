@@ -162,9 +162,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, testcaseApi } from '@/api'
+import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
 const projects = ref([])
 const testcases = ref([])
@@ -381,7 +382,25 @@ async function handleExport() {
   URL.revokeObjectURL(url)
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  registerAssistantHandler('testcases.ensureProject', async () => {
+    if (!projects.value.length) {
+      await loadProjects()
+    }
+    if (!projectId.value && projects.value.length) {
+      projectId.value = projects.value[0].id
+      await loadData()
+    }
+    if (!projectId.value) {
+      throw new Error('请先创建项目')
+    }
+  })
+  await loadProjects()
+})
+
+onUnmounted(() => {
+  unregisterAssistantHandler('testcases.ensureProject')
+})
 </script>
 
 <style scoped>

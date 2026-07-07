@@ -163,12 +163,80 @@ def _project_create_actions(name: str, desc: str) -> List[Dict[str, Any]]:
 
 
 def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
-    if preset == "create_project":
+    if preset in {"create_project", "project_management_full"}:
         name = "AI演示项目"
-        desc = "由 AI 助手演示自动创建"
+        desc = "项目管理全流程演示项目"
         return {
-            "reply": f"好的，我将为您演示创建项目「{name}」，请稍候观看浏览器自动操作。",
+            "reply": "好的，我将为您演示项目管理全流程：创建项目并完成基本配置，请稍候观看。",
             "actions": _project_create_actions(name, desc),
+            "needs_confirmation": False,
+        }
+
+    if preset == "testcase_management_full":
+        return {
+            "reply": "好的，我将为您演示用例管理全流程：AI 生成用例并进入用例库查看，请稍候观看。",
+            "actions": [
+                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
+                _wait_step("等待 AI 生成页加载"),
+                {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "准备生成配置"},
+                _wait_step("等待表单填充完成"),
+                {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "AI 生成用例"},
+                _wait_step("等待生成完成", ms=1500),
+                {"type": "navigate", "path": "/testcases", "label": "进入用例库"},
+                _wait_step("等待用例库加载"),
+                {"type": "invoke", "handler": "testcases.ensureProject", "label": "查看项目用例列表"},
+            ],
+            "needs_confirmation": False,
+        }
+
+    if preset == "requirement_management_full":
+        return {
+            "reply": "好的，我将为您演示需求管理全流程：创建演示需求，请稍候观看。",
+            "actions": [
+                {"type": "navigate", "path": "/requirements", "label": "打开需求管理"},
+                _wait_step("等待页面加载"),
+                {"type": "invoke", "handler": "requirements.ensureProject", "label": "选择项目"},
+                _wait_step("等待项目切换完成"),
+                {"type": "invoke", "handler": "requirements.createDemo", "label": "创建演示需求"},
+            ],
+            "needs_confirmation": False,
+        }
+
+    if preset in {"ai_generate"}:
+        return {
+            "reply": "好的，我将为您打开 AI 智能生成、填充演示需求并点击「开始生成」，请稍候观看。",
+            "actions": [
+                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
+                _wait_step("等待 AI 生成页加载"),
+                {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "选择项目并填充演示需求"},
+                _wait_step("等待表单填充完成"),
+                {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "点击开始生成"},
+            ],
+            "needs_confirmation": False,
+        }
+
+    if preset in {"api_automation", "api_automation_management_full"}:
+        name = "AI演示套件"
+        return {
+            "reply": "好的，我将为您演示接口自动化管理全流程：环境配置、套件创建与执行入口，请稍候观看。",
+            "actions": [
+                {"type": "navigate", "path": "/api-automation/env", "label": "打开环境配置"},
+                _wait_step("等待环境页加载"),
+                {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
+                _wait_step("等待项目切换完成"),
+                {"type": "invoke", "handler": "apiAutomation.ensureEnvironment", "label": "准备执行环境"},
+                _wait_step("等待环境就绪"),
+                {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
+                _wait_step("等待套件页加载"),
+                {
+                    "type": "invoke",
+                    "handler": "apiAutomation.createSuite",
+                    "payload": {"name": name, "base_url": "http://127.0.0.1"},
+                    "label": f"创建测试套件：{name}",
+                },
+                _wait_step("等待套件创建完成"),
+                {"type": "invoke", "handler": "apiAutomation.focusRunSuite", "label": "展示执行套件入口"},
+            ],
             "needs_confirmation": False,
         }
 
@@ -189,42 +257,6 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
         return {
             "reply": "好的，我将演示创建项目、进入 AI 生成并点击「开始生成」，请稍候观看。",
             "actions": actions,
-            "needs_confirmation": False,
-        }
-
-    if preset == "ai_generate":
-        return {
-            "reply": "好的，我将为您打开 AI 智能生成、填充演示需求并点击「开始生成」，请稍候观看。",
-            "actions": [
-                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
-                _wait_step("等待 AI 生成页加载"),
-                {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "选择项目并填充演示需求"},
-                _wait_step("等待表单填充完成"),
-                {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "点击开始生成"},
-            ],
-            "needs_confirmation": False,
-        }
-
-    if preset == "api_automation":
-        name = "AI演示套件"
-        return {
-            "reply": "好的，我将演示接口自动化：创建环境、测试套件并进入执行界面，请稍候观看。",
-            "actions": [
-                {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
-                _wait_step("等待套件页加载"),
-                {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
-                _wait_step("等待项目切换完成"),
-                {"type": "invoke", "handler": "apiAutomation.ensureEnvironment", "label": "准备执行环境"},
-                _wait_step("等待环境就绪"),
-                {
-                    "type": "invoke",
-                    "handler": "apiAutomation.createSuite",
-                    "payload": {"name": name, "base_url": "http://127.0.0.1"},
-                    "label": f"创建测试套件：{name}",
-                },
-                _wait_step("等待套件创建完成"),
-                {"type": "invoke", "handler": "apiAutomation.focusRunSuite", "label": "展示执行套件入口"},
-            ],
             "needs_confirmation": False,
         }
 

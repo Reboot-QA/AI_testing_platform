@@ -4,7 +4,7 @@
       <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="loadData">
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-button type="primary" :disabled="!projectId" @click="openDialog()">
+      <el-button type="primary" :disabled="!projectId" data-assistant="requirements.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加需求
       </el-button>
       <el-select v-model="batchStatus" placeholder="批量改状态" clearable style="width: 140px">
@@ -93,7 +93,7 @@
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑需求' : '添加需求'" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="标题" prop="title">
-          <el-input v-model="form.title" />
+          <el-input v-model="form.title" data-assistant="requirements.form.title" />
         </el-form-item>
         <el-form-item label="类型">
           <el-select v-model="form.req_type" style="width: 100%">
@@ -112,7 +112,13 @@
           </el-select>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="5" placeholder="详细需求描述，可用于 AI 生成用例" />
+          <el-input
+            v-model="form.description"
+            data-assistant="requirements.form.description"
+            type="textarea"
+            :rows="5"
+            placeholder="详细需求描述，可用于 AI 生成用例"
+          />
         </el-form-item>
         <el-form-item v-if="editing" label="状态">
           <el-select v-model="form.status" style="width: 100%">
@@ -124,7 +130,7 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" data-assistant="requirements.form.submit" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
 
@@ -203,9 +209,10 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
+import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
 const projects = ref([])
 const requirements = ref([])
@@ -437,7 +444,41 @@ async function handleBatchStatus() {
   }
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  registerAssistantHandler('requirements.ensureProject', async () => {
+    if (!projects.value.length) {
+      await loadProjects()
+    }
+    if (!projectId.value && projects.value.length) {
+      projectId.value = projects.value[0].id
+      await loadData()
+    }
+    if (!projectId.value) {
+      throw new Error('请先创建项目')
+    }
+  })
+
+  registerAssistantHandler('requirements.createDemo', async () => {
+    if (!projectId.value) {
+      throw new Error('请先选择项目')
+    }
+    openDialog()
+    form.title = 'AI演示需求'
+    form.description = '演示需求：用户可以使用账号密码登录系统，登录成功后进入首页。'
+    form.req_type = 'functional'
+    form.priority = 'P1'
+    form.status = 'draft'
+    await nextTick()
+    await handleSubmit()
+  })
+
+  await loadProjects()
+})
+
+onUnmounted(() => {
+  unregisterAssistantHandler('requirements.ensureProject')
+  unregisterAssistantHandler('requirements.createDemo')
+})
 </script>
 
 <style scoped>

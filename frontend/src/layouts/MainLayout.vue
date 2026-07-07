@@ -31,7 +31,7 @@
             <el-icon><Upload /></el-icon>
             <span>需求文档</span>
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('requirements')" index="/requirements">
+          <el-menu-item v-if="userStore.hasPermission('requirements')" index="/requirements" data-assistant="menu.requirements">
             <el-icon><Tickets /></el-icon>
             <span>需求点</span>
           </el-menu-item>
@@ -46,7 +46,7 @@
             <el-icon><MagicStick /></el-icon>
             <span>AI 生成</span>
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('testcases')" index="/testcases">
+          <el-menu-item v-if="userStore.hasPermission('testcases')" index="/testcases" data-assistant="menu.testcases">
             <el-icon><Collection /></el-icon>
             <span>用例库</span>
           </el-menu-item>
@@ -61,7 +61,7 @@
             <el-icon><Connection /></el-icon>
             <span>接口自动化</span>
           </template>
-          <el-menu-item v-if="userStore.hasPermission('api_automation_env')" index="/api-automation/env">
+          <el-menu-item v-if="userStore.hasPermission('api_automation_env')" index="/api-automation/env" data-assistant="menu.api_automation_env">
             环境配置
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('api_automation_suites')" index="/api-automation/suites" data-assistant="menu.api_automation_suites">

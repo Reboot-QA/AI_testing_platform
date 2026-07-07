@@ -202,10 +202,10 @@ function buildChatPayload(excludeAssistantId) {
 const messages = ref(loadStoredMessages())
 
 const suggestions = [
-  { text: '帮我演示创建一个项目', preset: 'create_project' },
-  { text: '如何创建项目并开始测试？', preset: 'create_project_and_test' },
-  { text: '怎样用 AI 生成测试用例？', preset: 'ai_generate' },
-  { text: '接口自动化怎样创建并执行？', preset: 'api_automation' },
+  { text: '帮我演示项目管理全流程', preset: 'project_management_full' },
+  { text: '帮我演示需求管理全流程', preset: 'requirement_management_full' },
+  { text: '帮我演示用例管理全流程', preset: 'testcase_management_full' },
+  { text: '帮我演示接口自动化管理全流程', preset: 'api_automation_management_full' },
 ]
 
 function formatContent(text) {
