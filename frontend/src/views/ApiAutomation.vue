@@ -252,9 +252,6 @@
             @selection-change="onRunSelectionChange"
           >
             <el-table-column type="selection" width="48" />
-            <el-table-column label="报告时间" min-width="150">
-              <template #default="{ row }">{{ formatReportTime(row.started_at) }}</template>
-            </el-table-column>
             <el-table-column prop="suite_name" label="套件" min-width="160" />
             <el-table-column prop="status" label="结果" width="100">
               <template #default="{ row }">
@@ -271,8 +268,17 @@
                 {{ row.passed_count }}/{{ row.failed_count }}/{{ row.total_count }}
               </template>
             </el-table-column>
+            <el-table-column label="触发方式" width="100">
+              <template #default="{ row }">{{ reportTriggerType(row.triggered_by) }}</template>
+            </el-table-column>
+            <el-table-column label="执行人" width="100">
+              <template #default="{ row }">{{ reportExecutorName(row.triggered_by) }}</template>
+            </el-table-column>
             <el-table-column label="耗时" width="100">
               <template #default="{ row }">{{ formatDuration(row.duration_ms) }}</template>
+            </el-table-column>
+            <el-table-column label="报告时间" min-width="170">
+              <template #default="{ row }">{{ formatReportTime(row.started_at) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="220" fixed="right" align="center">
               <template #default="{ row }">
@@ -1227,12 +1233,28 @@ function formatReportTime(value) {
   const date = new Date(value)
   if (Number.isNaN(date.getTime())) return '-'
   const pad = (num) => String(num).padStart(2, '0')
-  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+  return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 function reportTimeFileToken(value) {
-  const formatted = formatReportTime(value)
-  return formatted === '-' ? 'unknown' : formatted
+  if (!value) return 'unknown'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'unknown'
+  const pad = (num) => String(num).padStart(2, '0')
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+}
+
+function reportTriggerType(triggeredBy) {
+  if (triggeredBy && String(triggeredBy).startsWith('schedule:')) return '定时'
+  return '手动'
+}
+
+function reportExecutorName(triggeredBy) {
+  if (!triggeredBy) return '-'
+  const value = String(triggeredBy)
+  if (value.startsWith('schedule:')) return '系统'
+  if (value === 'manual') return '-'
+  return value
 }
 
 function stepStatusClass(statusCode) {
