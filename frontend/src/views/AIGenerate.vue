@@ -399,11 +399,45 @@ onMounted(async () => {
     form.case_type = 'functional'
     await nextTick()
   })
+
+  registerAssistantHandler('aiGenerate.startGenerate', async () => {
+    if (generating.value) {
+      return
+    }
+    if (!projects.value.length) {
+      await loadProjects()
+    }
+    if (!form.project_id && projects.value.length) {
+      form.project_id = projects.value[0].id
+      await loadRequirements()
+    }
+    if (!llmProviders.value.length) {
+      await loadProviders()
+    }
+    if (!form.provider_id && llmProviders.value.length) {
+      form.provider_id = llmProviders.value.find((item) => item.is_default)?.id
+        || llmProviders.value[0].id
+    }
+    if (!form.requirement_text.trim()) {
+      throw new Error('请先填写需求描述')
+    }
+    if (!form.project_id || !form.provider_id) {
+      throw new Error('请完善项目与大模型配置')
+    }
+    await nextTick()
+    const btn = document.querySelector('[data-assistant="ai_generate.generate_btn"]')
+    if (btn) {
+      btn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    }
+    await handleGenerate()
+  })
+
   await Promise.all([loadProjects(), loadProviders()])
 })
 
 onUnmounted(() => {
   unregisterAssistantHandler('aiGenerate.prepareDemo')
+  unregisterAssistantHandler('aiGenerate.startGenerate')
 })
 </script>
 

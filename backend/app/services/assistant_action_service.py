@@ -176,21 +176,25 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
                 {"type": "navigate", "path": "/ai-generate", "label": "进入 AI 智能生成"},
                 {"type": "wait", "ms": 800},
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "准备生成配置"},
+                {"type": "wait", "ms": 400},
+                {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "点击开始生成"},
             ]
         )
         return {
-            "reply": "好的，我将演示创建项目并进入 AI 生成用例页面，请稍候观看。",
+            "reply": "好的，我将演示创建项目、进入 AI 生成并点击「开始生成」，请稍候观看。",
             "actions": actions,
             "needs_confirmation": False,
         }
 
     if preset == "ai_generate":
         return {
-            "reply": "好的，我将为您打开 AI 智能生成并演示配置流程，请稍候观看。",
+            "reply": "好的，我将为您打开 AI 智能生成、填充演示需求并点击「开始生成」，请稍候观看。",
             "actions": [
                 {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
                 {"type": "wait", "ms": 800},
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "选择项目并填充演示需求"},
+                {"type": "wait", "ms": 400},
+                {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "点击开始生成"},
             ],
             "needs_confirmation": False,
         }
