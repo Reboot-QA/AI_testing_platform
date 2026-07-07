@@ -238,6 +238,19 @@ async function loadProjects() {
   }
 }
 
+registerAssistantHandler('testcases.ensureProject', async () => {
+  if (!projects.value.length) {
+    await loadProjects()
+  }
+  if (!projectId.value && projects.value.length) {
+    projectId.value = projects.value[0].id
+    await loadData()
+  }
+  if (!projectId.value) {
+    throw new Error('请先创建项目')
+  }
+})
+
 async function loadData() {
   if (!projectId.value) return
   loading.value = true
@@ -382,21 +395,7 @@ async function handleExport() {
   URL.revokeObjectURL(url)
 }
 
-onMounted(async () => {
-  registerAssistantHandler('testcases.ensureProject', async () => {
-    if (!projects.value.length) {
-      await loadProjects()
-    }
-    if (!projectId.value && projects.value.length) {
-      projectId.value = projects.value[0].id
-      await loadData()
-    }
-    if (!projectId.value) {
-      throw new Error('请先创建项目')
-    }
-  })
-  await loadProjects()
-})
+onMounted(loadProjects)
 
 onUnmounted(() => {
   unregisterAssistantHandler('testcases.ensureProject')

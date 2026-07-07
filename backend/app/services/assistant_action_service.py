@@ -183,7 +183,7 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
                 {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "AI 生成用例"},
                 _wait_step("等待生成完成", ms=1500),
                 {"type": "navigate", "path": "/testcases", "label": "进入用例库"},
-                _wait_step("等待用例库加载"),
+                _wait_step("等待用例库加载", ms=1500),
                 {"type": "invoke", "handler": "testcases.ensureProject", "label": "查看项目用例列表"},
             ],
             "needs_confirmation": False,
@@ -218,7 +218,7 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
     if preset in {"api_automation", "api_automation_management_full"}:
         name = "AI演示套件"
         return {
-            "reply": "好的，我将为您演示接口自动化管理全流程：环境配置、套件创建与执行入口，请稍候观看。",
+            "reply": "好的，我将为您演示接口自动化管理全流程：环境配置、套件创建、演示用例保存与执行入口，请稍候观看。",
             "actions": [
                 {"type": "navigate", "path": "/api-automation/env", "label": "打开环境配置"},
                 _wait_step("等待环境页加载"),
@@ -235,6 +235,8 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
                     "label": f"创建测试套件：{name}",
                 },
                 _wait_step("等待套件创建完成"),
+                {"type": "invoke", "handler": "apiAutomation.createDemoCase", "label": "创建并保存演示接口用例"},
+                _wait_step("等待用例保存完成"),
                 {"type": "invoke", "handler": "apiAutomation.focusRunSuite", "label": "展示执行套件入口"},
             ],
             "needs_confirmation": False,

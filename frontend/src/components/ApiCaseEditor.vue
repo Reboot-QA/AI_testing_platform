@@ -2,10 +2,10 @@
   <div class="api-case-editor">
     <div class="editor-toolbar">
       <div class="toolbar-left">
-        <el-button type="primary" :disabled="!suiteId" @click="handleNew">
+        <el-button type="primary" data-assistant="cases.new_btn" :disabled="!suiteId" @click="handleNew">
           <el-icon><Plus /></el-icon> 新建
         </el-button>
-        <el-button type="primary" :loading="saving" :disabled="!suiteId" @click="handleSave">
+        <el-button type="primary" data-assistant="cases.save_btn" :loading="saving" :disabled="!suiteId" @click="handleSave">
           <el-icon><DocumentChecked /></el-icon> 保存
         </el-button>
         <el-button type="success" :loading="sending" :disabled="!canSend" @click="handleSend">
@@ -61,7 +61,7 @@
       <el-form ref="formRef" :model="form" :rules="rules" label-width="0">
         <div class="name-row">
           <el-form-item prop="name" class="name-form-item">
-            <el-input v-model="form.name" placeholder="用例名称" />
+            <el-input v-model="form.name" data-assistant="cases.form.name" placeholder="用例名称" />
           </el-form-item>
         </div>
 
@@ -1306,7 +1306,29 @@ watch(
   { immediate: true }
 )
 
-defineExpose({ resetForm, applyCaptureItem, handleNew })
+async function fillDemoAndSave() {
+  handleNew()
+  form.name = 'AI演示接口用例'
+  form.method = 'GET'
+  form.full_url = 'http://127.0.0.1/'
+  form.environment_id = props.suiteEnvironmentId || props.environments[0]?.id || form.environment_id
+  if (!form.environment_id) {
+    throw new Error('请先配置执行环境')
+  }
+  await nextTick()
+  try {
+    await formRef.value.validate()
+  } catch {
+    throw new Error('请完善用例名称等必填项')
+  }
+  const beforeId = editingId.value
+  await handleSave()
+  if (!editingId.value && !beforeId) {
+    throw new Error('用例保存失败')
+  }
+}
+
+defineExpose({ resetForm, applyCaptureItem, handleNew, fillDemoAndSave })
 </script>
 
 <style scoped>

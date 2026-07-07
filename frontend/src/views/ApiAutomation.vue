@@ -1015,6 +1015,7 @@ const ASSISTANT_HANDLER_NAMES = [
   'apiAutomation.ensureProject',
   'apiAutomation.ensureEnvironment',
   'apiAutomation.createSuite',
+  'apiAutomation.createDemoCase',
   'apiAutomation.selectFirstSuite',
   'apiAutomation.openSwaggerImport',
   'apiAutomation.setSwaggerUrl',
@@ -2679,6 +2680,25 @@ function registerApiAutomationAssistantHandlers() {
     suiteForm.environment_id = payload.environment_id || environments.value[0]?.id || null
     await nextTick()
     await saveSuite()
+    if (suiteId.value) {
+      selectSuite(suiteId.value)
+      await nextTick()
+    }
+  })
+
+  registerAssistantHandler('apiAutomation.createDemoCase', async () => {
+    if (!suiteId.value) {
+      throw new Error('请先选择测试套件')
+    }
+    activeCaseId.value = null
+    await nextTick()
+    await nextTick()
+    if (!caseEditorRef.value?.fillDemoAndSave) {
+      throw new Error('用例编辑器未就绪，请稍后重试')
+    }
+    await caseEditorRef.value.fillDemoAndSave()
+    await loadCases()
+    await loadSuites()
   })
 
   registerAssistantHandler('apiAutomation.selectFirstSuite', async (payload = {}) => {

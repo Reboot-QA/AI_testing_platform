@@ -124,7 +124,7 @@
         <router-view />
       </el-main>
     </el-container>
-    <AssistantPanel />
+    <AssistantPanel :key="assistantPanelKey" />
   </el-container>
 </template>
 
@@ -190,6 +190,10 @@ const defaultOpeneds = computed(() => {
 })
 
 const pageTitle = computed(() => PAGE_TITLES[route.path] || 'AI 质量平台')
+
+const assistantPanelKey = computed(
+  () => userStore.user?.id || userStore.token || 'guest'
+)
 
 function handleLogout() {
   userStore.logout()

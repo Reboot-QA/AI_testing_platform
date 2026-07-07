@@ -34,6 +34,9 @@ const TARGET_ALIASES = {
   'ai_generate.project_select': 'ai_generate.project_select',
   'ai_generate.requirement_text': 'ai_generate.requirement_text',
   'suites.run_suite_btn': 'suites.run_suite_btn',
+  'cases.new_btn': 'cases.new_btn',
+  'cases.save_btn': 'cases.save_btn',
+  'cases.form.name': 'cases.form.name',
 }
 
 const DEFAULT_WAIT_MS = 1000

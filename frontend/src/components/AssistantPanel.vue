@@ -161,9 +161,17 @@ function resetAssistantChatToWelcome() {
   modeLabel.value = ''
 }
 
-function resetAssistantChat() {
-  resetAssistantChatToWelcome()
+function closeAssistantPanel() {
   open.value = false
+}
+
+function prepareAssistantForSessionStart() {
+  resetAssistantChatToWelcome()
+  closeAssistantPanel()
+}
+
+function resetAssistantChat() {
+  prepareAssistantForSessionStart()
 }
 
 function buildChatPayload(excludeAssistantId) {
@@ -210,7 +218,7 @@ watch(
     if (!token) {
       resetAssistantChat()
     } else if (token && !prev) {
-      resetAssistantChatToWelcome()
+      prepareAssistantForSessionStart()
     }
   }
 )
@@ -222,7 +230,7 @@ onMounted(() => {
     fabBottom.value = clampFabBottom(Number(saved))
   }
   if (userStore.token) {
-    resetAssistantChatToWelcome()
+    prepareAssistantForSessionStart()
   }
 })
 
