@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
+from app.database import get_db
 from app.services.api_run_maintenance import after_api_test_runs_deleted
 from app.services.api_run_export_service import (
     build_content_disposition,
