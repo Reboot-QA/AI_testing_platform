@@ -26,7 +26,7 @@
                 type="button"
                 class="suggestion-btn"
                 :disabled="loading || executing"
-                @click="sendSuggestion(item.query)"
+                @click="sendSuggestion(item)"
               >
                 <el-icon><Promotion /></el-icon>
                 <span>{{ item.text }}</span>
@@ -456,7 +456,7 @@ function handleSend() {
 }
 
 function sendSuggestion(item) {
-  if (loading.value || executing.value) return
+  if (loading.value || executing.value || !item?.preset) return
   streamChat(item.text, {
     preset: item.preset,
     autoExecute: true,
