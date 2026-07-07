@@ -278,6 +278,8 @@ export const apiAutomationApi = {
   },
   listRuns: (params = {}) => request.get('/api-automation/runs', { params }),
   getRun: (id) => request.get(`/api-automation/runs/${id}`),
+  getCombinedRun: (runIds) =>
+    request.get('/api-automation/runs/combined', { params: { run_ids: runIds.join(',') } }),
   deleteRun: (id) => request.delete(`/api-automation/runs/${id}`),
   batchDeleteRuns: (data) => request.post('/api-automation/runs/batch/delete', data),
   exportRun: (id, format = 'excel') =>

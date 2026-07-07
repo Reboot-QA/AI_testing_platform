@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import threading
 import time
@@ -137,6 +138,29 @@ def replace_scheduled_task_suites(db: Session, task: ApiScheduledTask, suite_ids
     task.suite_id = unique_ids[0] if unique_ids else None
 
 
+def get_task_last_run_ids(task: ApiScheduledTask) -> List[int]:
+    if task.last_run_ids:
+        try:
+            data = json.loads(task.last_run_ids)
+            if isinstance(data, list):
+                return [int(item) for item in data if str(item).isdigit()]
+        except (TypeError, ValueError, json.JSONDecodeError):
+            pass
+    if task.last_run_id:
+        return [task.last_run_id]
+    return []
+
+
+def set_task_last_runs(task: ApiScheduledTask, run_ids: List[int], overall_status: str) -> None:
+    unique_ids: List[int] = []
+    for run_id in run_ids:
+        if run_id not in unique_ids:
+            unique_ids.append(run_id)
+    task.last_run_ids = json.dumps(unique_ids) if unique_ids else None
+    task.last_run_id = unique_ids[-1] if unique_ids else None
+    task.last_run_status = overall_status if unique_ids else "failed"
+
+
 def execute_scheduled_task(db: Session, task: ApiScheduledTask) -> None:
     suites = get_scheduled_task_suites(db, task)
     if not suites:
@@ -145,12 +169,12 @@ def execute_scheduled_task(db: Session, task: ApiScheduledTask) -> None:
         db.commit()
         return
 
-    last_run: Optional[ApiTestRun] = None
+    run_ids: List[int] = []
     overall_status = "passed"
     for suite in suites:
         try:
             run = run_api_suite(db, suite, triggered_by=f"schedule:{task.name}")
-            last_run = run
+            run_ids.append(run.id)
             if run.status != "passed":
                 overall_status = run.status
         except Exception as exc:
@@ -158,14 +182,13 @@ def execute_scheduled_task(db: Session, task: ApiScheduledTask) -> None:
             overall_status = "failed"
 
     task.last_run_at = now_local()
-    task.last_run_id = last_run.id if last_run else None
-    task.last_run_status = overall_status
-    if last_run:
+    set_task_last_runs(task, run_ids, overall_status)
+    if run_ids:
         logger.info(
-            "定时任务 %s (%s) 执行完成: run_id=%s status=%s suites=%s",
+            "定时任务 %s (%s) 执行完成: run_ids=%s status=%s suites=%s",
             task.id,
             task.name,
-            last_run.id,
+            run_ids,
             overall_status,
             len(suites),
         )

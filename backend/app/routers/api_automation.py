@@ -60,6 +60,7 @@ from app.schemas import (
     ApiTestCaseUpdate,
     ApiTestRunDetailOut,
     ApiTestRunPageOut,
+    ApiTestRunSuiteSectionOut,
     ApiTestRunSummaryOut,
     ApiTestStepResultOut,
     ApiTestSuiteCreate,
@@ -103,6 +104,7 @@ from app.services.schedule_service import (
     execute_scheduled_task,
     format_schedule_desc,
     get_scheduled_task_suite_ids,
+    get_task_last_run_ids,
     refresh_task_schedule,
     replace_scheduled_task_suites,
     validate_schedule_fields,
@@ -443,6 +445,7 @@ def _schedule_out(db: Session, task: ApiScheduledTask) -> ApiScheduledTaskOut:
         enabled=task.enabled,
         last_run_at=task.last_run_at,
         last_run_id=task.last_run_id,
+        last_run_ids=get_task_last_run_ids(task),
         last_run_status=task.last_run_status,
         next_run_at=task.next_run_at,
         created_at=task.created_at,
@@ -479,6 +482,72 @@ def _run_detail_out(db: Session, run: ApiTestRun) -> ApiTestRunDetailOut:
         for step in steps
     ]
     return ApiTestRunDetailOut(**summary.model_dump(), step_results=step_results)
+
+
+def _parse_run_ids_param(run_ids: str) -> List[int]:
+    ids: List[int] = []
+    for part in (run_ids or "").split(","):
+        value = part.strip()
+        if value.isdigit():
+            run_id = int(value)
+            if run_id not in ids:
+                ids.append(run_id)
+    return ids
+
+
+def _combined_run_detail_out(db: Session, runs: List[ApiTestRun]) -> ApiTestRunDetailOut:
+    sections: List[ApiTestRunSuiteSectionOut] = []
+    for run in runs:
+        detail = _run_detail_out(db, run)
+        sections.append(
+            ApiTestRunSuiteSectionOut(
+                run_id=detail.id,
+                suite_id=detail.suite_id,
+                suite_name=detail.suite_name,
+                status=detail.status,
+                total_count=detail.total_count,
+                passed_count=detail.passed_count,
+                failed_count=detail.failed_count,
+                duration_ms=detail.duration_ms,
+                pass_rate=detail.pass_rate,
+                step_results=detail.step_results,
+            )
+        )
+
+    total_count = sum(section.total_count for section in sections)
+    passed_count = sum(section.passed_count for section in sections)
+    failed_count = sum(section.failed_count for section in sections)
+    skipped_count = sum(run.skipped_count for run in runs)
+    duration_ms = sum(section.duration_ms for section in sections)
+    pass_rate = round(passed_count / total_count * 100, 2) if total_count else 0.0
+    status = "passed"
+    if failed_count or any(section.status != "passed" for section in sections):
+        status = "failed"
+
+    started_at = min(run.started_at for run in runs)
+    finished_values = [run.finished_at or run.started_at for run in runs]
+    finished_at = max(finished_values) if finished_values else None
+    run_ids = [run.id for run in runs]
+    suite_names = [section.suite_name for section in sections if section.suite_name]
+
+    return ApiTestRunDetailOut(
+        id=run_ids[-1],
+        run_ids=run_ids,
+        suite_id=sections[0].suite_id if sections else 0,
+        suite_name="、".join(suite_names),
+        status=status,
+        total_count=total_count,
+        passed_count=passed_count,
+        failed_count=failed_count,
+        skipped_count=skipped_count,
+        duration_ms=duration_ms,
+        pass_rate=pass_rate,
+        triggered_by=runs[0].triggered_by,
+        started_at=started_at,
+        finished_at=finished_at,
+        step_results=[],
+        suite_sections=sections,
+    )
 
 
 @router.get("/environments", response_model=List[ApiEnvironmentOut])
@@ -1286,6 +1355,19 @@ def list_runs(
     return [_run_summary_out(db, run) for run in runs]
 
 
+@router.get("/runs/combined", response_model=ApiTestRunDetailOut)
+def get_combined_run_detail(
+    run_ids: str = Query(..., min_length=1),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    ids = _parse_run_ids_param(run_ids)
+    if not ids:
+        raise HTTPException(status_code=400, detail="run_ids 无效")
+    runs = [_get_owned_run(db, run_id, current_user) for run_id in ids]
+    return _combined_run_detail_out(db, runs)
+
+
 @router.get("/runs/{run_id}", response_model=ApiTestRunDetailOut)
 def get_run_detail(
     run_id: int,
@@ -1492,9 +1574,14 @@ def run_schedule_now(
     task = _get_owned_schedule(db, task_id, current_user)
     execute_scheduled_task(db, task)
     db.refresh(task)
-    if not task.last_run_id:
+    run_ids = get_task_last_run_ids(task)
+    if not run_ids:
         raise HTTPException(status_code=400, detail="执行失败，请检查套件是否已配置环境")
-    return ApiRunTriggerOut(run_id=task.last_run_id, message="定时任务已手动执行")
+    return ApiRunTriggerOut(
+        run_id=run_ids[-1],
+        run_ids=run_ids,
+        message="定时任务已手动执行",
+    )
 
 
 def _to_capture_item(data: dict) -> CaptureParsedItemOut:

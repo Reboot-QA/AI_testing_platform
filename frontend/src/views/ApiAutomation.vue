@@ -398,7 +398,7 @@
                 <el-button
                   link
                   type="primary"
-                  :disabled="!row.last_run_id"
+                  :disabled="!(row.last_run_ids?.length || row.last_run_id)"
                   @click="viewScheduleLastReport(row)"
                 >
                   查看报告
@@ -843,6 +843,9 @@
             <div class="report-drawer-title-row">
               <div class="report-drawer-title">测试报告</div>
               <span v-if="reportDetail.suite_name" class="report-drawer-suite">{{ reportDetail.suite_name }}</span>
+              <span v-if="reportSuiteSections.length > 1" class="report-drawer-suite-count">
+                共 {{ reportSuiteSections.length }} 个套件
+              </span>
             </div>
             <div class="report-drawer-meta">
               <div class="report-meta-item">
@@ -916,37 +919,59 @@
         </el-divider>
 
         <el-empty
-          v-if="!filteredReportSteps.length"
+          v-if="!displayReportSections.length || !filteredReportSteps.length"
           :description="reportStepFilter === 'passed' ? '暂无通过用例' : reportStepFilter === 'failed' ? '暂无失败用例' : '暂无用例'"
           :image-size="64"
         />
 
-        <el-collapse v-else v-model="expandedSteps" class="report-steps">
-          <el-collapse-item
-            v-for="(step, index) in filteredReportSteps"
-            :key="step.id"
-            :name="step.id"
+        <div v-else class="report-section-list">
+          <div
+            v-for="section in displayReportSections"
+            :key="section.run_id"
+            class="report-suite-section"
           >
-            <template #title>
-              <div class="step-title">
-                <span class="step-index">{{ index + 1 }}</span>
-                <el-tag :type="statusType[step.status]" size="small" effect="light">
-                  {{ statusLabel[step.status] || step.status }}
-                </el-tag>
-                <span :class="['step-method', `step-method-${(step.method || '').toLowerCase()}`]">
-                  {{ step.method }}
-                </span>
-                <span class="step-name">{{ step.case_name }}</span>
-                <span v-if="step.response_status != null" :class="['step-status-code', stepStatusClass(step.response_status)]">
-                  {{ step.response_status }}
-                </span>
-                <span class="step-duration">{{ formatDuration(step.duration_ms) }}</span>
-              </div>
-            </template>
+            <el-divider content-position="left">
+              <span class="report-suite-title">{{ section.suite_name || '未命名套件' }}</span>
+              <span class="report-suite-meta">
+                {{ section.passed_count }}/{{ section.failed_count }}/{{ section.total_count }}
+                · {{ formatDuration(section.duration_ms) }}
+              </span>
+            </el-divider>
 
-            <ApiReportStepDetail :step="step" />
-          </el-collapse-item>
-        </el-collapse>
+            <el-empty
+              v-if="!section.step_results.length"
+              :description="reportStepFilter === 'passed' ? '该套件暂无通过用例' : '该套件暂无失败用例'"
+              :image-size="48"
+            />
+
+            <el-collapse v-else v-model="expandedSteps" class="report-steps">
+              <el-collapse-item
+                v-for="(step, index) in section.step_results"
+                :key="step.id"
+                :name="step.id"
+              >
+                <template #title>
+                  <div class="step-title">
+                    <span class="step-index">{{ index + 1 }}</span>
+                    <el-tag :type="statusType[step.status]" size="small" effect="light">
+                      {{ statusLabel[step.status] || step.status }}
+                    </el-tag>
+                    <span :class="['step-method', `step-method-${(step.method || '').toLowerCase()}`]">
+                      {{ step.method }}
+                    </span>
+                    <span class="step-name">{{ step.case_name }}</span>
+                    <span v-if="step.response_status != null" :class="['step-status-code', stepStatusClass(step.response_status)]">
+                      {{ step.response_status }}
+                    </span>
+                    <span class="step-duration">{{ formatDuration(step.duration_ms) }}</span>
+                  </div>
+                </template>
+
+                <ApiReportStepDetail :step="step" />
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+        </div>
       </div>
     </el-drawer>
   </div>
@@ -1077,8 +1102,7 @@ const reportDetail = ref(null)
 const expandedSteps = ref([])
 const reportStepFilter = ref('all')
 
-const filteredReportSteps = computed(() => {
-  const steps = reportDetail.value?.step_results || []
+function filterReportSteps(steps = []) {
   if (reportStepFilter.value === 'passed') {
     return steps.filter((step) => step.status === 'passed')
   }
@@ -1086,7 +1110,39 @@ const filteredReportSteps = computed(() => {
     return steps.filter((step) => step.status === 'failed')
   }
   return steps
+}
+
+const reportSuiteSections = computed(() => {
+  if (!reportDetail.value) return []
+  if (reportDetail.value.suite_sections?.length) {
+    return reportDetail.value.suite_sections
+  }
+  return [{
+    run_id: reportDetail.value.id,
+    suite_id: reportDetail.value.suite_id,
+    suite_name: reportDetail.value.suite_name,
+    status: reportDetail.value.status,
+    total_count: reportDetail.value.total_count,
+    passed_count: reportDetail.value.passed_count,
+    failed_count: reportDetail.value.failed_count,
+    duration_ms: reportDetail.value.duration_ms,
+    pass_rate: reportDetail.value.pass_rate,
+    step_results: reportDetail.value.step_results || [],
+  }]
 })
+
+const displayReportSections = computed(() =>
+  reportSuiteSections.value
+    .map((section) => ({
+      ...section,
+      step_results: filterReportSteps(section.step_results || []),
+    }))
+    .filter((section) => section.step_results.length || reportStepFilter.value === 'all'),
+)
+
+const filteredReportSteps = computed(() =>
+  displayReportSections.value.flatMap((section) => section.step_results),
+)
 
 const envFormRef = ref()
 const folderFormRef = ref()
@@ -1667,8 +1723,10 @@ async function handleRunScheduleNow(row) {
     const result = await apiAutomationApi.runScheduleNow(row.id)
     ElMessage.success(result.message || '执行完成')
     await Promise.all([loadSchedules(), loadRuns(), loadSuites()])
-    if (result.run_id) {
-      await viewReport({ id: result.run_id })
+    if (result.run_ids?.length) {
+      await loadReportDetail(result.run_ids)
+    } else if (result.run_id) {
+      await loadReportDetail([result.run_id])
     }
   } finally {
     scheduleRunningId.value = null
@@ -1676,11 +1734,12 @@ async function handleRunScheduleNow(row) {
 }
 
 async function viewScheduleLastReport(row) {
-  if (!row.last_run_id) {
-    ElMessage.warning('暂无上次执行报告')
-    return
-  }
-  await viewReport({ id: row.last_run_id })
+  const runIds = row.last_run_ids?.length
+    ? row.last_run_ids
+    : row.last_run_id
+      ? [row.last_run_id]
+      : []
+  await loadReportDetail(runIds)
 }
 
 async function removeSchedule(row) {
@@ -2396,16 +2455,29 @@ async function openSuiteRunReport() {
   await viewReport({ id: suiteRunResultId.value })
 }
 
-async function viewReport(row) {
+async function loadReportDetail(runIds) {
+  const ids = (runIds || []).filter(Boolean)
+  if (!ids.length) {
+    ElMessage.warning('暂无执行报告')
+    return
+  }
   reportVisible.value = true
   reportDetailLoading.value = true
   try {
-    reportDetail.value = await apiAutomationApi.getRun(row.id)
+    if (ids.length > 1) {
+      reportDetail.value = await apiAutomationApi.getCombinedRun(ids)
+    } else {
+      reportDetail.value = await apiAutomationApi.getRun(ids[0])
+    }
     reportStepFilter.value = 'all'
     expandedSteps.value = []
   } finally {
     reportDetailLoading.value = false
   }
+}
+
+async function viewReport(row) {
+  await loadReportDetail([row.id])
 }
 
 function setReportStepFilter(filter) {
@@ -3025,6 +3097,39 @@ onUnmounted(() => {
 .report-drawer-time {
   padding-left: 10px;
   border-left: 1px solid #e2e8f0;
+}
+
+.report-drawer-suite-count {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.report-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.report-suite-section {
+  padding-bottom: 4px;
+}
+
+.report-suite-title {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.report-suite-meta {
+  margin-left: 10px;
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 400;
 }
 
 .report-panel {

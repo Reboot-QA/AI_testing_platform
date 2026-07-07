@@ -558,10 +558,26 @@ class ApiTestRunPageOut(BaseModel):
 
 class ApiTestRunDetailOut(ApiTestRunSummaryOut):
     step_results: List[ApiTestStepResultOut] = []
+    run_ids: List[int] = Field(default_factory=list)
+    suite_sections: List["ApiTestRunSuiteSectionOut"] = Field(default_factory=list)
+
+
+class ApiTestRunSuiteSectionOut(BaseModel):
+    run_id: int
+    suite_id: int
+    suite_name: str = ""
+    status: str
+    total_count: int
+    passed_count: int
+    failed_count: int
+    duration_ms: float
+    pass_rate: float
+    step_results: List[ApiTestStepResultOut] = []
 
 
 class ApiRunTriggerOut(BaseModel):
     run_id: int
+    run_ids: List[int] = Field(default_factory=list)
     message: str
 
 
@@ -793,6 +809,7 @@ class ApiScheduledTaskOut(ApiScheduledTaskBase):
     schedule_desc: str = ""
     last_run_at: Optional[datetime] = None
     last_run_id: Optional[int] = None
+    last_run_ids: List[int] = Field(default_factory=list)
     last_run_status: Optional[str] = None
     next_run_at: Optional[datetime] = None
     created_at: datetime

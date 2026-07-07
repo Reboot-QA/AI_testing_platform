@@ -1,6 +1,8 @@
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
+import json
+
 from app.database import engine
 
 
@@ -61,6 +63,12 @@ def migrate_api_scheduled_task_suites(db: Session) -> None:
     inspector = inspect(engine)
     if "api_scheduled_tasks" not in inspector.get_table_names():
         return
+
+    task_columns = {column["name"] for column in inspector.get_columns("api_scheduled_tasks")}
+    if "last_run_ids" not in task_columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE api_scheduled_tasks ADD COLUMN last_run_ids TEXT"))
+
     if "api_scheduled_task_suites" not in inspector.get_table_names():
         return
 
@@ -80,6 +88,9 @@ def migrate_api_scheduled_task_suites(db: Session) -> None:
                     sort_order=0,
                 )
             )
+            changed = True
+        if not task.last_run_ids and task.last_run_id:
+            task.last_run_ids = json.dumps([task.last_run_id])
             changed = True
     if changed:
         db.commit()

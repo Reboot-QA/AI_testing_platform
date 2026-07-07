@@ -145,6 +145,7 @@ class ApiScheduledTask(Base):
     enabled: Mapped[bool] = mapped_column(default=True)
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_run_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    last_run_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     last_run_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
