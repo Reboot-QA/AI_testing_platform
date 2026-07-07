@@ -393,8 +393,16 @@
                 {{ row.enabled && row.next_run_at ? formatTime(row.next_run_at) : '-' }}
               </template>
             </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right">
+            <el-table-column label="操作" width="300" fixed="right">
               <template #default="{ row }">
+                <el-button
+                  link
+                  type="primary"
+                  :disabled="!row.last_run_id"
+                  @click="viewScheduleLastReport(row)"
+                >
+                  查看报告
+                </el-button>
                 <el-button link type="success" :loading="scheduleRunningId === row.id" @click="handleRunScheduleNow(row)">
                   立即执行
                 </el-button>
@@ -1624,7 +1632,6 @@ async function handleRunScheduleNow(row) {
   try {
     const result = await apiAutomationApi.runScheduleNow(row.id)
     ElMessage.success(result.message || '执行完成')
-    await router.push('/api-automation/reports')
     await Promise.all([loadSchedules(), loadRuns(), loadSuites()])
     if (result.run_id) {
       await viewReport({ id: result.run_id })
@@ -1632,6 +1639,14 @@ async function handleRunScheduleNow(row) {
   } finally {
     scheduleRunningId.value = null
   }
+}
+
+async function viewScheduleLastReport(row) {
+  if (!row.last_run_id) {
+    ElMessage.warning('暂无上次执行报告')
+    return
+  }
+  await viewReport({ id: row.last_run_id })
 }
 
 async function removeSchedule(row) {
