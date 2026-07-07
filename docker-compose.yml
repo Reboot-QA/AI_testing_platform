@@ -34,6 +34,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+      network: ${DOCKER_BUILD_NETWORK:-default}
     container_name: ai-platform-backend
     restart: unless-stopped
     environment:

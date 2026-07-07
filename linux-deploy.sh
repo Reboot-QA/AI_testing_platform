@@ -18,6 +18,7 @@
 #   ENV_FILE=.env.docker 指定 env 文件
 #   BACKUP_DIR=路径      备份目录（默认 .deploy/backups/mysql）
 #   BACKUP_KEEP_DAYS=30  自动清理超过 N 天的备份
+#   DOCKER_BUILD_NETWORK=host  构建时使用宿主机网络（海外 VPS DNS 异常时可试）
 
 set -euo pipefail
 
@@ -77,6 +78,7 @@ AI质量平台 - Linux 一键部署（Docker）
   BACKUP_DIR        备份目录（默认 .deploy/backups/mysql）
   BACKUP_KEEP_DAYS  保留天数（默认 30）
   RESTORE_CONFIRM=1 恢复数据库时跳过交互确认
+  DOCKER_BUILD_NETWORK  Docker 构建网络（DNS 异常时可设 host）
 
 示例:
   chmod +x linux-deploy.sh && ./linux-deploy.sh
@@ -545,6 +547,9 @@ cmd_up() {
   fi
 
   info "构建并启动 Docker 服务（MySQL + 后端 + 前端）..."
+  if [[ "${DOCKER_BUILD_NETWORK:-}" == "host" ]]; then
+    warn "DOCKER_BUILD_NETWORK=host：构建阶段使用宿主机网络（适用于 DNS 解析异常）"
+  fi
   compose_cmd up -d --build
 
   if check_backend_mysql_auth_error; then
