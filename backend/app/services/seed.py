@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.auth import get_password_hash
+from app.models.department import Department
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
@@ -11,12 +12,16 @@ def seed_demo_data(db: Session) -> None:
     if db.query(User).first():
         return
 
+    default_dept = db.query(Department).filter(Department.name == "默认部门").first()
+    dept_id = default_dept.id if default_dept else None
+
     admin = User(
         username="admin",
         email="admin@example.com",
         hashed_password=get_password_hash("admin123"),
         full_name="管理员",
         role="admin",
+        department_id=dept_id,
     )
     db.add(admin)
     db.flush()
@@ -25,6 +30,7 @@ def seed_demo_data(db: Session) -> None:
         name="电商登录模块",
         description="用户登录、注册、找回密码相关功能测试",
         owner_id=admin.id,
+        department_id=dept_id,
     )
     db.add(project)
     db.flush()
