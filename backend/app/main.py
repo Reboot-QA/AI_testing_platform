@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 import logging
-import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -53,32 +52,39 @@ def setup_logging() -> None:
     logging.getLogger("uvicorn.error").setLevel(logging.INFO)
 
 
-_app_ready = threading.Event()
+_app_ready = False
 _app_init_error: str | None = None
 
 
 def _run_startup() -> None:
-    global _app_init_error
+    global _app_init_error, _app_ready
     logger = logging.getLogger(__name__)
+    steps = [
+        ("初始化数据库表", lambda db: Base.metadata.create_all(bind=engine)),
+        ("写入演示数据", seed_demo_data),
+        ("加载 LLM 配置", init_llm_settings_from_env),
+        ("迁移接口套件树", migrate_api_test_suite_tree),
+        ("迁移接口变量", migrate_api_variable_stores),
+        ("迁移定时任务套件", migrate_api_scheduled_task_suites),
+        ("迁移部门权限", migrate_department_permissions),
+        ("迁移需求创建人", migrate_requirement_created_by),
+        ("迁移用例创建人", migrate_testcase_created_by),
+        ("迁移用户邮箱", lambda db: migrate_user_optional_email()),
+        ("迁移菜单权限", migrate_all_user_permissions),
+        ("初始化定时任务", init_schedules_on_startup),
+    ]
     try:
-        Base.metadata.create_all(bind=engine)
+        import app.models  # noqa: F401
+
         db = SessionLocal()
         try:
-            seed_demo_data(db)
-            init_llm_settings_from_env(db)
-            migrate_api_test_suite_tree(db)
-            migrate_api_variable_stores(db)
-            migrate_api_scheduled_task_suites(db)
-            migrate_department_permissions(db)
-            migrate_requirement_created_by(db)
-            migrate_testcase_created_by(db)
-            migrate_user_optional_email()
-            migrate_all_user_permissions(db)
-            init_schedules_on_startup(db)
+            for label, step in steps:
+                logger.info("启动步骤: %s", label)
+                step(db)
         finally:
             db.close()
         start_scheduler()
-        _app_ready.set()
+        _app_ready = True
         logger.info("应用启动完成")
     except Exception as exc:
         _app_init_error = str(exc)
@@ -87,12 +93,14 @@ def _run_startup() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global _app_ready, _app_init_error
     setup_logging()
-    _app_ready.clear()
-    threading.Thread(target=_run_startup, daemon=True, name="app-bootstrap").start()
+    _app_ready = False
+    _app_init_error = None
+    _run_startup()
     yield
     stop_scheduler()
-    _app_ready.clear()
+    _app_ready = False
 
 
 app = FastAPI(title=settings.app_name, version="1.0.0", lifespan=lifespan)
@@ -123,7 +131,7 @@ register_request_logging(app)
 def health():
     if _app_init_error:
         raise HTTPException(status_code=500, detail=_app_init_error)
-    if not _app_ready.is_set():
+    if not _app_ready:
         raise HTTPException(status_code=503, detail="starting")
     return {"status": "ok"}
 

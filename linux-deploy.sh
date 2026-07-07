@@ -394,23 +394,41 @@ cmd_init_env() {
 }
 
 wait_backend_ready() {
-  local i url http_port
+  local i url http_port code body
   url="http://127.0.0.1:$(read_env_value BACKEND_PORT 8000)/health"
   http_port="$(read_env_value HTTP_PORT 5173)"
   info "等待后端就绪..."
   for i in $(seq 1 120); do
-    if curl -sf "$url" >/dev/null 2>&1; then
+    body=""
+    code="000"
+    if command -v curl >/dev/null 2>&1; then
+      body="$(curl -s "$url" 2>/dev/null || true)"
+      code="$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)"
+    fi
+    if [[ "$code" == "200" ]]; then
       ok "后端 API 已就绪 (端口 $(read_env_value BACKEND_PORT 8000))"
       break
     fi
+    if [[ "$code" == "500" ]]; then
+      warn "后端启动失败: ${body:-无详情}"
+      compose_cmd logs backend --tail=60 >&2 || true
+      return 1
+    fi
     if ! compose_cmd ps backend 2>/dev/null | grep -q "Up"; then
       warn "backend 容器未运行，查看日志..."
-      compose_cmd logs backend --tail=40 >&2 || true
+      compose_cmd logs backend --tail=60 >&2 || true
       return 1
+    fi
+    if (( i % 10 == 0 )); then
+      case "$code" in
+        503) info "后端仍在初始化数据库... (${i}/120)" ;;
+        000) info "等待后端端口响应... (${i}/120)" ;;
+        *) info "等待后端就绪... HTTP ${code} (${i}/120)" ;;
+      esac
     fi
     if (( i == 120 )); then
       warn "后端启动超时"
-      compose_cmd logs backend --tail=40 >&2 || true
+      compose_cmd logs backend --tail=60 >&2 || true
       return 1
     fi
     sleep 2

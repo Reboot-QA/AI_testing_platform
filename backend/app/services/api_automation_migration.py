@@ -117,9 +117,15 @@ def migrate_department_permissions(db: Session) -> None:
 
     statements = []
     if "departments" not in table_names:
+        dialect = engine.dialect.name
+        id_column = (
+            "id INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY"
+            if dialect == "mysql"
+            else "id INTEGER PRIMARY KEY"
+        )
         statements.append(
             "CREATE TABLE IF NOT EXISTS departments ("
-            "id INTEGER PRIMARY KEY, "
+            f"{id_column}, "
             "name VARCHAR(100) NOT NULL UNIQUE, "
             "description TEXT, "
             "created_at DATETIME, "
