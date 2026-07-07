@@ -549,6 +549,13 @@ class ApiTestRunSummaryOut(BaseModel):
     finished_at: Optional[datetime] = None
 
 
+class ApiTestRunPageOut(BaseModel):
+    items: List[ApiTestRunSummaryOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class ApiTestRunDetailOut(ApiTestRunSummaryOut):
     step_results: List[ApiTestStepResultOut] = []
 

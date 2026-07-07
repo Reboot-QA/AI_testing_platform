@@ -1,10 +1,10 @@
 import json
 from io import BytesIO
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -56,6 +56,7 @@ from app.schemas import (
     ApiTestCaseOut,
     ApiTestCaseUpdate,
     ApiTestRunDetailOut,
+    ApiTestRunPageOut,
     ApiTestRunSummaryOut,
     ApiTestStepResultOut,
     ApiTestSuiteCreate,
@@ -1196,10 +1197,17 @@ def run_suite_stream(
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
-@router.get("/runs", response_model=List[ApiTestRunSummaryOut])
+@router.get("/runs", response_model=Union[List[ApiTestRunSummaryOut], ApiTestRunPageOut])
 def list_runs(
     project_id: Optional[int] = None,
     suite_id: Optional[int] = None,
+    status: Optional[str] = Query(None, pattern="^(passed|failed|running)$"),
+    trigger_type: Optional[str] = Query(None, pattern="^(manual|schedule)$"),
+    keyword: Optional[str] = Query(None, max_length=100),
+    sort_by: str = Query("started_at", pattern="^(started_at|status|triggered_by|suite_name)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -1215,7 +1223,39 @@ def list_runs(
     if suite_id:
         _get_owned_executable_suite(db, suite_id, current_user)
         query = query.filter(ApiTestRun.suite_id == suite_id)
-    runs = query.order_by(ApiTestRun.id.desc()).limit(100).all()
+    if status:
+        query = query.filter(ApiTestRun.status == status)
+    if trigger_type == "schedule":
+        query = query.filter(ApiTestRun.triggered_by.like("schedule:%"))
+    elif trigger_type == "manual":
+        query = query.filter(
+            or_(ApiTestRun.triggered_by.is_(None), ~ApiTestRun.triggered_by.like("schedule:%"))
+        )
+    if keyword:
+        query = query.filter(ApiTestSuite.name.ilike(f"%{keyword.strip()}%"))
+
+    sort_columns = {
+        "started_at": ApiTestRun.started_at,
+        "status": ApiTestRun.status,
+        "triggered_by": ApiTestRun.triggered_by,
+        "suite_name": ApiTestSuite.name,
+    }
+    order_col = sort_columns.get(sort_by, ApiTestRun.started_at)
+    if sort_order == "asc":
+        query = query.order_by(order_col.asc(), ApiTestRun.id.asc())
+    else:
+        query = query.order_by(order_col.desc(), ApiTestRun.id.desc())
+
+    if page is not None:
+        total = query.count()
+        runs = query.offset((page - 1) * page_size).limit(page_size).all()
+        return ApiTestRunPageOut(
+            items=[_run_summary_out(db, run) for run in runs],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+    runs = query.limit(100).all()
     return [_run_summary_out(db, run) for run in runs]
 
 

@@ -209,98 +209,137 @@
       </div>
 
       <div v-else-if="activeTab === 'report'">
-        <el-card shadow="never">
-          <div class="pane-toolbar">
-            <el-dropdown
-              :disabled="!selectedRunIds.length"
-              @command="batchExportRuns"
-            >
+        <el-card shadow="never" class="report-page-card">
+          <div class="report-sub-toolbar">
+            <el-radio-group v-model="reportCategory" @change="handleReportFilterChange">
+              <el-radio-button label="all">全部</el-radio-button>
+              <el-radio-button label="manual">手动报告</el-radio-button>
+              <el-radio-button label="schedule">定时报告</el-radio-button>
+            </el-radio-group>
+
+            <div class="report-filter-actions">
+              <el-select
+                v-model="reportStatusFilter"
+                placeholder="执行结果"
+                clearable
+                class="report-filter-item"
+                @change="handleReportFilterChange"
+              >
+                <el-option label="通过" value="passed" />
+                <el-option label="失败" value="failed" />
+                <el-option label="执行中" value="running" />
+              </el-select>
+              <el-input
+                v-model="reportKeyword"
+                placeholder="搜索套件名称"
+                clearable
+                class="report-filter-item report-keyword-input"
+                @keyup.enter="handleReportFilterChange"
+                @clear="handleReportFilterChange"
+              />
+              <el-button @click="handleReportFilterChange">筛选</el-button>
+              <el-button @click="clearReportFilters">清空筛选</el-button>
+              <el-button :icon="Refresh" circle @click="loadRuns" />
+              <el-dropdown
+                :disabled="!selectedRunIds.length"
+                @command="batchExportRuns"
+              >
+                <el-button type="primary" plain :disabled="!selectedRunIds.length" :loading="runBatchExporting">
+                  批量导出
+                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+                    <el-dropdown-item command="word">导出 Word</el-dropdown-item>
+                    <el-dropdown-item command="pdf">导出 PDF</el-dropdown-item>
+                    <el-dropdown-item command="json">导出 JSON</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
               <el-button
-                type="primary"
+                type="danger"
                 plain
                 :disabled="!selectedRunIds.length"
-                :loading="runBatchExporting"
+                :loading="runBatchDeleting"
+                @click="batchRemoveRuns"
               >
-                批量导出{{ selectedRunIds.length ? `(${selectedRunIds.length})` : '' }}
-                <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                批量删除
               </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
-                  <el-dropdown-item command="word">导出 Word</el-dropdown-item>
-                  <el-dropdown-item command="pdf">导出 PDF</el-dropdown-item>
-                  <el-dropdown-item command="json">导出 JSON</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-button
-              type="danger"
-              plain
-              :disabled="!selectedRunIds.length"
-              :loading="runBatchDeleting"
-              @click="batchRemoveRuns"
-            >
-              批量删除{{ selectedRunIds.length ? `(${selectedRunIds.length})` : '' }}
-            </el-button>
+            </div>
           </div>
+
           <el-table
             ref="reportTableRef"
             v-loading="reportLoading"
             :data="runs"
             stripe
-            @row-click="viewReport"
+            class="report-data-table"
             @selection-change="onRunSelectionChange"
+            @sort-change="handleReportSortChange"
           >
             <el-table-column type="selection" width="48" />
-            <el-table-column label="报告时间" min-width="150">
+            <el-table-column label="报告名称" prop="suite_name" sortable="custom" min-width="180">
+              <template #default="{ row }">
+                <el-link type="primary" :underline="false" @click="viewReport(row)">
+                  {{ reportDisplayName(row) }}
+                </el-link>
+                <div class="report-name-meta">{{ formatReportTime(row.started_at) }}</div>
+              </template>
+            </el-table-column>
+            <el-table-column label="报告类型" width="110">
+              <template #default="{ row }">
+                <el-tag size="small" effect="plain">{{ reportTypeLabel(row) }}</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="执行结果" prop="status" sortable="custom" width="110">
+              <template #default="{ row }">
+                <el-tag :type="statusType[row.status]" size="small">
+                  {{ statusLabel[row.status] || row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="触发方式" prop="triggered_by" sortable="custom" min-width="140">
+              <template #default="{ row }">{{ triggerMethodLabel(row) }}</template>
+            </el-table-column>
+            <el-table-column label="创建人" width="120">
+              <template #default="{ row }">{{ creatorLabel(row) }}</template>
+            </el-table-column>
+            <el-table-column label="创建时间" prop="started_at" sortable="custom" width="150">
               <template #default="{ row }">{{ formatReportTime(row.started_at) }}</template>
             </el-table-column>
-            <el-table-column prop="suite_name" label="套件" min-width="160" />
-            <el-table-column prop="status" label="结果" width="100">
+            <el-table-column label="操作" width="72" fixed="right" align="center">
               <template #default="{ row }">
-                <el-tag :type="statusType[row.status]">{{ statusLabel[row.status] || row.status }}</el-tag>
-              </template>
-            </el-table-column>
-            <el-table-column label="通过率" width="120">
-              <template #default="{ row }">
-                <span :class="row.pass_rate >= 100 ? 'text-success' : 'text-danger'">{{ row.pass_rate }}%</span>
-              </template>
-            </el-table-column>
-            <el-table-column label="通过/失败/总数" width="160">
-              <template #default="{ row }">
-                {{ row.passed_count }}/{{ row.failed_count }}/{{ row.total_count }}
-              </template>
-            </el-table-column>
-            <el-table-column label="耗时" width="100">
-              <template #default="{ row }">{{ formatDuration(row.duration_ms) }}</template>
-            </el-table-column>
-            <el-table-column label="操作" width="220" fixed="right" align="center">
-              <template #default="{ row }">
-                <div class="report-row-actions">
-                  <el-button link type="primary" @click.stop="viewReport(row)">查看报告</el-button>
-                  <el-dropdown trigger="click" @command="(format) => exportRun(row, format)">
-                    <el-button
-                      link
-                      type="success"
-                      :loading="runExportingId === row.id"
-                      @click.stop
-                    >
-                      导出
-                    </el-button>
-                    <template #dropdown>
-                      <el-dropdown-menu>
-                        <el-dropdown-item command="excel">Excel</el-dropdown-item>
-                        <el-dropdown-item command="word">Word</el-dropdown-item>
-                        <el-dropdown-item command="pdf">PDF</el-dropdown-item>
-                        <el-dropdown-item command="json">JSON</el-dropdown-item>
-                      </el-dropdown-menu>
-                    </template>
-                  </el-dropdown>
-                  <el-button link type="danger" @click.stop="removeRun(row)">删除</el-button>
-                </div>
+                <el-dropdown trigger="click" @command="(cmd) => handleReportAction(cmd, row)">
+                  <el-button link type="primary" @click.stop>
+                    <el-icon><MoreFilled /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <el-dropdown-item command="view">查看报告</el-dropdown-item>
+                      <el-dropdown-item command="export-excel">导出 Excel</el-dropdown-item>
+                      <el-dropdown-item command="export-word">导出 Word</el-dropdown-item>
+                      <el-dropdown-item command="export-pdf">导出 PDF</el-dropdown-item>
+                      <el-dropdown-item command="export-json">导出 JSON</el-dropdown-item>
+                      <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
               </template>
             </el-table-column>
           </el-table>
+          <div class="pagination-bar">
+            <el-pagination
+              v-model:current-page="reportCurrentPage"
+              v-model:page-size="reportPageSize"
+              :total="reportTotal"
+              :page-sizes="[10, 20, 50, 100]"
+              layout="total, sizes, prev, pager, next, jumper"
+              background
+              @current-change="loadRuns"
+              @size-change="handleReportPageSizeChange"
+            />
+          </div>
         </el-card>
       </div>
 
@@ -882,7 +921,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, Document, Folder, MagicStick } from '@element-plus/icons-vue'
+import { ArrowDown, Document, Folder, MagicStick, MoreFilled, Refresh } from '@element-plus/icons-vue'
 import { projectApi, apiAutomationApi } from '@/api'
 import ApiCaseEditor from '@/components/ApiCaseEditor.vue'
 import ApiKvParamTable from '@/components/ApiKvParamTable.vue'
@@ -937,6 +976,14 @@ const suiteRunFailedCount = ref(0)
 const AI_GENERATE_CHUNK_SIZE = 8
 const caseEditorRef = ref(null)
 const reportTableRef = ref(null)
+const reportCurrentPage = ref(1)
+const reportPageSize = ref(10)
+const reportTotal = ref(0)
+const reportCategory = ref('all')
+const reportStatusFilter = ref('')
+const reportKeyword = ref('')
+const reportSortBy = ref('started_at')
+const reportSortOrder = ref('desc')
 const suiteTreeRef = ref(null)
 
 const envDialogVisible = ref(false)
@@ -1246,6 +1293,10 @@ function handleProjectChange() {
   activeFolderId.value = null
   activeCaseId.value = null
   cases.value = []
+  reportCurrentPage.value = 1
+  reportCategory.value = 'all'
+  reportStatusFilter.value = ''
+  reportKeyword.value = ''
   reloadAll()
 }
 
@@ -1426,11 +1477,109 @@ async function loadRuns() {
   if (!projectId.value) return
   reportLoading.value = true
   try {
-    runs.value = await apiAutomationApi.listRuns({ project_id: projectId.value })
+    const params = {
+      project_id: projectId.value,
+      page: reportCurrentPage.value,
+      page_size: reportPageSize.value,
+      sort_by: reportSortBy.value,
+      sort_order: reportSortOrder.value,
+    }
+    if (reportStatusFilter.value) params.status = reportStatusFilter.value
+    if (reportCategory.value === 'manual') params.trigger_type = 'manual'
+    if (reportCategory.value === 'schedule') params.trigger_type = 'schedule'
+    if (reportKeyword.value.trim()) params.keyword = reportKeyword.value.trim()
+
+    const data = await apiAutomationApi.listRuns(params)
+    runs.value = data.items || []
+    reportTotal.value = data.total || 0
+    const maxPage = Math.max(1, Math.ceil(reportTotal.value / reportPageSize.value) || 1)
+    if (reportCurrentPage.value > maxPage) {
+      reportCurrentPage.value = maxPage
+      if (maxPage !== data.page) {
+        return loadRuns()
+      }
+    }
     selectedRunIds.value = []
     reportTableRef.value?.clearSelection()
   } finally {
     reportLoading.value = false
+  }
+}
+
+function handleReportPageSizeChange() {
+  reportCurrentPage.value = 1
+  loadRuns()
+}
+
+function handleReportFilterChange() {
+  reportCurrentPage.value = 1
+  loadRuns()
+}
+
+function clearReportFilters() {
+  reportCategory.value = 'all'
+  reportStatusFilter.value = ''
+  reportKeyword.value = ''
+  reportSortBy.value = 'started_at'
+  reportSortOrder.value = 'desc'
+  reportCurrentPage.value = 1
+  loadRuns()
+}
+
+function handleReportSortChange({ prop, order }) {
+  if (!order) {
+    reportSortBy.value = 'started_at'
+    reportSortOrder.value = 'desc'
+  } else {
+    const sortMap = {
+      suite_name: 'suite_name',
+      status: 'status',
+      triggered_by: 'triggered_by',
+      started_at: 'started_at',
+    }
+    reportSortBy.value = sortMap[prop] || 'started_at'
+    reportSortOrder.value = order === 'ascending' ? 'asc' : 'desc'
+  }
+  reportCurrentPage.value = 1
+  loadRuns()
+}
+
+function isScheduleRun(row) {
+  return String(row?.triggered_by || '').startsWith('schedule:')
+}
+
+function reportDisplayName(row) {
+  return row?.suite_name || '未命名套件'
+}
+
+function reportTypeLabel(row) {
+  return isScheduleRun(row) ? '定时报告' : '套件报告'
+}
+
+function triggerMethodLabel(row) {
+  if (isScheduleRun(row)) {
+    const taskName = String(row.triggered_by || '').replace(/^schedule:/, '')
+    return taskName ? `定时任务（${taskName}）` : '定时任务'
+  }
+  return '手动执行'
+}
+
+function creatorLabel(row) {
+  if (isScheduleRun(row)) return '系统'
+  return row?.triggered_by || '-'
+}
+
+function handleReportAction(command, row) {
+  if (command === 'view') {
+    viewReport(row)
+    return
+  }
+  if (command === 'delete') {
+    removeRun(row)
+    return
+  }
+  if (command.startsWith('export-')) {
+    exportRun(row, command.replace('export-', ''))
   }
 }
 
@@ -2374,6 +2523,53 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.report-page-card :deep(.el-card__body) {
+  padding-top: 0;
+}
+
+.report-sub-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px 0 16px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.report-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.report-filter-item {
+  width: 140px;
+}
+
+.report-keyword-input {
+  width: 180px;
+}
+
+.report-data-table {
+  width: 100%;
+}
+
+.report-name-meta {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #909399;
+  font-variant-numeric: tabular-nums;
 }
 
 .report-row-actions {
