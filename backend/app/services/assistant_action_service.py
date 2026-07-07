@@ -6,11 +6,17 @@ import httpx
 
 from app.services.ai_service import _extract_llm_error
 
+DEFAULT_WAIT_MS = 1000
+
+
+def _wait_step(label: str = "等待页面就绪", ms: int = DEFAULT_WAIT_MS) -> Dict[str, Any]:
+    return {"type": "wait", "ms": ms, "label": label}
+
 # 前端 data-assistant 标识与说明
 ACTION_CATALOG = """
 可用浏览器自动化步骤（按顺序放入 actions 数组）：
 1. navigate - 跳转页面: {"type":"navigate","path":"/projects"}
-2. wait - 等待毫秒: {"type":"wait","ms":500}
+2. wait - 等待毫秒: {"type":"wait","ms":1000,"label":"等待页面就绪"}
 3. click - 点击元素: {"type":"click","target":"projects.create_btn"}
 4. fill - 填写输入: {"type":"fill","target":"projects.form.name","value":"项目名称"}
 5. invoke - 调用页面内处理器: {"type":"invoke","handler":"apiAutomation.parseSwagger","label":"解析 Swagger"}
@@ -147,9 +153,9 @@ def _wants_automation(text: str) -> bool:
 def _project_create_actions(name: str, desc: str) -> List[Dict[str, Any]]:
     return [
         {"type": "navigate", "path": "/projects", "label": "打开项目管理"},
-        {"type": "wait", "ms": 600},
+        _wait_step("等待页面加载"),
         {"type": "click", "target": "projects.create_btn", "label": "点击新建项目"},
-        {"type": "wait", "ms": 400},
+        _wait_step("等待弹窗打开"),
         {"type": "fill", "target": "projects.form.name", "value": name, "label": f"填写项目名称：{name}"},
         {"type": "fill", "target": "projects.form.description", "value": desc, "label": "填写项目描述"},
         {"type": "click", "target": "projects.form.submit", "label": "提交创建"},
@@ -172,11 +178,11 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
         actions = _project_create_actions(name, desc)
         actions.extend(
             [
-                {"type": "wait", "ms": 600},
+                _wait_step("等待项目创建完成"),
                 {"type": "navigate", "path": "/ai-generate", "label": "进入 AI 智能生成"},
-                {"type": "wait", "ms": 800},
+                _wait_step("等待 AI 生成页加载"),
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "准备生成配置"},
-                {"type": "wait", "ms": 400},
+                _wait_step("等待表单填充完成"),
                 {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "点击开始生成"},
             ]
         )
@@ -191,9 +197,9 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
             "reply": "好的，我将为您打开 AI 智能生成、填充演示需求并点击「开始生成」，请稍候观看。",
             "actions": [
                 {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
-                {"type": "wait", "ms": 800},
+                _wait_step("等待 AI 生成页加载"),
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "选择项目并填充演示需求"},
-                {"type": "wait", "ms": 400},
+                _wait_step("等待表单填充完成"),
                 {"type": "invoke", "handler": "aiGenerate.startGenerate", "label": "点击开始生成"},
             ],
             "needs_confirmation": False,
@@ -205,24 +211,47 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
             "reply": "好的，我将演示接口自动化：创建环境、测试套件并进入执行界面，请稍候观看。",
             "actions": [
                 {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
-                {"type": "wait", "ms": 800},
+                _wait_step("等待套件页加载"),
                 {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
-                {"type": "wait", "ms": 400},
+                _wait_step("等待项目切换完成"),
                 {"type": "invoke", "handler": "apiAutomation.ensureEnvironment", "label": "准备执行环境"},
-                {"type": "wait", "ms": 400},
+                _wait_step("等待环境就绪"),
                 {
                     "type": "invoke",
                     "handler": "apiAutomation.createSuite",
                     "payload": {"name": name, "base_url": "http://127.0.0.1"},
                     "label": f"创建测试套件：{name}",
                 },
-                {"type": "wait", "ms": 500},
+                _wait_step("等待套件创建完成"),
                 {"type": "invoke", "handler": "apiAutomation.focusRunSuite", "label": "展示执行套件入口"},
             ],
             "needs_confirmation": False,
         }
 
     return None
+
+
+def _swagger_import_actions(swagger_url: str) -> List[Dict[str, Any]]:
+    return [
+        {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
+        _wait_step("等待套件页加载"),
+        {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
+        _wait_step("等待项目切换完成"),
+        {"type": "invoke", "handler": "apiAutomation.selectFirstSuite", "label": "选择测试套件"},
+        _wait_step("等待套件选中"),
+        {"type": "invoke", "handler": "apiAutomation.openSwaggerImport", "label": "打开 Swagger 导入"},
+        _wait_step("等待导入弹窗打开"),
+        {
+            "type": "invoke",
+            "handler": "apiAutomation.setSwaggerUrl",
+            "payload": {"url": swagger_url},
+            "label": f"填写文档 URL：{swagger_url}",
+        },
+        _wait_step("等待 URL 填写完成"),
+        {"type": "invoke", "handler": "apiAutomation.parseSwagger", "label": "解析预览接口"},
+        _wait_step("等待接口解析完成", ms=1500),
+        {"type": "invoke", "handler": "apiAutomation.confirmSwaggerImport", "label": "确认导入"},
+    ]
 
 
 def _mock_plan_actions(
@@ -247,9 +276,9 @@ def _mock_plan_actions(
             "reply": f"好的，我将为您创建测试套件「{name}」，请确认后自动执行。",
             "actions": [
                 {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
-                {"type": "wait", "ms": 800},
+                _wait_step("等待套件页加载"),
                 {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
-                {"type": "wait", "ms": 400},
+                _wait_step("等待项目切换完成"),
                 {
                     "type": "invoke",
                     "handler": "apiAutomation.createSuite",
@@ -269,15 +298,7 @@ def _mock_plan_actions(
                 desc = desc_match.group(1).strip()
         return {
             "reply": f"好的，我将为您在浏览器中演示创建项目「{name}」，请确认后自动执行以下步骤。",
-            "actions": [
-                {"type": "navigate", "path": "/projects", "label": "打开项目管理"},
-                {"type": "wait", "ms": 600},
-                {"type": "click", "target": "projects.create_btn", "label": "点击新建项目"},
-                {"type": "wait", "ms": 400},
-                {"type": "fill", "target": "projects.form.name", "value": name, "label": f"填写项目名称：{name}"},
-                {"type": "fill", "target": "projects.form.description", "value": desc, "label": "填写项目描述"},
-                {"type": "click", "target": "projects.form.submit", "label": "提交创建"},
-            ],
+            "actions": _project_create_actions(name, desc),
             "needs_confirmation": True,
         }
 
@@ -292,28 +313,10 @@ def _mock_plan_actions(
                 "actions": [],
                 "needs_confirmation": False,
             }
+        swagger_import_actions = _swagger_import_actions(swagger_url)
         return {
             "reply": f"好的，我将在当前测试套件下从 {swagger_url} 导入接口，请确认后自动执行。",
-            "actions": [
-                {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
-                {"type": "wait", "ms": 800},
-                {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
-                {"type": "wait", "ms": 500},
-                {"type": "invoke", "handler": "apiAutomation.selectFirstSuite", "label": "选择测试套件"},
-                {"type": "wait", "ms": 400},
-                {"type": "invoke", "handler": "apiAutomation.openSwaggerImport", "label": "打开 Swagger 导入"},
-                {"type": "wait", "ms": 400},
-                {
-                    "type": "invoke",
-                    "handler": "apiAutomation.setSwaggerUrl",
-                    "payload": {"url": swagger_url},
-                    "label": f"填写文档 URL：{swagger_url}",
-                },
-                {"type": "wait", "ms": 300},
-                {"type": "invoke", "handler": "apiAutomation.parseSwagger", "label": "解析预览接口"},
-                {"type": "wait", "ms": 800},
-                {"type": "invoke", "handler": "apiAutomation.confirmSwaggerImport", "label": "确认导入"},
-            ],
+            "actions": swagger_import_actions,
             "needs_confirmation": True,
         }
 
@@ -322,26 +325,7 @@ def _mock_plan_actions(
         swagger_url = _normalize_swagger_url(raw_url)
         return {
             "reply": f"好的，我将从 {swagger_url} 导入接口到测试套件，请确认后自动执行。",
-            "actions": [
-                {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
-                {"type": "wait", "ms": 800},
-                {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
-                {"type": "wait", "ms": 500},
-                {"type": "invoke", "handler": "apiAutomation.selectFirstSuite", "label": "选择测试套件"},
-                {"type": "wait", "ms": 400},
-                {"type": "invoke", "handler": "apiAutomation.openSwaggerImport", "label": "打开 Swagger 导入"},
-                {"type": "wait", "ms": 400},
-                {
-                    "type": "invoke",
-                    "handler": "apiAutomation.setSwaggerUrl",
-                    "payload": {"url": swagger_url},
-                    "label": f"填写文档 URL：{swagger_url}",
-                },
-                {"type": "wait", "ms": 300},
-                {"type": "invoke", "handler": "apiAutomation.parseSwagger", "label": "解析预览接口"},
-                {"type": "wait", "ms": 800},
-                {"type": "invoke", "handler": "apiAutomation.confirmSwaggerImport", "label": "确认导入"},
-            ],
+            "actions": _swagger_import_actions(swagger_url),
             "needs_confirmation": True,
         }
 

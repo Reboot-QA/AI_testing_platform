@@ -29,6 +29,25 @@ const TARGET_ALIASES = {
   'suites.run_suite_btn': 'suites.run_suite_btn',
 }
 
+const DEFAULT_WAIT_MS = 1000
+
+function resolveStepWaitMs(step, fallback = DEFAULT_WAIT_MS) {
+  if (step.wait != null) return step.wait
+  if (step.ms != null) return step.ms
+  return fallback
+}
+
+function resolveStepLabel(step) {
+  if (step.label) return step.label
+  if (step.type === 'wait') {
+    const ms = resolveStepWaitMs(step)
+    const seconds = ms / 1000
+    const text = Number.isInteger(seconds) ? String(seconds) : seconds.toFixed(1)
+    return `等待 ${text} 秒`
+  }
+  return step.type
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
@@ -86,21 +105,21 @@ function dispatchInput(el, value) {
 }
 
 async function executeStep(step, onProgress) {
-  const label = step.label || step.type
+  const label = resolveStepLabel(step)
   onProgress?.({ status: 'running', label, step })
 
   switch (step.type) {
     case 'navigate':
       await router.push(step.path)
-      await sleep(step.wait || step.ms || 500)
+      await sleep(resolveStepWaitMs(step))
       break
     case 'wait':
-      await sleep(step.ms || 500)
+      await sleep(resolveStepWaitMs(step))
       break
     case 'invoke':
       highlightElementByLabel(label)
       await invokeAssistantHandler(step.handler, step.payload || {})
-      await sleep(step.wait || step.ms || 400)
+      await sleep(resolveStepWaitMs(step))
       break
     case 'click': {
       const el = findElement(step.target)
@@ -112,17 +131,17 @@ async function executeStep(step, onProgress) {
         throw new Error(`操作目标暂不可用：${step.target}`)
       }
       highlightElement(step.target)
-      await sleep(300)
+      await sleep(500)
       el.click()
-      await sleep(step.wait || step.ms || 300)
+      await sleep(resolveStepWaitMs(step))
       break
     }
     case 'fill': {
       const el = findElement(step.target)
       highlightElement(step.target)
-      await sleep(200)
+      await sleep(500)
       dispatchInput(el, step.value ?? '')
-      await sleep(step.wait || step.ms || 200)
+      await sleep(resolveStepWaitMs(step))
       break
     }
     default:
