@@ -21,10 +21,10 @@ services:
       - ./docker/mysql/healthcheck.sh:/healthcheck.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "sh /healthcheck.sh"]
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 20s
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
     ports:
       - "${MYSQL_PUBLISH_HOST:-127.0.0.1}:${MYSQL_PORT:-3306}:3306"
     networks:

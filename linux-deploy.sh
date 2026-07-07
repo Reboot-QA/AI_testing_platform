@@ -479,13 +479,22 @@ cmd_diagnose() {
   echo
   echo "========== MySQL 连接测试 =========="
   if docker ps --format '{{.Names}}' | grep -qx ai-platform-mysql; then
-    if docker exec ai-platform-mysql sh /healthcheck.sh 2>/dev/null; then
+    local hc_ok=0
+    if command -v timeout >/dev/null 2>&1; then
+      timeout 15 docker exec ai-platform-mysql sh /healthcheck.sh >/dev/null 2>&1 && hc_ok=1
+    else
+      docker exec ai-platform-mysql sh /healthcheck.sh >/dev/null 2>&1 && hc_ok=1
+    fi
+    if [[ "$hc_ok" == "1" ]]; then
       ok "MySQL 健康检查脚本通过"
     else
-      warn "MySQL 健康检查失败，常见原因："
+      warn "MySQL 健康检查失败或超时，常见原因："
       echo "  1) .env.docker 密码与数据卷不一致 → ./linux-deploy.sh fix-db"
-      echo "  2) 密码含特殊字符导致旧版 healthcheck 失败 → git pull 后重新 up"
-      docker exec ai-platform-mysql sh -c 'mysql -uroot -p"$MYSQL_ROOT_PASSWORD" -e "SHOW DATABASES;"' 2>&1 | tail -5 || true
+      echo "  2) MySQL 仍在重启/恢复中 → 等待 1 分钟后 ./linux-deploy.sh restart"
+      if command -v timeout >/dev/null 2>&1; then
+        timeout 10 docker exec ai-platform-mysql sh -c \
+          'export MYSQL_PWD="$MYSQL_ROOT_PASSWORD"; mysqladmin ping -h 127.0.0.1 -uroot --connect-timeout=3' 2>&1 | tail -3 || true
+      fi
     fi
   fi
 }
@@ -570,6 +579,28 @@ cmd_up() {
   fi
   compose_cmd up -d --build
 
+  info "等待 MySQL 健康检查..."
+  local i mysql_status
+  for i in $(seq 1 60); do
+    mysql_status="$(docker inspect ai-platform-mysql --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' 2>/dev/null || echo missing)"
+    if [[ "$mysql_status" == "healthy" ]]; then
+      ok "MySQL 已就绪"
+      break
+    fi
+    if [[ "$mysql_status" == "missing" ]]; then
+      warn "MySQL 容器不存在"
+      break
+    fi
+    if (( i % 6 == 0 )); then
+      info "MySQL 状态: ${mysql_status} (${i}/60)"
+    fi
+    if (( i == 60 )); then
+      warn "MySQL 健康检查超时，请执行: ./linux-deploy.sh diagnose"
+      compose_cmd logs mysql --tail=30 >&2 || true
+    fi
+    sleep 5
+  done
+
   if check_backend_mysql_auth_error; then
     cat <<'EOF' >&2
 
@@ -640,6 +671,28 @@ cmd_update() {
 
   info "重新构建并启动 Docker 服务..."
   compose_cmd up -d --build
+
+  info "等待 MySQL 健康检查..."
+  local i mysql_status
+  for i in $(seq 1 60); do
+    mysql_status="$(docker inspect ai-platform-mysql --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' 2>/dev/null || echo missing)"
+    if [[ "$mysql_status" == "healthy" ]]; then
+      ok "MySQL 已就绪"
+      break
+    fi
+    if [[ "$mysql_status" == "missing" ]]; then
+      warn "MySQL 容器不存在"
+      break
+    fi
+    if (( i % 6 == 0 )); then
+      info "MySQL 状态: ${mysql_status} (${i}/60)"
+    fi
+    if (( i == 60 )); then
+      warn "MySQL 健康检查超时，请执行: ./linux-deploy.sh diagnose"
+      compose_cmd logs mysql --tail=30 >&2 || true
+    fi
+    sleep 5
+  done
 
   if check_backend_mysql_auth_error; then
     error "MySQL 密码不一致，请执行: ./linux-deploy.sh fix-db"
