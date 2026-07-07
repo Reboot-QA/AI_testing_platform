@@ -252,7 +252,9 @@
             @selection-change="onRunSelectionChange"
           >
             <el-table-column type="selection" width="48" />
-            <el-table-column prop="id" label="报告 ID" width="90" />
+            <el-table-column label="报告时间" min-width="150">
+              <template #default="{ row }">{{ formatReportTime(row.started_at) }}</template>
+            </el-table-column>
             <el-table-column prop="suite_name" label="套件" min-width="160" />
             <el-table-column prop="status" label="结果" width="100">
               <template #default="{ row }">
@@ -271,9 +273,6 @@
             </el-table-column>
             <el-table-column label="耗时" width="100">
               <template #default="{ row }">{{ formatDuration(row.duration_ms) }}</template>
-            </el-table-column>
-            <el-table-column prop="started_at" label="执行时间" min-width="170">
-              <template #default="{ row }">{{ formatTime(row.started_at) }}</template>
             </el-table-column>
             <el-table-column label="操作" width="220" fixed="right" align="center">
               <template #default="{ row }">
@@ -778,12 +777,9 @@
       <template #header>
         <div v-if="reportDetail" class="report-drawer-header">
           <div>
-            <div class="report-drawer-title">测试报告 #{{ reportDetail.id }}</div>
+            <div class="report-drawer-title">测试报告 {{ formatReportTime(reportDetail.started_at) }}</div>
             <div class="report-drawer-sub">
               <span v-if="reportDetail.suite_name">{{ reportDetail.suite_name }}</span>
-              <span v-if="reportDetail.started_at" class="report-drawer-time">
-                {{ formatTime(reportDetail.started_at) }}
-              </span>
             </div>
           </div>
         </div>
@@ -1209,6 +1205,19 @@ function formatDuration(ms) {
 function formatTime(value) {
   if (!value) return '-'
   return new Date(value).toLocaleString()
+}
+
+function formatReportTime(value) {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '-'
+  const pad = (num) => String(num).padStart(2, '0')
+  return `${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}${pad(date.getHours())}${pad(date.getMinutes())}${pad(date.getSeconds())}`
+}
+
+function reportTimeFileToken(value) {
+  const formatted = formatReportTime(value)
+  return formatted === '-' ? 'unknown' : formatted
 }
 
 function stepStatusClass(statusCode) {
@@ -2241,7 +2250,7 @@ function setReportStepFilter(filter) {
 }
 
 async function removeRun(row) {
-  await ElMessageBox.confirm(`确认删除报告 #${row.id}？`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除报告「${formatReportTime(row.started_at)}」？`, '提示', { type: 'warning' })
   await apiAutomationApi.deleteRun(row.id)
   ElMessage.success('删除成功')
   await loadRuns()
@@ -2263,9 +2272,9 @@ function downloadBlob(blob, filename) {
 function buildRunExportFilename(row, format, count = 1) {
   const extMap = { excel: 'xlsx', word: 'docx', pdf: 'pdf', json: 'json' }
   const ext = extMap[format] || 'xlsx'
-  if (count === 1 && row?.id) {
+  if (count === 1 && row?.started_at) {
     const suite = String(row.suite_name || 'report').replace(/[/\\]/g, '_')
-    return `测试报告_${row.id}_${suite}.${ext}`
+    return `测试报告_${reportTimeFileToken(row.started_at)}_${suite}.${ext}`
   }
   return `测试报告_批量导出_${count}条.${ext}`
 }

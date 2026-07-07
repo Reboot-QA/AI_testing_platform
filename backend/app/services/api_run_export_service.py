@@ -47,7 +47,8 @@ def build_export_filename(reports: List[ApiTestRunDetailOut], ext: str) -> str:
     if len(reports) == 1:
         report = reports[0]
         suite = (report.suite_name or "report").replace("/", "_").replace("\\", "_")
-        return f"测试报告_{report.id}_{suite}.{ext}"
+        time_token = _format_report_time(report.started_at)
+        return f"测试报告_{time_token}_{suite}.{ext}"
     return f"测试报告_批量导出_{len(reports)}条.{ext}"
 
 
@@ -73,6 +74,12 @@ def _format_dt(value: Optional[datetime]) -> str:
     if not value:
         return ""
     return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _format_report_time(value: Optional[datetime]) -> str:
+    if not value:
+        return ""
+    return value.strftime("%Y%m%d%H%M%S")
 
 
 def _format_duration(ms: float) -> str:
@@ -112,7 +119,7 @@ def _format_assertions(results: Iterable[Any]) -> str:
 
 def _report_summary_rows(report: ApiTestRunDetailOut) -> List[List[str]]:
     return [
-        ["报告 ID", str(report.id)],
+        ["报告时间", _format_report_time(report.started_at)],
         ["测试套件", report.suite_name or "-"],
         ["执行结果", STATUS_LABELS.get(report.status, report.status)],
         ["通过率", f"{report.pass_rate}%"],
@@ -181,7 +188,7 @@ def build_run_export_excel(reports: List[ApiTestRunDetailOut]) -> BytesIO:
     summary_ws = wb.active
     summary_ws.title = "报告摘要"
     summary_headers = [
-        "报告 ID",
+        "报告时间",
         "套件",
         "结果",
         "通过率",
@@ -196,12 +203,12 @@ def build_run_export_excel(reports: List[ApiTestRunDetailOut]) -> BytesIO:
     summary_ws.append(summary_headers)
     _configure_sheet(
         summary_ws,
-        {"A": 10, "B": 24, "C": 10, "D": 10, "E": 8, "F": 8, "G": 8, "H": 10, "I": 12, "J": 20, "K": 20},
+        {"A": 20, "B": 24, "C": 10, "D": 10, "E": 8, "F": 8, "G": 8, "H": 10, "I": 12, "J": 20, "K": 20},
     )
 
     for report in reports:
         row_num = summary_ws.max_row + 1
-        summary_ws.cell(row_num, 1, report.id)
+        summary_ws.cell(row_num, 1, _format_report_time(report.started_at))
         summary_ws.cell(row_num, 2, report.suite_name)
         summary_ws.cell(row_num, 3, STATUS_LABELS.get(report.status, report.status))
         summary_ws.cell(row_num, 4, f"{report.pass_rate}%")
@@ -215,7 +222,7 @@ def build_run_export_excel(reports: List[ApiTestRunDetailOut]) -> BytesIO:
 
     detail_ws = wb.create_sheet("用例明细")
     detail_headers = [
-        "报告 ID",
+        "报告时间",
         "套件",
         "序号",
         "用例名称",
@@ -235,7 +242,7 @@ def build_run_export_excel(reports: List[ApiTestRunDetailOut]) -> BytesIO:
     _configure_sheet(
         detail_ws,
         {
-            "A": 10, "B": 20, "C": 8, "D": 22, "E": 10, "F": 36, "G": 10, "H": 10,
+            "A": 20, "B": 20, "C": 8, "D": 22, "E": 10, "F": 36, "G": 10, "H": 10,
             "I": 10, "J": 24, "K": 28, "L": 24, "M": 24, "N": 24, "O": 32,
         },
     )
@@ -243,7 +250,7 @@ def build_run_export_excel(reports: List[ApiTestRunDetailOut]) -> BytesIO:
     for report in reports:
         for index, step in enumerate(report.step_results, start=1):
             row_num = detail_ws.max_row + 1
-            detail_ws.cell(row_num, 1, report.id)
+            detail_ws.cell(row_num, 1, _format_report_time(report.started_at))
             detail_ws.cell(row_num, 2, report.suite_name)
             detail_ws.cell(row_num, 3, index)
             detail_ws.cell(row_num, 4, step.case_name)
@@ -335,7 +342,7 @@ def _append_report_word(doc, report: ApiTestRunDetailOut) -> None:
     run = title.add_run("接口自动化测试报告")
     _set_docx_font(run, size=20, bold=True)
 
-    _docx_paragraph(doc, f"报告编号：{report.id}    套件：{report.suite_name or '-'}", bold=True)
+    _docx_paragraph(doc, f"报告时间：{_format_report_time(report.started_at)}    套件：{report.suite_name or '-'}", bold=True)
     _docx_heading(doc, "报告摘要", level=2)
     _docx_table(doc, ["项目", "内容"], _report_summary_rows(report))
 
@@ -564,7 +571,7 @@ def _append_report_pdf(story: List[Any], report: ApiTestRunDetailOut, styles) ->
     story.append(Paragraph("接口自动化测试报告", styles["title"]))
     story.append(
         Paragraph(
-            _pdf_escape(f"报告编号：{report.id}    套件：{report.suite_name or '-'}"),
+            _pdf_escape(f"报告时间：{_format_report_time(report.started_at)}    套件：{report.suite_name or '-'}"),
             styles["body"],
         )
     )
