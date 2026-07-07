@@ -1,6 +1,6 @@
 # AI测试平台
 
-演示地址：http://38.12.6.230:5173/login
+演示地址：http://186.241.126.61:5173
 
 ![Snipaste_01](./images/Snipaste_01.png)
 ![Snipaste_02](./images/Snipaste_02.png)
