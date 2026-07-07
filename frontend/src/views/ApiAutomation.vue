@@ -149,7 +149,7 @@
                     <el-button :disabled="!suiteId" @click="openImportDialog()">
                       <el-icon><Upload /></el-icon> 导入抓包
                     </el-button>
-                    <el-button :disabled="!suiteId" @click="openSwaggerDialog()">
+                    <el-button :disabled="!suiteId" data-assistant="suites.swagger_import_btn" @click="openSwaggerDialog()">
                       <el-icon><Upload /></el-icon> 导入 Swagger
                     </el-button>
                     <el-button
@@ -593,6 +593,7 @@
             <div
               class="swagger-source-card"
               :class="{ active: swaggerSourceType === 'url' }"
+              data-assistant="suites.swagger_source_url"
               @click="swaggerSourceType = 'url'"
             >
               <div class="source-card-main">
@@ -614,6 +615,7 @@
         <el-form-item v-else label="文档 URL" required>
           <el-input
             v-model="swaggerUrl"
+            data-assistant="suites.swagger_url_input"
             placeholder="https://example.com/v3/api-docs 或 swagger.json"
           />
         </el-form-item>
@@ -642,7 +644,12 @@
 
       <template #footer>
         <el-button @click="swaggerDialogVisible = false">取消</el-button>
-        <el-button :disabled="!canParseSwagger" :loading="swaggerParsing" @click="handleParseSwagger">
+        <el-button
+          data-assistant="suites.swagger_parse_btn"
+          :disabled="!canParseSwagger"
+          :loading="swaggerParsing"
+          @click="handleParseSwagger"
+        >
           解析预览
         </el-button>
         <el-button
@@ -654,6 +661,7 @@
         </el-button>
         <el-button
           type="primary"
+          data-assistant="suites.swagger_confirm_btn"
           :disabled="!swaggerPreview.length"
           :loading="swaggerSaving"
           @click="handleImportSwagger"
@@ -987,6 +995,16 @@ import ApiCaseEditor from '@/components/ApiCaseEditor.vue'
 import ApiKvParamTable from '@/components/ApiKvParamTable.vue'
 import ApiReportStepDetail from '@/components/ApiReportStepDetail.vue'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
+import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
+
+const ASSISTANT_HANDLER_NAMES = [
+  'apiAutomation.ensureProject',
+  'apiAutomation.selectFirstSuite',
+  'apiAutomation.openSwaggerImport',
+  'apiAutomation.setSwaggerUrl',
+  'apiAutomation.parseSwagger',
+  'apiAutomation.confirmSwaggerImport',
+]
 
 const route = useRoute()
 const router = useRouter()
@@ -2558,7 +2576,82 @@ async function batchRemoveRuns() {
   }
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  registerApiAutomationAssistantHandlers()
+  await loadProjects()
+})
+
+function registerApiAutomationAssistantHandlers() {
+  registerAssistantHandler('apiAutomation.ensureProject', async () => {
+    if (!projectId.value) {
+      if (!projects.value.length) {
+        await loadProjects()
+      } else {
+        projectId.value = projects.value[0].id
+        await reloadAll()
+      }
+    }
+    if (!projectId.value) {
+      throw new Error('请先创建项目')
+    }
+  })
+
+  registerAssistantHandler('apiAutomation.selectFirstSuite', async () => {
+    if (!suiteId.value) {
+      if (!suites.value.length) {
+        await loadSuites()
+      }
+      const first = suites.value.find((item) => !item.is_folder)
+      if (!first) {
+        throw new Error('当前项目下没有测试套件，请先新建套件')
+      }
+      selectSuite(first.id)
+      await nextTick()
+    }
+  })
+
+  registerAssistantHandler('apiAutomation.openSwaggerImport', async () => {
+    if (!suiteId.value) {
+      throw new Error('请先选择测试套件')
+    }
+    openSwaggerDialog()
+    swaggerSourceType.value = 'url'
+    await nextTick()
+  })
+
+  registerAssistantHandler('apiAutomation.setSwaggerUrl', async (payload = {}) => {
+    const url = payload.url || ''
+    if (!url) {
+      throw new Error('缺少 Swagger URL')
+    }
+    swaggerSourceType.value = 'url'
+    swaggerUrl.value = url
+    await nextTick()
+  })
+
+  registerAssistantHandler('apiAutomation.parseSwagger', async () => {
+    if (!canParseSwagger.value) {
+      throw new Error('Swagger URL 未填写')
+    }
+    await handleParseSwagger()
+    if (!swaggerPreview.value.length) {
+      throw new Error('未解析到可导入的接口，请检查 URL 是否为 OpenAPI 文档地址')
+    }
+  })
+
+  registerAssistantHandler('apiAutomation.confirmSwaggerImport', async () => {
+    if (!swaggerPreview.value.length) {
+      throw new Error('请先解析预览接口')
+    }
+    await handleImportSwagger()
+  })
+}
+
+function unregisterApiAutomationAssistantHandlers() {
+  for (const name of ASSISTANT_HANDLER_NAMES) {
+    unregisterAssistantHandler(name)
+  }
+}
 
 let schedulePollTimer = null
 watch(
@@ -2587,6 +2680,7 @@ watch(
 )
 onUnmounted(() => {
   if (schedulePollTimer) clearInterval(schedulePollTimer)
+  unregisterApiAutomationAssistantHandlers()
 })
 </script>
 

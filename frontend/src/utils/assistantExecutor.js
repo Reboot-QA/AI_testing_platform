@@ -1,4 +1,5 @@
 import router from '@/router'
+import { invokeAssistantHandler } from '@/utils/assistantActionRegistry'
 
 const TARGET_ALIASES = {
   'projects.create_btn': 'projects.create_btn',
@@ -6,6 +7,12 @@ const TARGET_ALIASES = {
   'projects.form.description': 'projects.form.description',
   'projects.form.submit': 'projects.form.submit',
   'menu.projects': 'menu.projects',
+  'suites.import_btn': 'suites.swagger_import_btn',
+  'suites.swagger_import_btn': 'suites.swagger_import_btn',
+  'suites.swagger_source_url': 'suites.swagger_source_url',
+  'suites.swagger_url_input': 'suites.swagger_url_input',
+  'suites.swagger_parse_btn': 'suites.swagger_parse_btn',
+  'suites.swagger_confirm_btn': 'suites.swagger_confirm_btn',
 }
 
 function sleep(ms) {
@@ -60,7 +67,7 @@ function dispatchInput(el, value) {
   }
   input.focus()
   input.value = value
-  input.dispatchEvent(new Event('input', { bubbles: true }))
+  input.dispatchEvent(new InputEvent('input', { bubbles: true, data: value }))
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
@@ -71,17 +78,29 @@ async function executeStep(step, onProgress) {
   switch (step.type) {
     case 'navigate':
       await router.push(step.path)
-      await sleep(step.ms || 500)
+      await sleep(step.wait || step.ms || 500)
       break
     case 'wait':
       await sleep(step.ms || 500)
       break
+    case 'invoke':
+      highlightElementByLabel(label)
+      await invokeAssistantHandler(step.handler, step.payload || {})
+      await sleep(step.wait || step.ms || 400)
+      break
     case 'click': {
       const el = findElement(step.target)
+      const blocked =
+        el.disabled
+        || el.getAttribute('aria-disabled') === 'true'
+        || el.classList.contains('is-disabled')
+      if (blocked) {
+        throw new Error(`操作目标暂不可用：${step.target}`)
+      }
       highlightElement(step.target)
       await sleep(300)
       el.click()
-      await sleep(step.ms || 300)
+      await sleep(step.wait || step.ms || 300)
       break
     }
     case 'fill': {
@@ -89,7 +108,7 @@ async function executeStep(step, onProgress) {
       highlightElement(step.target)
       await sleep(200)
       dispatchInput(el, step.value ?? '')
-      await sleep(step.ms || 200)
+      await sleep(step.wait || step.ms || 200)
       break
     }
     default:
@@ -97,6 +116,26 @@ async function executeStep(step, onProgress) {
   }
 
   onProgress?.({ status: 'done', label, step })
+}
+
+function highlightElementByLabel(label) {
+  removeHighlight()
+  if (!label) return
+  const ring = document.createElement('div')
+  ring.className = 'assistant-highlight-ring'
+  ring.style.cssText = `
+    position: fixed;
+    right: 24px;
+    bottom: 120px;
+    width: 120px;
+    height: 36px;
+    border-radius: 8px;
+    border: 2px solid #3182ce;
+    box-shadow: 0 0 0 4px rgba(49, 130, 206, 0.25);
+    pointer-events: none;
+    z-index: 9999;
+  `
+  document.body.appendChild(ring)
 }
 
 export async function executeAssistantActions(actions, onProgress) {

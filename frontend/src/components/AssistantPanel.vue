@@ -35,8 +35,8 @@
           </div>
 
           <div
-            v-for="(msg, index) in messages"
-            :key="index"
+            v-for="msg in messages"
+            :key="msg.id"
             class="message-row"
             :class="msg.role"
           >
@@ -58,8 +58,8 @@
                   </div>
                 </div>
                 <div v-if="msg.actionStatus === 'pending'" class="action-buttons">
-                  <el-button size="small" @click="cancelPlan(index)">取消</el-button>
-                  <el-button size="small" type="primary" @click="runPlan(index)">确认执行</el-button>
+                  <el-button size="small" @click="cancelPlan(msg.id)">取消</el-button>
+                  <el-button size="small" type="primary" @click="runPlan(msg.id)">确认执行</el-button>
                 </div>
                 <div v-else-if="msg.actionStatus === 'done'" class="action-done">操作已完成</div>
                 <div v-else-if="msg.actionStatus === 'error'" class="action-error">{{ msg.actionError }}</div>
@@ -131,7 +131,6 @@ const open = ref(false)
 const input = ref('')
 const loading = ref(false)
 const executing = ref(false)
-const messages = ref([])
 const messageListRef = ref()
 const modeLabel = ref('')
 const abortController = ref(null)
@@ -139,7 +138,68 @@ const fabBottom = ref(24)
 const dragging = ref(false)
 const dragMoved = ref(false)
 const FAB_STORAGE_KEY = 'assistant-fab-bottom'
+const CHAT_STORAGE_KEY = 'assistant-chat-messages-v1'
 const FAB_MIN_BOTTOM = 72
+const MAX_STORED_MESSAGES = 80
+
+let messageSeq = 0
+
+function createMessageId() {
+  messageSeq += 1
+  return `msg-${Date.now()}-${messageSeq}`
+}
+
+function normalizeStoredMessage(item) {
+  return {
+    id: item.id || createMessageId(),
+    role: item.role,
+    content: item.content || '',
+    actions: Array.isArray(item.actions) ? item.actions : [],
+    actionStatus: item.actionStatus || null,
+    executionLogs: Array.isArray(item.executionLogs) ? item.executionLogs : [],
+    actionError: item.actionError || '',
+  }
+}
+
+function loadStoredMessages() {
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    const normalized = parsed.map(normalizeStoredMessage)
+    const maxId = normalized.reduce((max, item) => {
+      const match = String(item.id).match(/-(\d+)$/)
+      return match ? Math.max(max, Number(match[1])) : max
+    }, 0)
+    messageSeq = maxId
+    return normalized.slice(-MAX_STORED_MESSAGES)
+  } catch {
+    return []
+  }
+}
+
+function persistMessages() {
+  const payload = messages.value.slice(-MAX_STORED_MESSAGES).map((item) => ({
+    id: item.id,
+    role: item.role,
+    content: item.content,
+    actions: item.actions,
+    actionStatus: item.actionStatus,
+    executionLogs: item.executionLogs,
+    actionError: item.actionError,
+  }))
+  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(payload))
+}
+
+function buildChatPayload(excludeAssistantId) {
+  return messages.value
+    .filter((item) => item.id !== excludeAssistantId)
+    .filter((item) => item.role === 'user' || item.content?.trim())
+    .map((item) => ({ role: item.role, content: item.content }))
+}
+
+const messages = ref(loadStoredMessages())
 
 const suggestions = [
   { text: '帮我演示创建一个项目', query: '帮我演示创建一个项目，名称叫「AI演示项目」' },
@@ -170,11 +230,28 @@ watch(
   () => scrollToBottom()
 )
 
+watch(
+  messages,
+  () => {
+    persistMessages()
+  },
+  { deep: true }
+)
+
 onMounted(() => {
   injectAssistantHighlightStyle()
   const saved = localStorage.getItem(FAB_STORAGE_KEY)
   if (saved && !Number.isNaN(Number(saved))) {
     fabBottom.value = clampFabBottom(Number(saved))
+  }
+  if (messages.value.length) {
+    scrollToBottom()
+  }
+})
+
+watch(open, (visible) => {
+  if (visible && messages.value.length) {
+    scrollToBottom()
   }
 })
 
@@ -249,12 +326,13 @@ function stopStreaming() {
 }
 
 async function streamChat(question) {
-  messages.value.push({ role: 'user', content: question })
+  messages.value.push({ id: createMessageId(), role: 'user', content: question })
   loading.value = true
   modeLabel.value = ''
 
-  const assistantIndex = messages.value.length
+  const assistantId = createMessageId()
   messages.value.push({
+    id: assistantId,
     role: 'assistant',
     content: '',
     actions: [],
@@ -266,25 +344,27 @@ async function streamChat(question) {
   stopStreaming()
   abortController.value = new AbortController()
 
+  const findAssistantMessage = () => messages.value.find((item) => item.id === assistantId)
+
   try {
     await assistantApi.chatStream(
       {
-        messages: messages.value
-          .slice(0, -1)
-          .filter((item) => item.content)
-          .map((item) => ({ role: item.role, content: item.content })),
+        messages: buildChatPayload(assistantId),
         page_path: route.path,
       },
       (event) => {
+        const assistantMessage = findAssistantMessage()
+        if (!assistantMessage) return
+
         if (event.type === 'meta') {
           modeLabel.value = event.mode === 'mock' ? 'Mock 模式' : event.provider_name || event.model || '大模型'
         } else if (event.type === 'plan') {
-          messages.value[assistantIndex].actions = event.actions || []
+          assistantMessage.actions = event.actions || []
           if (event.actions?.length) {
-            messages.value[assistantIndex].actionStatus = 'pending'
+            assistantMessage.actionStatus = 'pending'
           }
         } else if (event.type === 'token') {
-          messages.value[assistantIndex].content += event.content || ''
+          assistantMessage.content += event.content || ''
           scrollToBottom()
         } else if (event.type === 'error') {
           throw new Error(event.message || '助手回复失败')
@@ -294,28 +374,32 @@ async function streamChat(question) {
     )
   } catch (error) {
     if (error.name === 'AbortError') return
+    const assistantMessage = findAssistantMessage()
     const fallback = error.message || '助手暂时不可用'
-    if (!messages.value[assistantIndex].content) {
-      messages.value[assistantIndex].content = fallback
+    if (assistantMessage && !assistantMessage.content) {
+      assistantMessage.content = fallback
     }
     ElMessage.error(fallback)
   } finally {
     loading.value = false
     abortController.value = null
-    if (!messages.value[assistantIndex].content && !messages.value[assistantIndex].actions?.length) {
-      messages.value[assistantIndex].content = '暂无回复，请稍后重试。'
+    const assistantMessage = findAssistantMessage()
+    if (assistantMessage && !assistantMessage.content && !assistantMessage.actions?.length) {
+      assistantMessage.content = '暂无回复，请稍后重试。'
     }
     scrollToBottom()
   }
 }
 
-function cancelPlan(index) {
-  messages.value[index].actionStatus = 'cancelled'
-  messages.value[index].actions = []
+function cancelPlan(messageId) {
+  const msg = messages.value.find((item) => item.id === messageId)
+  if (!msg) return
+  msg.actionStatus = 'cancelled'
+  msg.actions = []
 }
 
-async function runPlan(index) {
-  const msg = messages.value[index]
+async function runPlan(messageId) {
+  const msg = messages.value.find((item) => item.id === messageId)
   if (!msg?.actions?.length || executing.value) return
 
   executing.value = true
@@ -471,6 +555,7 @@ function sendSuggestion(query) {
   box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .panel-header {
@@ -497,7 +582,9 @@ function sendSuggestion(query) {
 
 .panel-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
   padding: 16px;
   background: #f7fafc;
 }
