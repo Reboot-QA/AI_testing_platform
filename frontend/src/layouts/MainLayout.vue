@@ -124,6 +124,7 @@
         <router-view />
       </el-main>
     </el-container>
+    <AssistantPanel />
   </el-container>
 </template>
 
@@ -133,6 +134,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
 import { PAGE_TITLES, SUBMENU_INDEX_BY_PATH } from '@/config/menus'
+import AssistantPanel from '@/components/AssistantPanel.vue'
 
 const route = useRoute()
 const router = useRouter()

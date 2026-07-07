@@ -182,6 +182,49 @@ export const settingsApi = {
   testLLM: (data) => request.post('/settings/llm/test', data || {}),
 }
 
+export const assistantApi = {
+  chatStream: (data, onEvent, options = {}) => {
+    const token = localStorage.getItem('token')
+    return fetch('/api/v1/assistant/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(data),
+      signal: options.signal,
+    }).then(async (response) => {
+      if (!response.ok) {
+        let message = '请求失败'
+        try {
+          const body = await response.json()
+          message = body.detail || message
+        } catch {
+          // ignore
+        }
+        throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
+      }
+
+      const reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let buffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        buffer += decoder.decode(value, { stream: true })
+        const chunks = buffer.split('\n\n')
+        buffer = chunks.pop() || ''
+        for (const chunk of chunks) {
+          const line = chunk.trim()
+          if (!line.startsWith('data:')) continue
+          onEvent(JSON.parse(line.slice(5).trim()))
+        }
+      }
+    })
+  },
+}
+
 export const departmentApi = {
   list: () => request.get('/departments'),
   create: (data) => request.post('/departments', data),
