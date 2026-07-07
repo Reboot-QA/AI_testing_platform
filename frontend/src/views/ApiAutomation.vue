@@ -162,6 +162,7 @@
                     </el-button>
                     <el-button
                       type="success"
+                      data-assistant="suites.run_suite_btn"
                       :disabled="!suiteId || running"
                       :loading="running"
                       @click="handleRunSuite"
@@ -1019,6 +1020,7 @@ const ASSISTANT_HANDLER_NAMES = [
   'apiAutomation.setSwaggerUrl',
   'apiAutomation.parseSwagger',
   'apiAutomation.confirmSwaggerImport',
+  'apiAutomation.focusRunSuite',
 ]
 
 const route = useRoute()
@@ -2753,6 +2755,17 @@ function registerApiAutomationAssistantHandlers() {
       throw new Error('请先解析预览接口')
     }
     await handleImportSwagger()
+  })
+
+  registerAssistantHandler('apiAutomation.focusRunSuite', async () => {
+    if (!suiteId.value) {
+      throw new Error('请先选择测试套件')
+    }
+    await nextTick()
+    const btn = document.querySelector('[data-assistant="suites.run_suite_btn"]')
+    if (btn) {
+      btn.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+    }
   })
 }
 

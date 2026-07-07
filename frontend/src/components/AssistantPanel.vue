@@ -18,7 +18,7 @@
               <img src="/assistant-avatar.png" alt="AI 助手" class="welcome-avatar-img" />
             </div>
             <h3>Hi，我是 AI 质量平台助手</h3>
-            <p>可以回答使用问题，也可以在浏览器中自动演示操作（如创建项目）。</p>
+            <p>点击下方示例，助手将自动在浏览器中演示操作；也可直接输入问题。</p>
             <div class="suggestions">
               <button
                 v-for="item in suggestions"
@@ -202,10 +202,10 @@ function buildChatPayload(excludeAssistantId) {
 const messages = ref(loadStoredMessages())
 
 const suggestions = [
-  { text: '帮我演示创建一个项目', query: '帮我演示创建一个项目，名称叫「AI演示项目」' },
-  { text: '如何创建项目并开始测试？', query: '如何创建项目并开始测试？请给出详细步骤。' },
-  { text: '怎样用 AI 生成测试用例？', query: '怎样使用 AI 生成测试用例？需要哪些前置条件？' },
-  { text: '接口自动化怎么配置？', query: '接口自动化模块怎么配置环境、套件和执行？' },
+  { text: '帮我演示创建一个项目', preset: 'create_project' },
+  { text: '如何创建项目并开始测试？', preset: 'create_project_and_test' },
+  { text: '怎样用 AI 生成测试用例？', preset: 'ai_generate' },
+  { text: '接口自动化怎样创建并执行？', preset: 'api_automation' },
 ]
 
 function formatContent(text) {
@@ -334,8 +334,9 @@ function stopStreaming() {
   }
 }
 
-async function streamChat(question) {
-  messages.value.push({ id: createMessageId(), role: 'user', content: question })
+async function streamChat(question, options = {}) {
+  const displayText = options.displayText || question
+  messages.value.push({ id: createMessageId(), role: 'user', content: displayText })
   loading.value = true
   modeLabel.value = ''
 
@@ -354,12 +355,14 @@ async function streamChat(question) {
   abortController.value = new AbortController()
 
   const findAssistantMessage = () => messages.value.find((item) => item.id === assistantId)
+  let shouldAutoExecute = !!options.autoExecute
 
   try {
     await assistantApi.chatStream(
       {
         messages: buildChatPayload(assistantId),
         page_path: route.path,
+        demo_preset: options.preset || undefined,
       },
       (event) => {
         const assistantMessage = findAssistantMessage()
@@ -371,6 +374,9 @@ async function streamChat(question) {
           assistantMessage.actions = event.actions || []
           if (event.actions?.length) {
             assistantMessage.actionStatus = 'pending'
+          }
+          if (event.needs_confirmation === false) {
+            shouldAutoExecute = shouldAutoExecute || !!options.autoExecute
           }
         } else if (event.type === 'token') {
           assistantMessage.content += event.content || ''
@@ -397,6 +403,9 @@ async function streamChat(question) {
       assistantMessage.content = '暂无回复，请稍后重试。'
     }
     scrollToBottom()
+    if (shouldAutoExecute && assistantMessage?.actionStatus === 'pending' && assistantMessage.actions?.length) {
+      await runPlan(assistantId)
+    }
   }
 }
 
@@ -446,9 +455,13 @@ function handleSend() {
   streamChat(text)
 }
 
-function sendSuggestion(query) {
+function sendSuggestion(item) {
   if (loading.value || executing.value) return
-  streamChat(query)
+  streamChat(item.text, {
+    preset: item.preset,
+    autoExecute: true,
+    displayText: item.text,
+  })
 }
 </script>
 

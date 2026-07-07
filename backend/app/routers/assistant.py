@@ -25,6 +25,7 @@ class AssistantChatRequest(BaseModel):
     messages: List[AssistantMessage] = Field(min_length=1)
     provider_id: Optional[int] = None
     page_path: Optional[str] = None
+    demo_preset: Optional[str] = None
 
 
 def _sse_event(payload: dict) -> str:
@@ -47,6 +48,7 @@ async def assistant_chat_stream(
         model=llm_config["model"],
         mock_mode=llm_config["mock_mode"],
         page_path=data.page_path,
+        demo_preset=data.demo_preset,
     )
 
     preset_reply = plan.get("reply") if plan.get("actions") else None

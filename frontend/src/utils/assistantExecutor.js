@@ -21,6 +21,12 @@ const TARGET_ALIASES = {
   'suites.form.environment': 'suites.form.environment',
   'suites.form.description': 'suites.form.description',
   'suites.form.submit': 'suites.form.submit',
+  'menu.ai_generate': 'menu.ai_generate',
+  'menu.api_automation_suites': 'menu.api_automation_suites',
+  'ai_generate.generate_btn': 'ai_generate.generate_btn',
+  'ai_generate.project_select': 'ai_generate.project_select',
+  'ai_generate.requirement_text': 'ai_generate.requirement_text',
+  'suites.run_suite_btn': 'suites.run_suite_btn',
 }
 
 function sleep(ms) {

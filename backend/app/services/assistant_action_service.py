@@ -144,6 +144,83 @@ def _wants_automation(text: str) -> bool:
     return any(keyword in q for keyword in automation_keywords)
 
 
+def _project_create_actions(name: str, desc: str) -> List[Dict[str, Any]]:
+    return [
+        {"type": "navigate", "path": "/projects", "label": "打开项目管理"},
+        {"type": "wait", "ms": 600},
+        {"type": "click", "target": "projects.create_btn", "label": "点击新建项目"},
+        {"type": "wait", "ms": 400},
+        {"type": "fill", "target": "projects.form.name", "value": name, "label": f"填写项目名称：{name}"},
+        {"type": "fill", "target": "projects.form.description", "value": desc, "label": "填写项目描述"},
+        {"type": "click", "target": "projects.form.submit", "label": "提交创建"},
+    ]
+
+
+def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
+    if preset == "create_project":
+        name = "AI演示项目"
+        desc = "由 AI 助手演示自动创建"
+        return {
+            "reply": f"好的，我将为您演示创建项目「{name}」，请稍候观看浏览器自动操作。",
+            "actions": _project_create_actions(name, desc),
+            "needs_confirmation": False,
+        }
+
+    if preset == "create_project_and_test":
+        name = "AI演示项目"
+        desc = "由 AI 助手演示创建，并进入 AI 生成用例"
+        actions = _project_create_actions(name, desc)
+        actions.extend(
+            [
+                {"type": "wait", "ms": 600},
+                {"type": "navigate", "path": "/ai-generate", "label": "进入 AI 智能生成"},
+                {"type": "wait", "ms": 800},
+                {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "准备生成配置"},
+            ]
+        )
+        return {
+            "reply": "好的，我将演示创建项目并进入 AI 生成用例页面，请稍候观看。",
+            "actions": actions,
+            "needs_confirmation": False,
+        }
+
+    if preset == "ai_generate":
+        return {
+            "reply": "好的，我将为您打开 AI 智能生成并演示配置流程，请稍候观看。",
+            "actions": [
+                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
+                {"type": "wait", "ms": 800},
+                {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "选择项目并填充演示需求"},
+            ],
+            "needs_confirmation": False,
+        }
+
+    if preset == "api_automation":
+        name = "AI演示套件"
+        return {
+            "reply": "好的，我将演示接口自动化：创建环境、测试套件并进入执行界面，请稍候观看。",
+            "actions": [
+                {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
+                {"type": "wait", "ms": 800},
+                {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
+                {"type": "wait", "ms": 400},
+                {"type": "invoke", "handler": "apiAutomation.ensureEnvironment", "label": "准备执行环境"},
+                {"type": "wait", "ms": 400},
+                {
+                    "type": "invoke",
+                    "handler": "apiAutomation.createSuite",
+                    "payload": {"name": name, "base_url": "http://127.0.0.1"},
+                    "label": f"创建测试套件：{name}",
+                },
+                {"type": "wait", "ms": 500},
+                {"type": "invoke", "handler": "apiAutomation.focusRunSuite", "label": "展示执行套件入口"},
+            ],
+            "needs_confirmation": False,
+        }
+
+    return None
+
+
 def _mock_plan_actions(
     question: str,
     page_path: Optional[str] = None,
@@ -293,9 +370,15 @@ async def plan_assistant_actions(
     model: str,
     mock_mode: bool,
     page_path: Optional[str] = None,
+    demo_preset: Optional[str] = None,
 ) -> Dict[str, Any]:
     if not messages or messages[-1].get("role") != "user":
         return {"reply": "", "actions": [], "needs_confirmation": False}
+
+    if demo_preset:
+        preset_plan = _get_demo_preset_plan(demo_preset)
+        if preset_plan:
+            return preset_plan
 
     question = messages[-1]["content"]
     if not _wants_automation(question):

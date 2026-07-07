@@ -42,7 +42,7 @@
             <el-icon><List /></el-icon>
             <span>用例管理</span>
           </template>
-          <el-menu-item v-if="userStore.hasPermission('ai_generate')" index="/ai-generate">
+          <el-menu-item v-if="userStore.hasPermission('ai_generate')" index="/ai-generate" data-assistant="menu.ai_generate">
             <el-icon><MagicStick /></el-icon>
             <span>AI 生成</span>
           </el-menu-item>
@@ -64,7 +64,7 @@
           <el-menu-item v-if="userStore.hasPermission('api_automation_env')" index="/api-automation/env">
             环境配置
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('api_automation_suites')" index="/api-automation/suites">
+          <el-menu-item v-if="userStore.hasPermission('api_automation_suites')" index="/api-automation/suites" data-assistant="menu.api_automation_suites">
             套件与用例
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('api_automation_reports')" index="/api-automation/reports">

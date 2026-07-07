@@ -8,7 +8,12 @@
           </template>
           <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
             <el-form-item label="项目" prop="project_id">
-              <el-select v-model="form.project_id" style="width: 100%" @change="loadRequirements">
+              <el-select
+                v-model="form.project_id"
+                data-assistant="ai_generate.project_select"
+                style="width: 100%"
+                @change="loadRequirements"
+              >
                 <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
               </el-select>
             </el-form-item>
@@ -88,6 +93,7 @@
             <el-form-item label="需求描述" prop="requirement_text">
               <el-input
                 v-model="form.requirement_text"
+                data-assistant="ai_generate.requirement_text"
                 type="textarea"
                 :rows="8"
                 placeholder="输入需求描述，或选择上方关联需求自动填充"
@@ -102,7 +108,7 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" :loading="generating" @click="handleGenerate">
+              <el-button type="primary" data-assistant="ai_generate.generate_btn" :loading="generating" @click="handleGenerate">
                 <el-icon><MagicStick /></el-icon> {{ generating ? '正在生成，请稍候...' : '开始生成' }}
               </el-button>
             </el-form-item>
@@ -184,11 +190,12 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { projectApi, requirementApi, settingsApi } from '@/api'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
+import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
 const aiStore = useAiGenerateStore()
 const {
@@ -372,7 +379,31 @@ async function handleGenerate() {
 }
 
 onMounted(async () => {
+  registerAssistantHandler('aiGenerate.prepareDemo', async () => {
+    if (!projects.value.length) {
+      await loadProjects()
+    }
+    if (!projects.value.length) {
+      throw new Error('请先创建项目')
+    }
+    form.project_id = projects.value[0].id
+    await loadRequirements()
+    if (!llmProviders.value.length) {
+      await loadProviders()
+    }
+    if (llmProviders.value.length && !form.provider_id) {
+      form.provider_id = llmProviders.value.find((item) => item.is_default)?.id
+        || llmProviders.value[0].id
+    }
+    form.requirement_text = '演示需求：用户可以使用账号密码登录系统，登录成功后进入首页。'
+    form.case_type = 'functional'
+    await nextTick()
+  })
   await Promise.all([loadProjects(), loadProviders()])
+})
+
+onUnmounted(() => {
+  unregisterAssistantHandler('aiGenerate.prepareDemo')
 })
 </script>
 
