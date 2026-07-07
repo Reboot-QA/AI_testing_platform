@@ -3,12 +3,12 @@ import logging
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models.api_automation import ApiScheduledTask, ApiTestRun, ApiTestSuite
+from app.models.api_automation import ApiScheduledTask, ApiScheduledTaskSuite, ApiTestRun, ApiTestSuite
 from app.models.system_setting import SystemSetting
 from app.services.api_runner_service import run_api_suite
 from app.utils.time_util import local_utc_offset, now_local, utc_naive_to_local
@@ -97,24 +97,78 @@ def validate_schedule_fields(
             raise ValueError(f"间隔执行最少 {MIN_INTERVAL_MINUTES} 分钟")
 
 
+def get_scheduled_task_suite_ids(db: Session, task: ApiScheduledTask) -> List[int]:
+    rows = (
+        db.query(ApiScheduledTaskSuite)
+        .filter(ApiScheduledTaskSuite.task_id == task.id)
+        .order_by(ApiScheduledTaskSuite.sort_order.asc(), ApiScheduledTaskSuite.id.asc())
+        .all()
+    )
+    if rows:
+        return [row.suite_id for row in rows]
+    if task.suite_id:
+        return [task.suite_id]
+    return []
+
+
+def get_scheduled_task_suites(db: Session, task: ApiScheduledTask) -> List[ApiTestSuite]:
+    suites: List[ApiTestSuite] = []
+    for suite_id in get_scheduled_task_suite_ids(db, task):
+        suite = db.query(ApiTestSuite).filter(ApiTestSuite.id == suite_id).first()
+        if suite:
+            suites.append(suite)
+    return suites
+
+
+def replace_scheduled_task_suites(db: Session, task: ApiScheduledTask, suite_ids: List[int]) -> None:
+    unique_ids: List[int] = []
+    for suite_id in suite_ids:
+        if suite_id not in unique_ids:
+            unique_ids.append(suite_id)
+    db.query(ApiScheduledTaskSuite).filter(ApiScheduledTaskSuite.task_id == task.id).delete()
+    for index, suite_id in enumerate(unique_ids):
+        db.add(
+            ApiScheduledTaskSuite(
+                task_id=task.id,
+                suite_id=suite_id,
+                sort_order=index,
+            )
+        )
+    task.suite_id = unique_ids[0] if unique_ids else None
+
+
 def execute_scheduled_task(db: Session, task: ApiScheduledTask) -> None:
-    suite = db.query(ApiTestSuite).filter(ApiTestSuite.id == task.suite_id).first()
-    if not suite:
+    suites = get_scheduled_task_suites(db, task)
+    if not suites:
         logger.warning("定时任务 %s 关联套件不存在", task.id)
         task.next_run_at = compute_next_run_at(task) if task.enabled else None
         db.commit()
         return
-    try:
-        run = run_api_suite(db, suite, triggered_by=f"schedule:{task.name}")
-        task.last_run_at = now_local()
-        task.last_run_id = run.id
-        task.last_run_status = run.status
-        logger.info("定时任务 %s (%s) 执行完成: run_id=%s status=%s", task.id, task.name, run.id, run.status)
-    except Exception as exc:
-        logger.exception("定时任务 %s 执行失败: %s", task.id, exc)
-        task.last_run_at = now_local()
-        task.last_run_id = None
-        task.last_run_status = "failed"
+
+    last_run: Optional[ApiTestRun] = None
+    overall_status = "passed"
+    for suite in suites:
+        try:
+            run = run_api_suite(db, suite, triggered_by=f"schedule:{task.name}")
+            last_run = run
+            if run.status != "passed":
+                overall_status = run.status
+        except Exception as exc:
+            logger.exception("定时任务 %s 执行套件 %s 失败: %s", task.id, suite.id, exc)
+            overall_status = "failed"
+
+    task.last_run_at = now_local()
+    task.last_run_id = last_run.id if last_run else None
+    task.last_run_status = overall_status
+    if last_run:
+        logger.info(
+            "定时任务 %s (%s) 执行完成: run_id=%s status=%s suites=%s",
+            task.id,
+            task.name,
+            last_run.id,
+            overall_status,
+            len(suites),
+        )
     if task.enabled:
         task.next_run_at = compute_next_run_at(task)
     db.commit()

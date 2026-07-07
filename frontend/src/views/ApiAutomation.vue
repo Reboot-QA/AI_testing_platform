@@ -368,7 +368,7 @@
           </div>
           <el-table v-loading="scheduleLoading" :data="schedules" stripe>
             <el-table-column prop="name" label="任务名称" min-width="140" />
-            <el-table-column prop="suite_name" label="测试套件" min-width="140" />
+            <el-table-column prop="suite_name" label="测试套件" min-width="180" show-overflow-tooltip />
             <el-table-column prop="schedule_desc" label="执行计划" min-width="140" />
             <el-table-column label="状态" width="90">
               <template #default="{ row }">
@@ -788,8 +788,15 @@
         <el-form-item label="任务名称" prop="name">
           <el-input v-model="scheduleForm.name" placeholder="例如：每日回归" />
         </el-form-item>
-        <el-form-item label="测试套件" prop="suite_id">
-          <el-select v-model="scheduleForm.suite_id" style="width: 100%" placeholder="选择套件">
+        <el-form-item label="测试套件" prop="suite_ids">
+          <el-select
+            v-model="scheduleForm.suite_ids"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            style="width: 100%"
+            placeholder="选择套件（可多选）"
+          >
             <el-option v-for="s in runnableSuites" :key="s.id" :label="suiteOptionLabel(s)" :value="s.id" />
           </el-select>
         </el-form-item>
@@ -832,10 +839,21 @@
     <el-drawer v-model="reportVisible" size="75%" class="report-drawer">
       <template #header>
         <div v-if="reportDetail" class="report-drawer-header">
-          <div>
-            <div class="report-drawer-title">测试报告 {{ formatReportTime(reportDetail.started_at) }}</div>
-            <div class="report-drawer-sub">
-              <span v-if="reportDetail.suite_name">{{ reportDetail.suite_name }}</span>
+          <div class="report-drawer-main">
+            <div class="report-drawer-title-row">
+              <div class="report-drawer-title">测试报告</div>
+              <span v-if="reportDetail.suite_name" class="report-drawer-suite">{{ reportDetail.suite_name }}</span>
+            </div>
+            <div class="report-drawer-meta">
+              <div class="report-meta-item">
+                <span class="report-meta-label">开始执行</span>
+                <span class="report-meta-value">{{ formatReportTime(reportDetail.started_at) }}</span>
+              </div>
+              <div class="report-meta-divider" />
+              <div class="report-meta-item">
+                <span class="report-meta-label">结束执行</span>
+                <span class="report-meta-value">{{ formatReportTime(reportDetail.finished_at) }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -1130,7 +1148,7 @@ const folderRules = {
 
 const scheduleForm = reactive({
   name: '',
-  suite_id: null,
+  suite_ids: [],
   schedule_type: 'daily',
   run_time: '09:00',
   week_day: 0,
@@ -1140,7 +1158,13 @@ const scheduleForm = reactive({
 
 const scheduleRules = {
   name: [{ required: true, message: '请输入任务名称', trigger: 'blur' }],
-  suite_id: [{ required: true, message: '请选择测试套件', trigger: 'change' }],
+  suite_ids: [{
+    validator: (_rule, value, callback) => {
+      if (!value?.length) callback(new Error('请至少选择一个测试套件'))
+      else callback()
+    },
+    trigger: 'change',
+  }],
   schedule_type: [{ required: true, message: '请选择调度类型', trigger: 'change' }],
   run_time: [{ required: true, message: '请选择执行时间', trigger: 'change' }],
   week_day: [{ required: true, message: '请选择星期', trigger: 'change' }],
@@ -1570,7 +1594,17 @@ async function loadSchedules() {
 function openScheduleDialog(row = null) {
   scheduleEditing.value = row
   scheduleForm.name = row?.name || ''
-  scheduleForm.suite_id = row?.suite_id || suiteId.value || suites.value[0]?.id || null
+  if (row?.suite_ids?.length) {
+    scheduleForm.suite_ids = [...row.suite_ids]
+  } else if (row?.suite_id) {
+    scheduleForm.suite_ids = [row.suite_id]
+  } else if (suiteId.value) {
+    scheduleForm.suite_ids = [suiteId.value]
+  } else if (runnableSuites.value[0]?.id) {
+    scheduleForm.suite_ids = [runnableSuites.value[0].id]
+  } else {
+    scheduleForm.suite_ids = []
+  }
   scheduleForm.schedule_type = row?.schedule_type || 'daily'
   scheduleForm.run_time = row?.run_time || '09:00'
   scheduleForm.week_day = row?.week_day ?? 0
@@ -1580,7 +1614,7 @@ function openScheduleDialog(row = null) {
 }
 
 async function saveSchedule() {
-  const fields = ['name', 'suite_id', 'schedule_type']
+  const fields = ['name', 'suite_ids', 'schedule_type']
   if (scheduleForm.schedule_type === 'weekly') fields.push('week_day')
   if (scheduleForm.schedule_type !== 'interval') fields.push('run_time')
   if (scheduleForm.schedule_type === 'interval') fields.push('interval_minutes')
@@ -1589,7 +1623,7 @@ async function saveSchedule() {
   try {
     const payload = {
       name: scheduleForm.name,
-      suite_id: scheduleForm.suite_id,
+      suite_ids: [...scheduleForm.suite_ids],
       schedule_type: scheduleForm.schedule_type,
       run_time: scheduleForm.run_time,
       enabled: scheduleForm.enabled,
@@ -2907,10 +2941,21 @@ onUnmounted(() => {
 }
 
 .report-drawer-header {
+  width: 100%;
+  padding-right: 8px;
+}
+
+.report-drawer-main {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-drawer-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
 }
 
 .report-drawer-title {
@@ -2918,6 +2963,53 @@ onUnmounted(() => {
   font-weight: 700;
   color: #1e293b;
   line-height: 1.3;
+}
+
+.report-drawer-suite {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #2563eb;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.report-drawer-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.report-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.report-meta-label {
+  font-size: 12px;
+  color: #64748b;
+}
+
+.report-meta-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+}
+
+.report-meta-divider {
+  width: 1px;
+  height: 36px;
+  background: #e2e8f0;
 }
 
 .report-drawer-sub {
@@ -3101,6 +3193,14 @@ onUnmounted(() => {
 @media (max-width: 1200px) {
   .report-summary {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .report-meta-divider {
+    display: none;
+  }
+
+  .report-drawer-meta {
+    gap: 12px;
   }
 }
 </style>

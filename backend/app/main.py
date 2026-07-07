@@ -12,7 +12,11 @@ from app.routers import auth, projects, requirements, testcases, users, api_auto
 from app.routers import settings as settings_router
 from app.services.seed import seed_demo_data
 from app.services.settings_service import init_llm_settings_from_env
-from app.services.api_automation_migration import migrate_api_test_suite_tree, migrate_api_variable_stores
+from app.services.api_automation_migration import (
+    migrate_api_scheduled_task_suites,
+    migrate_api_test_suite_tree,
+    migrate_api_variable_stores,
+)
 from app.services.user_migration import migrate_user_optional_email
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.schedule_service import init_schedules_on_startup, start_scheduler, stop_scheduler
@@ -61,6 +65,7 @@ def _run_startup() -> None:
             init_llm_settings_from_env(db)
             migrate_api_test_suite_tree(db)
             migrate_api_variable_stores(db)
+            migrate_api_scheduled_task_suites(db)
             migrate_user_optional_email()
             migrate_all_user_permissions(db)
             init_schedules_on_startup(db)

@@ -762,7 +762,7 @@ class SwaggerImportOut(BaseModel):
 
 class ApiScheduledTaskBase(BaseModel):
     name: str
-    suite_id: int
+    suite_ids: List[int] = Field(..., min_length=1)
     schedule_type: str = "daily"
     run_time: str = "09:00"
     week_day: Optional[int] = None
@@ -776,7 +776,7 @@ class ApiScheduledTaskCreate(ApiScheduledTaskBase):
 
 class ApiScheduledTaskUpdate(BaseModel):
     name: Optional[str] = None
-    suite_id: Optional[int] = None
+    suite_ids: Optional[List[int]] = None
     schedule_type: Optional[str] = None
     run_time: Optional[str] = None
     week_day: Optional[int] = None
@@ -787,7 +787,9 @@ class ApiScheduledTaskUpdate(BaseModel):
 class ApiScheduledTaskOut(ApiScheduledTaskBase):
     id: int
     project_id: int
+    suite_id: Optional[int] = None
     suite_name: str = ""
+    suite_names: List[str] = Field(default_factory=list)
     schedule_desc: str = ""
     last_run_at: Optional[datetime] = None
     last_run_id: Optional[int] = None

@@ -50,8 +50,8 @@ class ApiTestSuite(Base):
     runs: Mapped[List["ApiTestRun"]] = relationship(
         "ApiTestRun", back_populates="suite", cascade="all, delete-orphan"
     )
-    scheduled_tasks: Mapped[List["ApiScheduledTask"]] = relationship(
-        "ApiScheduledTask", back_populates="suite", cascade="all, delete-orphan"
+    scheduled_task_links: Mapped[List["ApiScheduledTaskSuite"]] = relationship(
+        "ApiScheduledTaskSuite", back_populates="suite", cascade="all, delete-orphan"
     )
 
 
@@ -119,12 +119,24 @@ class ApiTestStepResult(Base):
     run: Mapped["ApiTestRun"] = relationship("ApiTestRun", back_populates="step_results")
 
 
+class ApiScheduledTaskSuite(Base):
+    __tablename__ = "api_scheduled_task_suites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    task_id: Mapped[int] = mapped_column(ForeignKey("api_scheduled_tasks.id", ondelete="CASCADE"), index=True)
+    suite_id: Mapped[int] = mapped_column(ForeignKey("api_test_suites.id", ondelete="CASCADE"), index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+    task: Mapped["ApiScheduledTask"] = relationship("ApiScheduledTask", back_populates="task_suites")
+    suite: Mapped["ApiTestSuite"] = relationship("ApiTestSuite", back_populates="scheduled_task_links")
+
+
 class ApiScheduledTask(Base):
     __tablename__ = "api_scheduled_tasks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
-    suite_id: Mapped[int] = mapped_column(ForeignKey("api_test_suites.id"), index=True)
+    suite_id: Mapped[Optional[int]] = mapped_column(ForeignKey("api_test_suites.id"), index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(200))
     schedule_type: Mapped[str] = mapped_column(String(20), default="daily")
     run_time: Mapped[str] = mapped_column(String(5), default="09:00")
@@ -138,7 +150,9 @@ class ApiScheduledTask(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    suite: Mapped["ApiTestSuite"] = relationship("ApiTestSuite", back_populates="scheduled_tasks")
+    task_suites: Mapped[List["ApiScheduledTaskSuite"]] = relationship(
+        "ApiScheduledTaskSuite", back_populates="task", cascade="all, delete-orphan"
+    )
 
 
 from app.models.project import Project  # noqa: E402

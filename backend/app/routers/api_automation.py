@@ -21,6 +21,7 @@ from app.database import SessionLocal, get_db
 from app.models.api_automation import (
     ApiEnvironment,
     ApiScheduledTask,
+    ApiScheduledTaskSuite,
     ApiTestCase,
     ApiTestRun,
     ApiTestStepResult,
@@ -101,7 +102,9 @@ from app.services.api_variable_service import (
 from app.services.schedule_service import (
     execute_scheduled_task,
     format_schedule_desc,
+    get_scheduled_task_suite_ids,
     refresh_task_schedule,
+    replace_scheduled_task_suites,
     validate_schedule_fields,
 )
 
@@ -401,13 +404,36 @@ def _get_owned_schedule(db: Session, task_id: int, user: User) -> ApiScheduledTa
     return task
 
 
+def _validate_schedule_suites(
+    db: Session, user: User, project_id: int, suite_ids: List[int]
+) -> List[int]:
+    if not suite_ids:
+        raise HTTPException(status_code=400, detail="请至少选择一个测试套件")
+    unique_ids: List[int] = []
+    for suite_id in suite_ids:
+        if suite_id in unique_ids:
+            continue
+        suite = _get_owned_executable_suite(db, suite_id, user)
+        if suite.project_id != project_id:
+            raise HTTPException(status_code=400, detail="套件与项目不匹配")
+        unique_ids.append(suite_id)
+    return unique_ids
+
+
 def _schedule_out(db: Session, task: ApiScheduledTask) -> ApiScheduledTaskOut:
-    suite = db.query(ApiTestSuite).filter(ApiTestSuite.id == task.suite_id).first()
+    suite_ids = get_scheduled_task_suite_ids(db, task)
+    suite_names: List[str] = []
+    for suite_id in suite_ids:
+        suite = db.query(ApiTestSuite).filter(ApiTestSuite.id == suite_id).first()
+        if suite:
+            suite_names.append(suite.name)
     return ApiScheduledTaskOut(
         id=task.id,
         project_id=task.project_id,
-        suite_id=task.suite_id,
-        suite_name=suite.name if suite else "",
+        suite_ids=suite_ids,
+        suite_id=suite_ids[0] if suite_ids else task.suite_id,
+        suite_name="、".join(suite_names),
+        suite_names=suite_names,
         name=task.name,
         schedule_type=task.schedule_type,
         schedule_desc=format_schedule_desc(task),
@@ -1357,9 +1383,7 @@ def create_schedule(
     current_user: User = Depends(get_current_user),
 ):
     _get_owned_project(db, data.project_id, current_user)
-    suite = _get_owned_executable_suite(db, data.suite_id, current_user)
-    if suite.project_id != data.project_id:
-        raise HTTPException(status_code=400, detail="套件与项目不匹配")
+    suite_ids = _validate_schedule_suites(db, current_user, data.project_id, data.suite_ids)
     try:
         validate_schedule_fields(
             schedule_type=data.schedule_type,
@@ -1372,7 +1396,7 @@ def create_schedule(
 
     task = ApiScheduledTask(
         project_id=data.project_id,
-        suite_id=data.suite_id,
+        suite_id=suite_ids[0],
         name=data.name.strip(),
         schedule_type=data.schedule_type,
         run_time=data.run_time or "09:00",
@@ -1381,6 +1405,8 @@ def create_schedule(
         enabled=data.enabled,
     )
     db.add(task)
+    db.flush()
+    replace_scheduled_task_suites(db, task, suite_ids)
     db.commit()
     db.refresh(task)
     refresh_task_schedule(db, task, force_from_now=True)
@@ -1395,11 +1421,9 @@ def update_schedule(
     current_user: User = Depends(get_current_user),
 ):
     task = _get_owned_schedule(db, task_id, current_user)
-    if data.suite_id is not None:
-        suite = _get_owned_executable_suite(db, data.suite_id, current_user)
-        if suite.project_id != task.project_id:
-            raise HTTPException(status_code=400, detail="套件与项目不匹配")
-        task.suite_id = data.suite_id
+    if data.suite_ids is not None:
+        suite_ids = _validate_schedule_suites(db, current_user, task.project_id, data.suite_ids)
+        replace_scheduled_task_suites(db, task, suite_ids)
     if data.name is not None:
         task.name = data.name.strip()
     if data.schedule_type is not None:

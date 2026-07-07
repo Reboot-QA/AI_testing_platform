@@ -12,6 +12,7 @@ from app.models.api_automation import (
     ApiTestStepResult,
     ApiTestSuite,
     ApiScheduledTask,
+    ApiScheduledTaskSuite,
 )
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 
@@ -29,6 +30,7 @@ __all__ = [
     "ApiTestRun",
     "ApiTestStepResult",
     "ApiScheduledTask",
+    "ApiScheduledTaskSuite",
     "ManualTestRun",
     "ManualTestRunCase",
 ]

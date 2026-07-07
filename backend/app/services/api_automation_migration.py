@@ -53,3 +53,33 @@ def migrate_api_variable_stores(db: Session) -> None:
     with engine.begin() as conn:
         for statement in statements:
             conn.execute(text(statement))
+
+
+def migrate_api_scheduled_task_suites(db: Session) -> None:
+    from app.models.api_automation import ApiScheduledTask, ApiScheduledTaskSuite
+
+    inspector = inspect(engine)
+    if "api_scheduled_tasks" not in inspector.get_table_names():
+        return
+    if "api_scheduled_task_suites" not in inspector.get_table_names():
+        return
+
+    tasks = db.query(ApiScheduledTask).all()
+    changed = False
+    for task in tasks:
+        existing = (
+            db.query(ApiScheduledTaskSuite)
+            .filter(ApiScheduledTaskSuite.task_id == task.id)
+            .count()
+        )
+        if existing == 0 and task.suite_id:
+            db.add(
+                ApiScheduledTaskSuite(
+                    task_id=task.id,
+                    suite_id=task.suite_id,
+                    sort_order=0,
+                )
+            )
+            changed = True
+    if changed:
+        db.commit()
