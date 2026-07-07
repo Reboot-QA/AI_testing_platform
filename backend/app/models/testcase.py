@@ -23,12 +23,15 @@ class TestCase(Base):
     source: Mapped[str] = mapped_column(String(20), default="manual")
     review_status: Mapped[str] = mapped_column(String(20), default="draft")
     ai_metadata: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     project: Mapped["Project"] = relationship("Project", back_populates="testcases")
     requirement: Mapped[Optional["Requirement"]] = relationship("Requirement", back_populates="testcases")
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by_id])
 
 
 from app.models.project import Project  # noqa: E402
 from app.models.requirement import Requirement  # noqa: E402
+from app.models.user import User  # noqa: E402

@@ -94,3 +94,25 @@ def migrate_api_scheduled_task_suites(db: Session) -> None:
             changed = True
     if changed:
         db.commit()
+
+
+def migrate_requirement_created_by(db: Session) -> None:
+    inspector = inspect(engine)
+    if "requirements" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("requirements")}
+    if "created_by_id" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE requirements ADD COLUMN created_by_id INTEGER"))
+
+
+def migrate_testcase_created_by(db: Session) -> None:
+    inspector = inspect(engine)
+    if "testcases" not in inspector.get_table_names():
+        return
+
+    columns = {column["name"] for column in inspector.get_columns("testcases")}
+    if "created_by_id" not in columns:
+        with engine.begin() as conn:
+            conn.execute(text("ALTER TABLE testcases ADD COLUMN created_by_id INTEGER"))

@@ -58,6 +58,9 @@
           <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] || row.status }}</el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="creator_name" label="创建人" width="100">
+        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="testcase_count" label="关联用例" width="100" align="center">
         <template #default="{ row }">
           <el-button

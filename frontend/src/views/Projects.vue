@@ -19,6 +19,7 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="owner_name" label="创建人" width="100" />
       <el-table-column prop="created_at" label="创建时间" width="170">
         <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
       </el-table-column>

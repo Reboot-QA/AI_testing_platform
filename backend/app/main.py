@@ -16,6 +16,8 @@ from app.services.api_automation_migration import (
     migrate_api_scheduled_task_suites,
     migrate_api_test_suite_tree,
     migrate_api_variable_stores,
+    migrate_requirement_created_by,
+    migrate_testcase_created_by,
 )
 from app.services.user_migration import migrate_user_optional_email
 from app.services.permission_service import migrate_all_user_permissions
@@ -66,6 +68,8 @@ def _run_startup() -> None:
             migrate_api_test_suite_tree(db)
             migrate_api_variable_stores(db)
             migrate_api_scheduled_task_suites(db)
+            migrate_requirement_created_by(db)
+            migrate_testcase_created_by(db)
             migrate_user_optional_email()
             migrate_all_user_permissions(db)
             init_schedules_on_startup(db)

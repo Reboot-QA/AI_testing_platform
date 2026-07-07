@@ -116,6 +116,30 @@ def _prepare_ai_generate(
     }
 
 
+def _testcase_out(case: TestCase, db: Session) -> TestCaseOut:
+    creator_name = case.creator.username if case.creator else ""
+    if not creator_name and case.created_by_id:
+        creator = db.query(User).filter(User.id == case.created_by_id).first()
+        creator_name = creator.username if creator else ""
+    return TestCaseOut(
+        id=case.id,
+        project_id=case.project_id,
+        requirement_id=case.requirement_id,
+        title=case.title,
+        case_type=case.case_type,
+        priority=case.priority,
+        preconditions=case.preconditions,
+        steps=case.steps,
+        expected_results=case.expected_results,
+        tags=case.tags,
+        source=case.source,
+        review_status=case.review_status,
+        created_by_id=case.created_by_id,
+        creator_name=creator_name,
+        created_at=case.created_at,
+    )
+
+
 def _stage_generated_case(
     db: Session,
     *,
@@ -125,6 +149,7 @@ def _stage_generated_case(
     case_type: str,
     mode: str,
     item: dict,
+    created_by_id: Optional[int] = None,
 ) -> TestCase:
     case = TestCase(
         project_id=project_id,
@@ -138,6 +163,7 @@ def _stage_generated_case(
         tags=item.get("tags"),
         source="ai_generated",
         review_status="pending",
+        created_by_id=created_by_id,
         ai_metadata=json.dumps(
             {
                 "mode": mode,
@@ -162,6 +188,7 @@ def _save_generated_case(
     case_type: str,
     mode: str,
     item: dict,
+    created_by_id: Optional[int] = None,
 ) -> TestCase:
     case = _stage_generated_case(
         db,
@@ -171,6 +198,7 @@ def _save_generated_case(
         case_type=case_type,
         mode=mode,
         item=item,
+        created_by_id=created_by_id,
     )
     db.commit()
     db.refresh(case)
@@ -201,7 +229,11 @@ def list_testcases(
     current_user: User = Depends(get_current_user),
 ):
     _check_project(db, project_id, current_user.id)
-    query = db.query(TestCase).filter(TestCase.project_id == project_id)
+    query = (
+        db.query(TestCase)
+        .options(joinedload(TestCase.creator))
+        .filter(TestCase.project_id == project_id)
+    )
     if requirement_id:
         query = query.filter(TestCase.requirement_id == requirement_id)
     if review_status:
@@ -211,9 +243,14 @@ def list_testcases(
     if page is not None:
         total = query.count()
         items = query.offset((page - 1) * page_size).limit(page_size).all()
-        return TestCasePageOut(items=items, total=total, page=page, page_size=page_size)
+        return TestCasePageOut(
+            items=[_testcase_out(item, db) for item in items],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
 
-    return query.all()
+    return [_testcase_out(item, db) for item in query.all()]
 
 
 @router.post("", response_model=TestCaseOut)
@@ -223,11 +260,11 @@ def create_testcase(
     current_user: User = Depends(get_current_user),
 ):
     _check_project(db, data.project_id, current_user.id)
-    case = TestCase(**data.model_dump())
+    case = TestCase(**data.model_dump(), created_by_id=current_user.id)
     db.add(case)
     db.commit()
     db.refresh(case)
-    return case
+    return _testcase_out(case, db)
 
 
 @router.post("/ai/generate", response_model=AIGenerateResponse)
@@ -264,6 +301,7 @@ async def ai_generate(
                         case_type=data.case_type,
                         mode=mode,
                         item=item,
+                        created_by_id=current_user.id,
                     )
                 )
     except Exception as exc:
@@ -271,7 +309,7 @@ async def ai_generate(
 
     return AIGenerateResponse(
         generated_count=len(saved),
-        testcases=saved,
+        testcases=[_testcase_out(case, db) for case in saved],
         mode=mode,
         provider_name=llm_config.get("provider_name"),
         model=llm_config.get("model"),
@@ -361,6 +399,7 @@ async def ai_generate_stream(
                         case_type=data.case_type,
                         mode=mode,
                         item=item,
+                        created_by_id=current_user.id,
                     )
                     stream_db.flush()
                     stream_db.refresh(case)
@@ -368,7 +407,7 @@ async def ai_generate_stream(
                     yield _sse_event(
                         {
                             "type": "case",
-                            "data": TestCaseOut.model_validate(case).model_dump(mode="json"),
+                            "data": _testcase_out(case, stream_db).model_dump(mode="json"),
                             "current": saved_count,
                             "total": data.count,
                             "saved": True,
@@ -655,11 +694,11 @@ def batch_delete_testcases(
 
 @router.get("/{case_id}", response_model=TestCaseOut)
 def get_testcase(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    case = db.query(TestCase).filter(TestCase.id == case_id).first()
+    case = db.query(TestCase).options(joinedload(TestCase.creator)).filter(TestCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="用例不存在")
     _check_project(db, case.project_id, current_user.id)
-    return case
+    return _testcase_out(case, db)
 
 
 @router.put("/{case_id}", response_model=TestCaseOut)
@@ -677,7 +716,7 @@ def update_testcase(
         setattr(case, key, value)
     db.commit()
     db.refresh(case)
-    return case
+    return _testcase_out(case, db)
 
 
 @router.delete("/{case_id}")

@@ -107,6 +107,7 @@ class ProjectUpdate(BaseModel):
 class ProjectOut(ProjectBase):
     id: int
     owner_id: int
+    owner_name: str = ""
     status: str
     created_at: datetime
     requirement_count: int = 0
@@ -140,6 +141,8 @@ class RequirementOut(RequirementBase):
     project_id: int
     status: str
     source: str
+    created_by_id: Optional[int] = None
+    creator_name: str = ""
     created_at: datetime
     testcase_count: int = 0
 
@@ -230,6 +233,8 @@ class TestCaseOut(TestCaseBase):
     project_id: int
     source: str
     review_status: str
+    created_by_id: Optional[int] = None
+    creator_name: str = ""
     created_at: datetime
 
     class Config:

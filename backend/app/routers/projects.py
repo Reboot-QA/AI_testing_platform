@@ -1,7 +1,7 @@
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -17,11 +17,16 @@ router = APIRouter(prefix="/projects", tags=["项目"])
 def _project_out(project: Project, db: Session) -> ProjectOut:
     req_count = db.query(Requirement).filter(Requirement.project_id == project.id).count()
     case_count = db.query(TestCase).filter(TestCase.project_id == project.id).count()
+    owner_name = project.owner.username if project.owner else ""
+    if not owner_name and project.owner_id:
+        owner = db.query(User).filter(User.id == project.owner_id).first()
+        owner_name = owner.username if owner else ""
     return ProjectOut(
         id=project.id,
         name=project.name,
         description=project.description,
         owner_id=project.owner_id,
+        owner_name=owner_name,
         status=project.status,
         created_at=project.created_at,
         requirement_count=req_count,
@@ -31,7 +36,13 @@ def _project_out(project: Project, db: Session) -> ProjectOut:
 
 @router.get("", response_model=List[ProjectOut])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    projects = db.query(Project).filter(Project.owner_id == current_user.id).order_by(Project.id.desc()).all()
+    projects = (
+        db.query(Project)
+        .options(joinedload(Project.owner))
+        .filter(Project.owner_id == current_user.id)
+        .order_by(Project.id.desc())
+        .all()
+    )
     return [_project_out(p, db) for p in projects]
 
 

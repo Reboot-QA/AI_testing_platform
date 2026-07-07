@@ -18,12 +18,15 @@ class Requirement(Base):
     priority: Mapped[str] = mapped_column(String(10), default="P1")
     status: Mapped[str] = mapped_column(String(20), default="draft")
     source: Mapped[str] = mapped_column(String(30), default="manual")
+    created_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     project: Mapped["Project"] = relationship("Project", back_populates="requirements")
+    creator: Mapped[Optional["User"]] = relationship("User", foreign_keys=[created_by_id])
     testcases: Mapped[List["TestCase"]] = relationship("TestCase", back_populates="requirement")
 
 
 from app.models.project import Project  # noqa: E402
 from app.models.testcase import TestCase  # noqa: E402
+from app.models.user import User  # noqa: E402

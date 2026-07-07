@@ -71,6 +71,9 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="creator_name" label="创建人" width="100">
+        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="review_status" label="评审" width="100">
         <template #default="{ row }">
           <el-tag :type="reviewType[row.review_status]" size="small">

@@ -36,6 +36,7 @@ def seed_demo_data(db: Session) -> None:
         req_type="functional",
         priority="P0",
         status="approved",
+        created_by_id=admin.id,
     )
     db.add(req)
     db.flush()
@@ -53,6 +54,7 @@ def seed_demo_data(db: Session) -> None:
             tags="登录,冒烟",
             source="manual",
             review_status="approved",
+            created_by_id=admin.id,
         )
     )
     db.commit()

@@ -3,7 +3,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
@@ -38,6 +38,10 @@ def _sse_event(payload: dict) -> str:
 
 def _requirement_out(req: Requirement, db: Session) -> RequirementOut:
     case_count = db.query(TestCase).filter(TestCase.requirement_id == req.id).count()
+    creator_name = req.creator.username if req.creator else ""
+    if not creator_name and req.created_by_id:
+        creator = db.query(User).filter(User.id == req.created_by_id).first()
+        creator_name = creator.username if creator else ""
     return RequirementOut(
         id=req.id,
         project_id=req.project_id,
@@ -47,6 +51,8 @@ def _requirement_out(req: Requirement, db: Session) -> RequirementOut:
         priority=req.priority,
         status=req.status,
         source=req.source,
+        created_by_id=req.created_by_id,
+        creator_name=creator_name,
         created_at=req.created_at,
         testcase_count=case_count,
     )
@@ -76,7 +82,7 @@ def list_requirements(
     current_user: User = Depends(get_current_user),
 ):
     _check_project(db, project_id, current_user.id)
-    query = db.query(Requirement).filter(Requirement.project_id == project_id)
+    query = db.query(Requirement).options(joinedload(Requirement.creator)).filter(Requirement.project_id == project_id)
     if status:
         if status not in ALLOWED_REQUIREMENT_STATUSES:
             raise HTTPException(status_code=400, detail="无效的需求状态")
@@ -92,7 +98,7 @@ def create_requirement(
     current_user: User = Depends(get_current_user),
 ):
     _check_project(db, data.project_id, current_user.id)
-    req = Requirement(**data.model_dump())
+    req = Requirement(**data.model_dump(), created_by_id=current_user.id)
     db.add(req)
     db.commit()
     db.refresh(req)
@@ -334,6 +340,7 @@ def batch_import_requirements(
             priority=item.priority,
             status="draft",
             source="ai_document",
+            created_by_id=current_user.id,
         )
         db.add(req)
         saved.append(req)
