@@ -4,7 +4,9 @@ from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
-from sqlalchemy import func
+from datetime import datetime
+
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -1201,6 +1203,10 @@ def run_suite_stream(
 def list_runs(
     project_id: Optional[int] = None,
     suite_id: Optional[int] = None,
+    started_from: Optional[datetime] = Query(None),
+    started_to: Optional[datetime] = Query(None),
+    executor: Optional[str] = Query(None, max_length=50),
+    trigger_type: Optional[str] = Query(None, pattern="^(manual|schedule)$"),
     page: Optional[int] = Query(None, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -1218,6 +1224,28 @@ def list_runs(
     if suite_id:
         _get_owned_executable_suite(db, suite_id, current_user)
         query = query.filter(ApiTestRun.suite_id == suite_id)
+    if started_from:
+        query = query.filter(ApiTestRun.started_at >= started_from)
+    if started_to:
+        query = query.filter(ApiTestRun.started_at <= started_to)
+    if trigger_type == "schedule":
+        query = query.filter(ApiTestRun.triggered_by.like("schedule:%"))
+    elif trigger_type == "manual":
+        query = query.filter(
+            or_(
+                ApiTestRun.triggered_by.is_(None),
+                ~ApiTestRun.triggered_by.like("schedule:%"),
+            )
+        )
+    if executor:
+        executor_value = executor.strip()
+        if executor_value in ("系统", "system"):
+            query = query.filter(ApiTestRun.triggered_by.like("schedule:%"))
+        else:
+            query = query.filter(
+                ~ApiTestRun.triggered_by.like("schedule:%"),
+                ApiTestRun.triggered_by.ilike(f"%{executor_value}%"),
+            )
     query = query.order_by(ApiTestRun.id.desc())
     if page is not None:
         total = query.count()

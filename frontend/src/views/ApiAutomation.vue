@@ -7,6 +7,36 @@
       <el-button type="primary" :disabled="!projectId" @click="reloadAll">
         <el-icon><Refresh /></el-icon> 刷新
       </el-button>
+      <div v-if="activeTab === 'report'" class="report-search-bar">
+        <el-date-picker
+          v-model="reportDateRange"
+          type="daterange"
+          range-separator="至"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+          value-format="YYYY-MM-DD"
+          style="width: 260px"
+          clearable
+        />
+        <el-input
+          v-model="reportExecutorFilter"
+          placeholder="执行人"
+          clearable
+          style="width: 140px"
+          @keyup.enter="searchReports"
+        />
+        <el-select
+          v-model="reportTriggerFilter"
+          placeholder="触发方式"
+          clearable
+          style="width: 120px"
+        >
+          <el-option label="手动" value="manual" />
+          <el-option label="定时" value="schedule" />
+        </el-select>
+        <el-button type="primary" :disabled="!projectId" @click="searchReports">查询</el-button>
+        <el-button :disabled="!projectId" @click="resetReportSearch">重置</el-button>
+      </div>
     </div>
 
     <div class="main-content">
@@ -958,6 +988,9 @@ const reportTableRef = ref(null)
 const reportCurrentPage = ref(1)
 const reportPageSize = ref(10)
 const reportTotal = ref(0)
+const reportDateRange = ref(null)
+const reportExecutorFilter = ref('')
+const reportTriggerFilter = ref('')
 const suiteTreeRef = ref(null)
 
 const envDialogVisible = ref(false)
@@ -1284,7 +1317,37 @@ function handleProjectChange() {
   activeCaseId.value = null
   cases.value = []
   reportCurrentPage.value = 1
+  resetReportSearch(false)
   reloadAll()
+}
+
+function buildReportQueryParams() {
+  const params = {
+    project_id: projectId.value,
+    page: reportCurrentPage.value,
+    page_size: reportPageSize.value,
+  }
+  if (reportDateRange.value?.length === 2) {
+    params.started_from = `${reportDateRange.value[0]}T00:00:00`
+    params.started_to = `${reportDateRange.value[1]}T23:59:59`
+  }
+  const executor = reportExecutorFilter.value.trim()
+  if (executor) params.executor = executor
+  if (reportTriggerFilter.value) params.trigger_type = reportTriggerFilter.value
+  return params
+}
+
+function searchReports() {
+  reportCurrentPage.value = 1
+  loadRuns()
+}
+
+function resetReportSearch(reload = true) {
+  reportDateRange.value = null
+  reportExecutorFilter.value = ''
+  reportTriggerFilter.value = ''
+  reportCurrentPage.value = 1
+  if (reload) loadRuns()
 }
 
 async function loadEnvironments() {
@@ -1464,11 +1527,7 @@ async function loadRuns() {
   if (!projectId.value) return
   reportLoading.value = true
   try {
-    const data = await apiAutomationApi.listRuns({
-      project_id: projectId.value,
-      page: reportCurrentPage.value,
-      page_size: reportPageSize.value,
-    })
+    const data = await apiAutomationApi.listRuns(buildReportQueryParams())
     runs.value = data.items || []
     reportTotal.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(reportTotal.value / reportPageSize.value) || 1)
@@ -2413,8 +2472,18 @@ onUnmounted(() => {
 <style scoped>
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 12px;
   margin-bottom: 16px;
+}
+
+.report-search-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
 }
 
 .main-content {
