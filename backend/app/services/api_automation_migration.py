@@ -2,6 +2,7 @@ from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 import json
+import logging
 
 from app.database import engine
 
@@ -146,6 +147,17 @@ def migrate_department_permissions(db: Session) -> None:
         with engine.begin() as conn:
             for statement in statements:
                 conn.execute(text(statement))
+        db.expire_all()
+
+    inspector = inspect(engine)
+    user_columns = {column["name"] for column in inspector.get_columns("users")} if "users" in table_names else set()
+    project_columns = (
+        {column["name"] for column in inspector.get_columns("projects")} if "projects" in table_names else set()
+    )
+    if "department_id" not in user_columns or "department_id" not in project_columns:
+        logger = logging.getLogger(__name__)
+        logger.warning("部门字段迁移未完成，跳过默认部门回填")
+        return
 
     default_department = db.query(Department).filter(Department.name == "默认部门").first()
     needs_commit = False

@@ -421,10 +421,11 @@ wait_backend_ready() {
     fi
     if (( i % 10 == 0 )); then
       case "$code" in
-        503) info "后端仍在初始化数据库... (${i}/120)" ;;
-        000) info "等待后端端口响应... (${i}/120)" ;;
+        503) info "后端仍在初始化... (${i}/120)" ;;
+        000) info "等待后端端口（可能正在执行数据库迁移）... (${i}/120)" ;;
         *) info "等待后端就绪... HTTP ${code} (${i}/120)" ;;
       esac
+      compose_cmd logs backend --tail=5 2>/dev/null | sed 's/^/    /' >&2 || true
     fi
     if (( i == 120 )); then
       warn "后端启动超时"

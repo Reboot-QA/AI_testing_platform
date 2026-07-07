@@ -1,27 +1,16 @@
 from contextlib import asynccontextmanager
 import logging
+import os
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.bootstrap import run_bootstrap
 from app.config import settings
-from app.database import Base, SessionLocal, engine
 from app.routers import auth, projects, requirements, testcases, users, api_automation, test_execution, logs, departments
 from app.routers import settings as settings_router
-from app.services.seed import seed_demo_data
-from app.services.settings_service import init_llm_settings_from_env
-from app.services.api_automation_migration import (
-    migrate_api_scheduled_task_suites,
-    migrate_api_test_suite_tree,
-    migrate_api_variable_stores,
-    migrate_department_permissions,
-    migrate_requirement_created_by,
-    migrate_testcase_created_by,
-)
-from app.services.user_migration import migrate_user_optional_email
-from app.services.permission_service import migrate_all_user_permissions
-from app.services.schedule_service import init_schedules_on_startup, start_scheduler, stop_scheduler
+from app.services.schedule_service import start_scheduler, stop_scheduler
 from app.request_logging import register_request_logging
 
 
@@ -56,49 +45,22 @@ _app_ready = False
 _app_init_error: str | None = None
 
 
-def _run_startup() -> None:
-    global _app_init_error, _app_ready
-    logger = logging.getLogger(__name__)
-    steps = [
-        ("初始化数据库表", lambda db: Base.metadata.create_all(bind=engine)),
-        ("迁移接口套件树", migrate_api_test_suite_tree),
-        ("迁移接口变量", migrate_api_variable_stores),
-        ("迁移定时任务套件", migrate_api_scheduled_task_suites),
-        ("迁移部门权限", migrate_department_permissions),
-        ("迁移需求创建人", migrate_requirement_created_by),
-        ("迁移用例创建人", migrate_testcase_created_by),
-        ("迁移用户邮箱", lambda db: migrate_user_optional_email()),
-        ("写入演示数据", seed_demo_data),
-        ("加载 LLM 配置", init_llm_settings_from_env),
-        ("迁移菜单权限", migrate_all_user_permissions),
-        ("初始化定时任务", init_schedules_on_startup),
-    ]
-    try:
-        import app.models  # noqa: F401
-
-        db = SessionLocal()
-        try:
-            for label, step in steps:
-                logger.info("启动步骤: %s", label)
-                step(db)
-        finally:
-            db.close()
-        start_scheduler()
-        _app_ready = True
-        logger.info("应用启动完成")
-    except Exception as exc:
-        _app_init_error = str(exc)
-        logger.exception("应用启动失败")
-        raise
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _app_ready, _app_init_error
     setup_logging()
     _app_ready = False
     _app_init_error = None
-    _run_startup()
+    try:
+        if os.environ.get("APP_BOOTSTRAP_DONE") != "1":
+            run_bootstrap()
+        start_scheduler()
+        _app_ready = True
+        logging.getLogger(__name__).info("应用启动完成")
+    except Exception as exc:
+        _app_init_error = str(exc)
+        logging.getLogger(__name__).exception("应用启动失败")
+        raise
     yield
     stop_scheduler()
     _app_ready = False

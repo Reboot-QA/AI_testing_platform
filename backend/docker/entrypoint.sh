@@ -72,5 +72,26 @@ print("[ERR] MySQL connection timed out", file=sys.stderr)
 sys.exit(1)
 PY
 
+echo "[INFO] Running database bootstrap..."
+python - <<'PY'
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s",
+)
+
+try:
+    from app.bootstrap import run_bootstrap
+
+    run_bootstrap()
+except Exception:
+    logging.getLogger(__name__).exception("数据库初始化失败")
+    sys.exit(1)
+PY
+
+export APP_BOOTSTRAP_DONE=1
+
 echo "[INFO] Starting backend on 0.0.0.0:8000 ..."
 exec uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1 --log-level info
