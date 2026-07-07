@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { authApi } from '@/api'
 import { clearAssistantChat } from '@/utils/assistantChatStorage'
+import { useAiGenerateStore } from '@/stores/aiGenerate'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -35,6 +36,7 @@ export const useUserStore = defineStore('user', {
       return false
     },
     logout() {
+      useAiGenerateStore().stopForLogout()
       this.token = ''
       this.user = null
       localStorage.removeItem('token')

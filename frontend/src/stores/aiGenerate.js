@@ -122,6 +122,17 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       this.leaveCountdown = 0
     },
 
+    stopForLogout() {
+      if (abortController) {
+        abortController.abort()
+        abortController = null
+      }
+      this.generating = false
+      this.clearLeaveTimer()
+      this.leftPageAt = null
+      this.leaveCountdown = 0
+    },
+
     onLeaveAiGeneratePage() {
       if (!this.generating) return
       this.leftPageAt = Date.now()
