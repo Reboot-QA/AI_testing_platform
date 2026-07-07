@@ -125,11 +125,7 @@ import { ElMessage } from 'element-plus'
 import { assistantApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import { executeAssistantActions, injectAssistantHighlightStyle } from '@/utils/assistantExecutor'
-import {
-  loadAssistantMessages,
-  saveAssistantMessages,
-  clearAssistantChat,
-} from '@/utils/assistantChatStorage'
+import { clearAssistantChat } from '@/utils/assistantChatStorage'
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -154,33 +150,7 @@ function createMessageId() {
   return `msg-${Date.now()}-${messageSeq}`
 }
 
-function normalizeStoredMessage(item) {
-  return {
-    id: item.id || createMessageId(),
-    role: item.role,
-    content: item.content || '',
-    actions: Array.isArray(item.actions) ? item.actions : [],
-    actionStatus: item.actionStatus || null,
-    executionLogs: Array.isArray(item.executionLogs) ? item.executionLogs : [],
-    actionError: item.actionError || '',
-  }
-}
-
-function loadStoredMessages() {
-  const loaded = loadAssistantMessages({
-    createMessageId,
-    normalizeMessage: normalizeStoredMessage,
-  })
-  messageSeq = loaded.messageSeq
-  return loaded.messages
-}
-
-function persistMessages() {
-  if (!userStore.token) return
-  saveAssistantMessages(messages.value)
-}
-
-function resetAssistantChat() {
+function resetAssistantChatToWelcome() {
   stopStreaming()
   clearAssistantChat()
   messages.value = []
@@ -188,8 +158,12 @@ function resetAssistantChat() {
   input.value = ''
   loading.value = false
   executing.value = false
-  open.value = false
   modeLabel.value = ''
+}
+
+function resetAssistantChat() {
+  resetAssistantChatToWelcome()
+  open.value = false
 }
 
 function buildChatPayload(excludeAssistantId) {
@@ -199,7 +173,7 @@ function buildChatPayload(excludeAssistantId) {
     .map((item) => ({ role: item.role, content: item.content }))
 }
 
-const messages = ref(loadStoredMessages())
+const messages = ref([])
 
 const suggestions = [
   { text: '帮我演示项目管理全流程', preset: 'project_management_full' },
@@ -231,18 +205,12 @@ watch(
 )
 
 watch(
-  messages,
-  () => {
-    persistMessages()
-  },
-  { deep: true }
-)
-
-watch(
   () => userStore.token,
-  (token) => {
+  (token, prev) => {
     if (!token) {
       resetAssistantChat()
+    } else if (token && !prev) {
+      resetAssistantChatToWelcome()
     }
   }
 )
@@ -253,8 +221,8 @@ onMounted(() => {
   if (saved && !Number.isNaN(Number(saved))) {
     fabBottom.value = clampFabBottom(Number(saved))
   }
-  if (messages.value.length) {
-    scrollToBottom()
+  if (userStore.token) {
+    resetAssistantChatToWelcome()
   }
 })
 
@@ -404,7 +372,7 @@ async function streamChat(question, options = {}) {
     }
     scrollToBottom()
     if (shouldAutoExecute && assistantMessage?.actionStatus === 'pending' && assistantMessage.actions?.length) {
-      await runPlan(assistantId)
+      await runPlan(assistantId, { resetAfterSuccess: true })
     }
   }
 }
@@ -416,7 +384,7 @@ function cancelPlan(messageId) {
   msg.actions = []
 }
 
-async function runPlan(messageId) {
+async function runPlan(messageId, options = {}) {
   const msg = messages.value.find((item) => item.id === messageId)
   if (!msg?.actions?.length || executing.value) return
 
@@ -425,6 +393,7 @@ async function runPlan(messageId) {
   msg.executionLogs = []
   msg.actionError = ''
 
+  let succeeded = false
   try {
     await executeAssistantActions(msg.actions, (progress) => {
       const existing = msg.executionLogs.find((item) => item.label === progress.label)
@@ -438,6 +407,7 @@ async function runPlan(messageId) {
     msg.actionStatus = 'done'
     msg.content += '\n\n**已在浏览器中完成上述操作。**'
     ElMessage.success('自动操作已完成')
+    succeeded = true
   } catch (error) {
     msg.actionStatus = 'error'
     msg.actionError = error.message || '执行失败'
@@ -445,6 +415,9 @@ async function runPlan(messageId) {
   } finally {
     executing.value = false
     scrollToBottom()
+    if (options.resetAfterSuccess && succeeded) {
+      setTimeout(() => resetAssistantChatToWelcome(), 1000)
+    }
   }
 }
 
