@@ -123,9 +123,16 @@ import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { assistantApi } from '@/api'
+import { useUserStore } from '@/stores/user'
 import { executeAssistantActions, injectAssistantHighlightStyle } from '@/utils/assistantExecutor'
+import {
+  loadAssistantMessages,
+  saveAssistantMessages,
+  clearAssistantChat,
+} from '@/utils/assistantChatStorage'
 
 const route = useRoute()
+const userStore = useUserStore()
 
 const open = ref(false)
 const input = ref('')
@@ -138,9 +145,7 @@ const fabBottom = ref(24)
 const dragging = ref(false)
 const dragMoved = ref(false)
 const FAB_STORAGE_KEY = 'assistant-fab-bottom'
-const CHAT_STORAGE_KEY = 'assistant-chat-messages-v1'
 const FAB_MIN_BOTTOM = 72
-const MAX_STORED_MESSAGES = 80
 
 let messageSeq = 0
 
@@ -162,34 +167,29 @@ function normalizeStoredMessage(item) {
 }
 
 function loadStoredMessages() {
-  try {
-    const raw = localStorage.getItem(CHAT_STORAGE_KEY)
-    if (!raw) return []
-    const parsed = JSON.parse(raw)
-    if (!Array.isArray(parsed)) return []
-    const normalized = parsed.map(normalizeStoredMessage)
-    const maxId = normalized.reduce((max, item) => {
-      const match = String(item.id).match(/-(\d+)$/)
-      return match ? Math.max(max, Number(match[1])) : max
-    }, 0)
-    messageSeq = maxId
-    return normalized.slice(-MAX_STORED_MESSAGES)
-  } catch {
-    return []
-  }
+  const loaded = loadAssistantMessages({
+    createMessageId,
+    normalizeMessage: normalizeStoredMessage,
+  })
+  messageSeq = loaded.messageSeq
+  return loaded.messages
 }
 
 function persistMessages() {
-  const payload = messages.value.slice(-MAX_STORED_MESSAGES).map((item) => ({
-    id: item.id,
-    role: item.role,
-    content: item.content,
-    actions: item.actions,
-    actionStatus: item.actionStatus,
-    executionLogs: item.executionLogs,
-    actionError: item.actionError,
-  }))
-  localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(payload))
+  if (!userStore.token) return
+  saveAssistantMessages(messages.value)
+}
+
+function resetAssistantChat() {
+  stopStreaming()
+  clearAssistantChat()
+  messages.value = []
+  messageSeq = 0
+  input.value = ''
+  loading.value = false
+  executing.value = false
+  open.value = false
+  modeLabel.value = ''
 }
 
 function buildChatPayload(excludeAssistantId) {
@@ -236,6 +236,15 @@ watch(
     persistMessages()
   },
   { deep: true }
+)
+
+watch(
+  () => userStore.token,
+  (token) => {
+    if (!token) {
+      resetAssistantChat()
+    }
+  }
 )
 
 onMounted(() => {

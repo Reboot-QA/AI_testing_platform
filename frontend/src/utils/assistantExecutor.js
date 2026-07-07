@@ -13,6 +13,14 @@ const TARGET_ALIASES = {
   'suites.swagger_url_input': 'suites.swagger_url_input',
   'suites.swagger_parse_btn': 'suites.swagger_parse_btn',
   'suites.swagger_confirm_btn': 'suites.swagger_confirm_btn',
+  'apiAutomation.create_suite_btn': 'suites.open_create_suite_dialog',
+  'suites.create_suite_btn': 'suites.open_create_suite_dialog',
+  'suites.open_create_suite_dialog': 'suites.open_create_suite_dialog',
+  'suites.create_btn': 'suites.create_btn',
+  'suites.form.name': 'suites.form.name',
+  'suites.form.environment': 'suites.form.environment',
+  'suites.form.description': 'suites.form.description',
+  'suites.form.submit': 'suites.form.submit',
 }
 
 function sleep(ms) {

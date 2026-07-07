@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { authApi } from '@/api'
+import { clearAssistantChat } from '@/utils/assistantChatStorage'
 
 export const useUserStore = defineStore('user', {
   state: () => ({
@@ -37,6 +38,7 @@ export const useUserStore = defineStore('user', {
       this.token = ''
       this.user = null
       localStorage.removeItem('token')
+      clearAssistantChat()
     },
   },
 })

@@ -63,6 +63,14 @@
       </div>
 
       <div v-else-if="activeTab === 'suite'">
+        <button
+          type="button"
+          class="assistant-hidden-trigger"
+          data-assistant="suites.open_create_suite_dialog"
+          tabindex="-1"
+          aria-hidden="true"
+          @click="openSuiteDialog()"
+        />
         <el-row :gutter="16">
           <el-col :span="4">
             <el-card shadow="never" class="suite-card">
@@ -70,13 +78,13 @@
                 <div class="card-header">
                   <span>测试套件</span>
                   <el-dropdown trigger="click" :disabled="!projectId" @command="handleCreateCommand">
-                    <el-button type="primary" link :disabled="!projectId">
+                    <el-button type="primary" link :disabled="!projectId" data-assistant="suites.create_btn">
                       新建<el-icon class="el-icon--right"><ArrowDown /></el-icon>
                     </el-button>
                     <template #dropdown>
                       <el-dropdown-menu>
                         <el-dropdown-item command="folder">新建目录</el-dropdown-item>
-                        <el-dropdown-item command="suite">新建套件</el-dropdown-item>
+                        <el-dropdown-item command="suite" data-assistant="suites.create_suite_menu">新建套件</el-dropdown-item>
                       </el-dropdown-menu>
                     </template>
                   </el-dropdown>
@@ -486,7 +494,7 @@
     <el-dialog v-model="suiteDialogVisible" :title="suiteEditing ? '编辑套件' : '新建套件'" width="520px">
       <el-form ref="suiteFormRef" :model="suiteForm" :rules="suiteRules" label-width="100px">
         <el-form-item label="套件名称" prop="name">
-          <el-input v-model="suiteForm.name" />
+          <el-input v-model="suiteForm.name" data-assistant="suites.form.name" />
         </el-form-item>
         <el-form-item label="上级目录">
           <el-tree-select
@@ -500,17 +508,22 @@
           />
         </el-form-item>
         <el-form-item label="执行环境" prop="environment_id">
-          <el-select v-model="suiteForm.environment_id" style="width: 100%" placeholder="选择环境">
+          <el-select
+            v-model="suiteForm.environment_id"
+            data-assistant="suites.form.environment"
+            style="width: 100%"
+            placeholder="选择环境"
+          >
             <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
           </el-select>
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="suiteForm.description" type="textarea" :rows="2" />
+          <el-input v-model="suiteForm.description" data-assistant="suites.form.description" type="textarea" :rows="2" />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="suiteDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="suiteSaving" @click="saveSuite">保存</el-button>
+        <el-button type="primary" data-assistant="suites.form.submit" :loading="suiteSaving" @click="saveSuite">保存</el-button>
       </template>
     </el-dialog>
 
@@ -999,6 +1012,8 @@ import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/as
 
 const ASSISTANT_HANDLER_NAMES = [
   'apiAutomation.ensureProject',
+  'apiAutomation.ensureEnvironment',
+  'apiAutomation.createSuite',
   'apiAutomation.selectFirstSuite',
   'apiAutomation.openSwaggerImport',
   'apiAutomation.setSwaggerUrl',
@@ -2596,17 +2611,111 @@ function registerApiAutomationAssistantHandlers() {
     }
   })
 
-  registerAssistantHandler('apiAutomation.selectFirstSuite', async () => {
-    if (!suiteId.value) {
-      if (!suites.value.length) {
-        await loadSuites()
+  registerAssistantHandler('apiAutomation.ensureEnvironment', async (payload = {}) => {
+    if (!projectId.value) {
+      throw new Error('请先选择项目')
+    }
+    if (!environments.value.length) {
+      await loadEnvironments()
+    }
+    if (!environments.value.length) {
+      await apiAutomationApi.createEnvironment({
+        project_id: projectId.value,
+        name: payload.name || '默认环境',
+        base_url: payload.base_url || 'http://127.0.0.1',
+        default_headers: '{"Content-Type":"application/json"}',
+        variables: '{}',
+        description: '由 AI 助手自动创建',
+      })
+      await loadEnvironments()
+    }
+    if (!environments.value.length) {
+      throw new Error('无法创建执行环境，请先在「环境管理」中手动配置')
+    }
+  })
+
+  registerAssistantHandler('apiAutomation.createSuite', async (payload = {}) => {
+    if (!projectId.value) {
+      if (!projects.value.length) {
+        await loadProjects()
       }
+      if (projects.value.length) {
+        projectId.value = projects.value[0].id
+        await reloadAll()
+      }
+    }
+    if (!projectId.value) {
+      throw new Error('请先创建项目')
+    }
+
+    if (!environments.value.length) {
+      await loadEnvironments()
+    }
+    if (!environments.value.length) {
+      await apiAutomationApi.createEnvironment({
+        project_id: projectId.value,
+        name: payload.env_name || '默认环境',
+        base_url: payload.base_url || 'http://127.0.0.1',
+        default_headers: '{"Content-Type":"application/json"}',
+        variables: '{}',
+        description: '由 AI 助手自动创建',
+      })
+      await loadEnvironments()
+    }
+    if (!environments.value.length) {
+      throw new Error('无法创建执行环境，请先在「环境管理」中手动配置')
+    }
+
+    const suiteName = (payload.name || 'AI测试套件').trim()
+    if (!suiteName) {
+      throw new Error('套件名称不能为空')
+    }
+
+    openSuiteDialog(null, payload.parent_id ?? activeFolderId.value ?? null)
+    suiteForm.name = suiteName
+    suiteForm.description = payload.description || ''
+    suiteForm.environment_id = payload.environment_id || environments.value[0]?.id || null
+    await nextTick()
+    await saveSuite()
+  })
+
+  registerAssistantHandler('apiAutomation.selectFirstSuite', async (payload = {}) => {
+    if (!projectId.value) {
+      throw new Error('请先选择项目')
+    }
+    if (!suites.value.length) {
+      await loadSuites()
+    }
+    if (!suiteId.value) {
       const first = suites.value.find((item) => !item.is_folder)
-      if (!first) {
+      if (first) {
+        selectSuite(first.id)
+        await nextTick()
+        return
+      }
+      if (payload.auto_create === false) {
         throw new Error('当前项目下没有测试套件，请先新建套件')
       }
-      selectSuite(first.id)
+      if (!environments.value.length) {
+        await loadEnvironments()
+      }
+      if (!environments.value.length) {
+        await apiAutomationApi.createEnvironment({
+          project_id: projectId.value,
+          name: '默认环境',
+          base_url: payload.base_url || 'http://127.0.0.1',
+          default_headers: '{"Content-Type":"application/json"}',
+          variables: '{}',
+          description: '由 AI 助手自动创建',
+        })
+        await loadEnvironments()
+      }
+      openSuiteDialog(null, activeFolderId.value ?? null)
+      suiteForm.name = payload.name || 'AI测试套件'
+      suiteForm.description = payload.description || ''
+      suiteForm.environment_id = environments.value[0]?.id || null
       await nextTick()
+      await saveSuite()
     }
   })
 
@@ -2685,6 +2794,18 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.assistant-hidden-trigger {
+  position: absolute;
+  width: 0;
+  height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
