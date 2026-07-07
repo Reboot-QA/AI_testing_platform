@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.project import Project
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.testcase import TestCase
 from app.models.user import User
@@ -17,23 +16,21 @@ from app.schemas import (
     ManualTestRunSummaryOut,
     ManualTestRunUpdate,
 )
+from app.services.project_access_service import get_accessible_project
 from app.services.test_execution_service import create_manual_run, get_executor_name, submit_case_result
 
 router = APIRouter(prefix="/test-executions", tags=["用例执行"])
 
 
-def _check_project(db: Session, project_id: int, user_id: int) -> Project:
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == user_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
+def _check_project(db: Session, project_id: int, user: User):
+    return get_accessible_project(db, project_id, user)
 
 
 def _get_owned_run(db: Session, run_id: int, user: User) -> ManualTestRun:
     run = db.query(ManualTestRun).filter(ManualTestRun.id == run_id).first()
     if not run:
         raise HTTPException(status_code=404, detail="测试单不存在")
-    _check_project(db, run.project_id, user.id)
+    _check_project(db, run.project_id, user)
     return run
 
 
@@ -103,7 +100,7 @@ def list_runs(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user.id)
+    _check_project(db, project_id, current_user)
     runs = (
         db.query(ManualTestRun)
         .filter(ManualTestRun.project_id == project_id)
@@ -119,7 +116,7 @@ def create_run(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
 
     case_ids = list(data.case_ids)
     if data.requirement_id is not None:
@@ -160,7 +157,7 @@ def list_available_cases(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user.id)
+    _check_project(db, project_id, current_user)
     query = db.query(TestCase).filter(
         TestCase.project_id == project_id,
         TestCase.review_status == "approved",

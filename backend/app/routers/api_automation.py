@@ -17,7 +17,10 @@ from app.services.api_run_export_service import (
     build_export_filename,
     build_run_export,
 )
-from app.database import SessionLocal, get_db
+from app.services.project_access_service import (
+    filter_joined_project,
+    get_accessible_project,
+)
 from app.models.api_automation import (
     ApiEnvironment,
     ApiScheduledTask,
@@ -114,19 +117,17 @@ router = APIRouter(prefix="/api-automation", tags=["接口自动化"])
 
 
 def _get_owned_project(db: Session, project_id: int, user: User) -> Project:
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == user.id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
+    return get_accessible_project(db, project_id, user)
 
 
 def _get_owned_suite(db: Session, suite_id: int, user: User) -> ApiTestSuite:
-    suite = (
+    query = (
         db.query(ApiTestSuite)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestSuite.id == suite_id, Project.owner_id == user.id)
-        .first()
+        .filter(ApiTestSuite.id == suite_id)
     )
+    query = filter_joined_project(query, user)
+    suite = query.first()
     if not suite:
         raise HTTPException(status_code=404, detail="测试套件不存在")
     return suite
@@ -270,26 +271,26 @@ def _copy_suite_record(
 
 
 def _get_owned_case(db: Session, case_id: int, user: User) -> ApiTestCase:
-    case = (
+    query = (
         db.query(ApiTestCase)
         .join(ApiTestSuite, ApiTestSuite.id == ApiTestCase.suite_id)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestCase.id == case_id, Project.owner_id == user.id)
-        .first()
+        .filter(ApiTestCase.id == case_id)
     )
+    case = filter_joined_project(query, user).first()
     if not case:
         raise HTTPException(status_code=404, detail="接口用例不存在")
     return case
 
 
 def _get_owned_run(db: Session, run_id: int, user: User) -> ApiTestRun:
-    run = (
+    query = (
         db.query(ApiTestRun)
         .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestRun.id == run_id, Project.owner_id == user.id)
-        .first()
+        .filter(ApiTestRun.id == run_id)
     )
+    run = filter_joined_project(query, user).first()
     if not run:
         raise HTTPException(status_code=404, detail="执行记录不存在")
     return run
@@ -297,13 +298,13 @@ def _get_owned_run(db: Session, run_id: int, user: User) -> ApiTestRun:
 
 def _query_owned_runs(db: Session, run_ids: List[int], user: User) -> List[ApiTestRun]:
     unique_ids = list(dict.fromkeys(run_ids))
-    runs = (
+    query = (
         db.query(ApiTestRun)
         .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestRun.id.in_(unique_ids), Project.owner_id == user.id)
-        .all()
+        .filter(ApiTestRun.id.in_(unique_ids))
     )
+    runs = filter_joined_project(query, user).all()
     order = {run_id: index for index, run_id in enumerate(unique_ids)}
     runs.sort(key=lambda item: order.get(item.id, item.id))
     return runs
@@ -395,12 +396,12 @@ def _run_summary_out(db: Session, run: ApiTestRun) -> ApiTestRunSummaryOut:
 
 
 def _get_owned_schedule(db: Session, task_id: int, user: User) -> ApiScheduledTask:
-    task = (
+    query = (
         db.query(ApiScheduledTask)
         .join(Project, Project.id == ApiScheduledTask.project_id)
-        .filter(ApiScheduledTask.id == task_id, Project.owner_id == user.id)
-        .first()
+        .filter(ApiScheduledTask.id == task_id)
     )
+    task = filter_joined_project(query, user).first()
     if not task:
         raise HTTPException(status_code=404, detail="定时任务不存在")
     return task
@@ -586,12 +587,12 @@ def update_environment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    env = (
+    query = (
         db.query(ApiEnvironment)
         .join(Project, Project.id == ApiEnvironment.project_id)
-        .filter(ApiEnvironment.id == env_id, Project.owner_id == current_user.id)
-        .first()
+        .filter(ApiEnvironment.id == env_id)
     )
+    env = filter_joined_project(query, current_user).first()
     if not env:
         raise HTTPException(status_code=404, detail="环境不存在")
     for key, value in data.model_dump(exclude_unset=True).items():
@@ -607,12 +608,12 @@ def delete_environment(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    env = (
+    query = (
         db.query(ApiEnvironment)
         .join(Project, Project.id == ApiEnvironment.project_id)
-        .filter(ApiEnvironment.id == env_id, Project.owner_id == current_user.id)
-        .first()
+        .filter(ApiEnvironment.id == env_id)
     )
+    env = filter_joined_project(query, current_user).first()
     if not env:
         raise HTTPException(status_code=404, detail="环境不存在")
     db.delete(env)
@@ -846,13 +847,13 @@ def batch_delete_cases(
     if not data.case_ids:
         raise HTTPException(status_code=400, detail="请选择要删除的用例")
     unique_ids = list(dict.fromkeys(data.case_ids))
-    cases = (
+    query = (
         db.query(ApiTestCase)
         .join(ApiTestSuite, ApiTestSuite.id == ApiTestCase.suite_id)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestCase.id.in_(unique_ids), Project.owner_id == current_user.id)
-        .all()
+        .filter(ApiTestCase.id.in_(unique_ids))
     )
+    cases = filter_joined_project(query, current_user).all()
     if not cases:
         raise HTTPException(status_code=404, detail="未找到可删除的用例")
     for case in cases:
@@ -965,12 +966,12 @@ def debug_case(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    environment = (
+    query = (
         db.query(ApiEnvironment)
         .join(Project, Project.id == ApiEnvironment.project_id)
-        .filter(ApiEnvironment.id == data.environment_id, Project.owner_id == current_user.id)
-        .first()
+        .filter(ApiEnvironment.id == data.environment_id)
     )
+    environment = filter_joined_project(query, current_user).first()
     if not environment:
         raise HTTPException(status_code=404, detail="环境不存在")
 
@@ -1124,13 +1125,13 @@ async def batch_generate_case_data(
         raise HTTPException(status_code=400, detail="请选择要生成数据的用例")
 
     unique_ids = list(dict.fromkeys(data.case_ids))
-    cases = (
+    query = (
         db.query(ApiTestCase)
         .join(ApiTestSuite, ApiTestSuite.id == ApiTestCase.suite_id)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(ApiTestCase.id.in_(unique_ids), Project.owner_id == current_user.id)
-        .all()
+        .filter(ApiTestCase.id.in_(unique_ids))
     )
+    cases = filter_joined_project(query, current_user).all()
     if not cases:
         raise HTTPException(status_code=404, detail="未找到可操作的用例")
 
@@ -1311,8 +1312,8 @@ def list_runs(
         db.query(ApiTestRun)
         .join(ApiTestSuite, ApiTestSuite.id == ApiTestRun.suite_id)
         .join(Project, Project.id == ApiTestSuite.project_id)
-        .filter(Project.owner_id == current_user.id)
     )
+    query = filter_joined_project(query, current_user)
     if project_id:
         _get_owned_project(db, project_id, current_user)
         query = query.filter(ApiTestSuite.project_id == project_id)

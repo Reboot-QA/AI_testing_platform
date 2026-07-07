@@ -86,6 +86,9 @@
           <el-menu-item v-if="userStore.hasPermission('system_users')" index="/system/users">
             用户管理
           </el-menu-item>
+          <el-menu-item v-if="userStore.hasPermission('system_departments')" index="/system/departments">
+            部门权限
+          </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('system_permissions')" index="/system/permissions">
             权限管理
           </el-menu-item>
@@ -160,6 +163,7 @@ const showSystemMenu = computed(
   () =>
     userStore.hasPermission('system_settings') ||
     userStore.hasPermission('system_users') ||
+    userStore.hasPermission('system_departments') ||
     userStore.hasPermission('system_permissions') ||
     userStore.hasPermission('system_logs')
 )

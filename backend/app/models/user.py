@@ -17,9 +17,12 @@ class User(Base):
     full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="tester")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     projects: Mapped[List["Project"]] = relationship("Project", back_populates="owner")
+    department: Mapped[Optional["Department"]] = relationship("Department", back_populates="users")
 
 
 from app.models.project import Project  # noqa: E402
+from app.models.department import Department  # noqa: E402

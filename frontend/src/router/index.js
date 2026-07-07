@@ -101,6 +101,12 @@ const routes = [
         meta: { permission: 'system_users', requiresAdmin: true },
       },
       {
+        path: 'system/departments',
+        name: 'DepartmentManagement',
+        component: () => import('@/views/DepartmentManagement.vue'),
+        meta: { permission: 'system_departments', requiresAdmin: true },
+      },
+      {
         path: 'system/permissions',
         name: 'PermissionManagement',
         component: () => import('@/views/PermissionManagement.vue'),

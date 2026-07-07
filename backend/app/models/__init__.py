@@ -1,3 +1,4 @@
+from app.models.department import Department
 from app.models.user import User
 from app.models.user_permission import UserMenuPermission
 from app.models.project import Project
@@ -19,6 +20,7 @@ from app.models.test_execution import ManualTestRun, ManualTestRunCase
 __all__ = [
     "User",
     "UserMenuPermission",
+    "Department",
     "Project",
     "Requirement",
     "TestCase",

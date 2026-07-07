@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
-from app.routers import auth, projects, requirements, testcases, users, api_automation, test_execution, logs
+from app.routers import auth, projects, requirements, testcases, users, api_automation, test_execution, logs, departments
 from app.routers import settings as settings_router
 from app.services.seed import seed_demo_data
 from app.services.settings_service import init_llm_settings_from_env
@@ -16,6 +16,7 @@ from app.services.api_automation_migration import (
     migrate_api_scheduled_task_suites,
     migrate_api_test_suite_tree,
     migrate_api_variable_stores,
+    migrate_department_permissions,
     migrate_requirement_created_by,
     migrate_testcase_created_by,
 )
@@ -68,6 +69,7 @@ def _run_startup() -> None:
             migrate_api_test_suite_tree(db)
             migrate_api_variable_stores(db)
             migrate_api_scheduled_task_suites(db)
+            migrate_department_permissions(db)
             migrate_requirement_created_by(db)
             migrate_testcase_created_by(db)
             migrate_user_optional_email()
@@ -109,6 +111,7 @@ app.include_router(requirements.router, prefix="/api/v1")
 app.include_router(testcases.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
+app.include_router(departments.router, prefix="/api/v1")
 app.include_router(api_automation.router, prefix="/api/v1")
 app.include_router(test_execution.router, prefix="/api/v1")
 app.include_router(logs.router, prefix="/api/v1")

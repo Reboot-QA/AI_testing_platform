@@ -14,12 +14,14 @@ class Project(Base):
     name: Mapped[str] = mapped_column(String(100), index=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     owner_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), default="active")
     api_global_variables: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     owner: Mapped["User"] = relationship("User", back_populates="projects")
+    department: Mapped[Optional["Department"]] = relationship("Department", back_populates="projects")
     requirements: Mapped[List["Requirement"]] = relationship(
         "Requirement", back_populates="project", cascade="all, delete-orphan"
     )
@@ -38,6 +40,7 @@ class Project(Base):
 
 
 from app.models.user import User  # noqa: E402
+from app.models.department import Department  # noqa: E402
 from app.models.requirement import Requirement  # noqa: E402
 from app.models.testcase import TestCase  # noqa: E402
 from app.models.api_automation import ApiEnvironment, ApiTestSuite  # noqa: E402

@@ -10,6 +10,11 @@ from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
 from app.schemas import DashboardStats, ProjectCreate, ProjectOut, ProjectUpdate
+from app.services.project_access_service import (
+    accessible_projects_query,
+    get_accessible_project,
+    get_accessible_project_ids,
+)
 
 router = APIRouter(prefix="/projects", tags=["项目"])
 
@@ -21,12 +26,15 @@ def _project_out(project: Project, db: Session) -> ProjectOut:
     if not owner_name and project.owner_id:
         owner = db.query(User).filter(User.id == project.owner_id).first()
         owner_name = owner.username if owner else ""
+    department_name = project.department.name if project.department else ""
     return ProjectOut(
         id=project.id,
         name=project.name,
         description=project.description,
         owner_id=project.owner_id,
         owner_name=owner_name,
+        department_id=project.department_id,
+        department_name=department_name,
         status=project.status,
         created_at=project.created_at,
         requirement_count=req_count,
@@ -37,9 +45,8 @@ def _project_out(project: Project, db: Session) -> ProjectOut:
 @router.get("", response_model=List[ProjectOut])
 def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     projects = (
-        db.query(Project)
-        .options(joinedload(Project.owner))
-        .filter(Project.owner_id == current_user.id)
+        accessible_projects_query(db, current_user)
+        .options(joinedload(Project.owner), joinedload(Project.department))
         .order_by(Project.id.desc())
         .all()
     )
@@ -52,7 +59,12 @@ def create_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = Project(name=data.name, description=data.description, owner_id=current_user.id)
+    project = Project(
+        name=data.name,
+        description=data.description,
+        owner_id=current_user.id,
+        department_id=current_user.department_id,
+    )
     db.add(project)
     db.commit()
     db.refresh(project)
@@ -61,7 +73,7 @@ def create_project(
 
 @router.get("/stats/dashboard", response_model=DashboardStats)
 def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project_ids = [p.id for p in db.query(Project).filter(Project.owner_id == current_user.id).all()]
+    project_ids = get_accessible_project_ids(db, current_user)
     if not project_ids:
         return DashboardStats(
             project_count=0,
@@ -83,9 +95,7 @@ def dashboard_stats(db: Session = Depends(get_db), current_user: User = Depends(
 
 @router.get("/{project_id}", response_model=ProjectOut)
 def get_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == current_user.id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
+    project = get_accessible_project(db, project_id, current_user)
     return _project_out(project, db)
 
 
@@ -96,9 +106,7 @@ def update_project(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == current_user.id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
+    project = get_accessible_project(db, project_id, current_user)
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(project, key, value)
     db.commit()
@@ -108,10 +116,7 @@ def update_project(
 
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == current_user.id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
+    project = get_accessible_project(db, project_id, current_user)
     db.delete(project)
     db.commit()
     return {"message": "删除成功"}
-

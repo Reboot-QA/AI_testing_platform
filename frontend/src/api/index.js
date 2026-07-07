@@ -182,6 +182,13 @@ export const settingsApi = {
   testLLM: (data) => request.post('/settings/llm/test', data || {}),
 }
 
+export const departmentApi = {
+  list: () => request.get('/departments'),
+  create: (data) => request.post('/departments', data),
+  update: (id, data) => request.put(`/departments/${id}`, data),
+  delete: (id) => request.delete(`/departments/${id}`),
+}
+
 export const userApi = {
   list: () => request.get('/users'),
   create: (data) => request.post('/users', data),

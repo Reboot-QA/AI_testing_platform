@@ -77,6 +77,7 @@ MENU_DEFINITIONS: List[Dict[str, str]] = [
     },
     {"key": "system_settings", "label": "全局设置", "path": "/system/settings", "group": "system"},
     {"key": "system_users", "label": "用户管理", "path": "/system/users", "group": "system"},
+    {"key": "system_departments", "label": "部门权限", "path": "/system/departments", "group": "system"},
     {"key": "system_permissions", "label": "权限管理", "path": "/system/permissions", "group": "system"},
     {"key": "system_logs", "label": "日志监控", "path": "/system/logs", "group": "system"},
 ]

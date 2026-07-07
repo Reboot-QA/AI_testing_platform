@@ -43,6 +43,8 @@ class UserLogin(BaseModel):
 class UserOut(UserBase):
     id: int
     is_active: bool
+    department_id: Optional[int] = None
+    department_name: str = ""
     created_at: datetime
     menu_permissions: List[str] = []
 
@@ -52,6 +54,7 @@ class UserOut(UserBase):
 
 class UserCreateByAdmin(UserBase):
     password: str = Field(min_length=6)
+    department_id: Optional[int] = None
     menu_permissions: Optional[List[str]] = None
 
 
@@ -60,6 +63,7 @@ class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     is_active: Optional[bool] = None
+    department_id: Optional[int] = None
 
 
 class UserPasswordReset(BaseModel):
@@ -108,10 +112,37 @@ class ProjectOut(ProjectBase):
     id: int
     owner_id: int
     owner_name: str = ""
+    department_id: Optional[int] = None
+    department_name: str = ""
     status: str
     created_at: datetime
     requirement_count: int = 0
     testcase_count: int = 0
+
+    class Config:
+        from_attributes = True
+
+
+class DepartmentBase(BaseModel):
+    name: str
+    description: Optional[str] = None
+
+
+class DepartmentCreate(DepartmentBase):
+    pass
+
+
+class DepartmentUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+
+
+class DepartmentOut(DepartmentBase):
+    id: int
+    user_count: int = 0
+    project_count: int = 0
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

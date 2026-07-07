@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 from app.auth import get_current_admin, get_password_hash
 from app.constants.menus import MENU_KEY_SET
 from app.database import get_db
+from app.models.department import Department
 from app.models.project import Project
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.user import User
@@ -31,6 +32,10 @@ router = APIRouter(prefix="/users", tags=["用户管理"])
 
 
 def _user_out(user: User, db: Session) -> UserOut:
+    department_name = user.department.name if user.department else ""
+    if not department_name and user.department_id:
+        department = db.query(Department).filter(Department.id == user.department_id).first()
+        department_name = department.name if department else ""
     return UserOut(
         id=user.id,
         username=user.username,
@@ -38,9 +43,18 @@ def _user_out(user: User, db: Session) -> UserOut:
         full_name=user.full_name,
         role=user.role,
         is_active=user.is_active,
+        department_id=user.department_id,
+        department_name=department_name,
         created_at=user.created_at,
         menu_permissions=get_user_menu_keys(db, user),
     )
+
+
+def _validate_department_id(db: Session, department_id: Optional[int]) -> None:
+    if department_id is None:
+        return
+    if not db.query(Department).filter(Department.id == department_id).first():
+        raise HTTPException(status_code=400, detail="所选部门不存在")
 
 
 @router.get("/menus", response_model=List[MenuDefinitionOut])
@@ -66,12 +80,14 @@ def create_user(
         raise HTTPException(status_code=400, detail="用户名已存在")
     if data.email and db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="邮箱已存在")
+    _validate_department_id(db, data.department_id)
 
     user = User(
         username=data.username,
         email=data.email,
         full_name=data.full_name,
         role=data.role,
+        department_id=data.department_id,
         hashed_password=get_password_hash(data.password),
     )
     db.add(user)
@@ -115,6 +131,10 @@ def update_user(
         if user.id == current_admin.id and not data.is_active:
             raise HTTPException(status_code=400, detail="不能禁用当前登录账号")
         user.is_active = data.is_active
+
+    if "department_id" in data.model_fields_set:
+        _validate_department_id(db, data.department_id)
+        user.department_id = data.department_id
 
     db.commit()
     db.refresh(user)

@@ -22,6 +22,9 @@
           </el-tag>
         </template>
       </el-table-column>
+      <el-table-column prop="department_name" label="部门" width="120">
+        <template #default="{ row }">{{ row.department_name || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="is_active" label="状态" width="100">
         <template #default="{ row }">
           <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
@@ -50,7 +53,7 @@
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用户' : '添加用户'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="用户名" prop="username">
+        <el-form-item label="用户名" prop="username" required>
           <el-input v-model="form.username" :disabled="!!editing" placeholder="仅支持字母、数字、下划线" />
         </el-form-item>
         <el-form-item v-if="!editing" label="密码" prop="password">
@@ -66,6 +69,16 @@
           <el-select v-model="form.role" style="width: 100%">
             <el-option label="管理员" value="admin" />
             <el-option label="测试员" value="tester" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="部门" prop="department_id">
+          <el-select v-model="form.department_id" placeholder="请选择部门" style="width: 100%" filterable>
+            <el-option
+              v-for="dept in departments"
+              :key="dept.id"
+              :label="dept.name"
+              :value="dept.id"
+            />
           </el-select>
         </el-form-item>
         <el-form-item v-if="editing" label="状态">
@@ -98,13 +111,14 @@
 <script setup>
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { userApi } from '@/api'
+import { userApi, departmentApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.user?.id)
 
 const users = ref([])
+const departments = ref([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
@@ -150,6 +164,7 @@ const form = reactive({
   full_name: '',
   email: '',
   role: 'tester',
+  department_id: null,
   is_active: true,
 })
 
@@ -158,10 +173,11 @@ const passwordForm = reactive({
 })
 
 const rules = {
-  username: [{ validator: validateUsername, trigger: 'blur' }],
+  username: [{ required: true, validator: validateUsername, trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   email: [{ validator: validateEmail, trigger: 'blur' }],
   role: [{ required: true, message: '请选择角色', trigger: 'change' }],
+  department_id: [{ required: true, message: '请选择部门', trigger: 'change' }],
 }
 
 const passwordRules = {
@@ -173,6 +189,10 @@ const passwordRules = {
 
 function formatTime(value) {
   return value ? new Date(value).toLocaleString('zh-CN') : '-'
+}
+
+async function loadDepartments() {
+  departments.value = await departmentApi.list()
 }
 
 async function loadData() {
@@ -191,6 +211,7 @@ function openDialog(row = null) {
   form.full_name = row?.full_name || ''
   form.email = row?.email || ''
   form.role = row?.role || 'tester'
+  form.department_id = row?.department_id ?? null
   form.is_active = row?.is_active ?? true
   dialogVisible.value = true
 }
@@ -210,6 +231,7 @@ async function handleSubmit() {
         full_name: form.full_name,
         email: form.email.trim() || null,
         role: form.role,
+        department_id: form.department_id,
         is_active: form.is_active,
       })
       ElMessage.success('更新成功')
@@ -220,6 +242,7 @@ async function handleSubmit() {
         full_name: form.full_name,
         email: form.email.trim() || undefined,
         role: form.role,
+        department_id: form.department_id,
       })
       ElMessage.success('创建成功')
     }
@@ -255,6 +278,7 @@ onMounted(async () => {
   if (!userStore.user) {
     await userStore.fetchUser()
   }
+  await loadDepartments()
   loadData()
 })
 </script>

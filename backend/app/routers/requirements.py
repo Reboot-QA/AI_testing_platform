@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.models.project import Project
+from app.services.project_access_service import get_accessible_project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
@@ -58,11 +58,8 @@ def _requirement_out(req: Requirement, db: Session) -> RequirementOut:
     )
 
 
-def _check_project(db: Session, project_id: int, user_id: int) -> Project:
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == user_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
+def _check_project(db: Session, project_id: int, user: User) -> Project:
+    return get_accessible_project(db, project_id, user)
 
 
 def _clear_requirement_testcases(db: Session, req_id: int) -> int:
@@ -81,7 +78,7 @@ def list_requirements(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user.id)
+    _check_project(db, project_id, current_user)
     query = db.query(Requirement).options(joinedload(Requirement.creator)).filter(Requirement.project_id == project_id)
     if status:
         if status not in ALLOWED_REQUIREMENT_STATUSES:
@@ -97,7 +94,7 @@ def create_requirement(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     req = Requirement(**data.model_dump(), created_by_id=current_user.id)
     db.add(req)
     db.commit()
@@ -114,7 +111,7 @@ def batch_update_requirement_status(
     if data.status not in ALLOWED_REQUIREMENT_STATUSES:
         raise HTTPException(status_code=400, detail="无效的需求状态")
 
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     requirements = (
         db.query(Requirement)
         .filter(
@@ -141,7 +138,7 @@ def batch_delete_requirements(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     requirements = (
         db.query(Requirement)
         .filter(
@@ -189,7 +186,7 @@ async def extract_requirements_from_file(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user.id)
+    _check_project(db, project_id, current_user)
     content = await file.read()
     filename = file.filename or "document.txt"
 
@@ -238,7 +235,7 @@ async def extract_requirements_stream(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user.id)
+    _check_project(db, project_id, current_user)
     content = await file.read()
     filename = file.filename or "document.txt"
 
@@ -329,7 +326,7 @@ def batch_import_requirements(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     saved: List[Requirement] = []
     for item in data.requirements:
         req = Requirement(
@@ -359,7 +356,7 @@ def get_requirement(req_id: int, db: Session = Depends(get_db), current_user: Us
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="需求不存在")
-    _check_project(db, req.project_id, current_user.id)
+    _check_project(db, req.project_id, current_user)
     return _requirement_out(req, db)
 
 
@@ -373,7 +370,7 @@ def update_requirement(
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="需求不存在")
-    _check_project(db, req.project_id, current_user.id)
+    _check_project(db, req.project_id, current_user)
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(req, key, value)
     db.commit()
@@ -390,7 +387,7 @@ def clear_requirement_testcases(
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="需求不存在")
-    _check_project(db, req.project_id, current_user.id)
+    _check_project(db, req.project_id, current_user)
 
     deleted_count = _clear_requirement_testcases(db, req_id)
     db.commit()
@@ -408,7 +405,7 @@ def delete_requirement(
     req = db.query(Requirement).filter(Requirement.id == req_id).first()
     if not req:
         raise HTTPException(status_code=404, detail="需求不存在")
-    _check_project(db, req.project_id, current_user.id)
+    _check_project(db, req.project_id, current_user)
 
     case_count = db.query(TestCase).filter(TestCase.requirement_id == req_id).count()
     if case_count > 0:

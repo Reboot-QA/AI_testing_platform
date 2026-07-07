@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import SessionLocal, get_db
-from app.models.project import Project
+from app.services.project_access_service import get_accessible_project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
@@ -49,11 +49,8 @@ REVIEW_TRANSITIONS = {
 }
 
 
-def _check_project(db: Session, project_id: int, user_id: int) -> Project:
-    project = db.query(Project).filter(Project.id == project_id, Project.owner_id == user_id).first()
-    if not project:
-        raise HTTPException(status_code=404, detail="项目不存在")
-    return project
+def _check_project(db: Session, project_id: int, user: User) -> Project:
+    return get_accessible_project(db, project_id, user)
 
 
 def _build_content_disposition(filename: str) -> str:
@@ -68,7 +65,7 @@ def _prepare_ai_generate(
     data: AIGenerateRequest,
     current_user: User,
 ) -> Dict[str, Any]:
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
 
     requirement_text = data.requirement_text or ""
     requirement_ids = list(dict.fromkeys(data.requirement_ids or []))
@@ -228,7 +225,7 @@ def list_testcases(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user.id)
+    _check_project(db, project_id, current_user)
     query = (
         db.query(TestCase)
         .options(joinedload(TestCase.creator))
@@ -259,7 +256,7 @@ def create_testcase(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     case = TestCase(**data.model_dump(), created_by_id=current_user.id)
     db.add(case)
     db.commit()
@@ -571,7 +568,7 @@ def export_excel(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    project = _check_project(db, project_id, current_user.id)
+    project = _check_project(db, project_id, current_user)
     cases = (
         db.query(TestCase)
         .options(joinedload(TestCase.requirement))
@@ -633,7 +630,7 @@ def batch_review_testcases(
     if data.review_status not in ALLOWED_REVIEW_STATUSES:
         raise HTTPException(status_code=400, detail="无效的评审状态")
 
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     cases = db.query(TestCase).filter(
         TestCase.id.in_(data.case_ids),
         TestCase.project_id == data.project_id,
@@ -679,7 +676,7 @@ def batch_delete_testcases(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, data.project_id, current_user.id)
+    _check_project(db, data.project_id, current_user)
     cases = db.query(TestCase).filter(
         TestCase.id.in_(data.case_ids),
         TestCase.project_id == data.project_id,
@@ -697,7 +694,7 @@ def get_testcase(case_id: int, db: Session = Depends(get_db), current_user: User
     case = db.query(TestCase).options(joinedload(TestCase.creator)).filter(TestCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="用例不存在")
-    _check_project(db, case.project_id, current_user.id)
+    _check_project(db, case.project_id, current_user)
     return _testcase_out(case, db)
 
 
@@ -711,7 +708,7 @@ def update_testcase(
     case = db.query(TestCase).filter(TestCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="用例不存在")
-    _check_project(db, case.project_id, current_user.id)
+    _check_project(db, case.project_id, current_user)
     for key, value in data.model_dump(exclude_unset=True).items():
         setattr(case, key, value)
     db.commit()
@@ -724,7 +721,7 @@ def delete_testcase(case_id: int, db: Session = Depends(get_db), current_user: U
     case = db.query(TestCase).filter(TestCase.id == case_id).first()
     if not case:
         raise HTTPException(status_code=404, detail="用例不存在")
-    _check_project(db, case.project_id, current_user.id)
+    _check_project(db, case.project_id, current_user)
     db.delete(case)
     db.commit()
     return {"message": "删除成功"}

@@ -107,6 +107,58 @@ def migrate_requirement_created_by(db: Session) -> None:
             conn.execute(text("ALTER TABLE requirements ADD COLUMN created_by_id INTEGER"))
 
 
+def migrate_department_permissions(db: Session) -> None:
+    from app.models.department import Department
+    from app.models.project import Project
+    from app.models.user import User
+
+    inspector = inspect(engine)
+    table_names = set(inspector.get_table_names())
+
+    statements = []
+    if "departments" not in table_names:
+        statements.append(
+            "CREATE TABLE IF NOT EXISTS departments ("
+            "id INTEGER PRIMARY KEY, "
+            "name VARCHAR(100) NOT NULL UNIQUE, "
+            "description TEXT, "
+            "created_at DATETIME, "
+            "updated_at DATETIME)"
+        )
+
+    if "users" in table_names:
+        user_columns = {column["name"] for column in inspector.get_columns("users")}
+        if "department_id" not in user_columns:
+            statements.append("ALTER TABLE users ADD COLUMN department_id INTEGER")
+
+    if "projects" in table_names:
+        project_columns = {column["name"] for column in inspector.get_columns("projects")}
+        if "department_id" not in project_columns:
+            statements.append("ALTER TABLE projects ADD COLUMN department_id INTEGER")
+
+    if statements:
+        with engine.begin() as conn:
+            for statement in statements:
+                conn.execute(text(statement))
+
+    default_department = db.query(Department).filter(Department.name == "默认部门").first()
+    needs_commit = False
+    if not default_department:
+        default_department = Department(name="默认部门", description="系统默认部门，同部门用户共享项目数据")
+        db.add(default_department)
+        db.flush()
+        needs_commit = True
+
+    for user in db.query(User).filter(User.department_id.is_(None)).all():
+        user.department_id = default_department.id
+        needs_commit = True
+    for project in db.query(Project).filter(Project.department_id.is_(None)).all():
+        project.department_id = default_department.id
+        needs_commit = True
+    if needs_commit:
+        db.commit()
+
+
 def migrate_testcase_created_by(db: Session) -> None:
     inspector = inspect(engine)
     if "testcases" not in inspector.get_table_names():
