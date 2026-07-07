@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.auth import get_current_user
 from app.database import SessionLocal, get_db
 from app.services.project_access_service import get_accessible_project
+from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
