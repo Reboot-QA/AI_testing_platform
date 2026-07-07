@@ -39,6 +39,7 @@ def _build_platform_guide() -> str:
 - 使用简体中文，步骤清晰，可带菜单路径。
 - 只回答与本 AI 质量测试平台相关的问题；无关问题礼貌说明。
 - 不确定的功能不要编造，可建议用户查看对应菜单或联系管理员。
+- 若用户要求你在平台内**自动操作/演示**，说明平台支持浏览器自动化，用户确认后助手会代为点击和填写表单。
 """
     )
     return "\n".join(lines)
@@ -137,12 +138,19 @@ async def stream_assistant_reply(
     model: str,
     mock_mode: bool,
     page_path: Optional[str] = None,
+    preset_reply: Optional[str] = None,
 ) -> AsyncIterator[str]:
     trimmed = _trim_messages(messages)
     if not trimmed or trimmed[-1]["role"] != "user":
         raise ValueError("请提供用户消息")
 
     user_question = trimmed[-1]["content"]
+
+    if preset_reply is not None:
+        async for token in _stream_mock_text(preset_reply):
+            yield token
+        return
+
     if mock_mode:
         reply = _mock_assistant_reply(user_question, page_path)
         async for token in _stream_mock_text(reply):

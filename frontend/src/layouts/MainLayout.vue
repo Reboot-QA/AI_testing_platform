@@ -17,7 +17,7 @@
           <el-icon><DataAnalysis /></el-icon>
           <span>仪表盘</span>
         </el-menu-item>
-        <el-menu-item v-if="userStore.hasPermission('projects')" index="/projects">
+        <el-menu-item v-if="userStore.hasPermission('projects')" index="/projects" data-assistant="menu.projects">
           <el-icon><Folder /></el-icon>
           <span>项目管理</span>
         </el-menu-item>

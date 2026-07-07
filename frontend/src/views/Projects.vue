@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-button type="primary" @click="openDialog()">
+      <el-button type="primary" data-assistant="projects.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新建项目
       </el-button>
     </div>
@@ -41,15 +41,23 @@
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="500px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
         <el-form-item label="名称" prop="name">
-          <el-input v-model="form.name" placeholder="项目名称" />
+          <el-input v-model="form.name" data-assistant="projects.form.name" placeholder="项目名称" />
         </el-form-item>
         <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="项目描述" />
+          <el-input
+            v-model="form.description"
+            data-assistant="projects.form.description"
+            type="textarea"
+            :rows="3"
+            placeholder="项目描述"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button type="primary" data-assistant="projects.form.submit" :loading="submitting" @click="handleSubmit">
+          确定
+        </el-button>
       </template>
     </el-dialog>
   </div>
