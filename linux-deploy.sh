@@ -203,6 +203,50 @@ compose_cmd() {
   docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
 }
 
+health_check_hosts() {
+  echo 127.0.0.1
+  if getent ahostsv4 host.docker.internal >/dev/null 2>&1; then
+    echo host.docker.internal
+  fi
+  ip route 2>/dev/null | awk '/default/ {print $3; exit}'
+}
+
+backend_health_ok() {
+  local port="${1:-$(read_env_value BACKEND_PORT 8000)}"
+  local host url code status
+
+  for host in $(health_check_hosts); do
+    [[ -n "$host" ]] || continue
+    url="http://${host}:${port}/health"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "$url" 2>/dev/null || true)"
+    code="${code:-000}"
+    if [[ "$code" == "200" ]]; then
+      return 0
+    fi
+    if [[ "$code" == "500" ]]; then
+      echo "500"
+      return 2
+    fi
+  done
+
+  status="$(docker inspect ai-platform-backend --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}unknown{{end}}' 2>/dev/null || echo missing)"
+  [[ "$status" == "healthy" ]] && return 0
+  return 1
+}
+
+http_ok() {
+  local port="$1" path="${2:-/}"
+  local host url code
+  for host in $(health_check_hosts); do
+    [[ -n "$host" ]] || continue
+    url="http://${host}:${port}${path}"
+    code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 --max-time 5 "$url" 2>/dev/null || true)"
+    code="${code:-000}"
+    [[ "$code" =~ ^(200|304)$ ]] && return 0
+  done
+  return 1
+}
+
 ensure_docker() {
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     ok "Docker 已就绪: $(docker --version | head -1)"
@@ -394,22 +438,23 @@ cmd_init_env() {
 }
 
 wait_backend_ready() {
-  local i url http_port code body
-  url="http://127.0.0.1:$(read_env_value BACKEND_PORT 8000)/health"
+  local i http_port code body port
+  port="$(read_env_value BACKEND_PORT 8000)"
   http_port="$(read_env_value HTTP_PORT 5173)"
-  info "等待后端就绪..."
+  info "等待后端就绪 (端口 ${port})..."
   for i in $(seq 1 120); do
     body=""
     code="000"
-    if command -v curl >/dev/null 2>&1; then
-      body="$(curl -s "$url" 2>/dev/null || true)"
-      code="$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)"
-    fi
-    if [[ "$code" == "200" ]]; then
-      ok "后端 API 已就绪 (端口 $(read_env_value BACKEND_PORT 8000))"
+    if backend_health_ok "$port"; then
+      ok "后端 API 已就绪 (端口 ${port})"
       break
     fi
-    if [[ "$code" == "500" ]]; then
+    rc=$?
+    if [[ "$rc" == "2" ]]; then
+      for host in $(health_check_hosts); do
+        body="$(curl -s "http://${host}:${port}/health" 2>/dev/null || true)"
+        [[ -n "$body" ]] && break
+      done
       warn "后端启动失败: ${body:-无详情}"
       compose_cmd logs backend --tail=60 >&2 || true
       return 1
@@ -420,11 +465,7 @@ wait_backend_ready() {
       return 1
     fi
     if (( i % 10 == 0 )); then
-      case "$code" in
-        503) info "后端仍在初始化... (${i}/120)" ;;
-        000) info "等待后端端口（可能正在执行数据库迁移）... (${i}/120)" ;;
-        *) info "等待后端就绪... HTTP ${code} (${i}/120)" ;;
-      esac
+      info "等待后端就绪... (${i}/120，Jenkins 容器内会通过 Docker 健康检查或宿主机网关探测)"
       compose_cmd logs backend --tail=5 2>/dev/null | sed 's/^/    /' >&2 || true
     fi
     if (( i == 120 )); then
@@ -437,7 +478,7 @@ wait_backend_ready() {
 
   info "验证 Nginx 反代..."
   for i in $(seq 1 30); do
-    if curl -sf "http://127.0.0.1:${http_port}/docs" >/dev/null 2>&1; then
+    if http_ok "$http_port" "/docs"; then
       ok "前端反代正常 (端口 ${http_port})"
       return 0
     fi
