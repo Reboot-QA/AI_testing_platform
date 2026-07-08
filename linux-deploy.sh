@@ -655,6 +655,11 @@ cmd_logs() {
   fi
 }
 
+ensure_git_safe_directory() {
+  [[ -d "$ROOT/.git" ]] || return 0
+  git config --global --add safe.directory "$ROOT" 2>/dev/null || true
+}
+
 cmd_update() {
   fix_script_permissions
   ensure_docker
@@ -662,6 +667,7 @@ cmd_update() {
   stop_legacy_services
 
   if [[ -d "$ROOT/.git" ]]; then
+    ensure_git_safe_directory
     info "拉取 GitHub 最新代码..."
     git pull --ff-only origin "$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo main)" || \
       git pull --ff-only || error "git pull 失败，请检查网络或手动 git pull"

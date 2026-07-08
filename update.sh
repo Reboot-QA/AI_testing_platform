@@ -32,9 +32,15 @@ fix_scripts() {
   done
 }
 
+ensure_git_safe_directory() {
+  # root / jenkins 用户操作 ubuntu 拥有的目录时，Git 2.35+ 会拒绝（dubious ownership）
+  git config --global --add safe.directory "$ROOT" 2>/dev/null || true
+}
+
 pull_latest() {
   [[ -d "$ROOT/.git" ]] || error "当前目录不是 git 仓库，无法拉取代码"
 
+  ensure_git_safe_directory
   info "拉取 GitHub 最新代码..."
   if git pull --ff-only 2>/dev/null; then
     ok "代码已更新: $(git log -1 --oneline)"
@@ -43,7 +49,7 @@ pull_latest() {
 
   warn "git pull 失败，尝试丢弃部署脚本的本地修改后重试..."
   git checkout -- linux-deploy.sh update.sh deploy.sh 2>/dev/null || true
-  git pull --ff-only || error "git pull 仍失败，请执行: git status"
+  git pull --ff-only || error "git pull 仍失败。若为 dubious ownership，请执行: git config --global --add safe.directory $ROOT"
   ok "代码已更新: $(git log -1 --oneline)"
 }
 
