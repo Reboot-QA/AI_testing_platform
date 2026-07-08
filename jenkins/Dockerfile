@@ -9,7 +9,7 @@ ARG COMPOSE_VERSION=2.32.4
 
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y --no-install-recommends ca-certificates curl git jq; \
+    apt-get install -y --no-install-recommends ca-certificates curl git jq rsync; \
     rm -rf /var/lib/apt/lists/*; \
     ARCH="$(uname -m)"; \
     case "$ARCH" in \

@@ -44,7 +44,7 @@ pipeline {
                     echo "APP_DIR=${APP_DIR}"
                     echo "ENV_FILE=${ENV_FILE}"
                     test -d "${APP_DIR}" || { echo "部署目录不存在: ${APP_DIR}"; exit 1; }
-                    if [[ ! -f "${ENV_FILE}" ]]; then
+                    if [ ! -f "${ENV_FILE}" ]; then
                       echo "缺少 ${ENV_FILE}"
                       echo "请在服务器执行:"
                       echo "  cd ${APP_DIR} && cp .env.docker.example .env.docker"
@@ -52,7 +52,7 @@ pipeline {
                       echo "  sudo chmod 640 .env.docker && sudo chown root:1000 .env.docker"
                       exit 1
                     fi
-                    if [[ ! -r "${ENV_FILE}" ]]; then
+                    if [ ! -r "${ENV_FILE}" ]; then
                       echo "Jenkins 无法读取 ${ENV_FILE}，请执行:"
                       echo "  sudo chmod 640 ${ENV_FILE} && sudo chown root:1000 ${ENV_FILE}"
                       exit 1
@@ -69,6 +69,7 @@ pipeline {
             steps {
                 sh """
                     set -e
+                    export WORKSPACE='${WORKSPACE}'
                     export APP_DIR='${APP_DIR}'
                     export ENV_FILE='${ENV_FILE}'
                     export GIT_BRANCH='${DEPLOY_GIT_BRANCH}'

@@ -107,8 +107,6 @@ ensure_git_safe_directory() {
 }
 
 pull_latest() {
-  [[ -d "$APP_DIR/.git" ]] || error "部署目录不是 git 仓库: $APP_DIR"
-
   ensure_git_safe_directory
   cd "$APP_DIR"
   info "拉取最新代码 (分支: $GIT_BRANCH)..."
@@ -116,6 +114,48 @@ pull_latest() {
   git checkout "$GIT_BRANCH" 2>/dev/null || git checkout -b "$GIT_BRANCH" "origin/$GIT_BRANCH"
   git pull --ff-only origin "$GIT_BRANCH" || error "git pull 失败"
   ok "代码已更新: $(git log -1 --oneline)"
+}
+
+sync_from_workspace() {
+  local src="${1:-}"
+  [[ -n "$src" && -f "$src/docker-compose.yml" ]] || error "WORKSPACE 无效: ${src:-空}"
+
+  info "从 Jenkins workspace 同步代码 -> $APP_DIR"
+  if command -v rsync >/dev/null 2>&1; then
+    rsync -a --delete \
+      --exclude '.git/' \
+      --exclude 'node_modules/' \
+      --exclude 'frontend/node_modules/' \
+      --exclude '.env.docker' \
+      --exclude 'jenkins/.env' \
+      --exclude '.deploy/' \
+      "$src/" "$APP_DIR/"
+  else
+    warn "rsync 未安装，使用 tar 同步（建议重建 Jenkins 镜像）"
+    (cd "$src" && tar cf - \
+      --exclude='.git' \
+      --exclude='node_modules' \
+      --exclude='frontend/node_modules' \
+      --exclude='.env.docker' \
+      --exclude='jenkins/.env' \
+      --exclude='.deploy' \
+      .) | (cd "$APP_DIR" && tar xf -)
+  fi
+  ok "代码已同步: $(cd "$src" && git log -1 --oneline 2>/dev/null || echo latest)"
+}
+
+update_code() {
+  if [[ -d "$APP_DIR/.git" ]]; then
+    pull_latest
+    return 0
+  fi
+
+  if [[ -n "${WORKSPACE:-}" && -f "${WORKSPACE}/docker-compose.yml" ]]; then
+    sync_from_workspace "$WORKSPACE"
+    return 0
+  fi
+
+  error "部署目录不是 git 仓库: $APP_DIR。请执行: git clone https://github.com/Reboot-QA/AI_testing_platform.git $APP_DIR"
 }
 
 backup_db_if_possible() {
@@ -186,7 +226,7 @@ main() {
   info "部署目录: $APP_DIR"
   info "部署目标: $DEPLOY_TARGET"
 
-  pull_latest
+  update_code
   backup_db_if_possible
   deploy_services
   wait_mysql_healthy || true
