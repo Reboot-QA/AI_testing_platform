@@ -180,7 +180,32 @@ docker logs ai-platform-backend --tail=80
 ./linux-deploy.sh diagnose
 ```
 
-### 5. Webhook 不触发构建
+### 6. Permission denied: /var/jenkins_home
+
+数据卷曾被 `root` 创建，Jenkins 进程（UID 1000）无法写入。执行：
+
+```bash
+cd /opt/AI_testing_platform
+chmod +x jenkins/fix-permissions.sh
+sudo bash jenkins/fix-permissions.sh
+```
+
+或手动：
+
+```bash
+docker compose -f jenkins/docker-compose.yml down
+docker run --rm -v jenkins_jenkins-data:/var/jenkins_home busybox chown -R 1000:1000 /var/jenkins_home
+export DOCKER_GID=$(getent group docker | cut -d: -f3)
+docker compose -f jenkins/docker-compose.yml up -d
+```
+
+若无需保留 Jenkins 配置，可清空数据卷重建：
+
+```bash
+docker compose -f jenkins/docker-compose.yml down -v
+docker compose -f jenkins/docker-compose.yml up -d --build
+```
+
 
 - 确认 GitHub Webhook 最近投递返回 200
 - Jenkins 任务已勾选 **GitHub hook trigger for GITScm polling**

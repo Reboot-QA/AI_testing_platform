@@ -91,6 +91,21 @@ ensure_app_dir() {
   ok "应用目录就绪: $APP_DIR"
 }
 
+fix_jenkins_volume_permissions() {
+  local compose_file="$JENKINS_DIR/docker-compose.yml"
+  local volume_name="jenkins_jenkins-data"
+
+  info "修复 Jenkins 数据卷权限（jenkins 用户 UID=1000）..."
+  docker compose -f "$compose_file" down 2>/dev/null || true
+
+  docker volume create "$volume_name" >/dev/null 2>&1 || true
+  docker run --rm \
+    -v "${volume_name}:/var/jenkins_home" \
+    busybox chown -R 1000:1000 /var/jenkins_home
+
+  ok "数据卷权限已修复: $volume_name"
+}
+
 start_jenkins() {
   [[ -f "$JENKINS_DIR/docker-compose.yml" ]] || error "缺少 $JENKINS_DIR/docker-compose.yml"
 
@@ -99,7 +114,12 @@ start_jenkins() {
     ok "已生成 GITHUB_WEBHOOK_SECRET: $GITHUB_WEBHOOK_SECRET"
   fi
 
-  export APP_DIR JENKINS_HTTP_PORT JENKINS_AGENT_PORT GITHUB_WEBHOOK_SECRET
+  if [[ -z "${DOCKER_GID:-}" ]] && command -v getent >/dev/null 2>&1; then
+    DOCKER_GID="$(getent group docker | cut -d: -f3 || true)"
+  fi
+  export APP_DIR JENKINS_HTTP_PORT JENKINS_AGENT_PORT GITHUB_WEBHOOK_SECRET DOCKER_GID
+
+  fix_jenkins_volume_permissions
 
   info "构建并启动 Jenkins..."
   docker compose -f "$JENKINS_DIR/docker-compose.yml" up -d --build
