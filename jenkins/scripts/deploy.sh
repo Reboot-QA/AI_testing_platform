@@ -127,8 +127,18 @@ backup_db_if_possible() {
   fi
 }
 
+ensure_env_file() {
+  if [[ -f "$ENV_FILE" ]]; then
+    if [[ ! -r "$ENV_FILE" ]]; then
+      error "Jenkins 无法读取 ${ENV_FILE}，请在服务器执行: sudo chmod 640 ${ENV_FILE} && sudo chown root:1000 ${ENV_FILE}"
+    fi
+    return 0
+  fi
+  error "缺少 ${ENV_FILE}，请在服务器执行: cd ${APP_DIR} && cp .env.docker.example .env.docker && ./linux-deploy.sh init-env && sudo chmod 640 .env.docker && sudo chown root:1000 .env.docker"
+}
+
 deploy_services() {
-  [[ -f "$ENV_FILE" ]] || error "缺少环境文件: $ENV_FILE（请先 cp .env.docker.example .env.docker）"
+  ensure_env_file
 
   case "$DEPLOY_TARGET" in
     all)
