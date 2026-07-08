@@ -5,6 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      network: host
     image: ai-platform-jenkins:lts
     container_name: ai-platform-jenkins
     restart: unless-stopped
