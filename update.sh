@@ -22,7 +22,7 @@ error() { echo -e "\033[0;31m[ERR ]\033[0m $*" >&2; exit 1; }
 
 fix_scripts() {
   local f
-  for f in update.sh linux-deploy.sh deploy.sh; do
+  for f in update.sh linux-deploy.sh deploy.sh install-server.sh jenkins/install.sh jenkins/fix-app-permissions.sh jenkins/scripts/deploy.sh; do
     [[ -f "$ROOT/$f" ]] || continue
     if grep -q $'\r' "$ROOT/$f" 2>/dev/null; then
       warn "修复 $f 的 Windows 换行(CRLF)..."
@@ -99,6 +99,7 @@ main() {
   echo "========================================"
   fix_scripts
   pull_latest
+  fix_scripts
   deploy_docker
   echo "========================================"
 }

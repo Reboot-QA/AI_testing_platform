@@ -25,8 +25,8 @@ if [[ -f "$APP_DIR/.env.docker" ]]; then
   echo "[ OK ] .env.docker 权限: 640"
 fi
 
-chmod +x "$APP_DIR/update.sh" "$APP_DIR/linux-deploy.sh" 2>/dev/null || true
-chmod +x "$APP_DIR/jenkins/"*.sh 2>/dev/null || true
+chmod +x "$APP_DIR/update.sh" "$APP_DIR/linux-deploy.sh" "$APP_DIR/deploy.sh" 2>/dev/null || true
+chmod +x "$APP_DIR/jenkins/"*.sh "$APP_DIR/jenkins/scripts/"*.sh 2>/dev/null || true
 
 # Git 信任（jenkins 容器内也会执行，宿主机先配无妨）
 git config --system --add safe.directory "$APP_DIR" 2>/dev/null || true

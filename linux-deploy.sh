@@ -91,13 +91,15 @@ EOF
 }
 
 fix_script_permissions() {
-  if grep -q $'\r' "$0" 2>/dev/null; then
-    warn "检测到 Windows 换行(CRLF)，正在修复..."
-    sed -i 's/\r$//' "$0"
-  fi
-  chmod +x "$0" 2>/dev/null || true
-  [[ -f "$ROOT/docker/deploy.sh" ]] && chmod +x "$ROOT/docker/deploy.sh" 2>/dev/null || true
-  [[ -x "$ROOT/deploy.sh" ]] && chmod +x "$ROOT/deploy.sh" 2>/dev/null || true
+  local f
+  for f in "$0" update.sh deploy.sh install-server.sh docker/deploy.sh; do
+    [[ -f "$ROOT/$f" ]] || continue
+    if grep -q $'\r' "$ROOT/$f" 2>/dev/null; then
+      warn "检测到 $f 使用 Windows 换行(CRLF)，正在修复..."
+      sed -i 's/\r$//' "$ROOT/$f"
+    fi
+    chmod +x "$ROOT/$f" 2>/dev/null || true
+  done
 }
 
 detect_public_host() {

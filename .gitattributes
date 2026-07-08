@@ -1,4 +1,4 @@
-# Shell scripts must use LF on Linux
+# Shell scripts must use LF on Linux; keep executable bit in git (100755)
 *.sh text eol=lf
 deploy.sh text eol=lf
 
