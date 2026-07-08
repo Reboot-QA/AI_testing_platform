@@ -33,6 +33,4 @@ RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
 COPY init.groovy.d/ /usr/share/jenkins/ref/init.groovy.d/
 
-ENV PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-
 USER jenkins
