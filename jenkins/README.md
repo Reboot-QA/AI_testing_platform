@@ -65,6 +65,39 @@ sudo APP_DIR=/opt/AI_testing_platform ./jenkins/install.sh
 docker logs -f ai-platform-jenkins
 ```
 
+## 登录认证（重要）
+
+默认安装会**跳过 Jenkins 初始化向导**，若未配置安全策略，会出现**无需账号即可访问**的情况。
+
+已内置 JCasC 配置，启用 **本地账号 + 禁止匿名访问**：
+
+| 变量 | 说明 |
+|------|------|
+| `JENKINS_ADMIN_USER` | 管理员用户名（默认 `admin`） |
+| `JENKINS_ADMIN_PASSWORD` | 管理员密码（**必填强密码**） |
+
+### 为已安装的 Jenkins 启用登录
+
+```bash
+cd /opt/AI_testing_platform
+git pull
+chmod +x jenkins/enable-auth.sh
+sudo bash jenkins/enable-auth.sh
+```
+
+脚本会生成 `jenkins/.env`、设置密码并重启 Jenkins。完成后用输出的用户名密码登录。
+
+手动设置密码：
+
+```bash
+cd /opt/AI_testing_platform/jenkins
+cp .env.example .env
+vi .env   # 修改 JENKINS_ADMIN_PASSWORD
+docker compose --env-file .env up -d --build
+```
+
+> GitHub Webhook（`POST /github-webhook/`）仍可匿名触发构建，不受登录限制。
+
 ## 配置 Jenkins 任务
 
 ### 方式一：Pipeline from SCM（推荐）

@@ -91,12 +91,82 @@ ensure_app_dir() {
   ok "应用目录就绪: $APP_DIR"
 }
 
+is_weak_jenkins_password() {
+  case "$1" in
+    ""|admin|admin123|password|123456|change-me-jenkins-password)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
+ensure_jenkins_env_file() {
+  local env_file="$JENKINS_DIR/.env"
+  local host pass user port
+
+  if [[ ! -f "$env_file" ]]; then
+    cp "$JENKINS_DIR/.env.example" "$env_file"
+    ok "已创建 $env_file"
+  fi
+
+  if grep -q $'\r' "$env_file" 2>/dev/null; then
+    sed -i 's/\r$//' "$env_file"
+  fi
+
+  pass="$(grep -E '^JENKINS_ADMIN_PASSWORD=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  if is_weak_jenkins_password "$pass"; then
+    pass="$(generate_secret)"
+    if grep -q '^JENKINS_ADMIN_PASSWORD=' "$env_file" 2>/dev/null; then
+      sed -i "s|^JENKINS_ADMIN_PASSWORD=.*|JENKINS_ADMIN_PASSWORD=${pass}|" "$env_file"
+    else
+      echo "JENKINS_ADMIN_PASSWORD=${pass}" >>"$env_file"
+    fi
+    ok "已自动生成 JENKINS_ADMIN_PASSWORD"
+  fi
+
+  if [[ -z "$GITHUB_WEBHOOK_SECRET" ]]; then
+    GITHUB_WEBHOOK_SECRET="$(grep -E '^GITHUB_WEBHOOK_SECRET=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  fi
+  if [[ -z "$GITHUB_WEBHOOK_SECRET" || "$GITHUB_WEBHOOK_SECRET" == "change-me-webhook-secret" ]]; then
+    GITHUB_WEBHOOK_SECRET="$(generate_secret)"
+    if grep -q '^GITHUB_WEBHOOK_SECRET=' "$env_file" 2>/dev/null; then
+      sed -i "s|^GITHUB_WEBHOOK_SECRET=.*|GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}|" "$env_file"
+    else
+      echo "GITHUB_WEBHOOK_SECRET=${GITHUB_WEBHOOK_SECRET}" >>"$env_file"
+    fi
+    ok "已自动生成 GITHUB_WEBHOOK_SECRET"
+  fi
+
+  host="$(curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null | tr -d '[:space:]' || hostname -I 2>/dev/null | awk '{print $1}')"
+  [[ -n "$host" ]] || host="127.0.0.1"
+  port="$(grep -E '^JENKINS_HTTP_PORT=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2-)"
+  port="${port:-8080}"
+  if ! grep -q '^JENKINS_URL=' "$env_file" 2>/dev/null; then
+    echo "JENKINS_URL=http://${host}:${port}/" >>"$env_file"
+  fi
+
+  if [[ -z "${DOCKER_GID:-}" ]] && command -v getent >/dev/null 2>&1; then
+    DOCKER_GID="$(getent group docker | cut -d: -f3 || true)"
+    if grep -q '^DOCKER_GID=' "$env_file" 2>/dev/null; then
+      sed -i "s|^DOCKER_GID=.*|DOCKER_GID=${DOCKER_GID}|" "$env_file"
+    else
+      echo "DOCKER_GID=${DOCKER_GID}" >>"$env_file"
+    fi
+  fi
+
+  chmod 600 "$env_file" 2>/dev/null || true
+  ok "Jenkins 环境文件就绪: $env_file"
+}
+
 fix_jenkins_volume_permissions() {
   local compose_file="$JENKINS_DIR/docker-compose.yml"
+  local env_file="$JENKINS_DIR/.env"
   local volume_name="jenkins_jenkins-data"
 
   info "修复 Jenkins 数据卷权限（jenkins 用户 UID=1000）..."
-  docker compose -f "$compose_file" down 2>/dev/null || true
+  docker compose --env-file "$env_file" -f "$compose_file" down 2>/dev/null || true
 
   docker volume create "$volume_name" >/dev/null 2>&1 || true
   docker run --rm \
@@ -107,22 +177,15 @@ fix_jenkins_volume_permissions() {
 }
 
 start_jenkins() {
+  local env_file="$JENKINS_DIR/.env"
   [[ -f "$JENKINS_DIR/docker-compose.yml" ]] || error "缺少 $JENKINS_DIR/docker-compose.yml"
 
-  if [[ -z "$GITHUB_WEBHOOK_SECRET" ]]; then
-    GITHUB_WEBHOOK_SECRET="$(generate_secret)"
-    ok "已生成 GITHUB_WEBHOOK_SECRET: $GITHUB_WEBHOOK_SECRET"
-  fi
-
-  if [[ -z "${DOCKER_GID:-}" ]] && command -v getent >/dev/null 2>&1; then
-    DOCKER_GID="$(getent group docker | cut -d: -f3 || true)"
-  fi
-  export APP_DIR JENKINS_HTTP_PORT JENKINS_AGENT_PORT GITHUB_WEBHOOK_SECRET DOCKER_GID
+  ensure_jenkins_env_file
 
   fix_jenkins_volume_permissions
 
-  info "构建并启动 Jenkins..."
-  docker compose -f "$JENKINS_DIR/docker-compose.yml" up -d --build
+  info "构建并启动 Jenkins（已启用登录认证）..."
+  docker compose --env-file "$env_file" -f "$JENKINS_DIR/docker-compose.yml" up -d --build
 
   wait_jenkins_ready
 }
@@ -187,24 +250,34 @@ create_pipeline_job() {
 }
 
 print_banner() {
-  local host
+  local host user pass port env_file="$JENKINS_DIR/.env"
   host="$(curl -fsS --max-time 3 https://api.ipify.org 2>/dev/null | tr -d '[:space:]' || hostname -I 2>/dev/null | awk '{print $1}')"
   [[ -n "$host" ]] || host="服务器IP"
+  user="$(grep -E '^JENKINS_ADMIN_USER=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2-)"
+  user="${user:-admin}"
+  pass="$(grep -E '^JENKINS_ADMIN_PASSWORD=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2-)"
+  port="$(grep -E '^JENKINS_HTTP_PORT=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2-)"
+  port="${port:-8080}"
+  GITHUB_WEBHOOK_SECRET="$(grep -E '^GITHUB_WEBHOOK_SECRET=' "$env_file" 2>/dev/null | tail -1 | cut -d= -f2-)"
 
   cat <<EOF
 
 ========================================
   Jenkins CI/CD 安装完成
 ========================================
-  Jenkins 地址:  http://${host}:${JENKINS_HTTP_PORT}
+  Jenkins 地址:  http://${host}:${port}
+  登录用户名:    ${user}
+  登录密码:      ${pass}
   应用部署目录:  ${APP_DIR}
   Webhook 密钥:  ${GITHUB_WEBHOOK_SECRET}
 
+  密码保存在: ${env_file}（请勿提交 Git）
+
 下一步:
-  1. 浏览器打开 Jenkins，完成首次向导（或已跳过向导）
+  1. 浏览器打开 Jenkins，使用上述账号登录
   2. 新建 Pipeline 任务，Script Path 填: jenkins/Jenkinsfile
   3. 在 GitHub 仓库 Settings -> Webhooks 添加:
-       Payload URL: http://${host}:${JENKINS_HTTP_PORT}/github-webhook/
+       Payload URL: http://${host}:${port}/github-webhook/
        Content type: application/json
        Secret: ${GITHUB_WEBHOOK_SECRET}
        事件: Just the push event
@@ -212,8 +285,7 @@ print_banner() {
 
 常用命令:
   docker logs -f ai-platform-jenkins
-  docker compose -f ${JENKINS_DIR}/docker-compose.yml restart
-  docker compose -f ${JENKINS_DIR}/docker-compose.yml down
+  docker compose --env-file ${env_file} -f ${JENKINS_DIR}/docker-compose.yml restart
 
 详细文档: ${APP_DIR}/jenkins/README.md
 ========================================

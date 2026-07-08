@@ -2,10 +2,20 @@ jenkins:
   systemMessage: "AI测试平台 CI/CD - 自动部署前后端"
   numExecutors: 2
   mode: NORMAL
+  # 本地账号登录，禁止匿名访问
+  securityRealm:
+    local:
+      allowsSignup: false
+      users:
+        - id: "${JENKINS_ADMIN_USER:-admin}"
+          password: "${JENKINS_ADMIN_PASSWORD:?Set JENKINS_ADMIN_PASSWORD in jenkins/.env}"
+  authorizationStrategy:
+    loggedInUsersCanDoAnything:
+      allowAnonymousRead: false
 
 unclassified:
   location:
-    url: "http://localhost:8080/"
+    url: "${JENKINS_URL:-http://localhost:8080/}"
   timestamper:
     allPipelines: true
 
