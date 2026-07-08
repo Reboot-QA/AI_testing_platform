@@ -8,11 +8,8 @@ services:
     image: ai-platform-jenkins:lts
     container_name: ai-platform-jenkins
     restart: unless-stopped
-    user: root
     environment:
-      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Shanghai"
-      CASC_JENKINS_CONFIG: /var/jenkins_home/casc.yaml
-      # 应用部署目录（与 install-server.sh 默认一致）
+      JAVA_OPTS: "-Xms512m -Xmx1536m -Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Shanghai"
       APP_DIR: ${APP_DIR:-/opt/AI_testing_platform}
       ENV_FILE: ${ENV_FILE:-/opt/AI_testing_platform/.env.docker}
       # GitHub Webhook 密钥（与 GitHub 仓库 Webhook 配置一致）
@@ -26,7 +23,15 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       # 挂载应用部署目录，Jenkins 可直接在该目录 git pull + docker compose
       - ${APP_DIR:-/opt/AI_testing_platform}:${APP_DIR:-/opt/AI_testing_platform}
-      - ./casc.yaml:/var/jenkins_home/casc.yaml:ro
+    # 使 jenkins 用户能访问宿主机 docker.sock（DOCKER_GID 默认取宿主机 docker 组 id）
+    group_add:
+      - "${DOCKER_GID:-999}"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8080/login >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 20
+      start_period: 600s
     networks:
       - jenkins
 

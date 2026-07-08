@@ -104,17 +104,43 @@ start_jenkins() {
   info "构建并启动 Jenkins..."
   docker compose -f "$JENKINS_DIR/docker-compose.yml" up -d --build
 
-  info "等待 Jenkins 启动..."
-  local i code
-  for i in $(seq 1 60); do
+  wait_jenkins_ready
+}
+
+wait_jenkins_ready() {
+  # 首次启动需下载/初始化插件，低配 VPS 常需 5～15 分钟
+  local max_wait="${JENKINS_STARTUP_TIMEOUT:-900}"
+  local interval=5
+  local elapsed=0
+  local code
+
+  info "等待 Jenkins 启动（首次可能需 5～15 分钟，超时 ${max_wait}s）..."
+  while (( elapsed < max_wait )); do
     code="$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:${JENKINS_HTTP_PORT}/login" 2>/dev/null || echo 000)"
     if [[ "$code" == "200" ]]; then
-      ok "Jenkins 已启动"
+      ok "Jenkins 已启动（耗时约 ${elapsed}s）"
       return 0
     fi
-    sleep 3
+
+    if docker logs ai-platform-jenkins 2>&1 | tail -20 | grep -q "Jenkins is fully up and running"; then
+      ok "Jenkins 已就绪（日志确认，耗时约 ${elapsed}s）"
+      return 0
+    fi
+
+    if (( elapsed > 0 && elapsed % 30 == 0 )); then
+      info "仍在启动中... 已等待 ${elapsed}s，最近日志:"
+      docker logs ai-platform-jenkins --tail=5 2>&1 | sed 's/^/    /' || true
+    fi
+
+    sleep "$interval"
+    elapsed=$((elapsed + interval))
   done
-  error "Jenkins 启动超时，请查看: docker logs ai-platform-jenkins --tail=50"
+
+  warn "等待超时（${max_wait}s），但容器可能仍在后台初始化"
+  warn "请继续执行: docker logs -f ai-platform-jenkins"
+  warn "看到 'Jenkins is fully up and running' 后访问: http://服务器IP:${JENKINS_HTTP_PORT}"
+  docker ps --filter name=ai-platform-jenkins --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}' || true
+  return 0
 }
 
 create_pipeline_job() {
