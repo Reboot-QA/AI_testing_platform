@@ -98,31 +98,58 @@ docker compose --env-file .env up -d --build
 
 > GitHub Webhook（`POST /github-webhook/`）仍可匿名触发构建，不受登录限制。
 
-## 配置 Jenkins 任务
+## 配置 Jenkins 任务（只执行 update.sh 发版）
 
-### 方式一：Pipeline from SCM（推荐）
+Jenkins **不再拉取 workspace 代码**，只会在服务器上执行：
 
-1. 打开 `http://服务器IP:8080`
-2. **新建任务** → 名称 `ai-testing-platform-deploy` → 类型 **Pipeline**
-3. **构建触发器**：
-   - 勾选 **GitHub hook trigger for GITScm polling**
-   - （可选）勾选 **Poll SCM**，日程 `H/5 * * * *` 作为 Webhook 兜底
+```bash
+cd /opt/AI_testing_platform && bash ./update.sh
+```
+
+`update.sh` 会自动：`git pull` → `linux-deploy.sh update` → 重建前后端 Docker。
+
+### 方式一：Pipeline 脚本直接写（最简单，推荐）
+
+1. 新建/打开任务 **ai-testing-platform-deploy** → **Configure**
+2. **General**：不用勾 parameterized
+3. **Triggers**：勾选 **GitHub hook trigger for GITScm polling**
 4. **Pipeline**：
-   - Definition: **Pipeline script from SCM**
-   - SCM: **Git**
-   - Repository URL: `https://github.com/Reboot-QA/AI_testing_platform.git`
-   - Branch: `*/main`
-   - Script Path: `jenkins/Jenkinsfile`
-5. 保存后点击 **立即构建** 验证
+   - Definition: **Pipeline script**（不是 from SCM）
+   - 脚本内容：
 
-### 方式二：仅手动触发
+```groovy
+pipeline {
+    agent any
+    options {
+        disableConcurrentBuilds()
+        timeout(time: 45, unit: 'MINUTES')
+        skipDefaultCheckout(true)
+    }
+    environment {
+        APP_DIR = '/opt/AI_testing_platform'
+    }
+    triggers { githubPush() }
+    stages {
+        stage('一键发版') {
+            steps {
+                sh 'cd /opt/AI_testing_platform && bash ./update.sh'
+            }
+        }
+    }
+}
+```
 
-不配置 Webhook，在任务页点击 **Build with Parameters**：
+5. **Save** → **Build Now**
 
-| 参数 | 说明 |
-|------|------|
-| `DEPLOY_TARGET` | `all` / `backend` / `frontend` |
-| `SKIP_BACKUP` | 是否跳过部署前 MySQL 备份 |
+### 方式二：Pipeline from SCM（Jenkinsfile 在 Git 里维护）
+
+1. **Pipeline** → Definition: **Pipeline script from SCM**
+2. Git URL: `https://github.com/Reboot-QA/AI_testing_platform.git`
+3. Branch: `*/main`
+4. Script Path: `jenkins/Jenkinsfile`
+5. **Triggers**：勾选 GitHub hook trigger
+
+> 首次需 `git pull` 把最新 `jenkins/Jenkinsfile` 拉到服务器；或先用方式一直接发版。
 
 ## 配置 GitHub Webhook
 
@@ -140,25 +167,21 @@ docker compose --env-file .env up -d --build
 
 > 安全建议：生产环境请为 Jenkins 配置 HTTPS + 强密码，并将 Webhook 仅暴露给 GitHub IP 段。
 
-## 部署流程说明
+## 发版流程说明
 
-`jenkins/scripts/deploy.sh` 执行步骤：
-
-1. 在 `APP_DIR` 执行 `git pull`
-2. （默认）若 MySQL 容器在运行，先 `linux-deploy.sh backup-db`
-3. `docker compose up -d --build` 重建目标服务
-4. 等待 MySQL / 后端 `/health` / 前端 HTTP 就绪
-
-仅更新后端（改 Python 代码时）：
+Jenkins 执行 `update.sh`，等价于你在服务器手动运行：
 
 ```bash
-DEPLOY_TARGET=backend bash jenkins/scripts/deploy.sh
+cd /opt/AI_testing_platform
+./update.sh
 ```
 
-仅更新前端（改 Vue 代码时）：
+步骤：`git pull` → `linux-deploy.sh update` → `docker compose up -d --build`
+
+手动发版（不经过 Jenkins）：
 
 ```bash
-DEPLOY_TARGET=frontend bash jenkins/scripts/deploy.sh
+cd /opt/AI_testing_platform && ./update.sh
 ```
 
 ## 环境变量
