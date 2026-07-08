@@ -28,8 +28,6 @@ RUN set -eux; \
     docker --version; \
     docker compose version
 
-RUN usermod -aG docker jenkins
-
 COPY plugins.txt /usr/share/jenkins/ref/plugins.txt
 RUN jenkins-plugin-cli --plugin-file /usr/share/jenkins/ref/plugins.txt
 
