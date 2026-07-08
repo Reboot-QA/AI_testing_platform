@@ -3,7 +3,7 @@ export const MENU_DEFINITIONS = [
   { key: 'projects', label: '项目管理', path: '/projects', group: 'business' },
   {
     key: 'requirement_docs',
-    label: 'AI分析需求',
+    label: 'AI生成需求',
     path: '/requirement-docs',
     group: 'business',
     parent: 'requirement_mgmt',
@@ -83,7 +83,7 @@ export const MENU_DEFINITIONS = [
 export const PAGE_TITLES = {
   '/dashboard': '仪表盘',
   '/projects': '项目管理',
-  '/requirement-docs': 'AI分析需求',
+  '/requirement-docs': 'AI生成需求',
   '/requirements': '需求点',
   '/testcases': '用例库',
   '/ai-generate': 'AI生成用例',

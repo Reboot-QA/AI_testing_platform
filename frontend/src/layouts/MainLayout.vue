@@ -29,7 +29,7 @@
           </template>
           <el-menu-item v-if="userStore.hasPermission('requirement_docs')" index="/requirement-docs">
             <el-icon><Upload /></el-icon>
-            <span>AI分析需求</span>
+            <span>AI生成需求</span>
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('requirements')" index="/requirements" data-assistant="menu.requirements">
             <el-icon><Tickets /></el-icon>
