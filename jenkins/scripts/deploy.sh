@@ -67,21 +67,43 @@ wait_mysql_healthy() {
 }
 
 wait_backend_ready() {
-  local i url port code
+  local i url port code body
   port="$(grep -E '^BACKEND_PORT=' "$ENV_FILE" 2>/dev/null | tail -1 | cut -d= -f2)"
   port="${port:-8000}"
   url="http://127.0.0.1:${port}/health"
 
-  info "等待后端就绪: $url"
-  for i in $(seq 1 90); do
+  info "等待后端就绪: $url（数据库初始化可能需要 3～8 分钟）"
+  for i in $(seq 1 180); do
+    body=""
     code="$(curl -s -o /dev/null -w '%{http_code}' "$url" 2>/dev/null || echo 000)"
     if [[ "$code" == "200" ]]; then
       ok "后端健康检查通过"
       return 0
     fi
+    if [[ "$code" == "500" ]]; then
+      body="$(curl -s "$url" 2>/dev/null || true)"
+      warn "后端启动失败: ${body:-无详情}"
+      docker logs ai-platform-backend --tail=60 2>&1 | sed 's/^/    /' || true
+      error "后端返回 500，请检查上述日志"
+    fi
+    if ! docker ps --format '{{.Names}}' | grep -qx ai-platform-backend; then
+      warn "backend 容器未运行"
+      docker logs ai-platform-backend --tail=60 2>&1 | sed 's/^/    /' || true
+      error "backend 容器已退出"
+    fi
+    if (( i % 15 == 0 )); then
+      case "$code" in
+        503) info "后端仍在初始化... (${i}/180)" ;;
+        000) info "等待后端端口开放... (${i}/180)" ;;
+        *) info "等待后端就绪... HTTP ${code} (${i}/180)" ;;
+      esac
+      docker logs ai-platform-backend --tail=8 2>&1 | sed 's/^/    /' || true
+    fi
     sleep 2
   done
-  error "后端启动超时，请查看: docker logs ai-platform-backend --tail=50"
+  warn "后端启动超时，最近日志:"
+  docker logs ai-platform-backend --tail=60 2>&1 | sed 's/^/    /' || true
+  error "后端启动超时（已等待 6 分钟），请执行: ./linux-deploy.sh diagnose"
 }
 
 wait_frontend_ready() {
