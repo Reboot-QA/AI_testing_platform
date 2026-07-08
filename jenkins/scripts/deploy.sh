@@ -16,6 +16,10 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH
 APP_DIR="${APP_DIR:-/opt/AI_testing_platform}"
 ENV_FILE="${ENV_FILE:-$APP_DIR/.env.docker}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
+# Jenkins SCM 会注入 GIT_BRANCH=origin/main，需规范化
+GIT_BRANCH="${GIT_BRANCH#refs/heads/}"
+GIT_BRANCH="${GIT_BRANCH#origin/}"
+GIT_BRANCH="${GIT_BRANCH:-main}"
 DEPLOY_TARGET="${DEPLOY_TARGET:-all}"
 SKIP_BACKUP="${SKIP_BACKUP:-0}"
 WITH_MONITORING="${WITH_MONITORING:-0}"
@@ -97,9 +101,15 @@ wait_frontend_ready() {
   warn "前端健康检查未通过，请查看: docker logs ai-platform-frontend --tail=30"
 }
 
+ensure_git_safe_directory() {
+  # Jenkins 用户操作 root 拥有的挂载目录时，Git 2.35+ 会拒绝（dubious ownership）
+  git config --global --add safe.directory "$APP_DIR" 2>/dev/null || true
+}
+
 pull_latest() {
   [[ -d "$APP_DIR/.git" ]] || error "部署目录不是 git 仓库: $APP_DIR"
 
+  ensure_git_safe_directory
   cd "$APP_DIR"
   info "拉取最新代码 (分支: $GIT_BRANCH)..."
   git fetch origin "$GIT_BRANCH"

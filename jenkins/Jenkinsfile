@@ -24,8 +24,8 @@ pipeline {
     environment {
         APP_DIR = "${env.APP_DIR ?: '/opt/AI_testing_platform'}"
         ENV_FILE = "${env.ENV_FILE ?: '/opt/AI_testing_platform/.env.docker'}"
-        GIT_BRANCH = "${env.GIT_BRANCH ?: 'main'}"
-        PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        // 固定 main，避免 Jenkins SCM 注入 origin/main
+        DEPLOY_GIT_BRANCH = 'main'
     }
 
     triggers {
@@ -40,7 +40,7 @@ pipeline {
             steps {
                 sh '''
                     set -e
-                    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+                    export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
                     echo "APP_DIR=${APP_DIR}"
                     echo "ENV_FILE=${ENV_FILE}"
                     test -d "${APP_DIR}" || { echo "部署目录不存在: ${APP_DIR}"; exit 1; }
@@ -59,7 +59,7 @@ pipeline {
                     set -e
                     export APP_DIR='${APP_DIR}'
                     export ENV_FILE='${ENV_FILE}'
-                    export GIT_BRANCH='${GIT_BRANCH}'
+                    export GIT_BRANCH='${DEPLOY_GIT_BRANCH}'
                     export DEPLOY_TARGET='${params.DEPLOY_TARGET}'
                     export SKIP_BACKUP='${params.SKIP_BACKUP ? "1" : "0"}'
                     bash '${WORKSPACE}/jenkins/scripts/deploy.sh'
