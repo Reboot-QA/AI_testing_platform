@@ -21,7 +21,7 @@ MENU_DEFINITIONS: List[Dict[str, str]] = [
     },
     {
         "key": "ai_generate",
-        "label": "AI 生成",
+        "label": "AI生成用例",
         "path": "/ai-generate",
         "group": "business",
         "parent": "testcase_mgmt",

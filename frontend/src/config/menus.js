@@ -19,7 +19,7 @@ export const MENU_DEFINITIONS = [
   },
   {
     key: 'ai_generate',
-    label: 'AI 生成',
+    label: 'AI生成用例',
     path: '/ai-generate',
     group: 'business',
     parent: 'testcase_mgmt',
@@ -86,7 +86,7 @@ export const PAGE_TITLES = {
   '/requirement-docs': 'AI分析需求',
   '/requirements': '需求点',
   '/testcases': '用例库',
-  '/ai-generate': 'AI 智能生成',
+  '/ai-generate': 'AI生成用例',
   '/test-execution': '用例执行',
   '/api-automation/env': '环境配置',
   '/api-automation/suites': '套件与用例',

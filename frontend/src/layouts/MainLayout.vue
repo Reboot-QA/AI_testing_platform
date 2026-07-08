@@ -44,7 +44,7 @@
           </template>
           <el-menu-item v-if="userStore.hasPermission('ai_generate')" index="/ai-generate" data-assistant="menu.ai_generate">
             <el-icon><MagicStick /></el-icon>
-            <span>AI 生成</span>
+            <span>AI生成用例</span>
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('testcases')" index="/testcases" data-assistant="menu.testcases">
             <el-icon><Collection /></el-icon>
@@ -116,7 +116,7 @@
       >
         <template #title>
           AI 正在生成用例，请在 {{ aiStore.leaveCountdown }} 秒内返回
-          <el-button type="primary" link @click="router.push('/ai-generate')">AI 生成</el-button>
+          <el-button type="primary" link @click="router.push('/ai-generate')">AI生成用例</el-button>
           页面，否则将自动停止
         </template>
       </el-alert>

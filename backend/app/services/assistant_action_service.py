@@ -176,7 +176,7 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
         return {
             "reply": "好的，我将为您演示用例管理全流程：AI 生成用例并进入用例库查看，请稍候观看。",
             "actions": [
-                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
+                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI生成用例"},
                 _wait_step("等待 AI 生成页加载"),
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "准备生成配置"},
                 _wait_step("等待表单填充完成"),
@@ -204,9 +204,9 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
 
     if preset in {"ai_generate"}:
         return {
-            "reply": "好的，我将为您打开 AI 智能生成、填充演示需求并点击「开始生成」，请稍候观看。",
+            "reply": "好的，我将为您打开 AI生成用例、填充演示需求并点击「开始生成」，请稍候观看。",
             "actions": [
-                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI 智能生成"},
+                {"type": "navigate", "path": "/ai-generate", "label": "打开 AI生成用例"},
                 _wait_step("等待 AI 生成页加载"),
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "选择项目并填充演示需求"},
                 _wait_step("等待表单填充完成"),
@@ -249,7 +249,7 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
         actions.extend(
             [
                 _wait_step("等待项目创建完成"),
-                {"type": "navigate", "path": "/ai-generate", "label": "进入 AI 智能生成"},
+                {"type": "navigate", "path": "/ai-generate", "label": "进入 AI生成用例"},
                 _wait_step("等待 AI 生成页加载"),
                 {"type": "invoke", "handler": "aiGenerate.prepareDemo", "label": "准备生成配置"},
                 _wait_step("等待表单填充完成"),
@@ -257,7 +257,7 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
             ]
         )
         return {
-            "reply": "好的，我将演示创建项目、进入 AI 生成并点击「开始生成」，请稍候观看。",
+            "reply": "好的，我将演示创建项目、进入 AI生成用例并点击「开始生成」，请稍候观看。",
             "actions": actions,
             "needs_confirmation": False,
         }
