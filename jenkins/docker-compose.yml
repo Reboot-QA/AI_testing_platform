@@ -10,13 +10,11 @@ services:
     restart: unless-stopped
     environment:
       JAVA_OPTS: "-Xms512m -Xmx1536m -Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Shanghai"
-      CASC_JENKINS_CONFIG: /var/jenkins_home/casc.yaml
       APP_DIR: ${APP_DIR:-/opt/AI_testing_platform}
       ENV_FILE: ${ENV_FILE:-/opt/AI_testing_platform/.env.docker}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-change-me-webhook-secret}
       JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER:-admin}
-      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:?Set JENKINS_ADMIN_PASSWORD in jenkins/.env}
-      JENKINS_URL: ${JENKINS_URL:-http://localhost:8080/}
+      JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-}
       TZ: Asia/Shanghai
     ports:
       - "${JENKINS_HTTP_PORT:-8080}:8080"
@@ -24,10 +22,8 @@ services:
     volumes:
       - jenkins-data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
-      # 挂载应用部署目录，Jenkins 可直接在该目录 git pull + docker compose
       - ${APP_DIR:-/opt/AI_testing_platform}:${APP_DIR:-/opt/AI_testing_platform}
-      - ./casc.yaml:/var/jenkins_home/casc.yaml:ro
-    # 使 jenkins 用户能访问宿主机 docker.sock（DOCKER_GID 默认取宿主机 docker 组 id）
+      - ./init.groovy.d:/var/jenkins_home/init.groovy.d:ro
     group_add:
       - "${DOCKER_GID:-999}"
     healthcheck:
