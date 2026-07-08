@@ -6,6 +6,7 @@ backend/.env
 backend/ai_testcase.db
 backend/*.db
 *.db-journal
+jenkins/.env
 
 # Python
 __pycache__/

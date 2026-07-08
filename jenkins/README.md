@@ -1,0 +1,213 @@
+# Jenkins CI/CD - AI测试平台自动部署
+
+通过 Jenkins 在代码推送到 GitHub 后，自动拉取最新代码并重建 Docker 中的**前端**与**后端**服务。
+
+## 架构
+
+```
+GitHub (push main)
+    │
+    ▼ Webhook / 轮询 SCM
+Jenkins (Docker 容器，挂载 docker.sock)
+    │
+    ▼ jenkins/scripts/deploy.sh
+git pull → docker compose up -d --build (backend + frontend)
+    │
+    ▼
+ai-platform-frontend / ai-platform-backend / ai-platform-mysql
+```
+
+与项目现有脚本的关系：
+
+| 脚本 | 作用 |
+|------|------|
+| `jenkins/scripts/deploy.sh` | Jenkins 专用：拉代码 + 选择性重建前后端 + 健康检查 |
+| `update.sh` | 手动一键更新（等价逻辑） |
+| `linux-deploy.sh update` | Linux 部署机手动更新 |
+
+## 前置条件
+
+- Linux 服务器（推荐与 `linux-deploy.sh` 同机部署）
+- Docker 20.10+、Docker Compose v2
+- 应用已通过 `./linux-deploy.sh up` 首次部署
+- 已配置 `$APP_DIR/.env.docker`（含数据库密码等，**勿提交 Git**）
+- 服务器可访问 GitHub（拉取代码）
+
+默认路径：
+
+| 变量 | 默认值 |
+|------|--------|
+| `APP_DIR` | `/opt/AI_testing_platform` |
+| `ENV_FILE` | `/opt/AI_testing_platform/.env.docker` |
+| Jenkins 端口 | `8080` |
+
+## 一键安装
+
+在部署服务器上：
+
+```bash
+cd /opt/AI_testing_platform
+git pull   # 确保包含 jenkins/ 目录
+chmod +x jenkins/install.sh jenkins/scripts/deploy.sh
+sudo APP_DIR=/opt/AI_testing_platform ./jenkins/install.sh
+```
+
+安装脚本会：
+
+1. 确认/克隆应用仓库到 `APP_DIR`
+2. 构建 Jenkins 镜像（含 Docker CLI、Git、常用插件）
+3. 启动 `ai-platform-jenkins` 容器
+4. 挂载宿主机 Docker Socket，使 Jenkins 能执行 `docker compose`
+
+查看 Jenkins 日志：
+
+```bash
+docker logs -f ai-platform-jenkins
+```
+
+## 配置 Jenkins 任务
+
+### 方式一：Pipeline from SCM（推荐）
+
+1. 打开 `http://服务器IP:8080`
+2. **新建任务** → 名称 `ai-testing-platform-deploy` → 类型 **Pipeline**
+3. **构建触发器**：
+   - 勾选 **GitHub hook trigger for GITScm polling**
+   - （可选）勾选 **Poll SCM**，日程 `H/5 * * * *` 作为 Webhook 兜底
+4. **Pipeline**：
+   - Definition: **Pipeline script from SCM**
+   - SCM: **Git**
+   - Repository URL: `https://github.com/Reboot-QA/AI_testing_platform.git`
+   - Branch: `*/main`
+   - Script Path: `jenkins/Jenkinsfile`
+5. 保存后点击 **立即构建** 验证
+
+### 方式二：仅手动触发
+
+不配置 Webhook，在任务页点击 **Build with Parameters**：
+
+| 参数 | 说明 |
+|------|------|
+| `DEPLOY_TARGET` | `all` / `backend` / `frontend` |
+| `SKIP_BACKUP` | 是否跳过部署前 MySQL 备份 |
+
+## 配置 GitHub Webhook
+
+1. GitHub 仓库 → **Settings** → **Webhooks** → **Add webhook**
+2. 填写：
+
+| 项 | 值 |
+|----|-----|
+| Payload URL | `http://你的服务器IP:8080/github-webhook/` |
+| Content type | `application/json` |
+| Secret | 安装时输出的 `GITHUB_WEBHOOK_SECRET` |
+| 事件 | **Just the push event** |
+
+3. 若 Jenkins 在 NAT/防火墙后，需放行 **8080** 端口，或使用内网穿透 / 反向代理。
+
+> 安全建议：生产环境请为 Jenkins 配置 HTTPS + 强密码，并将 Webhook 仅暴露给 GitHub IP 段。
+
+## 部署流程说明
+
+`jenkins/scripts/deploy.sh` 执行步骤：
+
+1. 在 `APP_DIR` 执行 `git pull`
+2. （默认）若 MySQL 容器在运行，先 `linux-deploy.sh backup-db`
+3. `docker compose up -d --build` 重建目标服务
+4. 等待 MySQL / 后端 `/health` / 前端 HTTP 就绪
+
+仅更新后端（改 Python 代码时）：
+
+```bash
+DEPLOY_TARGET=backend bash jenkins/scripts/deploy.sh
+```
+
+仅更新前端（改 Vue 代码时）：
+
+```bash
+DEPLOY_TARGET=frontend bash jenkins/scripts/deploy.sh
+```
+
+## 环境变量
+
+Jenkins 容器内可通过 `jenkins/docker-compose.yml` 覆盖：
+
+```yaml
+environment:
+  APP_DIR: /opt/AI_testing_platform
+  ENV_FILE: /opt/AI_testing_platform/.env.docker
+  GITHUB_WEBHOOK_SECRET: your-secret
+```
+
+宿主机手动测试部署脚本：
+
+```bash
+export APP_DIR=/opt/AI_testing_platform
+export ENV_FILE=/opt/AI_testing_platform/.env.docker
+bash /opt/AI_testing_platform/jenkins/scripts/deploy.sh
+```
+
+## 常见问题
+
+### 1. Jenkins 构建失败：缺少 .env.docker
+
+在应用目录创建环境文件：
+
+```bash
+cd /opt/AI_testing_platform
+cp .env.docker.example .env.docker
+./linux-deploy.sh init-env
+```
+
+### 2. docker permission denied
+
+确保 Jenkins 容器以 root 启动（`docker-compose.yml` 中 `user: root`），或已将 jenkins 用户加入 docker 组。
+
+### 3. git pull 失败
+
+在 `APP_DIR` 检查：
+
+```bash
+cd /opt/AI_testing_platform
+git status
+git pull origin main
+```
+
+### 4. 后端启动超时
+
+```bash
+docker logs ai-platform-backend --tail=80
+./linux-deploy.sh diagnose
+```
+
+### 5. Webhook 不触发构建
+
+- 确认 GitHub Webhook 最近投递返回 200
+- Jenkins 任务已勾选 **GitHub hook trigger for GITScm polling**
+- 可依赖 SCM 轮询（Jenkinsfile 已配置每 5 分钟）
+
+## 停止 / 卸载 Jenkins
+
+```bash
+cd /opt/AI_testing_platform/jenkins
+docker compose down
+# 删除数据卷（会清除 Jenkins 配置）:
+# docker volume rm jenkins_jenkins-data
+```
+
+应用本身（MySQL / 前后端）不受影响。
+
+## 文件说明
+
+```
+jenkins/
+├── Dockerfile              # Jenkins 镜像（Docker CLI + 插件）
+├── docker-compose.yml      # Jenkins 服务编排
+├── casc.yaml               # Jenkins 基础配置 (JCasC)
+├── plugins.txt             # 预装插件列表
+├── Jenkinsfile             # Pipeline 定义
+├── install.sh              # 一键安装
+├── scripts/
+│   └── deploy.sh           # 实际部署逻辑
+└── README.md               # 本文档
+```

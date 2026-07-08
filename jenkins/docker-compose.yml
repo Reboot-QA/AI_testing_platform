@@ -1,0 +1,38 @@
+name: jenkins
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ai-platform-jenkins:lts
+    container_name: ai-platform-jenkins
+    restart: unless-stopped
+    user: root
+    environment:
+      JAVA_OPTS: "-Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Shanghai"
+      CASC_JENKINS_CONFIG: /var/jenkins_home/casc.yaml
+      # 应用部署目录（与 install-server.sh 默认一致）
+      APP_DIR: ${APP_DIR:-/opt/AI_testing_platform}
+      ENV_FILE: ${ENV_FILE:-/opt/AI_testing_platform/.env.docker}
+      # GitHub Webhook 密钥（与 GitHub 仓库 Webhook 配置一致）
+      GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-change-me-webhook-secret}
+      TZ: Asia/Shanghai
+    ports:
+      - "${JENKINS_HTTP_PORT:-8080}:8080"
+      - "${JENKINS_AGENT_PORT:-50000}:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      # 挂载应用部署目录，Jenkins 可直接在该目录 git pull + docker compose
+      - ${APP_DIR:-/opt/AI_testing_platform}:${APP_DIR:-/opt/AI_testing_platform}
+      - ./casc.yaml:/var/jenkins_home/casc.yaml:ro
+    networks:
+      - jenkins
+
+networks:
+  jenkins:
+    driver: bridge
+
+volumes:
+  jenkins-data:

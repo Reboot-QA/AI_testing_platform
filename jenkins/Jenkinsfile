@@ -1,0 +1,78 @@
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        timeout(time: 30, unit: 'MINUTES')
+    }
+
+    parameters {
+        choice(
+            name: 'DEPLOY_TARGET',
+            choices: ['all', 'backend', 'frontend'],
+            description: '部署范围：全部 / 仅后端 / 仅前端'
+        )
+        booleanParam(
+            name: 'SKIP_BACKUP',
+            defaultValue: false,
+            description: '跳过部署前数据库备份'
+        )
+    }
+
+    environment {
+        APP_DIR = "${env.APP_DIR ?: '/opt/AI_testing_platform'}"
+        ENV_FILE = "${env.ENV_FILE ?: '/opt/AI_testing_platform/.env.docker'}"
+        GIT_BRANCH = "${env.GIT_BRANCH ?: 'main'}"
+    }
+
+    triggers {
+        // GitHub Webhook 推送时自动构建（需在 Jenkins 安装 GitHub 插件并配置 Webhook）
+        githubPush()
+        // 兜底：每 5 分钟轮询一次仓库变更
+        pollSCM('H/5 * * * *')
+    }
+
+    stages {
+        stage('检查环境') {
+            steps {
+                sh '''
+                    set -e
+                    echo "APP_DIR=${APP_DIR}"
+                    echo "ENV_FILE=${ENV_FILE}"
+                    test -d "${APP_DIR}" || { echo "部署目录不存在: ${APP_DIR}"; exit 1; }
+                    test -f "${ENV_FILE}" || { echo "缺少 ${ENV_FILE}，请先配置 .env.docker"; exit 1; }
+                    docker --version
+                    docker compose version
+                '''
+            }
+        }
+
+        stage('拉取代码并部署') {
+            steps {
+                sh """
+                    set -e
+                    export APP_DIR='${APP_DIR}'
+                    export ENV_FILE='${ENV_FILE}'
+                    export GIT_BRANCH='${GIT_BRANCH}'
+                    export DEPLOY_TARGET='${params.DEPLOY_TARGET}'
+                    export SKIP_BACKUP='${params.SKIP_BACKUP ? "1" : "0"}'
+                    bash '${WORKSPACE}/jenkins/scripts/deploy.sh'
+                """
+            }
+        }
+    }
+
+    post {
+        success {
+            echo '部署成功：前后端已更新'
+        }
+        failure {
+            echo '部署失败，请查看 Jenkins 控制台日志或执行: docker logs ai-platform-backend --tail=80'
+        }
+        always {
+            cleanWs(deleteDirs: true, disableDeferredWipeout: true, notFailBuild: true)
+        }
+    }
+}
