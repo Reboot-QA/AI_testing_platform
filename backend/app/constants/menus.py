@@ -5,7 +5,7 @@ MENU_DEFINITIONS: List[Dict[str, str]] = [
     {"key": "projects", "label": "项目管理", "path": "/projects", "group": "business"},
     {
         "key": "requirement_docs",
-        "label": "需求文档",
+        "label": "AI分析需求",
         "path": "/requirement-docs",
         "group": "business",
         "parent": "requirement_mgmt",
