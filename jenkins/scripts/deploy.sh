@@ -11,6 +11,8 @@
 
 set -euo pipefail
 
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
+
 APP_DIR="${APP_DIR:-/opt/AI_testing_platform}"
 ENV_FILE="${ENV_FILE:-$APP_DIR/.env.docker}"
 GIT_BRANCH="${GIT_BRANCH:-main}"
@@ -31,7 +33,7 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $*"; }
 error() { echo -e "${RED}[ERR ]${NC} $*" >&2; exit 1; }
 
 require_cmd() {
-  command -v "$1" >/dev/null 2>&1 || error "未找到命令: $1"
+  command -v "$1" >/dev/null 2>&1 || error "未找到命令: $1（请重建 Jenkins 镜像: cd jenkins && docker compose --env-file .env up -d --build）"
 }
 
 compose_cmd() {
