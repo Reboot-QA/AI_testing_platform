@@ -10,13 +10,14 @@ services:
     container_name: ai-platform-jenkins
     restart: unless-stopped
     environment:
-      JAVA_OPTS: "-Xms512m -Xmx1536m -Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Shanghai"
+      JAVA_OPTS: "-Xms256m -Xmx768m -Djenkins.install.runSetupWizard=false -Duser.timezone=Asia/Shanghai"
       PATH: "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
       APP_DIR: ${APP_DIR:-/opt/AI_testing_platform}
       ENV_FILE: ${ENV_FILE:-/opt/AI_testing_platform/.env.docker}
       GITHUB_WEBHOOK_SECRET: ${GITHUB_WEBHOOK_SECRET:-change-me-webhook-secret}
       JENKINS_ADMIN_USER: ${JENKINS_ADMIN_USER:-admin}
       JENKINS_ADMIN_PASSWORD: ${JENKINS_ADMIN_PASSWORD:-}
+      DISABLE_JENKINS_AUTH: ${DISABLE_JENKINS_AUTH:-0}
       TZ: Asia/Shanghai
     ports:
       - "${JENKINS_HTTP_PORT:-8080}:8080"
@@ -25,7 +26,6 @@ services:
       - jenkins-data:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
       - ${APP_DIR:-/opt/AI_testing_platform}:${APP_DIR:-/opt/AI_testing_platform}
-      - ./init.groovy.d:/var/jenkins_home/init.groovy.d:ro
     group_add:
       - "${DOCKER_GID:-999}"
     healthcheck:

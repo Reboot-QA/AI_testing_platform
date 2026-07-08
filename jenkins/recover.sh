@@ -65,10 +65,27 @@ chmod 600 "$ENV_FILE" 2>/dev/null || true
 info "停止 Jenkins ..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down 2>/dev/null || true
 
+if [[ "${RESET_JENKINS:-}" == "1" ]]; then
+  warn "RESET_JENKINS=1：删除 Jenkins 数据卷（会丢失任务配置）..."
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" down -v 2>/dev/null || true
+  docker volume rm jenkins_jenkins-data 2>/dev/null || true
+else
+  info "清理数据卷中可能卡住的 init 脚本 ..."
+  docker run --rm -v jenkins_jenkins-data:/var/jenkins_home busybox sh -c \
+    'rm -rf /var/jenkins_home/init.groovy.d 2>/dev/null; chown -R 1000:1000 /var/jenkins_home' 2>/dev/null || true
+fi
+
 info "修复数据卷权限 ..."
+docker volume create jenkins_jenkins-data >/dev/null 2>&1 || true
 docker run --rm -v jenkins_jenkins-data:/var/jenkins_home busybox chown -R 1000:1000 /var/jenkins_home 2>/dev/null || true
 
-info "重建并启动 Jenkins（已移除导致崩溃的 JCasC 安全配置）..."
+info "注入 init 脚本到数据卷（可写，避免只读挂载导致崩溃）..."
+docker run --rm \
+  -v jenkins_jenkins-data:/var/jenkins_home \
+  -v "$JENKINS_DIR/init.groovy.d:/src:ro" \
+  busybox sh -c 'mkdir -p /var/jenkins_home/init.groovy.d && cp /src/*.groovy /var/jenkins_home/init.groovy.d/ 2>/dev/null || true; chown -R 1000:1000 /var/jenkins_home/init.groovy.d' 2>/dev/null || true
+
+info "重建并启动 Jenkins ..."
 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
 
 echo
@@ -89,11 +106,10 @@ cat <<EOF
   登录密码:   ${pass}
   访问地址:   http://服务器IP:${port}
 
-若仍 Restarting，请执行:
+若仍 Restarting，先查看日志:
   docker logs ai-platform-jenkins --tail=80
 
-若需清空 Jenkins 配置重来（会丢失任务配置）:
-  docker compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} down -v
-  docker compose --env-file ${ENV_FILE} -f ${COMPOSE_FILE} up -d --build
+彻底重置 Jenkins（会丢失任务配置，推荐此时使用）:
+  RESET_JENKINS=1 sudo bash jenkins/recover.sh
 ========================================
 EOF
