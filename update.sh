@@ -37,10 +37,17 @@ ensure_git_safe_directory() {
   git config --global --add safe.directory "$ROOT" 2>/dev/null || true
 }
 
+ensure_git_writable() {
+  if [[ -d "$ROOT/.git" ]] && [[ ! -w "$ROOT/.git" ]]; then
+    error "无法写入 ${ROOT}/.git（Permission denied）。Jenkins 发版请执行: sudo bash ${ROOT}/jenkins/fix-app-permissions.sh"
+  fi
+}
+
 pull_latest() {
   [[ -d "$ROOT/.git" ]] || error "当前目录不是 git 仓库，无法拉取代码"
 
   ensure_git_safe_directory
+  ensure_git_writable
   info "拉取 GitHub 最新代码..."
   if git pull --ff-only 2>/dev/null; then
     ok "代码已更新: $(git log -1 --oneline)"

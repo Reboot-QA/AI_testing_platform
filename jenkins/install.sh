@@ -176,6 +176,14 @@ fix_jenkins_volume_permissions() {
   ok "数据卷权限已修复: $volume_name"
 }
 
+fix_app_permissions() {
+  local fix_script="$APP_DIR/jenkins/fix-app-permissions.sh"
+  if [[ -x "$fix_script" ]]; then
+    info "修复应用目录权限（供 Jenkins git pull）..."
+    APP_DIR="$APP_DIR" bash "$fix_script" || warn "权限修复失败，可手动: sudo bash $fix_script"
+  fi
+}
+
 start_jenkins() {
   local env_file="$JENKINS_DIR/.env"
   [[ -f "$JENKINS_DIR/docker-compose.yml" ]] || error "缺少 $JENKINS_DIR/docker-compose.yml"
@@ -186,6 +194,10 @@ start_jenkins() {
 
   info "构建并启动 Jenkins（已启用登录认证）..."
   docker compose --env-file "$env_file" -f "$JENKINS_DIR/docker-compose.yml" up -d --build
+
+  if [[ -f "$APP_DIR/jenkins/fix-app-permissions.sh" ]]; then
+    warn "首次 Jenkins 发版前请执行: sudo bash $APP_DIR/jenkins/fix-app-permissions.sh"
+  fi
 
   wait_jenkins_ready
 }
