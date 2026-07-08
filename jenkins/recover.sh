@@ -86,7 +86,15 @@ docker run --rm \
   busybox sh -c 'mkdir -p /var/jenkins_home/init.groovy.d && cp /src/*.groovy /var/jenkins_home/init.groovy.d/ 2>/dev/null || true; chown -R 1000:1000 /var/jenkins_home/init.groovy.d' 2>/dev/null || true
 
 info "重建并启动 Jenkins ..."
-docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build
+docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" up -d --build --force-recreate
+
+info "验证部署目录挂载 ..."
+if docker exec ai-platform-jenkins test -f /opt/AI_testing_platform/update.sh 2>/dev/null; then
+  ok "已挂载 /opt/AI_testing_platform"
+else
+  warn "容器内仍看不到 update.sh，请执行:"
+  warn "  docker inspect ai-platform-jenkins --format '{{range .Mounts}}{{.Source}} -> {{.Destination}}{{println}}{{end}}'"
+fi
 
 echo
 info "等待启动（约 1～5 分钟），实时日志:"
