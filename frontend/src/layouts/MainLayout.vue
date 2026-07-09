@@ -21,6 +21,10 @@
           <el-icon><Folder /></el-icon>
           <span>项目管理</span>
         </el-menu-item>
+        <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox">
+          <el-icon><Grid /></el-icon>
+          <span>工作台</span>
+        </el-menu-item>
 
         <el-sub-menu v-if="showRequirementMenu" index="requirement_mgmt">
           <template #title>
@@ -192,8 +196,8 @@ const showSystemMenu = computed(
 )
 
 const activeMenu = computed(() => {
-  if (route.path.startsWith('/system/')) {
-    return route.path
+  if (route.path.startsWith('/apifox')) {
+    return '/apifox'
   }
   return route.path
 })
