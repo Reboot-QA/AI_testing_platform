@@ -16,7 +16,15 @@ from app.models.api_automation import (
     ApiScheduledTaskSuite,
 )
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
-from app.models.apifox import ApifoxEndpoint, ApifoxFolder
+from app.models.apifox import (
+    ApifoxEndpoint,
+    ApifoxEnvironment,
+    ApifoxEnvironmentVarLocal,
+    ApifoxEnvironmentVariable,
+    ApifoxFolder,
+    ApifoxGlobalVariable,
+    ApifoxGlobalVarLocal,
+)
 
 __all__ = [
     "User",
@@ -38,4 +46,9 @@ __all__ = [
     "ManualTestRunCase",
     "ApifoxFolder",
     "ApifoxEndpoint",
+    "ApifoxEnvironment",
+    "ApifoxEnvironmentVariable",
+    "ApifoxEnvironmentVarLocal",
+    "ApifoxGlobalVariable",
+    "ApifoxGlobalVarLocal",
 ]
