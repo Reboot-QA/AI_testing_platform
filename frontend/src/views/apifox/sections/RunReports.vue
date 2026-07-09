@@ -56,7 +56,7 @@
               <el-icon v-else color="#dc2626"><CircleClose /></el-icon>
               <span class="step-title">
                 {{ s.case_name }}
-                <span v-if="s.method" class="sub">[{{ s.method }}] {{ s.url }}</span>
+                <span v-if="s.method" class="sub"><MethodTag :method="s.method" /> {{ s.url }}</span>
                 <span v-if="s.response_status" class="sub">{{ s.response_status }} · {{ Math.round(s.duration_ms || 0) }}ms</span>
               </span>
             </template>
@@ -86,7 +86,9 @@
 
             <template v-if="s.response_body">
               <div class="sec-title">响应体</div>
-              <pre class="body-pre">{{ s.response_body }}</pre>
+              <div class="body-box">
+                <JsonView :data="s.response_body" :deep="3" />
+              </div>
             </template>
           </el-collapse-item>
         </el-collapse>
@@ -99,6 +101,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { apifoxApi } from '@/api'
+import MethodTag from '@/components/apifox/common/MethodTag.vue'
+import JsonView from '@/components/apifox/common/JsonView.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -176,15 +180,13 @@ onMounted(loadRuns)
   margin-bottom: 6px;
 }
 
-.body-pre {
+.body-box {
   background: #f8fafc;
   border: 1px solid #e2e8f0;
   border-radius: 4px;
   padding: 8px;
   font-size: 12px;
-  max-height: 260px;
+  max-height: 320px;
   overflow: auto;
-  white-space: pre-wrap;
-  word-break: break-all;
 }
 </style>
