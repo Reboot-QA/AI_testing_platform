@@ -101,3 +101,21 @@ class EndpointOut(BaseModel):
     sort_order: int
     created_at: datetime
     updated_at: datetime
+
+
+# ---------- 树拖拽重排 ----------
+class ReorderFolder(BaseModel):
+    id: int
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+
+
+class ReorderEndpoint(BaseModel):
+    id: int
+    folder_id: Optional[int] = None
+    sort_order: int = 0
+
+
+class TreeReorderRequest(BaseModel):
+    folders: List[ReorderFolder] = Field(default_factory=list)
+    endpoints: List[ReorderEndpoint] = Field(default_factory=list)
