@@ -5,6 +5,7 @@
 
 from typing import List, Optional
 
+from sqlalchemy import Row
 from sqlalchemy.orm import Session
 
 from app.models.apifox.case import (
@@ -12,6 +13,21 @@ from app.models.apifox.case import (
     ApifoxCaseExtract,
     ApifoxEndpointCase,
 )
+from app.models.apifox.endpoint import ApifoxEndpoint
+
+
+def list_project_cases(
+    db: Session, project_id: int
+) -> List[Row[tuple[ApifoxEndpointCase, ApifoxEndpoint]]]:
+    """项目全量用例（带所属接口），场景步骤选择器数据源。返回 (case, endpoint) 元组列表。"""
+    return (
+        db.query(ApifoxEndpointCase, ApifoxEndpoint)
+        .join(ApifoxEndpoint, ApifoxEndpoint.id == ApifoxEndpointCase.endpoint_id)
+        .filter(ApifoxEndpointCase.project_id == project_id)
+        .order_by(ApifoxEndpoint.sort_order, ApifoxEndpoint.id,
+                  ApifoxEndpointCase.sort_order, ApifoxEndpointCase.id)
+        .all()
+    )
 
 
 def list_cases(db: Session, endpoint_id: int) -> List[ApifoxEndpointCase]:

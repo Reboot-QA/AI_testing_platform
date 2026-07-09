@@ -298,6 +298,13 @@ export const apifoxApi = {
   createGlobalParam: (pid, data) => request.post(`/apifox/projects/${pid}/global-params`, data),
   updateGlobalParam: (gid, data) => request.put(`/apifox/global-params/${gid}`, data),
   deleteGlobalParam: (gid) => request.delete(`/apifox/global-params/${gid}`),
+
+  listProjectCases: (pid) => request.get(`/apifox/projects/${pid}/cases`),
+  listScenarios: (pid) => request.get(`/apifox/projects/${pid}/scenarios`),
+  getScenario: (sid) => request.get(`/apifox/scenarios/${sid}`),
+  createScenario: (pid, data) => request.post(`/apifox/projects/${pid}/scenarios`, data),
+  updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
+  deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
 }
 
 export const testExecutionApi = {

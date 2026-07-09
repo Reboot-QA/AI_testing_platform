@@ -16,7 +16,7 @@ from app.models.apifox.case import (
 )
 from app.models.apifox.script import ApifoxCaseScript
 from app.repositories.apifox import case_repo as repo
-from app.repositories.apifox import script_repo
+from app.repositories.apifox import scenario_repo, script_repo
 from app.routers.apifox.case_schemas import (
     AssertionRow,
     CaseBrief,
@@ -27,6 +27,7 @@ from app.routers.apifox.case_schemas import (
     CaseUpdate,
     DataDrive,
     ExtractRow,
+    ProjectCaseBrief,
 )
 from app.routers.apifox.schemas import KvRow, RequestSpec
 
@@ -144,6 +145,20 @@ def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
     )
 
 
+def list_project_cases(db: Session, project_id: int) -> List[ProjectCaseBrief]:
+    """项目全量用例（带接口信息），场景步骤选择器数据源。"""
+    return [
+        ProjectCaseBrief(
+            id=case.id,
+            name=case.name,
+            endpoint_id=endpoint.id,
+            endpoint_name=endpoint.name,
+            endpoint_method=endpoint.method,
+        )
+        for case, endpoint in repo.list_project_cases(db, project_id)
+    ]
+
+
 def list_cases(db: Session, endpoint_id: int) -> List[CaseBrief]:
     return [
         CaseBrief(id=c.id, endpoint_id=c.endpoint_id, name=c.name, sort_order=c.sort_order)
@@ -203,6 +218,9 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
 
 
 def delete_case(db: Session, case: ApifoxEndpointCase) -> None:
+    refs = scenario_repo.count_case_refs(db, case.id)
+    if refs:
+        raise ValueError(f"用例被 {refs} 处场景步骤引用，请先从场景中移除再删除")
     repo.delete_children(db, case.id)
     script_repo.delete_case_scripts(db, case.id)
     repo.delete(db, case)
