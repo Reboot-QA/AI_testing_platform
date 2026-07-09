@@ -18,6 +18,8 @@ class User(Base):
     role: Mapped[str] = mapped_column(String(20), default="tester")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
+    # Workbench 重构：一人一组织（软引用 organizations.id，避开循环外键）
+    organization_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     projects: Mapped[List["Project"]] = relationship("Project", back_populates="owner")
