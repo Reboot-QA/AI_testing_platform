@@ -21,6 +21,7 @@ from app.routers.apifox.schemas import (
     FolderCreate,
     FolderOut,
     FolderUpdate,
+    TreeReorderRequest,
 )
 from app.services.apifox import endpoint_service as service
 from app.services.project_access_service import get_accessible_project
@@ -145,3 +146,19 @@ def delete_endpoint(
     endpoint = _endpoint_checked(db, eid, user)
     service.delete_endpoint(db, endpoint)
     return {"message": "接口已删除"}
+
+
+# ---------- 树拖拽重排 ----------
+@router.post("/projects/{pid}/tree/reorder")
+def reorder_tree(
+    pid: int,
+    data: TreeReorderRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    get_accessible_project(db, pid, user)
+    try:
+        service.reorder_tree(db, pid, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"message": "已保存排序"}
