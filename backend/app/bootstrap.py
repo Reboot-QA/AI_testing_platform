@@ -24,6 +24,7 @@ def run_bootstrap() -> None:
     """启动前数据库初始化与迁移（Docker entrypoint 与 uvicorn lifespan 均可调用，幂等）。"""
     steps = [
         ("初始化数据库表", lambda db: Base.metadata.create_all(bind=engine)),
+        ("迁移 Workbench 租户加列", migrate_workbench_tenant_columns),
         ("迁移接口套件树", migrate_api_test_suite_tree),
         ("迁移接口变量", migrate_api_variable_stores),
         ("迁移定时任务套件", migrate_api_scheduled_task_suites),
@@ -31,7 +32,6 @@ def run_bootstrap() -> None:
         ("迁移需求创建人", migrate_requirement_created_by),
         ("迁移用例创建人", migrate_testcase_created_by),
         ("迁移用户邮箱", lambda db: migrate_user_optional_email()),
-        ("迁移 Workbench 租户加列", migrate_workbench_tenant_columns),
         ("写入演示数据", seed_demo_data),
         ("回填 Workbench 默认组织团队", seed_workbench_tenant),
         ("加载 LLM 配置", init_llm_settings_from_env),
