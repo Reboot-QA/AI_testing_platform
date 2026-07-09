@@ -35,7 +35,7 @@
     </div>
 
     <div class="editor-panel">
-      <CaseEditor v-if="form.id" :form="form" :saving="saving" @save="saveCase" />
+      <CaseEditor v-if="form.id" :form="form" :saving="saving" :scripts="scripts" @save="saveCase" />
       <el-empty v-else description="选择接口后新建/选择用例" />
     </div>
   </div>
@@ -55,10 +55,12 @@ const pid = computed(() => route.params.projectId)
 const endpoints = ref([])
 const selectedEndpointId = ref(null)
 const cases = ref([])
+const scripts = ref([])
 const saving = ref(false)
 
 const form = reactive({
   id: null, name: '', request_spec: emptySpec(), variables: [], assertions: [], extracts: [],
+  pre_scripts: [], post_scripts: [],
   data_drive: { enabled: false, rows: [] },
 })
 
@@ -89,6 +91,10 @@ async function loadEndpoints() {
   endpoints.value = await apifoxApi.listEndpoints(pid.value)
 }
 
+async function loadScripts() {
+  scripts.value = await apifoxApi.listScripts(pid.value)
+}
+
 async function loadCases() {
   cases.value = selectedEndpointId.value ? await apifoxApi.listCases(selectedEndpointId.value) : []
 }
@@ -102,6 +108,7 @@ function emptyCasePayload(name) {
   return {
     name, request_spec: emptySpec(), variables: [],
     data_drive: { enabled: false, rows: [] }, assertions: [], extracts: [],
+    pre_scripts: [], post_scripts: [],
   }
 }
 
@@ -124,6 +131,8 @@ function applyCase(c) {
   form.variables = ensureKvRows(c.variables || [])
   form.assertions = c.assertions || []
   form.extracts = c.extracts || []
+  form.pre_scripts = c.pre_scripts || []
+  form.post_scripts = c.post_scripts || []
   form.data_drive = c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
 }
 
@@ -141,6 +150,8 @@ async function saveCase() {
     await apifoxApi.updateCase(form.id, {
       name: form.name, request_spec: form.request_spec, variables: form.variables,
       data_drive: form.data_drive, assertions: form.assertions, extracts: form.extracts,
+      pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+      post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
     })
     ElMessage.success('已保存')
     await loadCases()
@@ -149,7 +160,10 @@ async function saveCase() {
   }
 }
 
-onMounted(loadEndpoints)
+onMounted(async () => {
+  await loadEndpoints()
+  await loadScripts()
+})
 </script>
 
 <style scoped>
