@@ -122,7 +122,7 @@ const routes = [
           {
             path: 'reports',
             name: 'ApifoxReports',
-            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            component: () => import('@/views/apifox/sections/RunReports.vue'),
             meta: { permission: 'apifox_workbench', sectionTitle: '测试报告' },
           },
           {

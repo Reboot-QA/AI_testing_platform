@@ -6,6 +6,7 @@ from app.models.apifox.case import (
 from app.models.apifox.data_model import ApifoxSchema
 from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
 from app.models.apifox.global_param import ApifoxGlobalParam
+from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.script import ApifoxCaseScript, ApifoxScript
 from app.models.apifox.variable import (
@@ -33,4 +34,6 @@ __all__ = [
     "ApifoxGlobalParam",
     "ApifoxScenario",
     "ApifoxScenarioStep",
+    "ApifoxRun",
+    "ApifoxRunStep",
 ]
