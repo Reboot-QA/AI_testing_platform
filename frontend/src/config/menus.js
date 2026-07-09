@@ -1,6 +1,7 @@
 export const MENU_DEFINITIONS = [
   { key: 'dashboard', label: '仪表盘', path: '/dashboard', group: 'business' },
   { key: 'projects', label: '项目管理', path: '/projects', group: 'business' },
+  { key: 'apifox_workbench', label: '工作台', path: '/apifox', group: 'business' },
   {
     key: 'requirement_docs',
     label: 'AI分析需求',
@@ -83,6 +84,7 @@ export const MENU_DEFINITIONS = [
 export const PAGE_TITLES = {
   '/dashboard': '仪表盘',
   '/projects': '项目管理',
+  '/apifox': '工作台',
   '/requirement-docs': 'AI分析需求',
   '/requirements': '需求点',
   '/testcases': '用例库',
