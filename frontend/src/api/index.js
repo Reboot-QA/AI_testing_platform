@@ -307,6 +307,7 @@ export const apifoxApi = {
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
 
   importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
+  reorderTree: (pid, data) => request.post(`/apifox/projects/${pid}/tree/reorder`, data),
 
   listSchedules: (pid) => request.get(`/apifox/projects/${pid}/schedules`),
   createSchedule: (pid, data) => request.post(`/apifox/projects/${pid}/schedules`, data),
