@@ -326,6 +326,7 @@ ensure_env_file() {
     set_env_value "GRAFANA_PUBLIC_URL" "http://${host}:${http_port}/api/v1/logs/grafana"
     set_env_value "LOKI_PUBLIC_URL" "http://${host}:$(read_env_value LOKI_PORT 3100)"
     set_env_value "GRAFANA_URL" "http://host.docker.internal:${grafana_port}"
+    set_env_value "LOKI_URL" "http://host.docker.internal:$(read_env_value LOKI_PORT 3100)"
   fi
 
   if ! grep -q '^MYSQL_PUBLISH_HOST=' "$ENV_FILE" 2>/dev/null; then

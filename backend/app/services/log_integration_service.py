@@ -1,6 +1,6 @@
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, List, Optional
 from urllib.error import URLError
 from urllib.parse import quote, urlparse, urlunparse
 from urllib.request import Request, urlopen
@@ -10,6 +10,35 @@ from app.config import settings
 INTERNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "grafana", "loki"})
 
 _grafana_upstream_cache: Optional[tuple] = None
+_loki_upstream_cache: Optional[tuple] = None
+
+
+def _host_gateway_candidates(port: int) -> List[str]:
+    return [
+        _build_url("http://host.docker.internal", port),
+        f"http://172.17.0.1:{port}",
+        _build_url("http://127.0.0.1", port),
+    ]
+
+
+def _resolve_upstream(cache_name: str, primary_url: str, port: int, health_path: str) -> str:
+    cache = globals()[cache_name]
+    now = time.time()
+    if cache and now - cache[0] < 60:
+        return cache[1]
+
+    candidates = [primary_url, *_host_gateway_candidates(port)]
+    seen = set()
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        if _probe(f"{candidate}{health_path}"):
+            globals()[cache_name] = (now, candidate)
+            return candidate
+
+    globals()[cache_name] = (now, primary_url)
+    return primary_url
 
 
 def _build_url(base: str, port: int, default_host: str = "127.0.0.1") -> str:
@@ -52,36 +81,33 @@ def get_grafana_url() -> str:
 
 
 def resolve_grafana_upstream() -> str:
-    global _grafana_upstream_cache
-    now = time.time()
-    if _grafana_upstream_cache and now - _grafana_upstream_cache[0] < 60:
-        return _grafana_upstream_cache[1]
-
-    candidates = [
+    return _resolve_upstream(
+        "_grafana_upstream_cache",
         get_grafana_url(),
-        _build_url("http://host.docker.internal", settings.grafana_port),
-        _build_url("http://127.0.0.1", settings.grafana_port),
-    ]
-    seen = set()
-    for candidate in candidates:
-        if candidate in seen:
-            continue
-        seen.add(candidate)
-        if _probe(f"{candidate}/api/health"):
-            _grafana_upstream_cache = (now, candidate)
-            return candidate
-
-    fallback = get_grafana_url()
-    _grafana_upstream_cache = (now, fallback)
-    return fallback
+        settings.grafana_port,
+        "/api/health",
+    )
 
 
 def get_loki_url() -> str:
     return _build_url(settings.loki_url, settings.loki_port)
 
 
+def resolve_loki_upstream() -> str:
+    return _resolve_upstream(
+        "_loki_upstream_cache",
+        get_loki_url(),
+        settings.loki_port,
+        "/ready",
+    )
+
+
 def _probe_grafana() -> bool:
     return _probe(f"{resolve_grafana_upstream()}/api/health")
+
+
+def _probe_loki() -> bool:
+    return _probe(f"{resolve_loki_upstream()}/ready")
 
 
 def get_integration_status(public_host: Optional[str] = None, public_origin: Optional[str] = None) -> Dict:
@@ -113,7 +139,7 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         embed_url = dashboard_url
 
     grafana_ok = _probe_grafana()
-    loki_ok = _probe(f"{loki_url}/ready")
+    loki_ok = _probe_loki()
 
     return {
         "enabled": settings.grafana_enabled,
