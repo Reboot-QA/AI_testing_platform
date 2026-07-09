@@ -1,9 +1,8 @@
 """Workbench 重构 · 存量数据回填（幂等，可重跑）。
 
-策略：建 1 个默认组织 + 1 个默认团队，把存量用户挂为组织成员、存量项目挂到默认团队。
-既满足「一人一组织」（全员单组织、无多组织切换），又保留灰度期「互相可见」行为
-（组织成员默认继承 editor，等价旧部门共享）。
-新用户建组织走惰性创建（Phase 2 工作台入口），本脚本只回填存量。
+策略：把存量用户挂到默认组织为成员、存量项目挂到默认团队，并回填 users.organization_id/team_id。
+既满足「一人一组织」，又保留灰度期「互相可见」（组织成员默认继承 editor，等价旧部门共享）。
+默认组织/团队的 get-or-create 复用 membership_service；新用户建号绑定见 bind_user_to_tenant。
 """
 
 import logging
@@ -14,12 +13,10 @@ from sqlalchemy.orm import Session
 from app.database import engine
 from app.models.project import Project
 from app.models.user import User
-from app.models.workbench.tenant import Organization, OrgMember, Team
+from app.models.workbench.tenant import OrgMember
+from app.services.workbench.membership_service import resolve_default_org_team
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_ORG_NAME = "默认组织"
-DEFAULT_TEAM_NAME = "默认团队"
 
 
 def seed_workbench_tenant(db: Session) -> None:
@@ -31,39 +28,29 @@ def seed_workbench_tenant(db: Session) -> None:
         return
     user_columns = {c["name"] for c in inspector.get_columns("users")}
     project_columns = {c["name"] for c in inspector.get_columns("projects")}
-    if "organization_id" not in user_columns or "team_id" not in project_columns:
+    if (
+        "organization_id" not in user_columns
+        or "team_id" not in user_columns
+        or "team_id" not in project_columns
+    ):
         logger.warning("Workbench 加列未完成，跳过租户回填")
         return
 
-    # 组织 owner：优先第一个 admin，否则第一个用户
-    owner = db.query(User).filter(User.role == "admin").order_by(User.id).first()
-    if not owner:
-        owner = db.query(User).order_by(User.id).first()
-    if not owner:
+    if not db.query(User).first():
         return  # 空库，无需回填
 
-    org = db.query(Organization).filter(Organization.name == DEFAULT_ORG_NAME).first()
-    if not org:
-        org = Organization(name=DEFAULT_ORG_NAME, owner_user_id=owner.id)
-        db.add(org)
-        db.flush()
-
-    team = (
-        db.query(Team)
-        .filter(Team.org_id == org.id, Team.name == DEFAULT_TEAM_NAME)
-        .first()
-    )
-    if not team:
-        team = Team(org_id=org.id, name=DEFAULT_TEAM_NAME)
-        db.add(team)
-        db.flush()
+    org, team = resolve_default_org_team(db)
+    owner_id = org.owner_user_id
 
     changed = False
 
-    # 用户：回填 organization_id + org_members
+    # 用户：回填 organization_id / team_id + org_members
     for user in db.query(User).all():
         if user.organization_id is None:
             user.organization_id = org.id
+            changed = True
+        if user.team_id is None:
+            user.team_id = team.id
             changed = True
         exists = (
             db.query(OrgMember)
@@ -71,7 +58,7 @@ def seed_workbench_tenant(db: Session) -> None:
             .first()
         )
         if not exists:
-            if user.id == owner.id:
+            if user.id == owner_id:
                 role = "owner"
             elif user.role == "admin":
                 role = "admin"

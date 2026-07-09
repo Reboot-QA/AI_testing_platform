@@ -21,6 +21,8 @@ def migrate_workbench_tenant_columns(db: Session) -> None:
         user_columns = {column["name"] for column in inspector.get_columns("users")}
         if "organization_id" not in user_columns:
             statements.append("ALTER TABLE users ADD COLUMN organization_id INTEGER")
+        if "team_id" not in user_columns:
+            statements.append("ALTER TABLE users ADD COLUMN team_id INTEGER")
 
     if "projects" in table_names:
         project_columns = {column["name"] for column in inspector.get_columns("projects")}
