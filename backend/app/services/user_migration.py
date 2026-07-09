@@ -1,6 +1,24 @@
 from sqlalchemy import inspect, text
+from sqlalchemy.orm import Session
 
 from app.database import engine
+
+
+def migrate_user_must_change_password(db: Session) -> None:
+    inspector = inspect(engine)
+    if "users" not in inspector.get_table_names():
+        return
+    user_columns = {column["name"] for column in inspector.get_columns("users")}
+    if "must_change_password" in user_columns:
+        return
+    dialect = engine.dialect.name
+    if dialect == "mysql":
+        statement = "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
+    else:
+        statement = "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
+    with engine.begin() as conn:
+        conn.execute(text(statement))
+    db.expire_all()
 
 
 def migrate_user_optional_email() -> None:

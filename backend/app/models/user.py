@@ -17,6 +17,7 @@ class User(Base):
     full_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="tester")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False)
     department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
     # Workbench 重构：一人一组织（软引用 organizations.id，避开循环外键）
     organization_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)

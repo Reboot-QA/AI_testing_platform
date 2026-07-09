@@ -54,6 +54,7 @@ def _build_user_out(user: User, db: Session) -> UserOut:
         full_name=user.full_name,
         role=user.role,
         is_active=user.is_active,
+        must_change_password=user.must_change_password,
         created_at=user.created_at,
         menu_permissions=get_user_menu_keys(db, user),
     )
@@ -84,5 +85,6 @@ def change_password(
     if data.old_password == data.new_password:
         raise HTTPException(status_code=400, detail="新密码不能与原密码相同")
     current_user.hashed_password = get_password_hash(data.new_password)
+    current_user.must_change_password = False
     db.commit()
     return {"message": "密码已修改"}

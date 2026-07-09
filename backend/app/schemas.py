@@ -51,6 +51,7 @@ class UserLogin(BaseModel):
 class UserOut(UserBase):
     id: int
     is_active: bool
+    must_change_password: bool = False
     department_id: Optional[int] = None
     department_name: str = ""
     organization_id: Optional[int] = None

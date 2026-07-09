@@ -66,6 +66,7 @@ def _user_out(user: User, db: Session) -> UserOut:
         full_name=user.full_name,
         role=user.role,
         is_active=user.is_active,
+        must_change_password=user.must_change_password,
         department_id=user.department_id,
         department_name=department_name,
         organization_id=user.organization_id,
@@ -220,6 +221,7 @@ def reset_password(
     if not user:
         raise HTTPException(status_code=404, detail="用户不存在")
     user.hashed_password = get_password_hash(data.password)
+    user.must_change_password = True
     db.commit()
     return {"message": "密码已重置"}
 

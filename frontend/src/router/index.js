@@ -10,6 +10,11 @@ const routes = [
     meta: { public: true },
   },
   {
+    path: '/force-change-password',
+    name: 'ForceChangePassword',
+    component: () => import('@/views/ForceChangePassword.vue'),
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: '/dashboard',
@@ -139,6 +144,18 @@ router.beforeEach(async (to, _from, next) => {
       userStore.logout()
       return next('/login')
     }
+  }
+  if (userStore.mustChangePassword && to.path !== '/force-change-password') {
+    return next('/force-change-password')
+  }
+  if (to.path === '/force-change-password') {
+    if (!userStore.token) {
+      return next('/login')
+    }
+    if (!userStore.mustChangePassword) {
+      return next('/dashboard')
+    }
+    return next()
   }
   if (to.meta.requiresAdmin && userStore.user?.role !== 'admin') {
     return next('/dashboard')

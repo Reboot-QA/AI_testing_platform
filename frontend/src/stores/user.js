@@ -11,6 +11,7 @@ export const useUserStore = defineStore('user', {
   getters: {
     isLoggedIn: (state) => !!state.token,
     isAdmin: (state) => state.user?.role === 'admin',
+    mustChangePassword: (state) => !!state.user?.must_change_password,
     menuPermissions: (state) => state.user?.menu_permissions || [],
   },
   actions: {

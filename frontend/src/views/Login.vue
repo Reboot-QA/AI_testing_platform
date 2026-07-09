@@ -61,7 +61,11 @@ async function handleLogin() {
   try {
     await userStore.login(form.username, form.password)
     ElMessage.success('登录成功')
-    router.push('/dashboard')
+    if (userStore.mustChangePassword) {
+      router.push('/force-change-password')
+    } else {
+      router.push('/dashboard')
+    }
   } finally {
     loading.value = false
   }
