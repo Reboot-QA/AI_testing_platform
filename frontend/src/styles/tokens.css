@@ -1,0 +1,33 @@
+/* 全局 design token：收敛散落硬编码 hex + 移植 Apifox 方法/状态色板。
+   平台当前仅浅色主题；色板值取自参考项目 globals.css 的 lightDefault。 */
+
+:root {
+  /* Apifox 方法/状态色板 */
+  --color-green-6: #4caf50;
+  --color-orange-6: #fa8c16;
+  --color-blue-6: #1890ff;
+  --color-volcano-6: #fa541c;
+  --color-pink-6: #eb2f96;
+  --color-geekblue-6: #2f54eb;
+  --color-lime-6: #a0d911;
+  --color-yellow-6: #fadb14;
+  --color-purple-6: #9373ee;
+  --color-red-6: #f5222d;
+  --color-grey-6: #aaaaaa;
+
+  /* 品牌 / 中性（现有散落 hex 的统一入口，供 F2 逐步替换） */
+  --ax-brand: #1a365d;
+  --ax-text: #1e293b;
+  --ax-text-secondary: #64748b;
+  --ax-text-placeholder: #94a3b8;
+  --ax-border: #e2e8f0;
+  --ax-bg: #ffffff;
+  --ax-bg-hover: #f1f5f9;
+  --ax-bg-active: #e0ecff;
+
+  /* 尺寸 */
+  --ax-radius: 6px;
+  --ax-radius-lg: 10px;
+  --ax-gap: 8px;
+  --ax-gap-lg: 16px;
+}
