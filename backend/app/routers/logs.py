@@ -5,7 +5,15 @@ from fastapi.responses import FileResponse, StreamingResponse
 
 from app.auth import get_current_admin
 from app.models.user import User
+from app.schemas import GrafanaLaunchIn
 from app.services import log_service
+from app.services.grafana_proxy_service import (
+    build_enter_response,
+    build_launch_url,
+    build_public_origin,
+    proxy_to_grafana,
+    resolve_user_from_cookie,
+)
 from app.services.log_integration_service import get_integration_status
 
 router = APIRouter(prefix="/logs", tags=["日志监控"])
@@ -22,7 +30,33 @@ def log_integrations(
         forwarded = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
         raw_host = forwarded or (request.headers.get("host") or "")
         host = raw_host.split(":")[0].strip()
-    return get_integration_status(public_host=host or None)
+    origin = build_public_origin(request)
+    return get_integration_status(public_host=host or None, public_origin=origin)
+
+
+@router.post("/grafana/launch")
+def grafana_launch(
+    body: GrafanaLaunchIn,
+    request: Request,
+    current_user: User = Depends(get_current_admin),
+):
+    origin = build_public_origin(request)
+    url = build_launch_url(origin, current_user.id, current_user.username, current_user.role, body.redirect)
+    return {"url": url}
+
+
+@router.get("/grafana/enter")
+def grafana_enter(token: str = Query(..., min_length=8), redirect: str = Query("/")):
+    return build_enter_response(token, redirect)
+
+
+@router.api_route("/grafana", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+@router.api_route("/grafana/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
+async def grafana_proxy(request: Request, path: str = ""):
+    user_ctx = resolve_user_from_cookie(request)
+    if not user_ctx:
+        raise HTTPException(status_code=401, detail="请从平台「日志监控」页面打开 Grafana")
+    return await proxy_to_grafana(path, request, user_ctx)
 
 
 @router.get("/sources")

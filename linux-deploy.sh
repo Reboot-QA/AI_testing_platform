@@ -319,9 +319,13 @@ ensure_env_file() {
   local host
   host="$(detect_public_host)"
   if [[ "$host" != "127.0.0.1" ]]; then
-    set_env_value "GRAFANA_ROOT_URL" "http://${host}:$(read_env_value GRAFANA_PORT 3000)"
-    set_env_value "GRAFANA_PUBLIC_URL" "http://${host}:$(read_env_value GRAFANA_PORT 3000)"
+    local http_port grafana_port
+    http_port="$(read_env_value HTTP_PORT 5173)"
+    grafana_port="$(read_env_value GRAFANA_PORT 3000)"
+    set_env_value "GRAFANA_ROOT_URL" "http://${host}:${http_port}/api/v1/logs/grafana"
+    set_env_value "GRAFANA_PUBLIC_URL" "http://${host}:${http_port}/api/v1/logs/grafana"
     set_env_value "LOKI_PUBLIC_URL" "http://${host}:$(read_env_value LOKI_PORT 3100)"
+    set_env_value "GRAFANA_URL" "http://host.docker.internal:${grafana_port}"
   fi
 
   if ! grep -q '^MYSQL_PUBLISH_HOST=' "$ENV_FILE" 2>/dev/null; then
