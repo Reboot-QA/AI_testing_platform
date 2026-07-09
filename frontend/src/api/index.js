@@ -281,6 +281,12 @@ export const apifoxApi = {
   createCase: (eid, data) => request.post(`/apifox/endpoints/${eid}/cases`, data),
   updateCase: (cid, data) => request.put(`/apifox/cases/${cid}`, data),
   deleteCase: (cid) => request.delete(`/apifox/cases/${cid}`),
+
+  listSchemas: (pid) => request.get(`/apifox/projects/${pid}/schemas`),
+  getSchema: (sid) => request.get(`/apifox/schemas/${sid}`),
+  createSchema: (pid, data) => request.post(`/apifox/projects/${pid}/schemas`, data),
+  updateSchema: (sid, data) => request.put(`/apifox/schemas/${sid}`, data),
+  deleteSchema: (sid) => request.delete(`/apifox/schemas/${sid}`),
 }
 
 export const testExecutionApi = {

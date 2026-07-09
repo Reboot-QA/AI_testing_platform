@@ -27,6 +27,7 @@ from app.models.apifox import (
     ApifoxFolder,
     ApifoxGlobalVariable,
     ApifoxGlobalVarLocal,
+    ApifoxSchema,
 )
 
 __all__ = [
@@ -57,4 +58,5 @@ __all__ = [
     "ApifoxEndpointCase",
     "ApifoxCaseAssertion",
     "ApifoxCaseExtract",
+    "ApifoxSchema",
 ]

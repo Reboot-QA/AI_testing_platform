@@ -110,7 +110,7 @@ const routes = [
           {
             path: 'datamodels',
             name: 'ApifoxDataModels',
-            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            component: () => import('@/views/apifox/sections/SchemaManage.vue'),
             meta: { permission: 'apifox_workbench', sectionTitle: '数据模型' },
           },
           {
