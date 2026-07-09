@@ -320,6 +320,8 @@ ensure_env_file() {
   host="$(detect_public_host)"
   if [[ "$host" != "127.0.0.1" ]]; then
     set_env_value "GRAFANA_ROOT_URL" "http://${host}:$(read_env_value GRAFANA_PORT 3000)"
+    set_env_value "GRAFANA_PUBLIC_URL" "http://${host}:$(read_env_value GRAFANA_PORT 3000)"
+    set_env_value "LOKI_PUBLIC_URL" "http://${host}:$(read_env_value LOKI_PORT 3100)"
   fi
 
   if ! grep -q '^MYSQL_PUBLISH_HOST=' "$ENV_FILE" 2>/dev/null; then
