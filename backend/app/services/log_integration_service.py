@@ -1,9 +1,11 @@
 from typing import Dict, Optional
 from urllib.error import URLError
-from urllib.parse import quote
+from urllib.parse import quote, urlparse, urlunparse
 from urllib.request import Request, urlopen
 
 from app.config import settings
+
+INTERNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "grafana", "loki"})
 
 
 def _build_url(base: str, port: int, default_host: str = "127.0.0.1") -> str:
@@ -16,7 +18,11 @@ def _build_url(base: str, port: int, default_host: str = "127.0.0.1") -> str:
 def _apply_public_host(url: str, public_host: Optional[str]) -> str:
     if not public_host or public_host in {"127.0.0.1", "localhost"}:
         return url
-    return url.replace("127.0.0.1", public_host).replace("localhost", public_host)
+    parsed = urlparse(url)
+    if not parsed.hostname or parsed.hostname not in INTERNAL_HOSTS:
+        return url
+    netloc = f"{public_host}:{parsed.port}" if parsed.port else public_host
+    return urlunparse(parsed._replace(netloc=netloc))
 
 
 def _resolve_public_url(internal_url: str, public_url_setting: str, public_host: Optional[str]) -> str:
