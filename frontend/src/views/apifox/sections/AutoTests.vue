@@ -3,9 +3,11 @@
     <el-radio-group v-model="section" size="small" class="section-switch">
       <el-radio-button value="cases">单接口用例</el-radio-button>
       <el-radio-button value="scenarios">场景用例</el-radio-button>
+      <el-radio-button value="schedules">定时任务</el-radio-button>
     </el-radio-group>
 
     <ScenarioPanel v-if="section === 'scenarios'" class="auto-tests" />
+    <SchedulePanel v-else-if="section === 'schedules'" />
     <div v-else class="auto-tests">
     <div class="list-panel">
       <div class="field">
@@ -67,6 +69,7 @@ import { ensureKvRows } from '@/utils/apiCaseConfig'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
+import SchedulePanel from '@/views/apifox/sections/SchedulePanel.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)

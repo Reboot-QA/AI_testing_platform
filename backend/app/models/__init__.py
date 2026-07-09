@@ -33,6 +33,7 @@ from app.models.apifox import (
     ApifoxRunStep,
     ApifoxScenario,
     ApifoxScenarioStep,
+    ApifoxSchedule,
     ApifoxSchema,
     ApifoxScript,
 )
@@ -73,4 +74,5 @@ __all__ = [
     "ApifoxScenarioStep",
     "ApifoxRun",
     "ApifoxRunStep",
+    "ApifoxSchedule",
 ]
