@@ -23,7 +23,7 @@
 
 | 服务 | 默认地址 | 默认账号 |
 |------|----------|----------|
-| Grafana | http://服务器IP:3000 | admin / admin123 |
+| Grafana | http://服务器IP:3000 | 平台内打开免登录（只读）；管理配置见 `.env.docker` |
 | Loki API | http://服务器IP:3100 | 无认证（内网使用） |
 
 预置仪表盘：**AI质量平台日志** (`uid: ai-platform-logs`)
@@ -139,6 +139,7 @@ GRAFANA_EMBED=true
 
 ## 安全建议
 
-- 生产环境修改 Grafana 默认密码
+- 生产环境修改 Grafana 管理员密码（`GRAFANA_ADMIN_PASSWORD`）
+- 匿名访问为只读（Viewer），仅用于平台内查看日志
 - 安全组仅对运维 IP 开放 3000/3100 端口
-- 不要将 Loki/Grafana 直接暴露公网而不设认证
+- 不要将 Loki/Grafana 直接暴露公网而不设访问控制
