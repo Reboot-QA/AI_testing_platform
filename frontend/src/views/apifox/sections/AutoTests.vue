@@ -42,7 +42,16 @@
     </div>
 
     <div class="editor-panel">
-      <CaseEditor v-if="form.id" :form="form" :saving="saving" :scripts="scripts" @save="saveCase" />
+      <template v-if="form.id">
+        <div class="run-bar">
+          <el-select v-model="runEnvId" placeholder="选择环境" size="small" style="width: 180px" clearable>
+            <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
+          </el-select>
+          <el-button size="small" type="success" :loading="running" @click="runCase">运行</el-button>
+        </div>
+        <CaseEditor :form="form" :saving="saving" :scripts="scripts" @save="saveCase" />
+        <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
+      </template>
       <el-empty v-else description="选择接口后新建/选择用例" />
     </div>
     </div>
@@ -56,6 +65,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
+import RunProgress from '@/components/apifox/RunProgress.vue'
 import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
 
 const route = useRoute()
@@ -66,7 +76,11 @@ const endpoints = ref([])
 const selectedEndpointId = ref(null)
 const cases = ref([])
 const scripts = ref([])
+const environments = ref([])
 const saving = ref(false)
+const running = ref(false)
+const runEnvId = ref(null)
+const runEvents = ref([])
 
 const form = reactive({
   id: null, name: '', request_spec: emptySpec(), variables: [], assertions: [], extracts: [],
@@ -103,6 +117,24 @@ async function loadEndpoints() {
 
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
+}
+
+async function loadEnvironments() {
+  environments.value = await apifoxApi.listEnvironments(pid.value)
+  const def = environments.value.find((e) => e.is_default)
+  if (def && !runEnvId.value) runEnvId.value = def.id
+}
+
+async function runCase() {
+  runEvents.value = []
+  running.value = true
+  try {
+    await apifoxApi.runCaseStream(form.id, runEnvId.value, (e) => runEvents.value.push(e))
+  } catch (e) {
+    ElMessage.error(e.message || '运行失败')
+  } finally {
+    running.value = false
+  }
 }
 
 async function loadCases() {
@@ -173,12 +205,19 @@ async function saveCase() {
 onMounted(async () => {
   await loadEndpoints()
   await loadScripts()
+  await loadEnvironments()
 })
 </script>
 
 <style scoped>
 .section-switch {
   margin-bottom: 12px;
+}
+
+.run-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
 }
 
 .auto-tests {
