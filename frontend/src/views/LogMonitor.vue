@@ -353,16 +353,22 @@ async function downloadLog() {
   URL.revokeObjectURL(url)
 }
 
+const originParams = () => ({
+  public_host: window.location.hostname,
+  public_origin: window.location.origin,
+})
+
 async function loadIntegrations() {
   integrationLoading.value = true
   try {
-    integrations.value = await logsApi.integrations({
-      public_host: window.location.hostname,
-    })
+    integrations.value = await logsApi.integrations(originParams())
     embedUrl.value = ''
     if (integrations.value.monitoring_online && integrations.value.embed_url) {
       if (integrations.value.use_proxy) {
-        const launch = await logsApi.grafanaLaunch({ redirect: integrations.value.embed_url })
+        const launch = await logsApi.grafanaLaunch(
+          { redirect: integrations.value.embed_url },
+          originParams(),
+        )
         embedUrl.value = launch.url
       } else {
         embedUrl.value = integrations.value.embed_url
@@ -376,7 +382,7 @@ async function loadIntegrations() {
 async function openGrafana(redirect) {
   if (!redirect) return
   if (integrations.value.use_proxy) {
-    const { url } = await logsApi.grafanaLaunch({ redirect })
+    const { url } = await logsApi.grafanaLaunch({ redirect }, originParams())
     window.open(url, '_blank', 'noopener,noreferrer')
     return
   }

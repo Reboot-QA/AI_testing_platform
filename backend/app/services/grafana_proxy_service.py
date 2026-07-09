@@ -90,7 +90,9 @@ def resolve_user_from_cookie(request: Request) -> Optional[dict]:
         return None
 
 
-def build_public_origin(request: Request) -> str:
+def build_public_origin(request: Request, fallback_origin: Optional[str] = None) -> str:
+    if fallback_origin:
+        return fallback_origin.rstrip("/")
     scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
     host = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
     return f"{scheme}://{host}"
@@ -153,5 +155,6 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
         key: value
         for key, value in upstream.headers.items()
         if key.lower() not in HOP_BY_HOP_HEADERS
+        and key.lower() not in {"x-frame-options", "content-security-policy"}
     }
     return Response(content=upstream.content, status_code=upstream.status_code, headers=response_headers)

@@ -23,6 +23,7 @@ router = APIRouter(prefix="/logs", tags=["日志监控"])
 def log_integrations(
     request: Request,
     public_host: Optional[str] = Query(None, max_length=200),
+    public_origin: Optional[str] = Query(None, max_length=300),
     _: User = Depends(get_current_admin),
 ):
     host = (public_host or "").strip()
@@ -30,7 +31,7 @@ def log_integrations(
         forwarded = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
         raw_host = forwarded or (request.headers.get("host") or "")
         host = raw_host.split(":")[0].strip()
-    origin = build_public_origin(request)
+    origin = build_public_origin(request, (public_origin or "").strip() or None)
     return get_integration_status(public_host=host or None, public_origin=origin)
 
 
@@ -38,9 +39,10 @@ def log_integrations(
 def grafana_launch(
     body: GrafanaLaunchIn,
     request: Request,
+    public_origin: Optional[str] = Query(None, max_length=300),
     current_user: User = Depends(get_current_admin),
 ):
-    origin = build_public_origin(request)
+    origin = build_public_origin(request, (public_origin or "").strip() or None)
     url = build_launch_url(origin, current_user.id, current_user.username, current_user.role, body.redirect)
     return {"url": url}
 
