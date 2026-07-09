@@ -83,6 +83,11 @@ class UserPasswordReset(BaseModel):
     password: str = Field(min_length=6)
 
 
+class UserPasswordChange(BaseModel):
+    old_password: str
+    new_password: str = Field(min_length=6)
+
+
 class MenuDefinitionOut(BaseModel):
     key: str
     label: str

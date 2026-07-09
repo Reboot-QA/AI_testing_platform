@@ -40,6 +40,7 @@ export const authApi = {
   },
   register: (data) => request.post('/auth/register', data),
   me: () => request.get('/auth/me'),
+  changePassword: (data) => request.put('/auth/password', data),
 }
 
 export const projectApi = {
