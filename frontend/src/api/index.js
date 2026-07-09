@@ -45,6 +45,7 @@ export const authApi = {
 
 export const projectApi = {
   list: () => request.get('/projects'),
+  get: (id) => request.get(`/projects/${id}`),
   create: (data) => request.post('/projects', data),
   update: (id, data) => request.put(`/projects/${id}`, data),
   delete: (id) => request.delete(`/projects/${id}`),
