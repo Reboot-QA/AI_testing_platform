@@ -90,6 +90,56 @@ const routes = [
         meta: { permission: 'api_automation_schedule', apiTab: 'schedule' },
       },
       {
+        path: 'apifox',
+        name: 'ApifoxWorkbench',
+        component: () => import('@/views/apifox/Workbench.vue'),
+        meta: { permission: 'apifox_workbench' },
+      },
+      {
+        path: 'apifox/project/:projectId',
+        component: () => import('@/views/apifox/ProjectWorkspace.vue'),
+        redirect: (to) => `/apifox/project/${to.params.projectId}/apis`,
+        meta: { permission: 'apifox_workbench' },
+        children: [
+          {
+            path: 'apis',
+            name: 'ApifoxApis',
+            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: '接口管理' },
+          },
+          {
+            path: 'datamodels',
+            name: 'ApifoxDataModels',
+            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: '数据模型' },
+          },
+          {
+            path: 'tests',
+            name: 'ApifoxTests',
+            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: '自动化测试' },
+          },
+          {
+            path: 'reports',
+            name: 'ApifoxReports',
+            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: '测试报告' },
+          },
+          {
+            path: 'environments',
+            name: 'ApifoxEnvironments',
+            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: '环境' },
+          },
+          {
+            path: 'settings',
+            name: 'ApifoxProjectSettings',
+            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: '项目设置' },
+          },
+        ],
+      },
+      {
         path: 'system',
         redirect: '/system/settings',
       },
