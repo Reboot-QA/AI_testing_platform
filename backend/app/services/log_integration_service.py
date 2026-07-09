@@ -58,13 +58,13 @@ def get_integration_status(public_host: Optional[str] = None) -> Dict:
     public_grafana = _resolve_public_url(grafana_url, settings.grafana_public_url, public_host)
     public_loki = _resolve_public_url(loki_url, settings.loki_public_url, public_host)
 
-    dashboard_url = f"{public_grafana}/d/ai-platform-logs/ai-platform-logs?orgId=1&refresh=10s"
+    dashboard_url = f"{public_grafana}/d/ai-platform-logs/ai-platform-logs?orgId=1&refresh=10s&kiosk"
     explore_left = (
         '{"datasource":"loki","queries":[{"expr":"{job=\\"ai-platform\\"}","refId":"A"}],'
         '"range":{"from":"now-1h","to":"now"}}'
     )
     explore_url = f"{public_grafana}/explore?orgId=1&left={quote(explore_left)}"
-    embed_url = f"{dashboard_url}&kiosk"
+    embed_url = dashboard_url
 
     grafana_ok = _probe(f"{grafana_url}/api/health")
     loki_ok = _probe(f"{loki_url}/ready")
@@ -80,6 +80,7 @@ def get_integration_status(public_host: Optional[str] = None) -> Dict:
         "grafana_online": grafana_ok,
         "loki_online": loki_ok,
         "monitoring_online": grafana_ok and loki_ok,
+        "anonymous_access": True,
         "startup_hint": "./deploy.sh monitoring start",
         "docs_path": "monitoring/README.md",
     }

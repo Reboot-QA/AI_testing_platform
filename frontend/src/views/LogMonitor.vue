@@ -147,7 +147,8 @@
             <template #default>
               <p>在 Linux 服务器上执行以下命令启动 Grafana + Loki + Promtail：</p>
               <pre class="setup-code">{{ integrations.startup_hint || './deploy.sh monitoring start' }}</pre>
-              <p>默认 Grafana 账号：admin / admin123（请在生产环境修改密码）</p>
+              <p v-if="integrations.anonymous_access">从本平台打开 Grafana 将自动以只读身份进入，无需输入密码。</p>
+              <p v-else>Grafana 管理账号见服务器 <code>.env.docker</code> 中的 GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD。</p>
               <p>详细说明见项目目录 <code>monitoring/README.md</code></p>
             </template>
           </el-alert>
@@ -194,6 +195,7 @@ const integrations = ref({
   grafana_online: false,
   loki_online: false,
   monitoring_online: false,
+  anonymous_access: true,
   startup_hint: './deploy.sh monitoring start',
 })
 
