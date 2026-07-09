@@ -24,8 +24,6 @@ const TARGET_ALIASES = {
   'menu.ai_generate': 'menu.ai_generate',
   'menu.requirements': 'menu.requirements',
   'menu.testcases': 'menu.testcases',
-  'menu.api_automation_suites': 'menu.api_automation_suites',
-  'menu.api_automation_env': 'menu.api_automation_env',
   'requirements.create_btn': 'requirements.create_btn',
   'requirements.form.title': 'requirements.form.title',
   'requirements.form.description': 'requirements.form.description',
