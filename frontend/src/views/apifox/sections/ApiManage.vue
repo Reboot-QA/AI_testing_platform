@@ -12,12 +12,25 @@
           <el-icon><Download /></el-icon> 导入
         </el-button>
       </div>
+      <el-input
+        v-model="filterText"
+        size="small"
+        clearable
+        placeholder="搜索接口 / 文件夹"
+        class="tree-search"
+      />
       <el-tree
+        ref="treeRef"
         :data="treeData"
         node-key="key"
         :expand-on-click-node="false"
+        :allow-drop="allowDrop"
+        :filter-node-method="filterNode"
         highlight-current
+        draggable
         @node-click="onNodeClick"
+        @node-drop="onDrop"
+        @node-contextmenu="onContextMenu"
       >
         <template #default="{ data }">
           <span class="node">
@@ -39,6 +52,14 @@
     </div>
 
     <ImportDialog v-model:visible="importVisible" :project-id="pid" @imported="loadAll" />
+    <TreeContextMenu
+      :visible="ctx.visible"
+      :x="ctx.x"
+      :y="ctx.y"
+      :items="ctxItems"
+      @select="onCtxSelect"
+      @close="ctx.visible = false"
+    />
   </div>
 </template>
 
@@ -48,18 +69,21 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
+import { useApiTree } from '@/composables/useApiTree'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import ImportDialog from '@/components/apifox/ImportDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
+import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
-const folders = ref([])
-const endpoints = ref([])
+const { treeData, treeRef, filterText, filterNode, allowDrop, onDrop, reload: loadAll } = useApiTree(pid)
+
 const selectedFolderId = ref(null)
 const saving = ref(false)
 const importVisible = ref(false)
+const ctx = reactive({ visible: false, x: 0, y: 0, node: null })
 
 const form = reactive({ id: null, name: '', method: 'GET', path: '', description: '', request_spec: emptySpec() })
 
@@ -94,29 +118,57 @@ function normalizeSpec(spec) {
   }
 }
 
-const treeData = computed(() => {
-  const map = {}
-  folders.value.forEach((f) => {
-    map[f.id] = { key: `f-${f.id}`, id: f.id, type: 'folder', label: f.name, children: [] }
-  })
-  const roots = []
-  folders.value.forEach((f) => {
-    const node = map[f.id]
-    if (f.parent_id && map[f.parent_id]) map[f.parent_id].children.push(node)
-    else roots.push(node)
-  })
-  endpoints.value.forEach((e) => {
-    const node = { key: `e-${e.id}`, id: e.id, type: 'endpoint', label: e.name, method: e.method }
-    if (e.folder_id && map[e.folder_id]) map[e.folder_id].children.push(node)
-    else roots.push(node)
-  })
-  return roots
+// ---------- 右键菜单 ----------
+const ctxItems = computed(() => {
+  if (!ctx.node) return []
+  const items = []
+  if (ctx.node.type === 'folder') {
+    items.push({ key: 'add-endpoint', label: '新建接口' }, { key: 'add-folder', label: '新建子文件夹' })
+  }
+  items.push({ key: 'rename', label: '重命名' })
+  if (ctx.node.type === 'endpoint') items.push({ key: 'duplicate', label: '复制接口' })
+  items.push({ key: 'delete', label: '删除', danger: true })
+  return items
 })
 
-async function loadAll() {
-  const [fs, es] = await Promise.all([apifoxApi.listFolders(pid.value), apifoxApi.listEndpoints(pid.value)])
-  folders.value = fs
-  endpoints.value = es
+function onContextMenu(e, data) {
+  e.preventDefault()
+  ctx.node = data
+  ctx.x = e.clientX
+  ctx.y = e.clientY
+  ctx.visible = true
+}
+
+function onCtxSelect(key) {
+  const node = ctx.node
+  if (!node) return
+  if (key === 'add-endpoint') {
+    selectedFolderId.value = node.id
+    addEndpoint()
+  } else if (key === 'add-folder') {
+    selectedFolderId.value = node.id
+    addFolder()
+  } else if (key === 'rename') {
+    renameNode(node)
+  } else if (key === 'delete') {
+    deleteNode(node)
+  } else if (key === 'duplicate') {
+    duplicateEndpoint(node)
+  }
+}
+
+async function duplicateEndpoint(node) {
+  const e = await apifoxApi.getEndpoint(node.id)
+  await apifoxApi.createEndpoint(pid.value, {
+    name: `${e.name} 副本`,
+    method: e.method,
+    path: e.path,
+    folder_id: e.folder_id,
+    request_spec: e.request_spec,
+    description: e.description,
+  })
+  ElMessage.success('已复制')
+  await loadAll()
 }
 
 function onNodeClick(data) {
@@ -210,6 +262,10 @@ onMounted(loadAll)
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.tree-search {
+  margin-bottom: 8px;
 }
 
 .editor-panel {

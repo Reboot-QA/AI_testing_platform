@@ -19,6 +19,7 @@ from app.routers.apifox.schemas import (
     FolderOut,
     FolderUpdate,
     RequestSpec,
+    TreeReorderRequest,
 )
 
 
@@ -65,6 +66,40 @@ def _require_folder_in_project(db: Session, folder_id: int | None, project_id: i
         raise ValueError("所选文件夹不存在或不属于该项目")
 
 
+def _would_create_cycle(db: Session, folder_id: int, new_parent_id: int | None, project_id: int) -> bool:
+    """把 folder 移到 new_parent 下是否形成环（new_parent 是 folder 自身或其子孙）。"""
+    if new_parent_id is None:
+        return False
+    if new_parent_id == folder_id:
+        return True
+    folders_by_id = {f.id: f for f in repo.list_folders(db, project_id)}
+    cur_id: int | None = new_parent_id
+    seen: set[int] = set()
+    while cur_id is not None:
+        if cur_id == folder_id:
+            return True
+        if cur_id in seen:
+            break
+        seen.add(cur_id)
+        parent = folders_by_id.get(cur_id)
+        cur_id = parent.parent_id if parent else None
+    return False
+
+
+def _has_cycle(folders_by_id: dict[int, ApifoxFolder]) -> bool:
+    """整棵文件夹图是否存在环（按当前 parent_id 关系走链）。"""
+    for folder in folders_by_id.values():
+        cur_id: int | None = folder.id
+        seen: set[int] = set()
+        while cur_id is not None:
+            if cur_id in seen:
+                return True
+            seen.add(cur_id)
+            node = folders_by_id.get(cur_id)
+            cur_id = node.parent_id if node else None
+    return False
+
+
 # ---------- folders ----------
 def list_folders(db: Session, project_id: int) -> List[FolderOut]:
     return [_folder_out(f) for f in repo.list_folders(db, project_id)]
@@ -81,9 +116,9 @@ def create_folder(db: Session, project_id: int, data: FolderCreate) -> FolderOut
 
 def update_folder(db: Session, folder: ApifoxFolder, data: FolderUpdate) -> FolderOut:
     if "parent_id" in data.model_fields_set:
-        if data.parent_id == folder.id:
-            raise ValueError("文件夹不能移动到自身")
         _require_folder_in_project(db, data.parent_id, folder.project_id)
+        if _would_create_cycle(db, folder.id, data.parent_id, folder.project_id):
+            raise ValueError("文件夹不能移动到自身或其子文件夹下")
         folder.parent_id = data.parent_id
     if data.name is not None:
         folder.name = data.name
@@ -160,4 +195,34 @@ def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate)
 
 def delete_endpoint(db: Session, endpoint: ApifoxEndpoint) -> None:
     repo.delete_endpoint(db, endpoint)
+    db.commit()
+
+
+# ---------- 树拖拽重排（原子：一次落库全部 parent/folder + sort_order） ----------
+def reorder_tree(db: Session, project_id: int, data: TreeReorderRequest) -> None:
+    folders_by_id = {f.id: f for f in repo.list_folders(db, project_id)}
+    endpoints_by_id = {e.id: e for e in repo.list_endpoints(db, project_id)}
+
+    for f_item in data.folders:
+        folder = folders_by_id.get(f_item.id)
+        if folder is None:
+            raise ValueError("文件夹不存在或不属于该项目")
+        if f_item.parent_id is not None and f_item.parent_id not in folders_by_id:
+            raise ValueError("目标父文件夹不存在或不属于该项目")
+        folder.parent_id = f_item.parent_id
+        folder.sort_order = f_item.sort_order
+
+    if _has_cycle(folders_by_id):
+        db.rollback()
+        raise ValueError("文件夹移动会形成循环")
+
+    for e_item in data.endpoints:
+        endpoint = endpoints_by_id.get(e_item.id)
+        if endpoint is None:
+            raise ValueError("接口不存在或不属于该项目")
+        if e_item.folder_id is not None and e_item.folder_id not in folders_by_id:
+            raise ValueError("目标文件夹不存在或不属于该项目")
+        endpoint.folder_id = e_item.folder_id
+        endpoint.sort_order = e_item.sort_order
+
     db.commit()
