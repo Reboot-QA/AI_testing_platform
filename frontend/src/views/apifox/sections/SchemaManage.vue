@@ -25,7 +25,6 @@
       <template v-if="form.id">
         <div class="row1">
           <el-input v-model="form.name" placeholder="模型名称" style="width: 260px" />
-          <el-button @click="formatJson">格式化</el-button>
           <el-button type="primary" :loading="saving" @click="saveSchema">保存</el-button>
         </div>
         <el-input
@@ -33,13 +32,7 @@
           placeholder="描述（选填）"
           class="desc-input"
         />
-        <el-input
-          v-model="form.json_schema"
-          type="textarea"
-          :rows="22"
-          class="json-input"
-          placeholder='JSON Schema，例如 {"type":"object","properties":{"id":{"type":"integer"}}}'
-        />
+        <CodeEditor v-model="form.json_schema" language="json" height="440px" />
       </template>
       <el-empty v-else description="选择或新建一个数据模型开始编辑" />
     </div>
@@ -51,6 +44,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -88,14 +82,6 @@ async function delSchema(s) {
   if (form.id === s.id) form.id = null
   ElMessage.success('已删除')
   await loadSchemas()
-}
-
-function formatJson() {
-  try {
-    form.json_schema = JSON.stringify(JSON.parse(form.json_schema), null, 2)
-  } catch {
-    ElMessage.error('JSON 格式不正确，无法格式化')
-  }
 }
 
 async function saveSchema() {
@@ -182,10 +168,5 @@ onMounted(loadSchemas)
 
 .desc-input {
   margin-bottom: 10px;
-}
-
-.json-input :deep(textarea) {
-  font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
 }
 </style>

@@ -21,9 +21,7 @@
       >
         <template #default="{ data }">
           <span class="node">
-            <el-tag v-if="data.type === 'endpoint'" size="small" :type="methodTag(data.method)">
-              {{ data.method }}
-            </el-tag>
+            <MethodTag v-if="data.type === 'endpoint'" :method="data.method" class="tree-method" />
             <el-icon v-else><Folder /></el-icon>
             <span class="node-label">{{ data.label }}</span>
             <span class="node-ops">
@@ -52,6 +50,7 @@ import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import ImportDialog from '@/components/apifox/ImportDialog.vue'
+import MethodTag from '@/components/apifox/common/MethodTag.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -94,8 +93,6 @@ function normalizeSpec(spec) {
     },
   }
 }
-
-const methodTag = (m) => ({ GET: 'success', POST: 'warning', PUT: '', DELETE: 'danger', PATCH: 'info' }[m] || 'info')
 
 const treeData = computed(() => {
   const map = {}
@@ -225,6 +222,11 @@ onMounted(loadAll)
   align-items: center;
   gap: 6px;
   width: 100%;
+}
+
+.tree-method {
+  flex-shrink: 0;
+  min-width: 34px;
 }
 
 .node-label {
