@@ -86,6 +86,7 @@ ensure_app_dir() {
     fi
   fi
 
+  chmod +x "$APP_DIR/update.sh" 2>/dev/null || true
   chmod +x "$APP_DIR/jenkins/scripts/deploy.sh" 2>/dev/null || true
   chmod +x "$APP_DIR/linux-deploy.sh" 2>/dev/null || true
   ok "应用目录就绪: $APP_DIR"

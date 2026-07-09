@@ -26,16 +26,44 @@ pipeline {
                     set -e
                     export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH:-}"
                     APP_DIR="${APP_DIR:-/opt/AI_testing_platform}"
+                    ENV_FILE="${ENV_FILE:-/opt/AI_testing_platform/.env.docker}"
                     UPDATE_SCRIPT="${APP_DIR}/update.sh"
+                    DEPLOY_SCRIPT="${APP_DIR}/jenkins/scripts/deploy.sh"
+                    GIT_BRANCH="${GIT_BRANCH:-main}"
+
                     echo "APP_DIR=${APP_DIR}"
-                    ls -la "${APP_DIR}" 2>/dev/null | head -5 || true
+                    ls -la "${APP_DIR}" 2>/dev/null | head -8 || true
+
+                    git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
+
+                    if [ ! -f "${UPDATE_SCRIPT}" ] && [ -d "${APP_DIR}/.git" ]; then
+                      echo "未找到 update.sh，先 git pull 拉取最新代码..."
+                      git -C "${APP_DIR}" fetch origin "${GIT_BRANCH}" || true
+                      git -C "${APP_DIR}" checkout "${GIT_BRANCH}" 2>/dev/null || true
+                      git -C "${APP_DIR}" pull --ff-only origin "${GIT_BRANCH}" \
+                        || git -C "${APP_DIR}" pull origin "${GIT_BRANCH}" \
+                        || true
+                    fi
+
+                    if [ ! -f "${UPDATE_SCRIPT}" ] && [ -f "${DEPLOY_SCRIPT}" ]; then
+                      echo "仍无 update.sh，回退执行 jenkins/scripts/deploy.sh"
+                      sed -i 's/\\r$//' "${DEPLOY_SCRIPT}" 2>/dev/null || true
+                      chmod +x "${DEPLOY_SCRIPT}" 2>/dev/null || true
+                      test -f "${ENV_FILE}" || { echo "缺少 ${ENV_FILE}"; exit 1; }
+                      test -S /var/run/docker.sock || { echo "未挂载 docker.sock"; exit 1; }
+                      bash "${DEPLOY_SCRIPT}"
+                      exit 0
+                    fi
+
                     if [ ! -f "${UPDATE_SCRIPT}" ]; then
                       echo "错误: 容器内找不到 ${UPDATE_SCRIPT}"
-                      echo "请确认 Jenkins 已挂载部署目录，在服务器执行:"
-                      echo "  docker exec ai-platform-jenkins ls -la ${APP_DIR}"
-                      echo "  cd /opt/AI_testing_platform/jenkins && docker compose --env-file .env up -d --force-recreate"
+                      echo "请在服务器执行:"
+                      echo "  cd ${APP_DIR} && git pull && chmod +x update.sh linux-deploy.sh"
+                      echo "  sudo bash ${APP_DIR}/jenkins/fix-app-permissions.sh"
+                      echo "  cd ${APP_DIR}/jenkins && docker compose --env-file .env up -d --force-recreate"
                       exit 1
                     fi
+
                     sed -i 's/\\r$//' "${UPDATE_SCRIPT}" 2>/dev/null || true
                     chmod +x "${APP_DIR}/update.sh" "${APP_DIR}/linux-deploy.sh" "${APP_DIR}/deploy.sh" 2>/dev/null || true
                     test -f "${ENV_FILE}" || { echo "缺少 ${ENV_FILE}"; exit 1; }

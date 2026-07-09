@@ -127,12 +127,30 @@ pipeline {
     }
     environment {
         APP_DIR = '/opt/AI_testing_platform'
+        ENV_FILE = '/opt/AI_testing_platform/.env.docker'
     }
     triggers { githubPush() }
     stages {
         stage('一键发版') {
             steps {
-                sh 'cd /opt/AI_testing_platform && bash ./update.sh'
+                sh '''
+                    set -e
+                    APP_DIR="${APP_DIR:-/opt/AI_testing_platform}"
+                    UPDATE_SCRIPT="${APP_DIR}/update.sh"
+                    DEPLOY_SCRIPT="${APP_DIR}/jenkins/scripts/deploy.sh"
+                    git config --global --add safe.directory "${APP_DIR}" 2>/dev/null || true
+                    if [ ! -f "${UPDATE_SCRIPT}" ] && [ -d "${APP_DIR}/.git" ]; then
+                      git -C "${APP_DIR}" pull --ff-only || git -C "${APP_DIR}" pull || true
+                    fi
+                    if [ -f "${UPDATE_SCRIPT}" ]; then
+                      bash "${UPDATE_SCRIPT}"
+                    elif [ -f "${DEPLOY_SCRIPT}" ]; then
+                      bash "${DEPLOY_SCRIPT}"
+                    else
+                      echo "缺少发版脚本，请执行: cd ${APP_DIR} && git pull"
+                      exit 1
+                    fi
+                '''
             }
         }
     }
@@ -205,7 +223,20 @@ bash /opt/AI_testing_platform/jenkins/scripts/deploy.sh
 
 ## 常见问题
 
-### 1. Jenkins 构建失败：缺少 .env.docker
+### 1. Jenkins 构建失败：`./update.sh: No such file or directory`
+
+服务器上的代码过旧，还没有 `update.sh`。在服务器执行一次：
+
+```bash
+cd /opt/AI_testing_platform
+git pull
+chmod +x update.sh linux-deploy.sh jenkins/scripts/deploy.sh
+sudo bash jenkins/fix-app-permissions.sh
+```
+
+然后在 Jenkins 任务里把 Pipeline 脚本更新为 `jenkins/Jenkinsfile` 中的最新版本（支持自动 `git pull` 和回退 `jenkins/scripts/deploy.sh`）。
+
+### 2. Jenkins 构建失败：缺少 .env.docker
 
 在应用目录创建环境文件：
 
