@@ -25,13 +25,12 @@
         <el-radio-group v-model="form.request_spec.body.type" size="small">
           <el-radio-button v-for="t in BODY_TYPES" :key="t" :value="t">{{ t }}</el-radio-button>
         </el-radio-group>
-        <el-input
+        <CodeEditor
           v-if="['json', 'raw'].includes(form.request_spec.body.type)"
           v-model="form.request_spec.body.raw"
-          type="textarea"
-          :rows="8"
+          :language="form.request_spec.body.type === 'json' ? 'json' : 'plaintext'"
+          height="220px"
           class="body-raw"
-          placeholder="请求体内容"
         />
         <KvRowsEditor
           v-else-if="['form-data', 'urlencoded'].includes(form.request_spec.body.type)"
@@ -63,6 +62,7 @@
 <script setup>
 import { ref } from 'vue'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
+import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
 defineProps({
   form: { type: Object, required: true },

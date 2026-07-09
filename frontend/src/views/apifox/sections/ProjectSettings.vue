@@ -49,13 +49,7 @@
             <el-button type="primary" :loading="saving" @click="saveScript">保存</el-button>
           </div>
           <el-input v-model="scriptForm.description" placeholder="描述（选填）" class="desc-input" />
-          <el-input
-            v-model="scriptForm.content"
-            type="textarea"
-            :rows="18"
-            class="code-input"
-            placeholder="脚本内容；运行结果写入 variables，供 {{变量名}} 引用（执行引擎 P4 接入）"
-          />
+          <CodeEditor v-model="scriptForm.content" :language="scriptForm.lang" height="360px" />
         </template>
         <el-empty v-else description="选择或新建一个脚本（脚本跟随项目，可被用例前后置引用）" />
       </div>
@@ -112,6 +106,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -299,11 +294,6 @@ onMounted(async () => {
 
 .desc-input {
   margin-bottom: 10px;
-}
-
-.code-input :deep(textarea) {
-  font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
 }
 
 .var-title {

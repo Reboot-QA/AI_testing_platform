@@ -20,7 +20,9 @@
           style="width: 100%"
           @change="onEndpointChange"
         >
-          <el-option v-for="e in endpoints" :key="e.id" :label="`${e.method} ${e.name}`" :value="e.id" />
+          <el-option v-for="e in endpoints" :key="e.id" :label="`${e.method} ${e.name}`" :value="e.id">
+            <MethodTag :method="e.method" /> <span class="opt-name">{{ e.name }}</span>
+          </el-option>
         </el-select>
       </div>
 
@@ -70,6 +72,7 @@ import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
 import SchedulePanel from '@/views/apifox/sections/SchedulePanel.vue'
+import MethodTag from '@/components/apifox/common/MethodTag.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -215,6 +218,10 @@ onMounted(async () => {
 <style scoped>
 .section-switch {
   margin-bottom: 12px;
+}
+
+.opt-name {
+  margin-left: 6px;
 }
 
 .run-bar {
