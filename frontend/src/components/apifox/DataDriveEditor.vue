@@ -54,7 +54,7 @@ function addRow() {
 
 <style scoped>
 .tip {
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
   margin: 8px 0;
 }

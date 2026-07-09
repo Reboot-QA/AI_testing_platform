@@ -52,8 +52,8 @@
         <el-collapse>
           <el-collapse-item v-for="s in detail.steps" :key="s.id" :name="s.id">
             <template #title>
-              <el-icon v-if="s.status === 'passed'" color="#16a34a"><CircleCheck /></el-icon>
-              <el-icon v-else color="#dc2626"><CircleClose /></el-icon>
+              <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
+              <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
               <span class="step-title">
                 {{ s.case_name }}
                 <span v-if="s.method" class="sub"><MethodTag :method="s.method" /> {{ s.url }}</span>
@@ -140,11 +140,11 @@ onMounted(loadRuns)
 
 .title {
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-brand);
 }
 
 .sub {
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
   margin-left: 6px;
 }
@@ -159,7 +159,7 @@ onMounted(loadRuns)
 
 .sec-title {
   font-weight: 600;
-  color: #475569;
+  color: var(--ax-text-tertiary);
   margin: 10px 0 4px;
   font-size: 13px;
 }
@@ -171,18 +171,18 @@ onMounted(loadRuns)
 
 .mono {
   font-family: Consolas, Monaco, monospace;
-  color: #64748b;
+  color: var(--ax-text-secondary);
 }
 
 .err {
-  color: #dc2626;
+  color: var(--ax-danger);
   font-size: 13px;
   margin-bottom: 6px;
 }
 
 .body-box {
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--ax-bg-subtle);
+  border: 1px solid var(--ax-border);
   border-radius: 4px;
   padding: 8px;
   font-size: 12px;
