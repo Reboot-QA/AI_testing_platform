@@ -59,7 +59,8 @@ async function doImport() {
     const payload = mode.value === 'url' ? { url: url.value.trim() } : { content: content.value }
     const report = await apifoxApi.importOpenapi(props.projectId, payload)
     ElMessage.success(
-      `导入完成：新建 ${report.created} 个接口、跳过 ${report.skipped} 个、新建文件夹 ${report.folders_created} 个`
+      `导入完成：新建 ${report.created} 个接口、${report.schemas_created || 0} 个数据模型、` +
+      `跳过 ${report.skipped} 个、新建文件夹 ${report.folders_created} 个`
     )
     emit('update:visible', false)
     emit('imported')
