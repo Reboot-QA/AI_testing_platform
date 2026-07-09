@@ -24,7 +24,11 @@
     <div class="editor-panel">
       <template v-if="form.id">
         <div class="row1">
-          <el-input v-model="form.name" placeholder="模型名称" style="width: 260px" />
+          <el-input v-model="form.name" placeholder="模型名称" style="width: 220px" />
+          <el-radio-group v-model="viewMode" size="small" @change="onViewChange">
+            <el-radio-button value="visual">可视化</el-radio-button>
+            <el-radio-button value="source">源码</el-radio-button>
+          </el-radio-group>
           <el-button type="primary" :loading="saving" @click="saveSchema">保存</el-button>
         </div>
         <el-input
@@ -32,7 +36,25 @@
           placeholder="描述（选填）"
           class="desc-input"
         />
-        <CodeEditor v-model="form.json_schema" language="json" height="440px" />
+        <div v-if="viewMode === 'visual'" class="schema-fields">
+          <div class="sf-head">
+            <span class="h-name">字段名</span>
+            <span class="h-type">类型</span>
+            <span class="h-req">必填</span>
+            <span class="h-desc">说明</span>
+          </div>
+          <SchemaFieldRow
+            v-for="(f, i) in fields"
+            :key="f.uid"
+            :field="f"
+            :list="fields"
+            :index="i"
+          />
+          <el-button link type="primary" size="small" class="add-field" @click="addRootField">
+            + 添加字段
+          </el-button>
+        </div>
+        <CodeEditor v-else v-model="form.json_schema" language="json" height="440px" />
       </template>
       <el-empty v-else description="选择或新建一个数据模型开始编辑" />
     </div>
@@ -44,14 +66,27 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { fieldsToSchema, newField, schemaToFields } from '@/composables/useJsonSchema'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
+import SchemaFieldRow from '@/components/apifox/SchemaFieldRow.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
 const schemas = ref([])
 const saving = ref(false)
+const viewMode = ref('visual')
+const fields = ref([])
 const form = reactive({ id: null, name: '', description: '', json_schema: '{}' })
+
+function loadFieldsFromSource() {
+  try {
+    fields.value = schemaToFields(JSON.parse(form.json_schema || '{}'))
+    return true
+  } catch {
+    return false
+  }
+}
 
 async function loadSchemas() {
   schemas.value = await apifoxApi.listSchemas(pid.value)
@@ -63,6 +98,21 @@ async function selectSchema(sid) {
   form.name = s.name
   form.description = s.description || ''
   form.json_schema = s.json_schema
+  viewMode.value = 'visual'
+  loadFieldsFromSource()
+}
+
+function onViewChange(mode) {
+  if (mode === 'source') {
+    form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+  } else if (!loadFieldsFromSource()) {
+    ElMessage.error('源码 JSON 格式有误，请修正后再切换到可视化')
+    viewMode.value = 'source'
+  }
+}
+
+function addRootField() {
+  fields.value.push(newField('string'))
 }
 
 async function addSchema() {
@@ -70,7 +120,10 @@ async function addSchema() {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
   })
-  const created = await apifoxApi.createSchema(pid.value, { name: value, json_schema: '{}' })
+  const created = await apifoxApi.createSchema(pid.value, {
+    name: value,
+    json_schema: '{"type":"object","properties":{}}',
+  })
   ElMessage.success('已创建')
   await loadSchemas()
   await selectSchema(created.id)
@@ -85,6 +138,9 @@ async function delSchema(s) {
 }
 
 async function saveSchema() {
+  if (viewMode.value === 'visual') {
+    form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+  }
   try {
     JSON.parse(form.json_schema)
   } catch {
@@ -168,5 +224,37 @@ onMounted(loadSchemas)
 
 .desc-input {
   margin-bottom: 10px;
+}
+
+.schema-fields {
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius);
+  padding: 10px 12px;
+}
+
+.sf-head {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ax-border);
+  font-size: 12px;
+  color: var(--ax-text-secondary);
+}
+
+.sf-head .h-name {
+  width: 180px;
+}
+
+.sf-head .h-type {
+  width: 110px;
+}
+
+.sf-head .h-req {
+  width: 52px;
+}
+
+.add-field {
+  margin-top: 8px;
 }
 </style>
