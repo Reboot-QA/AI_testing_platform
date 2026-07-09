@@ -306,6 +306,8 @@ export const apifoxApi = {
   updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
 
+  importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
+
   listRuns: (pid) => request.get(`/apifox/projects/${pid}/runs`),
   getRun: (rid) => request.get(`/apifox/runs/${rid}`),
   runCaseStream: (cid, environmentId, onEvent, options = {}) =>
