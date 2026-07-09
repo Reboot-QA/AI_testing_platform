@@ -128,7 +128,7 @@ const routes = [
           {
             path: 'environments',
             name: 'ApifoxEnvironments',
-            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            component: () => import('@/views/apifox/sections/EnvManage.vue'),
             meta: { permission: 'apifox_workbench', sectionTitle: '环境' },
           },
           {

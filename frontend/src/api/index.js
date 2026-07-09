@@ -259,6 +259,22 @@ export const apifoxApi = {
   createEndpoint: (pid, data) => request.post(`/apifox/projects/${pid}/endpoints`, data),
   updateEndpoint: (id, data) => request.put(`/apifox/endpoints/${id}`, data),
   deleteEndpoint: (id) => request.delete(`/apifox/endpoints/${id}`),
+
+  listEnvironments: (pid) => request.get(`/apifox/projects/${pid}/environments`),
+  createEnvironment: (pid, data) => request.post(`/apifox/projects/${pid}/environments`, data),
+  updateEnvironment: (id, data) => request.put(`/apifox/environments/${id}`, data),
+  deleteEnvironment: (id) => request.delete(`/apifox/environments/${id}`),
+  listEnvVars: (eid) => request.get(`/apifox/environments/${eid}/variables`),
+  createEnvVar: (eid, data) => request.post(`/apifox/environments/${eid}/variables`, data),
+  updateEnvVar: (vid, data) => request.put(`/apifox/env-variables/${vid}`, data),
+  deleteEnvVar: (vid) => request.delete(`/apifox/env-variables/${vid}`),
+  setEnvVarLocal: (vid, local_value) => request.put(`/apifox/env-variables/${vid}/local`, { local_value }),
+
+  listGlobalVars: (pid) => request.get(`/apifox/projects/${pid}/global-variables`),
+  createGlobalVar: (pid, data) => request.post(`/apifox/projects/${pid}/global-variables`, data),
+  updateGlobalVar: (gid, data) => request.put(`/apifox/global-variables/${gid}`, data),
+  deleteGlobalVar: (gid) => request.delete(`/apifox/global-variables/${gid}`),
+  setGlobalVarLocal: (gid, local_value) => request.put(`/apifox/global-variables/${gid}/local`, { local_value }),
 }
 
 export const testExecutionApi = {
