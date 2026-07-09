@@ -201,7 +201,7 @@ onMounted(loadAll)
 
 .tree-panel {
   width: 300px;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid var(--ax-border);
   overflow: auto;
   padding-right: 8px;
 }

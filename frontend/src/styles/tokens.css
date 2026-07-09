@@ -15,15 +15,22 @@
   --color-red-6: #f5222d;
   --color-grey-6: #aaaaaa;
 
-  /* 品牌 / 中性（现有散落 hex 的统一入口，供 F2 逐步替换） */
+  /* 品牌 / 中性（收敛散落 hex 的统一入口） */
   --ax-brand: #1a365d;
   --ax-text: #1e293b;
   --ax-text-secondary: #64748b;
+  --ax-text-tertiary: #475569;
   --ax-text-placeholder: #94a3b8;
+  --ax-text-disabled: #cbd5e1;
   --ax-border: #e2e8f0;
   --ax-bg: #ffffff;
+  --ax-bg-subtle: #f8fafc;
   --ax-bg-hover: #f1f5f9;
   --ax-bg-active: #e0ecff;
+
+  /* 语义状态色 */
+  --ax-success: #16a34a;
+  --ax-danger: #dc2626;
 
   /* 尺寸 */
   --ax-radius: 6px;

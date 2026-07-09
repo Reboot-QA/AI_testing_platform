@@ -255,7 +255,7 @@ onMounted(loadAll)
 }
 
 .tip {
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
 }
 
@@ -265,11 +265,11 @@ onMounted(loadAll)
 
 .time {
   font-size: 12px;
-  color: #475569;
+  color: var(--ax-text-tertiary);
   margin-left: 4px;
 }
 
 .muted {
-  color: #cbd5e1;
+  color: var(--ax-text-disabled);
 }
 </style>

@@ -12,8 +12,8 @@
     </div>
 
     <div v-for="(s, i) in stepEvents" :key="i" class="rp-step">
-      <el-icon v-if="s.status === 'passed'" color="#16a34a"><CircleCheck /></el-icon>
-      <el-icon v-else color="#dc2626"><CircleClose /></el-icon>
+      <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
+      <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
       <span class="rp-name">{{ s.index }}/{{ s.total }} {{ s.case_name }}</span>
       <span v-if="s.response_status" class="rp-meta">{{ s.response_status }}</span>
       <span v-if="s.duration_ms != null" class="rp-meta">{{ Math.round(s.duration_ms) }}ms</span>
@@ -41,10 +41,10 @@ const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
 <style scoped>
 .run-progress {
   margin-top: 12px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--ax-border);
   border-radius: 6px;
   padding: 10px 12px;
-  background: #f8fafc;
+  background: var(--ax-bg-subtle);
 }
 
 .rp-head {
@@ -52,7 +52,7 @@ const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-brand);
   margin-bottom: 8px;
 }
 
@@ -72,12 +72,12 @@ const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
 }
 
 .rp-meta {
-  color: #64748b;
+  color: var(--ax-text-secondary);
   font-size: 12px;
 }
 
 .rp-err {
-  color: #dc2626;
+  color: var(--ax-danger);
   font-size: 12px;
   max-width: 40%;
   overflow: hidden;
@@ -86,7 +86,7 @@ const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
 }
 
 .rp-err-line {
-  color: #dc2626;
+  color: var(--ax-danger);
   font-size: 13px;
   margin-top: 6px;
 }

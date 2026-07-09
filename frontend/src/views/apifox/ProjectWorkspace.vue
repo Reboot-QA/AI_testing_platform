@@ -72,6 +72,6 @@ watch(
 .ws-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-brand);
 }
 </style>
