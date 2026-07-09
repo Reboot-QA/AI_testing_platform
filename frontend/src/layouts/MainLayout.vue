@@ -21,10 +21,6 @@
           <el-icon><Folder /></el-icon>
           <span>项目管理</span>
         </el-menu-item>
-        <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox">
-          <el-icon><Grid /></el-icon>
-          <span>工作台</span>
-        </el-menu-item>
 
         <el-sub-menu v-if="showRequirementMenu" index="requirement_mgmt">
           <template #title>
@@ -65,6 +61,9 @@
             <el-icon><Connection /></el-icon>
             <span>接口自动化</span>
           </template>
+          <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox">
+            工作台
+          </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('api_automation_env')" index="/api-automation/env" data-assistant="menu.api_automation_env">
             环境配置
           </el-menu-item>
@@ -180,6 +179,7 @@ const showTestcaseMenu = computed(
 
 const showAutomationMenu = computed(
   () =>
+    userStore.hasPermission('apifox_workbench') ||
     userStore.hasPermission('api_automation_env') ||
     userStore.hasPermission('api_automation_suites') ||
     userStore.hasPermission('api_automation_reports') ||
@@ -206,6 +206,9 @@ const defaultOpeneds = computed(() => {
   const open = []
   if (route.path.startsWith('/system')) {
     open.push('system')
+  }
+  if (route.path.startsWith('/apifox')) {
+    open.push('api_automation_mgmt')
   }
   const submenu = SUBMENU_INDEX_BY_PATH[route.path]
   if (submenu) {

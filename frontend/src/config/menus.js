@@ -1,7 +1,6 @@
 export const MENU_DEFINITIONS = [
   { key: 'dashboard', label: '仪表盘', path: '/dashboard', group: 'business' },
   { key: 'projects', label: '项目管理', path: '/projects', group: 'business' },
-  { key: 'apifox_workbench', label: '工作台', path: '/apifox', group: 'business' },
   {
     key: 'requirement_docs',
     label: 'AI分析需求',
@@ -41,6 +40,14 @@ export const MENU_DEFINITIONS = [
     group: 'business',
     parent: 'testcase_mgmt',
     parentLabel: '用例管理',
+  },
+  {
+    key: 'apifox_workbench',
+    label: '工作台',
+    path: '/apifox',
+    group: 'business',
+    parent: 'api_automation_mgmt',
+    parentLabel: '接口自动化',
   },
   {
     key: 'api_automation_env',
@@ -125,6 +132,7 @@ export const BUSINESS_MENU_GROUPS = [
 ]
 
 export const SUBMENU_INDEX_BY_PATH = {
+  '/apifox': 'api_automation_mgmt',
   '/requirement-docs': 'requirement_mgmt',
   '/requirements': 'requirement_mgmt',
   '/testcases': 'testcase_mgmt',
