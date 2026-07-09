@@ -113,7 +113,7 @@ AI质量平台 - 一键部署脚本
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
-  monitoring      Grafana + Loki 监控栈 (start|stop|restart|status|logs|debug)
+  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|status|logs|debug)
   docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
 
 环境变量:
@@ -1269,6 +1269,7 @@ monitoring_env() {
   export GRAFANA_ADMIN_USER
   export GRAFANA_ADMIN_PASSWORD
   export GRAFANA_ROOT_URL="${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}"
+  export GRAFANA_ANONYMOUS_ENABLED="${GRAFANA_ANONYMOUS_ENABLED:-true}"
 }
 
 monitoring_validate() {
@@ -1375,6 +1376,15 @@ monitoring_restart() {
   monitoring_start
 }
 
+monitoring_recreate_grafana() {
+  require_docker
+  monitoring_write_env
+  cd "$MONITORING_DIR"
+  info "重建 Grafana 容器（应用最新配置）..."
+  docker compose up -d --force-recreate grafana
+  ok "Grafana 已重建: ${GRAFANA_ROOT_URL:-http://127.0.0.1:${GRAFANA_PORT}}"
+}
+
 monitoring_status() {
   require_docker
   monitoring_write_env
@@ -1470,12 +1480,13 @@ monitoring_main() {
     start) monitoring_start ;;
     stop) monitoring_stop ;;
     restart) monitoring_restart ;;
+    recreate-grafana) monitoring_recreate_grafana ;;
     status) monitoring_status ;;
     logs) monitoring_logs "${2:-100}" ;;
     debug) monitoring_debug ;;
     *)
       error "未知 monitoring 子命令: $action"
-      echo "用法: $0 monitoring [start|stop|restart|status|logs|debug]"
+      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|status|logs|debug]"
       exit 1
       ;;
   esac
