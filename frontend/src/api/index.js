@@ -275,6 +275,12 @@ export const apifoxApi = {
   updateGlobalVar: (gid, data) => request.put(`/apifox/global-variables/${gid}`, data),
   deleteGlobalVar: (gid) => request.delete(`/apifox/global-variables/${gid}`),
   setGlobalVarLocal: (gid, local_value) => request.put(`/apifox/global-variables/${gid}/local`, { local_value }),
+
+  listCases: (eid) => request.get(`/apifox/endpoints/${eid}/cases`),
+  getCase: (cid) => request.get(`/apifox/cases/${cid}`),
+  createCase: (eid, data) => request.post(`/apifox/endpoints/${eid}/cases`, data),
+  updateCase: (cid, data) => request.put(`/apifox/cases/${cid}`, data),
+  deleteCase: (cid) => request.delete(`/apifox/cases/${cid}`),
 }
 
 export const testExecutionApi = {

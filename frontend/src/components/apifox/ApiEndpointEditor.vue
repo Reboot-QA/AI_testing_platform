@@ -1,13 +1,15 @@
 <template>
   <div class="editor">
-    <div class="row1">
-      <el-select v-model="form.method" style="width: 110px">
-        <el-option v-for="m in METHODS" :key="m" :label="m" :value="m" />
-      </el-select>
-      <el-input v-model="form.path" placeholder="/path/to/api" />
-      <el-button type="primary" :loading="saving" @click="$emit('save')">保存</el-button>
-    </div>
-    <el-input v-model="form.name" placeholder="接口名称" class="name-input" />
+    <template v-if="showMeta">
+      <div class="row1">
+        <el-select v-model="form.method" style="width: 110px">
+          <el-option v-for="m in METHODS" :key="m" :label="m" :value="m" />
+        </el-select>
+        <el-input v-model="form.path" placeholder="/path/to/api" />
+        <el-button type="primary" :loading="saving" @click="$emit('save')">保存</el-button>
+      </div>
+      <el-input v-model="form.name" placeholder="接口名称" class="name-input" />
+    </template>
 
     <el-tabs v-model="activeTab" class="spec-tabs">
       <el-tab-pane label="Params" name="params">
@@ -65,6 +67,7 @@ import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
+  showMeta: { type: Boolean, default: true },
 })
 defineEmits(['save'])
 
