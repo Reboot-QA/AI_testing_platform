@@ -9,12 +9,15 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import httpx
 from sqlalchemy.orm import Session
 
+from app.models.apifox.data_model import ApifoxSchema
 from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
 from app.repositories.apifox import endpoint_repo as repo
+from app.repositories.apifox import schema_repo
 from app.routers.apifox.schemas import AuthSpec, BodySpec, KvRow, RequestSpec
 
 HTTP_METHODS = ("get", "post", "put", "delete", "patch")
 _MAX_SCHEMA_DEPTH = 3
+_MAX_MODEL_DEPTH = 6
 
 
 def fetch_openapi(url: str) -> Dict[str, Any]:
@@ -86,6 +89,49 @@ def _skeleton(doc: Dict[str, Any], schema: Optional[Dict[str, Any]], depth: int 
     if schema_type == "boolean":
         return False
     return ""
+
+
+def _expand_schema(doc: Dict[str, Any], schema: Optional[Dict[str, Any]],
+                   depth: int = 0, seen: Optional[Set[str]] = None) -> Dict[str, Any]:
+    """把 OpenAPI schema 展开成纯 JSON Schema 结构（$ref 就地内联；防循环+深度护栏）。
+
+    与 _skeleton 不同：这里保留的是 type/properties/items/required 等**结构**（供数据模型编辑器渲染），
+    而非示例值。循环引用或超深处降级为 {type: object}。
+    """
+    if not isinstance(schema, dict) or depth > _MAX_MODEL_DEPTH:
+        return {"type": "object"}
+    seen = set(seen or ())
+
+    ref = schema.get("$ref")
+    if ref:
+        if ref in seen:
+            return {"type": "object"}
+        target = _resolve_ref(doc, schema, set())
+        return _expand_schema(doc, target, depth, seen | {ref})
+
+    out: Dict[str, Any] = {}
+    for key in ("description", "format", "enum", "default"):
+        if key in schema:
+            out[key] = schema[key]
+
+    schema_type = schema.get("type")
+    if schema_type == "object" or "properties" in schema:
+        out["type"] = "object"
+        out["properties"] = {
+            str(key): _expand_schema(doc, prop, depth + 1, seen)
+            for key, prop in (schema.get("properties") or {}).items()
+        }
+        if isinstance(schema.get("required"), list):
+            out["required"] = schema["required"]
+    elif schema_type == "array":
+        out["type"] = "array"
+        out["items"] = _expand_schema(doc, schema.get("items") or {}, depth + 1, seen)
+    elif schema_type:
+        out["type"] = schema_type
+    else:
+        # allOf/oneOf/anyOf 等组合或空 schema：降级为 object（不深入合并）
+        out["type"] = "object"
+    return out
 
 
 def _param_value(doc: Dict[str, Any], param: Dict[str, Any]) -> str:
@@ -209,10 +255,36 @@ def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[st
         existing.add((item["method"], item["path"]))
         created += 1
 
+    schemas_created = _import_schemas(db, project_id, doc)
+
     db.commit()
     return {
         "total": len(parsed),
         "created": created,
         "skipped": skipped,
         "folders_created": folders_created,
+        "schemas_created": schemas_created,
     }
+
+
+def _import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
+    """把 components/schemas 导入为数据模型（同名去重不覆盖；$ref 就地展开）。"""
+    components_schemas = (doc.get("components") or {}).get("schemas") or {}
+    if not isinstance(components_schemas, dict):
+        return 0
+    existing_names = {s.name for s in schema_repo.list_schemas(db, project_id)}
+    schemas_created = 0
+    for name, schema_def in components_schemas.items():
+        safe_name = str(name)[:200]
+        if not isinstance(schema_def, dict) or safe_name in existing_names:
+            continue
+        expanded = _expand_schema(doc, schema_def)
+        schema_repo.add(db, ApifoxSchema(
+            project_id=project_id,
+            name=safe_name,
+            json_schema=json.dumps(expanded, ensure_ascii=False, indent=2),
+            description=schema_def.get("description"),
+        ))
+        existing_names.add(safe_name)
+        schemas_created += 1
+    return schemas_created

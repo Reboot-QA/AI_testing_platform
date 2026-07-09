@@ -25,6 +25,7 @@ class ImportReport(BaseModel):
     created: int
     skipped: int
     folders_created: int
+    schemas_created: int = 0
 
 
 @router.post("/projects/{pid}/import/openapi", response_model=ImportReport)
