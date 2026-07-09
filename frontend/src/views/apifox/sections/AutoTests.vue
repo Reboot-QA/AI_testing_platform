@@ -1,5 +1,12 @@
 <template>
-  <div class="auto-tests">
+  <div>
+    <el-radio-group v-model="section" size="small" class="section-switch">
+      <el-radio-button value="cases">单接口用例</el-radio-button>
+      <el-radio-button value="scenarios">场景用例</el-radio-button>
+    </el-radio-group>
+
+    <ScenarioPanel v-if="section === 'scenarios'" class="auto-tests" />
+    <div v-else class="auto-tests">
     <div class="list-panel">
       <div class="field">
         <span class="lbl">接口</span>
@@ -38,6 +45,7 @@
       <CaseEditor v-if="form.id" :form="form" :saving="saving" :scripts="scripts" @save="saveCase" />
       <el-empty v-else description="选择接口后新建/选择用例" />
     </div>
+    </div>
   </div>
 </template>
 
@@ -48,10 +56,12 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
+import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
+const section = ref('cases')
 const endpoints = ref([])
 const selectedEndpointId = ref(null)
 const cases = ref([])
@@ -167,10 +177,14 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.section-switch {
+  margin-bottom: 12px;
+}
+
 .auto-tests {
   display: flex;
   gap: 16px;
-  height: calc(100vh - 220px);
+  height: calc(100vh - 260px);
 }
 
 .list-panel {
