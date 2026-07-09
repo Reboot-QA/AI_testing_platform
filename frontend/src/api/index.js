@@ -305,6 +305,54 @@ export const apifoxApi = {
   createScenario: (pid, data) => request.post(`/apifox/projects/${pid}/scenarios`, data),
   updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
+
+  listRuns: (pid) => request.get(`/apifox/projects/${pid}/runs`),
+  getRun: (rid) => request.get(`/apifox/runs/${rid}`),
+  runCaseStream: (cid, environmentId, onEvent, options = {}) =>
+    apifoxRunStream(`/api/v1/apifox/cases/${cid}/run/stream`, environmentId, onEvent, options),
+  runScenarioStream: (sid, environmentId, onEvent, options = {}) =>
+    apifoxRunStream(`/api/v1/apifox/scenarios/${sid}/run/stream`, environmentId, onEvent, options),
+}
+
+function apifoxRunStream(url, environmentId, onEvent, options = {}) {
+  const token = localStorage.getItem('token')
+  const query = environmentId ? `?environment_id=${environmentId}` : ''
+  return fetch(`${url}${query}`, {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    signal: options.signal,
+  }).then(async (response) => {
+    if (!response.ok) {
+      let message = '请求失败'
+      try {
+        const body = await response.json()
+        message = body.detail || message
+      } catch {
+        // ignore parse error
+      }
+      throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
+    }
+
+    const reader = response.body.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const chunks = buffer.split('\n\n')
+      buffer = chunks.pop() || ''
+      for (const chunk of chunks) {
+        const line = chunk.trim()
+        if (!line.startsWith('data:')) continue
+        const event = JSON.parse(line.slice(5).trim())
+        onEvent(event)
+      }
+    }
+  })
 }
 
 export const testExecutionApi = {
