@@ -10,6 +10,7 @@ from app.models.department import Department
 from app.models.project import Project
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.user import User
+from app.models.workbench.tenant import Organization, OrgMember, Team
 from app.schemas import (
     MenuDefinitionOut,
     UserCreateByAdmin,
@@ -25,6 +26,11 @@ from app.services.permission_service import (
     list_menu_definitions,
     set_user_menu_keys,
 )
+from app.services.workbench.membership_service import (
+    ASSIGNABLE_ORG_ROLES,
+    bind_user_to_tenant,
+    unbind_user_tenant,
+)
 
 ALLOWED_ROLES = {"admin", "tester"}
 
@@ -36,6 +42,23 @@ def _user_out(user: User, db: Session) -> UserOut:
     if not department_name and user.department_id:
         department = db.query(Department).filter(Department.id == user.department_id).first()
         department_name = department.name if department else ""
+
+    organization_name = ""
+    org_role = None
+    if user.organization_id:
+        org = db.query(Organization).filter(Organization.id == user.organization_id).first()
+        organization_name = org.name if org else ""
+        member = (
+            db.query(OrgMember)
+            .filter(OrgMember.org_id == user.organization_id, OrgMember.user_id == user.id)
+            .first()
+        )
+        org_role = member.role if member else None
+    team_name = ""
+    if user.team_id:
+        team = db.query(Team).filter(Team.id == user.team_id).first()
+        team_name = team.name if team else ""
+
     return UserOut(
         id=user.id,
         username=user.username,
@@ -45,6 +68,11 @@ def _user_out(user: User, db: Session) -> UserOut:
         is_active=user.is_active,
         department_id=user.department_id,
         department_name=department_name,
+        organization_id=user.organization_id,
+        organization_name=organization_name,
+        team_id=user.team_id,
+        team_name=team_name,
+        org_role=org_role,
         created_at=user.created_at,
         menu_permissions=get_user_menu_keys(db, user),
     )
@@ -55,6 +83,12 @@ def _validate_department_id(db: Session, department_id: Optional[int]) -> None:
         return
     if not db.query(Department).filter(Department.id == department_id).first():
         raise HTTPException(status_code=400, detail="所选部门不存在")
+
+
+def _validate_org_role(org_role: Optional[str]) -> None:
+    """建号/改号表单只允许分配 admin/member；owner 不经表单分配。"""
+    if org_role is not None and org_role not in ASSIGNABLE_ORG_ROLES:
+        raise HTTPException(status_code=400, detail="无效的组织角色")
 
 
 @router.get("/menus", response_model=List[MenuDefinitionOut])
@@ -81,6 +115,7 @@ def create_user(
     if data.email and db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="邮箱已存在")
     _validate_department_id(db, data.department_id)
+    _validate_org_role(data.org_role)
 
     user = User(
         username=data.username,
@@ -96,6 +131,13 @@ def create_user(
     ensure_default_permissions(db, user)
     if data.menu_permissions is not None and user.role != "admin":
         set_user_menu_keys(db, user.id, data.menu_permissions)
+    try:
+        bind_user_to_tenant(db, user, data.organization_id, data.team_id, data.org_role)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    db.refresh(user)
     return _user_out(user, db)
 
 
@@ -135,6 +177,32 @@ def update_user(
     if "department_id" in data.model_fields_set:
         _validate_department_id(db, data.department_id)
         user.department_id = data.department_id
+
+    tenant_fields = {"organization_id", "team_id", "org_role"} & data.model_fields_set
+    if tenant_fields:
+        _validate_org_role(data.org_role)
+        org_id = (
+            data.organization_id
+            if "organization_id" in data.model_fields_set
+            else user.organization_id
+        )
+        team_id = data.team_id if "team_id" in data.model_fields_set else user.team_id
+        if "org_role" in data.model_fields_set:
+            role = data.org_role
+        else:
+            # 未改角色则沿用现有组织角色（保留 owner 等），缺省 member
+            current = (
+                db.query(OrgMember)
+                .filter(OrgMember.org_id == org_id, OrgMember.user_id == user.id)
+                .first()
+                if org_id
+                else None
+            )
+            role = current.role if current else "member"
+        try:
+            bind_user_to_tenant(db, user, org_id, team_id, role)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     db.commit()
     db.refresh(user)
@@ -183,6 +251,7 @@ def delete_user(
         {ManualTestRunCase.executed_by: None},
         synchronize_session=False,
     )
+    unbind_user_tenant(db, user_id)
 
     db.delete(user)
     db.commit()
