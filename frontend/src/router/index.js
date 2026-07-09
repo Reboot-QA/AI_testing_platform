@@ -61,9 +61,34 @@ const routes = [
         component: () => import('@/views/TestExecution.vue'),
         meta: { permission: 'test_execution' },
       },
-      // 旧接口自动化模块已由 apifox 工作台承接，软下线：旧路径统一重定向到新工作台。
-      { path: 'api-automation', redirect: '/apifox' },
-      { path: 'api-automation/:pathMatch(.*)*', redirect: '/apifox' },
+      {
+        path: 'api-automation',
+        redirect: '/api-automation/suites',
+      },
+      {
+        path: 'api-automation/env',
+        name: 'ApiAutomationEnv',
+        component: () => import('@/views/ApiAutomation.vue'),
+        meta: { permission: 'api_automation_env', apiTab: 'env' },
+      },
+      {
+        path: 'api-automation/suites',
+        name: 'ApiAutomationSuites',
+        component: () => import('@/views/ApiAutomation.vue'),
+        meta: { permission: 'api_automation_suites', apiTab: 'suite' },
+      },
+      {
+        path: 'api-automation/reports',
+        name: 'ApiAutomationReports',
+        component: () => import('@/views/ApiAutomation.vue'),
+        meta: { permission: 'api_automation_reports', apiTab: 'report' },
+      },
+      {
+        path: 'api-automation/schedule',
+        name: 'ApiAutomationSchedule',
+        component: () => import('@/views/ApiAutomation.vue'),
+        meta: { permission: 'api_automation_schedule', apiTab: 'schedule' },
+      },
       {
         path: 'apifox',
         name: 'ApifoxWorkbench',
