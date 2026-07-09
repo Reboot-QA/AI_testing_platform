@@ -8,6 +8,9 @@
         <el-button size="small" type="primary" @click="addEndpoint">
           <el-icon><Plus /></el-icon> 接口
         </el-button>
+        <el-button size="small" @click="importVisible = true">
+          <el-icon><Download /></el-icon> 导入
+        </el-button>
       </div>
       <el-tree
         :data="treeData"
@@ -36,6 +39,8 @@
       <ApiEndpointEditor v-if="form.id" :form="form" :saving="saving" @save="saveEndpoint" />
       <el-empty v-else description="选择或新建一个接口开始编辑" />
     </div>
+
+    <ImportDialog v-model:visible="importVisible" :project-id="pid" @imported="loadAll" />
   </div>
 </template>
 
@@ -46,6 +51,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
+import ImportDialog from '@/components/apifox/ImportDialog.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -54,6 +60,7 @@ const folders = ref([])
 const endpoints = ref([])
 const selectedFolderId = ref(null)
 const saving = ref(false)
+const importVisible = ref(false)
 
 const form = reactive({ id: null, name: '', method: 'GET', path: '', description: '', request_spec: emptySpec() })
 
