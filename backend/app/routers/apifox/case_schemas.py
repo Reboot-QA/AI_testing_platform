@@ -37,6 +37,18 @@ class DataDrive(BaseModel):
     rows: List[DataDriveRow] = Field(default_factory=list)
 
 
+class CaseScriptRef(BaseModel):
+    """用例前后置对项目脚本库的引用。"""
+
+    script_id: int
+    enabled: bool = True
+
+
+class CaseScriptOut(CaseScriptRef):
+    script_name: str = ""
+    script_lang: str = ""
+
+
 class CaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
@@ -44,6 +56,8 @@ class CaseCreate(BaseModel):
     data_drive: DataDrive = Field(default_factory=DataDrive)
     assertions: List[AssertionRow] = Field(default_factory=list)
     extracts: List[ExtractRow] = Field(default_factory=list)
+    pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    post_scripts: List[CaseScriptRef] = Field(default_factory=list)
 
 
 class CaseUpdate(BaseModel):
@@ -53,6 +67,8 @@ class CaseUpdate(BaseModel):
     data_drive: Optional[DataDrive] = None
     assertions: Optional[List[AssertionRow]] = None
     extracts: Optional[List[ExtractRow]] = None
+    pre_scripts: Optional[List[CaseScriptRef]] = None
+    post_scripts: Optional[List[CaseScriptRef]] = None
     sort_order: Optional[int] = None
 
 
@@ -73,6 +89,8 @@ class CaseOut(BaseModel):
     data_drive: DataDrive
     assertions: List[AssertionRow]
     extracts: List[ExtractRow]
+    pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
+    post_scripts: List[CaseScriptOut] = Field(default_factory=list)
     sort_order: int
     created_at: datetime
     updated_at: datetime
