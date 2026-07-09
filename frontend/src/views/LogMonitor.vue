@@ -358,6 +358,17 @@ const originParams = () => ({
   public_origin: window.location.origin,
 })
 
+const GRAFANA_PROXY_PREFIX = '/api/v1/logs/grafana'
+
+function buildGrafanaProxyUrl(redirect) {
+  const path = redirect.startsWith('/') ? redirect : `/${redirect}`
+  return `${window.location.origin}${GRAFANA_PROXY_PREFIX}${path}`
+}
+
+async function ensureGrafanaSession() {
+  await logsApi.grafanaSession()
+}
+
 async function loadIntegrations() {
   integrationLoading.value = true
   try {
@@ -365,11 +376,8 @@ async function loadIntegrations() {
     embedUrl.value = ''
     if (integrations.value.monitoring_online && integrations.value.embed_url) {
       if (integrations.value.use_proxy) {
-        const launch = await logsApi.grafanaLaunch(
-          { redirect: integrations.value.embed_url },
-          originParams(),
-        )
-        embedUrl.value = launch.url
+        await ensureGrafanaSession()
+        embedUrl.value = buildGrafanaProxyUrl(integrations.value.embed_url)
       } else {
         embedUrl.value = integrations.value.embed_url
       }
@@ -382,8 +390,8 @@ async function loadIntegrations() {
 async function openGrafana(redirect) {
   if (!redirect) return
   if (integrations.value.use_proxy) {
-    const { url } = await logsApi.grafanaLaunch({ redirect }, originParams())
-    window.open(url, '_blank', 'noopener,noreferrer')
+    await ensureGrafanaSession()
+    window.open(buildGrafanaProxyUrl(redirect), '_blank', 'noopener,noreferrer')
     return
   }
   window.open(redirect, '_blank', 'noopener,noreferrer')

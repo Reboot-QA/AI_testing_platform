@@ -1,13 +1,14 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from app.auth import get_current_admin
 from app.models.user import User
 from app.schemas import GrafanaLaunchIn
 from app.services import log_service
 from app.services.grafana_proxy_service import (
+    attach_grafana_session,
     build_enter_response,
     build_launch_url,
     build_public_origin,
@@ -35,6 +36,16 @@ def log_integrations(
     return get_integration_status(public_host=host or None, public_origin=origin)
 
 
+@router.post("/grafana/session")
+def grafana_session(current_user: User = Depends(get_current_admin)):
+    response = JSONResponse({"ok": True})
+    attach_grafana_session(
+        response,
+        {"user_id": current_user.id, "username": current_user.username, "role": current_user.role},
+    )
+    return response
+
+
 @router.post("/grafana/launch")
 def grafana_launch(
     body: GrafanaLaunchIn,
@@ -57,7 +68,11 @@ def grafana_enter(token: str = Query(..., min_length=8), redirect: str = Query("
 async def grafana_proxy(request: Request, path: str = ""):
     user_ctx = resolve_user_from_cookie(request)
     if not user_ctx:
-        raise HTTPException(status_code=401, detail="请从平台「日志监控」页面打开 Grafana")
+        raise HTTPException(
+            status_code=401,
+            detail="请从平台「日志监控」页面打开 Grafana",
+            headers={"X-Grafana-Proxy": "auth-required"},
+        )
     return await proxy_to_grafana(path, request, user_ctx)
 
 

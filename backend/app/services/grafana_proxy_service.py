@@ -107,13 +107,8 @@ def build_launch_url(origin: str, user_id: int, username: str, role: str, redire
     )
 
 
-def build_enter_response(token: str, redirect: str) -> RedirectResponse:
-    user_ctx = consume_launch_token(token)
-    redirect_path = redirect if redirect.startswith("/") else f"/{redirect}"
-    if not redirect_path.startswith("/"):
-        redirect_path = f"/{redirect_path}"
+def attach_grafana_session(response: Response, user_ctx: dict) -> None:
     session = create_session_cookie(user_ctx)
-    response = RedirectResponse(url=f"{GRAFANA_PROXY_PREFIX}{redirect_path}")
     response.set_cookie(
         COOKIE_NAME,
         session,
@@ -122,11 +117,30 @@ def build_enter_response(token: str, redirect: str) -> RedirectResponse:
         path=GRAFANA_PROXY_PREFIX,
         samesite="lax",
     )
+
+
+def build_enter_response(token: str, redirect: str) -> RedirectResponse:
+    user_ctx = consume_launch_token(token)
+    redirect_path = redirect if redirect.startswith("/") else f"/{redirect}"
+    if not redirect_path.startswith("/"):
+        redirect_path = f"/{redirect_path}"
+    response = RedirectResponse(url=f"{GRAFANA_PROXY_PREFIX}{redirect_path}")
+    attach_grafana_session(response, user_ctx)
     return response
 
 
 def _grafana_role(platform_role: str) -> str:
     return "Admin" if platform_role == "admin" else "Viewer"
+
+
+def _rewrite_grafana_location(value: str) -> str:
+    upstream_base = resolve_grafana_upstream().rstrip("/")
+    if value.startswith(upstream_base):
+        suffix = value[len(upstream_base) :] or "/"
+        return f"{GRAFANA_PROXY_PREFIX}{suffix}"
+    if value.startswith("/"):
+        return f"{GRAFANA_PROXY_PREFIX}{value}"
+    return value
 
 
 async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Response:
@@ -151,10 +165,14 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
         logger.warning("Grafana 代理失败: %s", exc)
         raise HTTPException(status_code=502, detail="无法连接 Grafana，请确认监控栈已启动") from exc
 
-    response_headers = {
-        key: value
-        for key, value in upstream.headers.items()
-        if key.lower() not in HOP_BY_HOP_HEADERS
-        and key.lower() not in {"x-frame-options", "content-security-policy"}
-    }
+    response_headers = {}
+    for key, value in upstream.headers.items():
+        lower = key.lower()
+        if lower in HOP_BY_HOP_HEADERS:
+            continue
+        if lower in {"x-frame-options", "content-security-policy"}:
+            continue
+        if lower == "location":
+            value = _rewrite_grafana_location(value)
+        response_headers[key] = value
     return Response(content=upstream.content, status_code=upstream.status_code, headers=response_headers)
