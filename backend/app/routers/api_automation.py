@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
-from app.database import get_db
+from app.database import SessionLocal, get_db
 from app.services.api_run_maintenance import after_api_test_runs_deleted
 from app.services.api_run_export_service import (
     build_content_disposition,
@@ -1272,10 +1272,16 @@ def run_suite(
 @router.post("/suites/{suite_id}/run/stream")
 def run_suite_stream(
     suite_id: int,
-    db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    suite = _get_owned_executable_suite(db, suite_id, current_user)
+    db = SessionLocal()
+    try:
+        _get_owned_executable_suite(db, suite_id, current_user)
+        triggered_by = current_user.username
+    except HTTPException:
+        raise
+    finally:
+        db.close()
 
     def event_generator():
         stream_db = SessionLocal()
@@ -1284,7 +1290,7 @@ def run_suite_stream(
             if not stream_suite:
                 yield _sse_event({"type": "error", "message": "测试套件不存在"})
                 return
-            for event in iter_api_suite_run(stream_db, stream_suite, triggered_by=current_user.username):
+            for event in iter_api_suite_run(stream_db, stream_suite, triggered_by=triggered_by):
                 yield _sse_event(event)
         except ValueError as exc:
             yield _sse_event({"type": "error", "message": str(exc)})
@@ -1293,7 +1299,15 @@ def run_suite_stream(
         finally:
             stream_db.close()
 
-    return StreamingResponse(event_generator(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/runs", response_model=Union[List[ApiTestRunSummaryOut], ApiTestRunPageOut])
