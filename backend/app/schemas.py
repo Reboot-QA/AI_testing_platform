@@ -31,7 +31,15 @@ class UserBase(BaseModel):
         return value
 
 
-class UserCreate(UserBase):
+class OrgBindIn(BaseModel):
+    """建号/改号时的租户绑定输入（组织必、团队为归属标签可空、组织角色可空）。"""
+
+    organization_id: Optional[int] = None
+    team_id: Optional[int] = None
+    org_role: Optional[str] = None
+
+
+class UserCreate(UserBase, OrgBindIn):
     password: str = Field(min_length=6)
 
 
@@ -45,6 +53,11 @@ class UserOut(UserBase):
     is_active: bool
     department_id: Optional[int] = None
     department_name: str = ""
+    organization_id: Optional[int] = None
+    organization_name: str = ""
+    team_id: Optional[int] = None
+    team_name: str = ""
+    org_role: Optional[str] = None
     created_at: datetime
     menu_permissions: List[str] = []
 
@@ -52,13 +65,13 @@ class UserOut(UserBase):
         from_attributes = True
 
 
-class UserCreateByAdmin(UserBase):
+class UserCreateByAdmin(UserBase, OrgBindIn):
     password: str = Field(min_length=6)
     department_id: Optional[int] = None
     menu_permissions: Optional[List[str]] = None
 
 
-class UserUpdate(BaseModel):
+class UserUpdate(OrgBindIn):
     email: Optional[EmailStr] = None
     full_name: Optional[str] = None
     role: Optional[str] = None

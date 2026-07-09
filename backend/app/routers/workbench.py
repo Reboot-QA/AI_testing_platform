@@ -15,7 +15,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.project import Project
 from app.models.user import User
-from app.models.workbench.tenant import OrgMember, ProjectMember, Team
+from app.models.workbench.tenant import Organization, OrgMember, ProjectMember, Team
 from app.services.workbench.access_service_v2 import (
     check_project_access,
     effective_role,
@@ -151,3 +151,36 @@ def _members(db: Session, project: Project) -> List[MemberOut]:
         )
 
     return list(result.values())
+
+
+# ---------- 组织 / 团队（会员管理建号下拉用；登录可见） ----------
+class OrgBrief(BaseModel):
+    id: int
+    name: str
+
+
+class TeamBrief(BaseModel):
+    id: int
+    name: str
+    org_id: int
+
+
+@router.get("/orgs", response_model=List[OrgBrief])
+def list_orgs(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """组织列表（建号时选择会员从属组织）。"""
+    orgs = db.query(Organization).order_by(Organization.id).all()
+    return [OrgBrief(id=o.id, name=o.name) for o in orgs]
+
+
+@router.get("/orgs/{org_id}/teams", response_model=List[TeamBrief])
+def list_org_teams(
+    org_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """某组织下的团队列表（建号时选择会员从属团队）。"""
+    teams = db.query(Team).filter(Team.org_id == org_id).order_by(Team.id).all()
+    return [TeamBrief(id=t.id, name=t.name, org_id=t.org_id) for t in teams]

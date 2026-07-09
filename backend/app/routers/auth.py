@@ -7,6 +7,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas import Token, UserCreate, UserOut
 from app.services.permission_service import ensure_default_permissions, get_user_menu_keys
+from app.services.workbench.membership_service import ASSIGNABLE_ORG_ROLES, bind_user_to_tenant
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -22,6 +23,9 @@ def register(
     if user_in.email and db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="邮箱已存在")
 
+    if user_in.org_role is not None and user_in.org_role not in ASSIGNABLE_ORG_ROLES:
+        raise HTTPException(status_code=400, detail="无效的组织角色")
+
     user = User(
         username=user_in.username,
         email=user_in.email,
@@ -33,6 +37,12 @@ def register(
     db.commit()
     db.refresh(user)
     ensure_default_permissions(db, user)
+    try:
+        bind_user_to_tenant(db, user, user_in.organization_id, user_in.team_id, user_in.org_role)
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
     return _build_user_out(user, db)
 
 

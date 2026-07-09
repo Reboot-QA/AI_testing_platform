@@ -244,6 +244,11 @@ export const userApi = {
     request.put(`/users/${id}/permissions`, { menu_permissions }),
 }
 
+export const workbenchApi = {
+  listOrgs: () => request.get('/workbench/orgs'),
+  listOrgTeams: (orgId) => request.get(`/workbench/orgs/${orgId}/teams`),
+}
+
 export const testExecutionApi = {
   listRuns: (projectId) =>
     request.get('/test-executions', { params: { project_id: projectId } }),
