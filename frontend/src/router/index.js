@@ -116,7 +116,7 @@ const routes = [
           {
             path: 'tests',
             name: 'ApifoxTests',
-            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            component: () => import('@/views/apifox/sections/AutoTests.vue'),
             meta: { permission: 'apifox_workbench', sectionTitle: '自动化测试' },
           },
           {
