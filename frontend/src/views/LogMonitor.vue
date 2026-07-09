@@ -125,13 +125,13 @@
           </el-row>
 
           <div class="grafana-actions">
-            <el-button type="primary" :disabled="!integrations.dashboard_url" @click="openUrl(integrations.dashboard_url)">
+            <el-button type="primary" :disabled="!integrations.grafana_online" @click="openGrafana(integrations.dashboard_url)">
               打开 Grafana 仪表盘
             </el-button>
-            <el-button :disabled="!integrations.explore_url" @click="openUrl(integrations.explore_url)">
+            <el-button :disabled="!integrations.grafana_online" @click="openGrafana(integrations.explore_url)">
               打开 Explore 查询
             </el-button>
-            <el-button :disabled="!integrations.grafana_url" @click="openUrl(integrations.grafana_url)">
+            <el-button :disabled="!integrations.grafana_online" @click="openGrafana(integrations.use_proxy ? '/' : integrations.grafana_url)">
               打开 Grafana 控制台
             </el-button>
           </div>
@@ -147,16 +147,16 @@
             <template #default>
               <p>在 Linux 服务器上执行以下命令启动 Grafana + Loki + Promtail：</p>
               <pre class="setup-code">{{ integrations.startup_hint || './deploy.sh monitoring start' }}</pre>
-              <p v-if="integrations.anonymous_access">从本平台打开 Grafana 将自动以只读身份进入，无需输入密码。</p>
-              <p v-else>Grafana 管理账号见服务器 <code>.env.docker</code> 中的 GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD。</p>
+              <p v-if="integrations.use_proxy">从本平台打开 Grafana 将通过平台账号自动登录，无需输入 Grafana 密码。</p>
+              <p v-else-if="integrations.anonymous_access">从本平台打开 Grafana 将自动以只读身份进入，无需输入密码。</p>
               <p>详细说明见项目目录 <code>monitoring/README.md</code></p>
             </template>
           </el-alert>
 
           <iframe
-            v-if="showEmbed && integrations.embed_url"
+            v-if="showEmbed && embedUrl"
             class="grafana-embed"
-            :src="integrations.embed_url"
+            :src="embedUrl"
             title="Grafana Dashboard"
           />
         </el-card>
@@ -187,6 +187,7 @@ const integrationLoading = ref(false)
 const integrations = ref({
   enabled: true,
   embed_enabled: true,
+  use_proxy: true,
   grafana_url: '',
   loki_url: '',
   dashboard_url: '',
@@ -195,16 +196,17 @@ const integrations = ref({
   grafana_online: false,
   loki_online: false,
   monitoring_online: false,
-  anonymous_access: true,
-  startup_hint: './deploy.sh monitoring start',
+  anonymous_access: false,
+  startup_hint: './deploy.sh monitoring recreate-grafana',
 })
+const embedUrl = ref('')
 
 let streamAbort = null
 let refreshTimer = null
 let integrationTimer = null
 
 const showEmbed = computed(
-  () => integrations.value.embed_enabled && integrations.value.monitoring_online && integrations.value.embed_url
+  () => integrations.value.embed_enabled && integrations.value.monitoring_online && embedUrl.value
 )
 
 const sourceOptions = computed(() =>
@@ -357,14 +359,28 @@ async function loadIntegrations() {
     integrations.value = await logsApi.integrations({
       public_host: window.location.hostname,
     })
+    embedUrl.value = ''
+    if (integrations.value.monitoring_online && integrations.value.embed_url) {
+      if (integrations.value.use_proxy) {
+        const launch = await logsApi.grafanaLaunch({ redirect: integrations.value.embed_url })
+        embedUrl.value = launch.url
+      } else {
+        embedUrl.value = integrations.value.embed_url
+      }
+    }
   } finally {
     integrationLoading.value = false
   }
 }
 
-function openUrl(url) {
-  if (!url) return
-  window.open(url, '_blank', 'noopener,noreferrer')
+async function openGrafana(redirect) {
+  if (!redirect) return
+  if (integrations.value.use_proxy) {
+    const { url } = await logsApi.grafanaLaunch({ redirect })
+    window.open(url, '_blank', 'noopener,noreferrer')
+    return
+  }
+  window.open(redirect, '_blank', 'noopener,noreferrer')
 }
 
 onMounted(async () => {

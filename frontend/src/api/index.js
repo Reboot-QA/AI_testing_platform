@@ -358,6 +358,7 @@ export const logsApi = {
   sources: () => request.get('/logs/sources'),
   tail: (params = {}) => request.get('/logs/tail', { params }),
   integrations: (params = {}) => request.get('/logs/integrations', { params }),
+  grafanaLaunch: (data) => request.post('/logs/grafana/launch', data),
 }
 
 export default request
