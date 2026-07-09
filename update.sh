@@ -22,7 +22,7 @@ error() { echo -e "\033[0;31m[ERR ]\033[0m $*" >&2; exit 1; }
 
 fix_scripts() {
   local f
-  for f in update.sh linux-deploy.sh deploy.sh install-server.sh jenkins/install.sh jenkins/fix-app-permissions.sh jenkins/scripts/deploy.sh; do
+  for f in update.sh linux-deploy.sh deploy.sh install-server.sh; do
     [[ -f "$ROOT/$f" ]] || continue
     if grep -q $'\r' "$ROOT/$f" 2>/dev/null; then
       warn "修复 $f 的 Windows 换行(CRLF)..."
@@ -33,13 +33,13 @@ fix_scripts() {
 }
 
 ensure_git_safe_directory() {
-  # root / jenkins 用户操作 ubuntu 拥有的目录时，Git 2.35+ 会拒绝（dubious ownership）
+  # Git 2.35+ 对非所有者目录会拒绝操作（dubious ownership）
   git config --global --add safe.directory "$ROOT" 2>/dev/null || true
 }
 
 ensure_git_writable() {
   if [[ -d "$ROOT/.git" ]] && [[ ! -w "$ROOT/.git" ]]; then
-    error "无法写入 ${ROOT}/.git（Permission denied）。Jenkins 发版请执行: sudo bash ${ROOT}/jenkins/fix-app-permissions.sh"
+    error "无法写入 ${ROOT}/.git（Permission denied）。请检查目录所有者: ls -ld ${ROOT}/.git"
   fi
 }
 

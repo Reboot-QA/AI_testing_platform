@@ -489,7 +489,7 @@ wait_backend_ready() {
       return 1
     fi
     if (( i % 10 == 0 )); then
-      info "等待后端就绪... (${i}/120，Jenkins 容器内会通过 Docker 健康检查或宿主机网关探测)"
+      info "等待后端就绪... (${i}/120)"
       compose_cmd logs backend --tail=5 2>/dev/null | sed 's/^/    /' >&2 || true
     fi
     if (( i == 120 )); then
@@ -509,7 +509,7 @@ wait_backend_ready() {
     sleep 2
   done
   if core_containers_running; then
-    warn "宿主机端口 ${http_port} 探测失败，但 MySQL/后端/前端容器均已运行（Jenkins 容器发版时常见）"
+    warn "宿主机端口 ${http_port} 探测失败，但 MySQL/后端/前端容器均已运行"
     ok "部署完成，请在浏览器访问: http://服务器IP:${http_port}"
     return 0
   fi

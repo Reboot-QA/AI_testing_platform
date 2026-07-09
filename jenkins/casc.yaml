@@ -1,8 +1,0 @@
-jenkins:
-  systemMessage: "AI测试平台 CI/CD - 自动部署前后端"
-  numExecutors: 2
-  mode: NORMAL
-
-unclassified:
-  timestamper:
-    allPipelines: true
