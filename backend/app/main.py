@@ -15,6 +15,7 @@ from app.routers.apifox import variables_router as apifox_variables_router
 from app.routers.apifox import cases_router as apifox_cases_router
 from app.routers.apifox import data_models_router as apifox_data_models_router
 from app.routers.apifox import global_params_router as apifox_global_params_router
+from app.routers.apifox import imports_router as apifox_imports_router
 from app.routers.apifox import runs_router as apifox_runs_router
 from app.routers.apifox import scenarios_router as apifox_scenarios_router
 from app.routers.apifox import scripts_router as apifox_scripts_router
@@ -103,6 +104,7 @@ app.include_router(apifox_scripts_router, prefix="/api/v1")
 app.include_router(apifox_global_params_router, prefix="/api/v1")
 app.include_router(apifox_scenarios_router, prefix="/api/v1")
 app.include_router(apifox_runs_router, prefix="/api/v1")
+app.include_router(apifox_imports_router, prefix="/api/v1")
 
 register_request_logging(app)
 

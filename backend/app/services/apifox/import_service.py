@@ -1,0 +1,218 @@
+"""Apifox · OpenAPI 3.x 导入（URL 拉取/粘贴 JSON → 批量生成 endpoint，按 tag 建文件夹）。
+
+同 (method, path) 已存在则跳过；批量入库单次 commit。仅支持 OpenAPI 3.x（Swagger 2.0 后续）。
+"""
+
+import json
+from typing import Any, Dict, List, Optional, Set, Tuple
+
+import httpx
+from sqlalchemy.orm import Session
+
+from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
+from app.repositories.apifox import endpoint_repo as repo
+from app.routers.apifox.schemas import AuthSpec, BodySpec, KvRow, RequestSpec
+
+HTTP_METHODS = ("get", "post", "put", "delete", "patch")
+_MAX_SCHEMA_DEPTH = 3
+
+
+def fetch_openapi(url: str) -> Dict[str, Any]:
+    try:
+        response = httpx.get(url, timeout=10.0, follow_redirects=True)
+        response.raise_for_status()
+        return response.json()
+    except httpx.HTTPError as exc:
+        raise ValueError(f"拉取 OpenAPI 失败: {exc}")
+    except json.JSONDecodeError:
+        raise ValueError("URL 返回内容不是合法 JSON")
+
+
+def parse_content(content: str) -> Dict[str, Any]:
+    try:
+        doc = json.loads(content)
+    except (ValueError, TypeError):
+        raise ValueError("粘贴内容不是合法 JSON")
+    if not isinstance(doc, dict):
+        raise ValueError("OpenAPI 文档必须是 JSON 对象")
+    return doc
+
+
+def validate_openapi(doc: Dict[str, Any]) -> None:
+    version = str(doc.get("openapi") or "")
+    if not version.startswith("3"):
+        raise ValueError("仅支持 OpenAPI 3.x（缺少 openapi: 3.x 声明）")
+    if not isinstance(doc.get("paths"), dict) or not doc["paths"]:
+        raise ValueError("OpenAPI 文档没有 paths")
+
+
+def _resolve_ref(doc: Dict[str, Any], schema: Dict[str, Any], seen: Set[str]) -> Dict[str, Any]:
+    ref = schema.get("$ref")
+    if not ref:
+        return schema
+    if ref in seen:
+        return {}
+    seen.add(ref)
+    node: Any = doc
+    for part in ref.lstrip("#/").split("/"):
+        if not isinstance(node, dict) or part not in node:
+            return {}
+        node = node[part]
+    return node if isinstance(node, dict) else {}
+
+
+def _skeleton(doc: Dict[str, Any], schema: Optional[Dict[str, Any]], depth: int = 0,
+              seen: Optional[Set[str]] = None) -> Any:
+    """按 schema 生成示例骨架（example 优先；$ref 展开防循环；深度护栏）。"""
+    if not schema or depth > _MAX_SCHEMA_DEPTH:
+        return None
+    seen = set(seen or ())
+    schema = _resolve_ref(doc, schema, seen)
+    if "example" in schema:
+        return schema["example"]
+    if "default" in schema:
+        return schema["default"]
+    schema_type = schema.get("type")
+    if schema_type == "object" or "properties" in schema:
+        return {
+            key: _skeleton(doc, prop, depth + 1, seen)
+            for key, prop in (schema.get("properties") or {}).items()
+        }
+    if schema_type == "array":
+        item = _skeleton(doc, schema.get("items"), depth + 1, seen)
+        return [item] if item is not None else []
+    if schema_type == "integer" or schema_type == "number":
+        return 0
+    if schema_type == "boolean":
+        return False
+    return ""
+
+
+def _param_value(doc: Dict[str, Any], param: Dict[str, Any]) -> str:
+    if "example" in param:
+        return str(param["example"])
+    value = _skeleton(doc, param.get("schema"))
+    if value in (None, {}, []):
+        return ""
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+
+
+def _rows_from_params(doc: Dict[str, Any], params: List[Dict[str, Any]], location: str) -> List[KvRow]:
+    rows: List[KvRow] = []
+    for param in params or []:
+        if param.get("in") != location or not param.get("name"):
+            continue
+        rows.append(KvRow(
+            key=str(param["name"]),
+            value=_param_value(doc, param),
+            enabled=True,
+            desc=str(param.get("description") or ""),
+        ))
+    return rows
+
+
+def _form_rows(doc: Dict[str, Any], schema: Optional[Dict[str, Any]]) -> List[KvRow]:
+    skeleton = _skeleton(doc, schema)
+    if not isinstance(skeleton, dict):
+        return []
+    return [
+        KvRow(key=str(k), value=v if isinstance(v, str) else json.dumps(v, ensure_ascii=False))
+        for k, v in skeleton.items()
+    ]
+
+
+def _body_spec(doc: Dict[str, Any], request_body: Optional[Dict[str, Any]]) -> BodySpec:
+    content = (request_body or {}).get("content") or {}
+    if "application/json" in content:
+        media = content["application/json"]
+        example = media.get("example")
+        if example is None:
+            example = _skeleton(doc, media.get("schema"))
+        raw = json.dumps(example, ensure_ascii=False, indent=2) if example is not None else ""
+        return BodySpec(type="json", raw=raw)
+    if "application/x-www-form-urlencoded" in content:
+        return BodySpec(type="urlencoded",
+                        form=_form_rows(doc, content["application/x-www-form-urlencoded"].get("schema")))
+    if "multipart/form-data" in content:
+        return BodySpec(type="form-data",
+                        form=_form_rows(doc, content["multipart/form-data"].get("schema")))
+    return BodySpec()
+
+
+def parse_openapi(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """解析为待建 endpoint 列表：{name, method, path, folder, description, request_spec}。"""
+    endpoints: List[Dict[str, Any]] = []
+    for path, path_item in (doc.get("paths") or {}).items():
+        if not isinstance(path_item, dict):
+            continue
+        common_params = path_item.get("parameters") or []
+        for method in HTTP_METHODS:
+            operation = path_item.get(method)
+            if not isinstance(operation, dict):
+                continue
+            params = list(common_params) + list(operation.get("parameters") or [])
+            tags = operation.get("tags") or []
+            spec = RequestSpec(
+                query=_rows_from_params(doc, params, "query"),
+                path_params=_rows_from_params(doc, params, "path"),
+                headers=_rows_from_params(doc, params, "header"),
+                body=_body_spec(doc, operation.get("requestBody")),
+                auth=AuthSpec(),
+            )
+            endpoints.append({
+                "name": operation.get("summary") or operation.get("operationId")
+                        or f"{method.upper()} {path}",
+                "method": method.upper(),
+                "path": path,
+                "folder": str(tags[0]) if tags else None,
+                "description": operation.get("description") or None,
+                "request_spec": spec,
+            })
+    return endpoints
+
+
+def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[str, int]:
+    """导入编排：跳重(method,path) + 按 tag get-or-create 文件夹 + 批量入库单次 commit。"""
+    validate_openapi(doc)
+    parsed = parse_openapi(doc)
+
+    existing: Set[Tuple[str, str]] = {
+        (e.method.upper(), e.path) for e in repo.list_endpoints(db, project_id)
+    }
+    folder_by_name: Dict[str, ApifoxFolder] = {
+        f.name: f for f in repo.list_folders(db, project_id) if f.parent_id is None
+    }
+
+    created = skipped = folders_created = 0
+    for item in parsed:
+        if (item["method"], item["path"]) in existing:
+            skipped += 1
+            continue
+        folder_id = None
+        if item["folder"]:
+            folder = folder_by_name.get(item["folder"])
+            if folder is None:
+                folder = ApifoxFolder(project_id=project_id, name=item["folder"])
+                repo.create_folder(db, folder)
+                folder_by_name[item["folder"]] = folder
+                folders_created += 1
+            folder_id = folder.id
+        repo.create_endpoint(db, ApifoxEndpoint(
+            project_id=project_id,
+            folder_id=folder_id,
+            name=item["name"][:200],
+            method=item["method"],
+            path=item["path"][:500],
+            request_spec=item["request_spec"].model_dump_json(),
+            description=item["description"],
+        ))
+        existing.add((item["method"], item["path"]))
+        created += 1
+
+    db.commit()
+    return {
+        "total": len(parsed),
+        "created": created,
+        "skipped": skipped,
+        "folders_created": folders_created,
+    }
