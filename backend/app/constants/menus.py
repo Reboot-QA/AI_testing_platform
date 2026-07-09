@@ -3,7 +3,6 @@ from typing import Dict, List
 MENU_DEFINITIONS: List[Dict[str, str]] = [
     {"key": "dashboard", "label": "仪表盘", "path": "/dashboard", "group": "business"},
     {"key": "projects", "label": "项目管理", "path": "/projects", "group": "business"},
-    {"key": "apifox_workbench", "label": "工作台", "path": "/apifox", "group": "business"},
     {
         "key": "requirement_docs",
         "label": "AI分析需求",
@@ -43,6 +42,14 @@ MENU_DEFINITIONS: List[Dict[str, str]] = [
         "group": "business",
         "parent": "testcase_mgmt",
         "parent_label": "用例管理",
+    },
+    {
+        "key": "apifox_workbench",
+        "label": "工作台",
+        "path": "/apifox",
+        "group": "business",
+        "parent": "api_automation_mgmt",
+        "parent_label": "接口自动化",
     },
     {
         "key": "api_automation_env",
