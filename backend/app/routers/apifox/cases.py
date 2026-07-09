@@ -51,7 +51,10 @@ def create_case(
     eid: int, data: CaseCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
     endpoint = _endpoint_checked(db, eid, user)
-    return service.create_case(db, endpoint.project_id, endpoint.id, data)
+    try:
+        return service.create_case(db, endpoint.project_id, endpoint.id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.get("/cases/{cid}", response_model=CaseOut)
@@ -65,7 +68,10 @@ def update_case(
     cid: int, data: CaseUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
     case = _case_checked(db, cid, user)
-    return service.update_case(db, case, data)
+    try:
+        return service.update_case(db, case, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/cases/{cid}")

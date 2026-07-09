@@ -14,12 +14,16 @@ from app.models.apifox.case import (
     ApifoxCaseExtract,
     ApifoxEndpointCase,
 )
+from app.models.apifox.script import ApifoxCaseScript
 from app.repositories.apifox import case_repo as repo
+from app.repositories.apifox import script_repo
 from app.routers.apifox.case_schemas import (
     AssertionRow,
     CaseBrief,
     CaseCreate,
     CaseOut,
+    CaseScriptOut,
+    CaseScriptRef,
     CaseUpdate,
     DataDrive,
     ExtractRow,
@@ -69,6 +73,38 @@ def _write_assertions(db: Session, case_id: int, rows: List[AssertionRow]) -> No
         )
 
 
+def _write_case_scripts(
+    db: Session, case: ApifoxEndpointCase, phase: str, refs: List[CaseScriptRef]
+) -> None:
+    """写入某 phase 的脚本引用；校验脚本存在且属同一 project（否则 ValueError→400）。"""
+    for i, ref in enumerate(refs):
+        script = script_repo.get_script(db, ref.script_id)
+        if not script or script.project_id != case.project_id:
+            raise ValueError("引用的脚本不存在或不属于该项目")
+        repo.add(
+            db,
+            ApifoxCaseScript(
+                case_id=case.id, script_id=ref.script_id, phase=phase,
+                enabled=ref.enabled, sort_order=i,
+            ),
+        )
+
+
+def _load_case_scripts(db: Session, case_id: int) -> tuple[List[CaseScriptOut], List[CaseScriptOut]]:
+    pre: List[CaseScriptOut] = []
+    post: List[CaseScriptOut] = []
+    for link in script_repo.list_case_scripts(db, case_id):
+        script = script_repo.get_script(db, link.script_id)
+        out = CaseScriptOut(
+            script_id=link.script_id,
+            enabled=link.enabled,
+            script_name=script.name if script else "",
+            script_lang=script.lang if script else "",
+        )
+        (pre if link.phase == "pre" else post).append(out)
+    return pre, post
+
+
 def _write_extracts(db: Session, case_id: int, rows: List[ExtractRow]) -> None:
     for i, e in enumerate(rows):
         repo.add(
@@ -81,7 +117,10 @@ def _write_extracts(db: Session, case_id: int, rows: List[ExtractRow]) -> None:
 
 
 def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
+    pre_scripts, post_scripts = _load_case_scripts(db, case.id)
     return CaseOut(
+        pre_scripts=pre_scripts,
+        post_scripts=post_scripts,
         id=case.id,
         project_id=case.project_id,
         endpoint_id=case.endpoint_id,
@@ -124,6 +163,8 @@ def create_case(db: Session, project_id: int, endpoint_id: int, data: CaseCreate
     repo.add(db, case)
     _write_assertions(db, case.id, data.assertions)
     _write_extracts(db, case.id, data.extracts)
+    _write_case_scripts(db, case, "pre", data.pre_scripts)
+    _write_case_scripts(db, case, "post", data.post_scripts)
     db.commit()
     db.refresh(case)
     return _case_out(db, case)
@@ -150,6 +191,12 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
     if data.extracts is not None:
         repo.delete_extracts(db, case.id)
         _write_extracts(db, case.id, data.extracts)
+    if data.pre_scripts is not None:
+        script_repo.delete_case_scripts(db, case.id, "pre")
+        _write_case_scripts(db, case, "pre", data.pre_scripts)
+    if data.post_scripts is not None:
+        script_repo.delete_case_scripts(db, case.id, "post")
+        _write_case_scripts(db, case, "post", data.post_scripts)
     db.commit()
     db.refresh(case)
     return _case_out(db, case)
@@ -157,5 +204,6 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
 
 def delete_case(db: Session, case: ApifoxEndpointCase) -> None:
     repo.delete_children(db, case.id)
+    script_repo.delete_case_scripts(db, case.id)
     repo.delete(db, case)
     db.commit()

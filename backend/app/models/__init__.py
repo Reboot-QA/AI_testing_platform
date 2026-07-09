@@ -19,15 +19,18 @@ from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.apifox import (
     ApifoxCaseAssertion,
     ApifoxCaseExtract,
+    ApifoxCaseScript,
     ApifoxEndpoint,
     ApifoxEndpointCase,
     ApifoxEnvironment,
     ApifoxEnvironmentVarLocal,
     ApifoxEnvironmentVariable,
     ApifoxFolder,
+    ApifoxGlobalParam,
     ApifoxGlobalVariable,
     ApifoxGlobalVarLocal,
     ApifoxSchema,
+    ApifoxScript,
 )
 
 __all__ = [
@@ -59,4 +62,7 @@ __all__ = [
     "ApifoxCaseAssertion",
     "ApifoxCaseExtract",
     "ApifoxSchema",
+    "ApifoxScript",
+    "ApifoxCaseScript",
+    "ApifoxGlobalParam",
 ]

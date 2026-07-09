@@ -287,6 +287,17 @@ export const apifoxApi = {
   createSchema: (pid, data) => request.post(`/apifox/projects/${pid}/schemas`, data),
   updateSchema: (sid, data) => request.put(`/apifox/schemas/${sid}`, data),
   deleteSchema: (sid) => request.delete(`/apifox/schemas/${sid}`),
+
+  listScripts: (pid) => request.get(`/apifox/projects/${pid}/scripts`),
+  getScript: (sid) => request.get(`/apifox/scripts/${sid}`),
+  createScript: (pid, data) => request.post(`/apifox/projects/${pid}/scripts`, data),
+  updateScript: (sid, data) => request.put(`/apifox/scripts/${sid}`, data),
+  deleteScript: (sid) => request.delete(`/apifox/scripts/${sid}`),
+
+  listGlobalParams: (pid) => request.get(`/apifox/projects/${pid}/global-params`),
+  createGlobalParam: (pid, data) => request.post(`/apifox/projects/${pid}/global-params`, data),
+  updateGlobalParam: (gid, data) => request.put(`/apifox/global-params/${gid}`, data),
+  deleteGlobalParam: (gid) => request.delete(`/apifox/global-params/${gid}`),
 }
 
 export const testExecutionApi = {

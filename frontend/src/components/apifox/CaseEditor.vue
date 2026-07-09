@@ -12,6 +12,12 @@
       <el-tab-pane label="用例变量" name="variables">
         <KvRowsEditor :rows="form.variables" />
       </el-tab-pane>
+      <el-tab-pane label="前置" name="pre_scripts">
+        <ScriptRefsEditor :rows="form.pre_scripts" :scripts="scripts" />
+      </el-tab-pane>
+      <el-tab-pane label="后置" name="post_scripts">
+        <ScriptRefsEditor :rows="form.post_scripts" :scripts="scripts" />
+      </el-tab-pane>
       <el-tab-pane label="断言" name="assertions">
         <AssertionsEditor :rows="form.assertions" />
       </el-tab-pane>
@@ -32,10 +38,12 @@ import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
 import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 import DataDriveEditor from '@/components/apifox/DataDriveEditor.vue'
+import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
 
 defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
+  scripts: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 

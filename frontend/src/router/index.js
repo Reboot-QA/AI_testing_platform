@@ -134,7 +134,7 @@ const routes = [
           {
             path: 'settings',
             name: 'ApifoxProjectSettings',
-            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            component: () => import('@/views/apifox/sections/ProjectSettings.vue'),
             meta: { permission: 'apifox_workbench', sectionTitle: '项目设置' },
           },
         ],
