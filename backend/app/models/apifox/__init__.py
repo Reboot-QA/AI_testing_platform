@@ -1,3 +1,8 @@
+from app.models.apifox.case import (
+    ApifoxCaseAssertion,
+    ApifoxCaseExtract,
+    ApifoxEndpointCase,
+)
 from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
 from app.models.apifox.variable import (
     ApifoxEnvironment,
@@ -15,4 +20,7 @@ __all__ = [
     "ApifoxEnvironmentVarLocal",
     "ApifoxGlobalVariable",
     "ApifoxGlobalVarLocal",
+    "ApifoxEndpointCase",
+    "ApifoxCaseAssertion",
+    "ApifoxCaseExtract",
 ]

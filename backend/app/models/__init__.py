@@ -17,7 +17,10 @@ from app.models.api_automation import (
 )
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.apifox import (
+    ApifoxCaseAssertion,
+    ApifoxCaseExtract,
     ApifoxEndpoint,
+    ApifoxEndpointCase,
     ApifoxEnvironment,
     ApifoxEnvironmentVarLocal,
     ApifoxEnvironmentVariable,
@@ -51,4 +54,7 @@ __all__ = [
     "ApifoxEnvironmentVarLocal",
     "ApifoxGlobalVariable",
     "ApifoxGlobalVarLocal",
+    "ApifoxEndpointCase",
+    "ApifoxCaseAssertion",
+    "ApifoxCaseExtract",
 ]

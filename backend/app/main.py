@@ -12,6 +12,7 @@ from app.routers import auth, projects, requirements, testcases, users, api_auto
 from app.routers import settings as settings_router
 from app.routers.apifox import router as apifox_router
 from app.routers.apifox import variables_router as apifox_variables_router
+from app.routers.apifox import cases_router as apifox_cases_router
 from app.services.schedule_service import start_scheduler, stop_scheduler
 from app.request_logging import register_request_logging
 
@@ -91,6 +92,7 @@ app.include_router(logs.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
 app.include_router(apifox_router, prefix="/api/v1")
 app.include_router(apifox_variables_router, prefix="/api/v1")
+app.include_router(apifox_cases_router, prefix="/api/v1")
 
 register_request_logging(app)
 
