@@ -79,6 +79,16 @@ class CaseBrief(BaseModel):
     sort_order: int
 
 
+class ProjectCaseBrief(BaseModel):
+    """项目全量用例（带接口信息），场景步骤选择器数据源。"""
+
+    id: int
+    name: str
+    endpoint_id: int
+    endpoint_name: str
+    endpoint_method: str
+
+
 class CaseOut(BaseModel):
     id: int
     project_id: int

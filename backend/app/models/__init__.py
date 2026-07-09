@@ -29,6 +29,8 @@ from app.models.apifox import (
     ApifoxGlobalParam,
     ApifoxGlobalVariable,
     ApifoxGlobalVarLocal,
+    ApifoxScenario,
+    ApifoxScenarioStep,
     ApifoxSchema,
     ApifoxScript,
 )
@@ -65,4 +67,6 @@ __all__ = [
     "ApifoxScript",
     "ApifoxCaseScript",
     "ApifoxGlobalParam",
+    "ApifoxScenario",
+    "ApifoxScenarioStep",
 ]

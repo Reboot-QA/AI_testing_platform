@@ -14,7 +14,13 @@ from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.user import User
 from app.repositories.apifox import case_repo, endpoint_repo
-from app.routers.apifox.case_schemas import CaseBrief, CaseCreate, CaseOut, CaseUpdate
+from app.routers.apifox.case_schemas import (
+    CaseBrief,
+    CaseCreate,
+    CaseOut,
+    CaseUpdate,
+    ProjectCaseBrief,
+)
 from app.services.apifox import case_service as service
 from app.services.project_access_service import get_accessible_project
 
@@ -38,6 +44,14 @@ def _case_checked(db: Session, cid: int, user: User) -> ApifoxEndpointCase:
         raise HTTPException(status_code=404, detail="接口不存在")
     get_accessible_project(db, endpoint.project_id, user)
     return case
+
+
+@router.get("/projects/{pid}/cases", response_model=List[ProjectCaseBrief])
+def list_project_cases(
+    pid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    get_accessible_project(db, pid, user)
+    return service.list_project_cases(db, pid)
 
 
 @router.get("/endpoints/{eid}/cases", response_model=List[CaseBrief])
@@ -77,5 +91,8 @@ def update_case(
 @router.delete("/cases/{cid}")
 def delete_case(cid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     case = _case_checked(db, cid, user)
-    service.delete_case(db, case)
+    try:
+        service.delete_case(db, case)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"message": "用例已删除"}
