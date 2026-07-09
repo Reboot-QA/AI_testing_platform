@@ -13,7 +13,7 @@ def migrate_user_must_change_password(db: Session) -> None:
         return
     dialect = engine.dialect.name
     if dialect == "mysql":
-        statement = "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
+        statement = "ALTER TABLE users ADD COLUMN must_change_password TINYINT(1) NOT NULL DEFAULT 0"
     else:
         statement = "ALTER TABLE users ADD COLUMN must_change_password BOOLEAN NOT NULL DEFAULT 0"
     with engine.begin() as conn:
