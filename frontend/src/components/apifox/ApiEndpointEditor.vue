@@ -89,7 +89,7 @@ const activeTab = ref('params')
 
 .sub-title {
   font-size: 13px;
-  color: #64748b;
+  color: var(--ax-text-secondary);
   margin: 8px 0;
 }
 
@@ -99,7 +99,7 @@ const activeTab = ref('params')
 }
 
 .none-tip {
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   padding: 12px 0;
 }
 </style>

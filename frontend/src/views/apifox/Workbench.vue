@@ -116,7 +116,7 @@ onMounted(loadData)
 }
 
 .hint {
-  color: #64748b;
+  color: var(--ax-text-secondary);
   font-size: 13px;
 }
 
@@ -129,6 +129,8 @@ onMounted(loadData)
 
 .project-card {
   cursor: pointer;
+  border-left: 3px solid var(--ax-brand);
+  border-radius: var(--ax-radius-lg);
   transition: transform 0.15s;
 }
 
@@ -139,12 +141,12 @@ onMounted(loadData)
 .card-title {
   font-size: 16px;
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-brand);
   margin-bottom: 8px;
 }
 
 .card-desc {
-  color: #64748b;
+  color: var(--ax-text-secondary);
   font-size: 13px;
   height: 40px;
   overflow: hidden;
@@ -160,7 +162,7 @@ onMounted(loadData)
 .card-foot {
   display: flex;
   justify-content: space-between;
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
 }
 </style>

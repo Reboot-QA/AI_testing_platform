@@ -74,7 +74,7 @@ function addVar() {
 
 <style scoped>
 .eff {
-  color: #16a34a;
+  color: var(--ax-success);
   font-size: 13px;
 }
 

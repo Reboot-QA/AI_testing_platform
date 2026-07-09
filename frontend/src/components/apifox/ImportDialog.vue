@@ -75,7 +75,7 @@ async function doImport() {
 }
 
 .tip {
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
   margin-top: 8px;
 }

@@ -154,7 +154,7 @@ onMounted(async () => {
 
 .list-panel {
   width: 240px;
-  border-right: 1px solid #e2e8f0;
+  border-right: 1px solid var(--ax-border);
   overflow: auto;
   padding-right: 8px;
 }
@@ -164,7 +164,7 @@ onMounted(async () => {
   align-items: center;
   justify-content: space-between;
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-brand);
   margin-bottom: 8px;
 }
 
@@ -178,16 +178,16 @@ onMounted(async () => {
 }
 
 .env-item:hover {
-  background: #f1f5f9;
+  background: var(--ax-bg-hover);
 }
 
 .env-item.active {
-  background: #e0ecff;
+  background: var(--ax-bg-active);
 }
 
 .env-item.global {
   margin-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  border-top: 1px solid var(--ax-border);
   padding-top: 12px;
 }
 
@@ -213,7 +213,7 @@ onMounted(async () => {
 
 .var-title {
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-brand);
   margin-bottom: 12px;
 }
 </style>

@@ -135,7 +135,7 @@ function move(i, delta) {
 
 .idx {
   width: 20px;
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
   text-align: right;
 }

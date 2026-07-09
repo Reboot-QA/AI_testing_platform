@@ -77,7 +77,7 @@ function move(i, delta) {
 }
 
 .tip {
-  color: #94a3b8;
+  color: var(--ax-text-placeholder);
   font-size: 12px;
 }
 </style>
