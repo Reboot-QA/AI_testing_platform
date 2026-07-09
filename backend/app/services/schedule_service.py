@@ -225,6 +225,19 @@ def _scheduler_thread_loop() -> None:
             logger.exception("定时任务调度循环异常")
         finally:
             db.close()
+
+        # apifox v2 定时任务复用同一轮询线程；延迟 import 避免旧→新模块顶层依赖/循环 import。
+        # 独立 session + try/except，apifox 扫描异常不影响旧任务。
+        db = SessionLocal()
+        try:
+            from app.services.apifox.schedule_service import run_due_apifox_tasks
+
+            run_due_apifox_tasks(db)
+        except Exception:
+            logger.exception("apifox 定时任务调度循环异常")
+        finally:
+            db.close()
+
         _scheduler_stop.wait(CHECK_INTERVAL_SECONDS)
 
 

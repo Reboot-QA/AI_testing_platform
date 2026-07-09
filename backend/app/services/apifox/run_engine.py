@@ -54,26 +54,26 @@ def _rows_to_dict(rows: List[Dict[str, Any]], variables: Dict[str, str]) -> Dict
     return result
 
 
-# ---------- 变量解析（local ?? remote，enabled） ----------
-def resolve_env_vars(db: Session, environment_id: Optional[int], user_id: int) -> Dict[str, str]:
+# ---------- 变量解析（local ?? remote，enabled；user_id=None 为定时模式，只读远程值） ----------
+def resolve_env_vars(db: Session, environment_id: Optional[int], user_id: Optional[int]) -> Dict[str, str]:
     if not environment_id:
         return {}
     result: Dict[str, str] = {}
     for var in variable_repo.list_env_vars(db, environment_id):
         if not var.enabled:
             continue
-        local = variable_repo.get_env_local(db, var.id, user_id)
+        local = variable_repo.get_env_local(db, var.id, user_id) if user_id is not None else None
         value = local.local_value if local else var.remote_value
         result[var.key] = value or ""
     return result
 
 
-def resolve_global_vars(db: Session, project_id: int, user_id: int) -> Dict[str, str]:
+def resolve_global_vars(db: Session, project_id: int, user_id: Optional[int]) -> Dict[str, str]:
     result: Dict[str, str] = {}
     for var in variable_repo.list_global_vars(db, project_id):
         if not var.enabled:
             continue
-        local = variable_repo.get_global_local(db, var.id, user_id)
+        local = variable_repo.get_global_local(db, var.id, user_id) if user_id is not None else None
         value = local.local_value if local else var.remote_value
         result[var.key] = value or ""
     return result
@@ -284,10 +284,15 @@ def run_case_scripts(
 
 
 def persist_scoped_extracts(
-    db: Session, project_id: int, environment_id: Optional[int], user_id: int,
+    db: Session, project_id: int, environment_id: Optional[int], user_id: Optional[int],
     scoped: List[Dict[str, str]],
 ) -> None:
-    """environment/global 作用域提取 → 写当前用户本地值；变量不存在则先建远程行(remote=None)。"""
+    """environment/global 作用域提取的落库。
+
+    手动运行(user_id 有值)→ 写该用户本地值，不污染团队远程值；
+    定时运行(user_id=None)→ 写远程值（团队共享，如刷新 token 全员受益）。
+    变量不存在则先建远程行。
+    """
     for item in scoped:
         key, value, scope = item["key"], item["value"], item["scope"]
         if scope == "environment":
@@ -300,7 +305,10 @@ def persist_scoped_extracts(
             if env_var is None:
                 env_var = ApifoxEnvironmentVariable(environment_id=environment_id, key=key)
                 variable_repo.add(db, env_var)
-            variable_repo.upsert_env_local(db, env_var.id, user_id, value)
+            if user_id is None:
+                env_var.remote_value = value
+            else:
+                variable_repo.upsert_env_local(db, env_var.id, user_id, value)
         elif scope == "global":
             global_var = next(
                 (v for v in variable_repo.list_global_vars(db, project_id) if v.key == key),
@@ -309,7 +317,10 @@ def persist_scoped_extracts(
             if global_var is None:
                 global_var = ApifoxGlobalVariable(project_id=project_id, key=key)
                 variable_repo.add(db, global_var)
-            variable_repo.upsert_global_local(db, global_var.id, user_id, value)
+            if user_id is None:
+                global_var.remote_value = value
+            else:
+                variable_repo.upsert_global_local(db, global_var.id, user_id, value)
     db.commit()
 
 

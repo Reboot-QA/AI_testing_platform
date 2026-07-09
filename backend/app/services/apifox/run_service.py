@@ -50,7 +50,8 @@ def _count_scenario_steps(db: Session, scenario_id: int, depth: int = 0) -> int:
 class _RunContext:
     """一次运行的共享状态（run 行、计数、runtime 变量、当前 step 序号）。"""
 
-    def __init__(self, db: Session, run: ApifoxRun, environment: Optional[ApifoxEnvironment], user_id: int):
+    def __init__(self, db: Session, run: ApifoxRun, environment: Optional[ApifoxEnvironment],
+                 user_id: Optional[int]):
         self.db = db
         self.run = run
         self.environment = environment
@@ -208,7 +209,7 @@ def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
 
 def iter_case_run(
     db: Session, case: ApifoxEndpointCase, environment: Optional[ApifoxEnvironment],
-    triggered_by: str, user_id: int,
+    triggered_by: str, user_id: Optional[int],
 ) -> Generator[Dict[str, Any], None, None]:
     total = _count_case_steps(case)
     run = _start_run(db, case.project_id, "case", case.id, case.name, environment, triggered_by, total)
@@ -224,7 +225,7 @@ def iter_case_run(
 
 def iter_scenario_run(
     db: Session, scenario: ApifoxScenario, environment: Optional[ApifoxEnvironment],
-    triggered_by: str, user_id: int,
+    triggered_by: str, user_id: Optional[int],
 ) -> Generator[Dict[str, Any], None, None]:
     total = _count_scenario_steps(db, scenario.id)
     run = _start_run(

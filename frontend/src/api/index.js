@@ -308,6 +308,12 @@ export const apifoxApi = {
 
   importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
 
+  listSchedules: (pid) => request.get(`/apifox/projects/${pid}/schedules`),
+  createSchedule: (pid, data) => request.post(`/apifox/projects/${pid}/schedules`, data),
+  updateSchedule: (sid, data) => request.put(`/apifox/schedules/${sid}`, data),
+  deleteSchedule: (sid) => request.delete(`/apifox/schedules/${sid}`),
+  runScheduleNow: (sid) => request.post(`/apifox/schedules/${sid}/run-now`),
+
   listRuns: (pid) => request.get(`/apifox/projects/${pid}/runs`),
   getRun: (rid) => request.get(`/apifox/runs/${rid}`),
   runCaseStream: (cid, environmentId, onEvent, options = {}) =>
