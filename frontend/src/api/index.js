@@ -249,6 +249,18 @@ export const userApi = {
     request.put(`/users/${id}/permissions`, { menu_permissions }),
 }
 
+export const apifoxApi = {
+  listFolders: (pid) => request.get(`/apifox/projects/${pid}/folders`),
+  createFolder: (pid, data) => request.post(`/apifox/projects/${pid}/folders`, data),
+  updateFolder: (id, data) => request.put(`/apifox/folders/${id}`, data),
+  deleteFolder: (id) => request.delete(`/apifox/folders/${id}`),
+  listEndpoints: (pid) => request.get(`/apifox/projects/${pid}/endpoints`),
+  getEndpoint: (id) => request.get(`/apifox/endpoints/${id}`),
+  createEndpoint: (pid, data) => request.post(`/apifox/projects/${pid}/endpoints`, data),
+  updateEndpoint: (id, data) => request.put(`/apifox/endpoints/${id}`, data),
+  deleteEndpoint: (id) => request.delete(`/apifox/endpoints/${id}`),
+}
+
 export const testExecutionApi = {
   listRuns: (projectId) =>
     request.get('/test-executions', { params: { project_id: projectId } }),

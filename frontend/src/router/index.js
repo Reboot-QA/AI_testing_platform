@@ -104,7 +104,7 @@ const routes = [
           {
             path: 'apis',
             name: 'ApifoxApis',
-            component: () => import('@/views/apifox/SectionPlaceholder.vue'),
+            component: () => import('@/views/apifox/sections/ApiManage.vue'),
             meta: { permission: 'apifox_workbench', sectionTitle: '接口管理' },
           },
           {
