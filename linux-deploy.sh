@@ -19,8 +19,13 @@
 #   BACKUP_DIR=路径      备份目录（默认 .deploy/backups/mysql）
 #   BACKUP_KEEP_DAYS=30  自动清理超过 N 天的备份
 #   DOCKER_BUILD_NETWORK=host  构建时使用宿主机网络（海外 VPS DNS 异常时可试）
+  SKIP_DOCKER_BUILD=1        跳过镜像构建，直接启动（构建已卡住且镜像已存在时用）
 
 set -euo pipefail
+
+# 避免 Docker BuildKit 在 resolving provenance for metadata file 阶段卡住
+export BUILDX_NO_DEFAULT_ATTESTATIONS="${BUILDX_NO_DEFAULT_ATTESTATIONS:-1}"
+export BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS:-plain}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
@@ -203,6 +208,20 @@ compose_cmd() {
     profiles+=(--profile monitoring)
   fi
   BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
+}
+
+compose_build_images() {
+  local services=(backend frontend)
+  info "构建镜像 backend + frontend（已禁用 provenance 元数据）..."
+
+  if compose_cmd build --provenance=false --sbom=false --progress=plain "${services[@]}"; then
+    ok "镜像构建完成"
+    return 0
+  fi
+
+  warn "BuildKit 构建失败，改用传统 builder（DOCKER_BUILDKIT=0）..."
+  DOCKER_BUILDKIT=0 compose_cmd build --progress=plain "${services[@]}"
+  ok "镜像构建完成（legacy builder）"
 }
 
 health_check_hosts() {
@@ -655,7 +674,12 @@ cmd_up() {
   if [[ "${DOCKER_BUILD_NETWORK:-}" == "host" ]]; then
     warn "DOCKER_BUILD_NETWORK=host：构建阶段使用宿主机网络（适用于 DNS 解析异常）"
   fi
-  compose_cmd up -d --build
+  if [[ "${SKIP_DOCKER_BUILD:-0}" != "1" ]]; then
+    compose_build_images
+  else
+    warn "SKIP_DOCKER_BUILD=1：跳过镜像构建，直接启动已有镜像"
+  fi
+  compose_cmd up -d
 
   info "等待 MySQL 健康检查..."
   local i mysql_status
@@ -754,7 +778,8 @@ cmd_update() {
   fi
 
   info "重新构建并启动 Docker 服务..."
-  compose_cmd up -d --build
+  compose_build_images
+  compose_cmd up -d
 
   info "等待 MySQL 健康检查..."
   local i mysql_status
