@@ -39,6 +39,7 @@ import { reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
+import { emptySpec, normalizeSpec as normSpec } from '@/utils/apifoxSpec'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 
@@ -59,29 +60,6 @@ const form = reactive({
   id: null, name: '', request_spec: emptySpec(), variables: [], assertions: [], extracts: [],
   pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] },
 })
-
-function emptySpec() {
-  return {
-    query: [], path_params: [], headers: [],
-    body: { type: 'none', raw: '', form: [] },
-    auth: { type: 'none', token: '', username: '', password: '' },
-  }
-}
-
-function normSpec(s) {
-  s = s || {}
-  const b = s.body || {}
-  return {
-    query: ensureKvRows(s.query || []),
-    path_params: ensureKvRows(s.path_params || []),
-    headers: ensureKvRows(s.headers || []),
-    body: { type: b.type || 'none', raw: b.raw || '', form: ensureKvRows(b.form || []) },
-    auth: {
-      type: s.auth?.type || 'none', token: s.auth?.token || '',
-      username: s.auth?.username || '', password: s.auth?.password || '',
-    },
-  }
-}
 
 async function loadCases() {
   cases.value = props.endpointId ? await apifoxApi.listCases(props.endpointId) : []
