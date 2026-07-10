@@ -64,6 +64,7 @@ class EndpointCreate(BaseModel):
     method: str = "GET"
     path: str = ""
     folder_id: Optional[int] = None
+    server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     description: Optional[str] = None
 
@@ -73,6 +74,7 @@ class EndpointUpdate(BaseModel):
     method: Optional[str] = None
     path: Optional[str] = None
     folder_id: Optional[int] = None
+    server_name: Optional[str] = None
     request_spec: Optional[RequestSpec] = None
     description: Optional[str] = None
     sort_order: Optional[int] = None
@@ -96,6 +98,7 @@ class EndpointOut(BaseModel):
     name: str
     method: str
     path: str
+    server_name: Optional[str] = None
     request_spec: RequestSpec
     description: Optional[str] = None
     sort_order: int

@@ -50,6 +50,7 @@ def _endpoint_out(endpoint: ApifoxEndpoint) -> EndpointOut:
         name=endpoint.name,
         method=endpoint.method,
         path=endpoint.path,
+        server_name=endpoint.server_name,
         request_spec=_load_spec(endpoint.request_spec),
         description=endpoint.description,
         sort_order=endpoint.sort_order,
@@ -159,6 +160,7 @@ def create_endpoint(db: Session, project_id: int, data: EndpointCreate) -> Endpo
         name=data.name,
         method=data.method,
         path=data.path,
+        server_name=data.server_name,
         request_spec=data.request_spec.model_dump_json(),
         description=data.description,
     )
@@ -182,6 +184,8 @@ def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate)
         endpoint.method = data.method
     if data.path is not None:
         endpoint.path = data.path
+    if "server_name" in data.model_fields_set:
+        endpoint.server_name = data.server_name
     if data.request_spec is not None:
         endpoint.request_spec = data.request_spec.model_dump_json()
     if data.description is not None:

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.variable import (
     ApifoxEnvironment,
+    ApifoxEnvironmentServer,
     ApifoxEnvironmentVariable,
     ApifoxGlobalVariable,
 )
@@ -18,6 +19,9 @@ from app.routers.apifox.variable_schemas import (
     EnvironmentCreate,
     EnvironmentOut,
     EnvironmentUpdate,
+    ServerCreate,
+    ServerOut,
+    ServerUpdate,
     VariableCreate,
     VariableOut,
     VariableUpdate,
@@ -25,6 +29,10 @@ from app.routers.apifox.variable_schemas import (
 
 
 # ---------- environments ----------
+def _server_out(server: ApifoxEnvironmentServer) -> ServerOut:
+    return ServerOut(id=server.id, name=server.name, base_url=server.base_url, sort_order=server.sort_order)
+
+
 def _env_out(env: ApifoxEnvironment) -> EnvironmentOut:
     return EnvironmentOut(
         id=env.id,
@@ -33,6 +41,7 @@ def _env_out(env: ApifoxEnvironment) -> EnvironmentOut:
         base_url=env.base_url,
         is_default=env.is_default,
         sort_order=env.sort_order,
+        servers=[_server_out(s) for s in env.servers],
     )
 
 
@@ -80,6 +89,45 @@ def delete_environment(db: Session, env: ApifoxEnvironment) -> None:
     for var in repo.list_env_vars(db, env.id):
         repo.delete(db, var)  # 连带删环境变量（本地值由 FK 悬挂风险——见下 cleanup）
     repo.delete(db, env)
+    db.commit()
+
+
+# ---------- environment servers（命名前置 URL） ----------
+def list_servers(db: Session, environment_id: int) -> List[ServerOut]:
+    return [_server_out(s) for s in repo.list_servers(db, environment_id)]
+
+
+def create_server(db: Session, environment_id: int, data: ServerCreate) -> ServerOut:
+    if any(s.name == data.name for s in repo.list_servers(db, environment_id)):
+        raise ValueError("前置 URL 名已存在")
+    server = ApifoxEnvironmentServer(
+        environment_id=environment_id, name=data.name, base_url=data.base_url
+    )
+    repo.add(db, server)
+    db.commit()
+    db.refresh(server)
+    return _server_out(server)
+
+
+def update_server(db: Session, server: ApifoxEnvironmentServer, data: ServerUpdate) -> ServerOut:
+    if data.name is not None and data.name != server.name:
+        if any(
+            s.name == data.name and s.id != server.id
+            for s in repo.list_servers(db, server.environment_id)
+        ):
+            raise ValueError("前置 URL 名已存在")
+        server.name = data.name
+    if "base_url" in data.model_fields_set:
+        server.base_url = data.base_url
+    if data.sort_order is not None:
+        server.sort_order = data.sort_order
+    db.commit()
+    db.refresh(server)
+    return _server_out(server)
+
+
+def delete_server(db: Session, server: ApifoxEnvironmentServer) -> None:
+    repo.delete(db, server)
     db.commit()
 
 

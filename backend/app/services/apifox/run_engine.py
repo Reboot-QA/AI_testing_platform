@@ -112,6 +112,17 @@ def data_drive_rows(case: ApifoxEndpointCase) -> List[Optional[Dict[str, str]]]:
 
 
 # ---------- 请求构建 ----------
+def _select_base_url(environment: Optional[ApifoxEnvironment], server_name: Optional[str]) -> str:
+    """按接口选定的命名前置 URL 取 base_url；未选/未命中 → 环境默认前置 URL(base_url)。"""
+    if environment is None:
+        return ""
+    if server_name:
+        for server in environment.servers or []:
+            if server.name == server_name:
+                return (server.base_url or "").rstrip("/")
+    return (environment.base_url or "").rstrip("/")
+
+
 def build_request(
     endpoint: ApifoxEndpoint,
     spec: Dict[str, Any],
@@ -128,9 +139,9 @@ def build_request(
     if path.startswith("http://") or path.startswith("https://"):
         url = path
     else:
-        base = (environment.base_url or "").rstrip("/") if environment else ""
+        base = _select_base_url(environment, getattr(endpoint, "server_name", None))
         if not base:
-            raise ValueError("未选择环境或环境未配置 base_url，且接口路径不是绝对地址")
+            raise ValueError("未选择环境或环境未配置前置 URL，且接口路径不是绝对地址")
         url = base + ("/" + path.lstrip("/") if path else "")
 
     params = _rows_to_dict(spec.get("query") or [], variables)
