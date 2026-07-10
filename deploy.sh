@@ -1285,13 +1285,26 @@ monitoring_detect_log_volume() {
   if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
     return 0
   fi
-  local mount_name mount_source
+  local mount_name mount_source mount_type
+  mount_type="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Type}}{{end}}{{end}}' 2>/dev/null || true)"
   mount_name="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
   mount_source="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)"
-  if [[ -n "$mount_name" ]]; then
+
+  if [[ "$mount_type" == "volume" && -n "$mount_name" ]]; then
+    local vol_path
+    vol_path="$(docker volume inspect "$mount_name" --format '{{.Mountpoint}}' 2>/dev/null || true)"
+    if [[ -n "$vol_path" && -d "$vol_path" ]]; then
+      export LOG_DIR_HOST="$vol_path"
+      export HOST_LOG_DIR="$vol_path"
+      info "检测到 backend 日志卷 ${mount_name} -> ${LOG_DIR_HOST}"
+      return 0
+    fi
     export DOCKER_APP_LOGS_VOLUME="$mount_name"
     info "检测到 Docker 日志卷: ${DOCKER_APP_LOGS_VOLUME}（Promtail 将挂载同一卷）"
-  elif [[ -n "$mount_source" && -d "$mount_source" ]]; then
+    return 0
+  fi
+
+  if [[ -n "$mount_source" && -d "$mount_source" ]]; then
     export LOG_DIR_HOST="$mount_source"
     export HOST_LOG_DIR="$mount_source"
     info "检测到 backend 日志目录: ${LOG_DIR_HOST}"
@@ -1408,18 +1421,39 @@ monitoring_stop() {
 monitoring_fix_logs() {
   require_docker
   monitoring_env
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
+    error "backend 容器未运行，请先启动应用"
+    exit 1
+  fi
+  if [[ -z "${LOG_DIR_HOST:-}" && -z "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
+    error "无法检测 backend 日志位置"
+    exit 1
+  fi
   monitoring_write_env
   info "重建 Promtail 并重新挂载日志源..."
   if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
     info "  使用 Docker 卷: ${DOCKER_APP_LOGS_VOLUME}"
   else
     info "  使用宿主机目录: ${LOG_DIR_HOST}"
+    if [[ ! -f "${LOG_DIR_HOST}/backend.log" ]]; then
+      warn "backend.log 尚未生成，先访问平台产生日志"
+    else
+      ok "backend.log 大小: $(wc -c <"${LOG_DIR_HOST}/backend.log") bytes"
+    fi
   fi
   docker volume rm ai-platform-monitoring_promtail-positions 2>/dev/null || true
   monitoring_compose up -d --force-recreate promtail
   sleep 3
   info "Promtail 挂载内容:"
-  docker exec ai-platform-promtail ls -la /var/log/ai-platform/ 2>&1 || true
+  if ! docker exec ai-platform-promtail ls -la /var/log/ai-platform/ 2>&1; then
+    error "Promtail 无法访问日志目录"
+    exit 1
+  fi
+  if ! docker exec ai-platform-promtail test -f /var/log/ai-platform/backend.log 2>/dev/null; then
+    error "Promtail 仍看不到 backend.log，请执行: ./deploy.sh monitoring debug"
+    exit 1
+  fi
+  ok "Promtail 已挂载 backend.log"
   monitoring_verify_loki || true
 }
 
