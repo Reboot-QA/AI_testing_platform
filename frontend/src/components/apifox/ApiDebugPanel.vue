@@ -8,7 +8,7 @@
       <span class="hint">直接发一次请求（不建用例、不落报告）</span>
     </div>
 
-    <ApiEndpointEditor :form="form" :saving="saving" @save="$emit('save')" />
+    <ApiEndpointEditor :form="form" :saving="saving" :server-names="serverNames" @save="$emit('save')" />
 
     <div v-if="resp" class="resp">
       <div class="resp-head">
@@ -40,6 +40,7 @@ const props = defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
   environments: { type: Array, default: () => [] },
+  serverNames: { type: Array, default: () => [] },
   projectId: { type: [String, Number], required: true },
 })
 defineEmits(['save'])
@@ -73,6 +74,7 @@ async function send() {
     resp.value = await apifoxApi.debugSend(props.projectId, {
       method: props.form.method,
       path: props.form.path,
+      server_name: props.form.server_name,
       request_spec: props.form.request_spec,
       environment_id: envId.value,
     })
