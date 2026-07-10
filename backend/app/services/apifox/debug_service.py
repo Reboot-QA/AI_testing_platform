@@ -23,13 +23,16 @@ def debug_send(
     request_spec: Dict[str, Any],
     environment_id: Optional[int],
     user_id: Optional[int],
+    server_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     environment = variable_repo.get_environment(db, environment_id) if environment_id else None
     env_vars = engine.resolve_env_vars(db, environment_id, user_id)
     global_vars = engine.resolve_global_vars(db, project_id, user_id)
     variables = engine.merge_vars(global_vars, env_vars)
 
-    endpoint = ApifoxEndpoint(method=(method or "GET").upper(), path=path or "")
+    endpoint = ApifoxEndpoint(
+        method=(method or "GET").upper(), path=path or "", server_name=server_name
+    )
     plan = engine.build_request(
         endpoint, request_spec or {}, environment, variables,
         global_param_repo.list_params(db, project_id),

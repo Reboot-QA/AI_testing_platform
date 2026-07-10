@@ -20,6 +20,7 @@ router = APIRouter(prefix="/apifox", tags=["接口自动化v2·调试"])
 class DebugRequest(BaseModel):
     method: str = "GET"
     path: str = ""
+    server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     environment_id: Optional[int] = None
 
@@ -52,6 +53,7 @@ def debug_send(
         result = debug_service.debug_send(
             db, pid, data.method, data.path,
             data.request_spec.model_dump(), data.environment_id, user.id,
+            server_name=data.server_name,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

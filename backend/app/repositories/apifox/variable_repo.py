@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.variable import (
     ApifoxEnvironment,
+    ApifoxEnvironmentServer,
     ApifoxEnvironmentVariable,
     ApifoxEnvironmentVarLocal,
     ApifoxGlobalVariable,
@@ -28,6 +29,20 @@ def list_environments(db: Session, project_id: int) -> List[ApifoxEnvironment]:
 
 def get_environment(db: Session, env_id: int) -> Optional[ApifoxEnvironment]:
     return db.query(ApifoxEnvironment).filter(ApifoxEnvironment.id == env_id).first()
+
+
+# ---------- environment servers（命名前置 URL） ----------
+def list_servers(db: Session, environment_id: int) -> List[ApifoxEnvironmentServer]:
+    return (
+        db.query(ApifoxEnvironmentServer)
+        .filter(ApifoxEnvironmentServer.environment_id == environment_id)
+        .order_by(ApifoxEnvironmentServer.sort_order, ApifoxEnvironmentServer.id)
+        .all()
+    )
+
+
+def get_server(db: Session, server_id: int) -> Optional[ApifoxEnvironmentServer]:
+    return db.query(ApifoxEnvironmentServer).filter(ApifoxEnvironmentServer.id == server_id).first()
 
 
 def add(db: Session, obj):

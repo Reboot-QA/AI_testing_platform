@@ -12,6 +12,7 @@ from app.models.apifox.schedule import ApifoxSchedule
 from app.models.apifox.script import ApifoxCaseScript, ApifoxScript
 from app.models.apifox.variable import (
     ApifoxEnvironment,
+    ApifoxEnvironmentServer,
     ApifoxEnvironmentVariable,
     ApifoxEnvironmentVarLocal,
     ApifoxGlobalVariable,
@@ -22,6 +23,7 @@ __all__ = [
     "ApifoxFolder",
     "ApifoxEndpoint",
     "ApifoxEnvironment",
+    "ApifoxEnvironmentServer",
     "ApifoxEnvironmentVariable",
     "ApifoxEnvironmentVarLocal",
     "ApifoxGlobalVariable",
