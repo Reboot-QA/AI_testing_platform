@@ -11,6 +11,8 @@ INTERNAL_HOSTS = frozenset({"127.0.0.1", "localhost", "grafana", "loki"})
 GRAFANA_PROXY_PREFIX = "/api/v1/logs/grafana"
 DASHBOARD_UID = "ai-platform-logs"
 DASHBOARD_QUERY = "orgId=1&refresh=10s&kiosk"
+# 英文标题对应 slug；与 provision JSON 保持一致，API 不可用时作兜底
+DASHBOARD_ROUTE_FALLBACK = "/d/ai-platform-logs/ai-platform-logs"
 
 _grafana_upstream_cache: Optional[tuple] = None
 _loki_upstream_cache: Optional[tuple] = None
@@ -148,12 +150,20 @@ def _fetch_dashboard_meta() -> tuple[bool, str, Optional[str]]:
         return result
 
     base = resolve_grafana_upstream().rstrip("/")
+    api_paths = (
+        f"{base}/api/dashboards/uid/{DASHBOARD_UID}",
+        f"{base}{GRAFANA_PROXY_PREFIX}/api/dashboards/uid/{DASHBOARD_UID}",
+    )
     try:
         import httpx
 
         with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0), follow_redirects=False) as client:
-            resp = client.get(f"{base}/api/dashboards/uid/{DASHBOARD_UID}", auth=auth)
-            if resp.status_code == 404:
+            resp = None
+            for api_url in api_paths:
+                resp = client.get(api_url, auth=auth)
+                if resp.status_code == 200:
+                    break
+            if resp is None or resp.status_code == 404:
                 result = (False, "预置仪表盘未导入，请执行: ./deploy.sh monitoring fix-dashboard", None)
             elif resp.status_code != 200:
                 result = (False, f"仪表盘检查失败 (HTTP {resp.status_code})", None)
@@ -179,7 +189,7 @@ def resolve_dashboard_path() -> str:
     ok, _, route = _fetch_dashboard_meta()
     if ok and route:
         return f"{route}?{DASHBOARD_QUERY}"
-    return f"/d/{DASHBOARD_UID}?{DASHBOARD_QUERY}"
+    return f"{DASHBOARD_ROUTE_FALLBACK}?{DASHBOARD_QUERY}"
 
 
 def verify_grafana_dashboard() -> tuple[bool, str]:
@@ -219,7 +229,8 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
     grafana_dashboard_ok, grafana_dashboard_message, _ = (
         _fetch_dashboard_meta() if grafana_ok and grafana_auth_ok else (False, "", None)
     )
-    dashboard_path = resolve_dashboard_path() if grafana_dashboard_ok else f"/d/{DASHBOARD_UID}?{DASHBOARD_QUERY}"
+    dashboard_path = resolve_dashboard_path()
+    dashboard_not_imported = "未导入" in (grafana_dashboard_message or "")
 
     # Grafana 11 Explore 使用 panes 参数（left 已废弃，会导致 Page not found）
     explore_panes = (
@@ -251,7 +262,7 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         "loki_url": public_loki,
         "dashboard_url": dashboard_url,
         "explore_url": explore_url,
-        "embed_url": dashboard_path if grafana_dashboard_ok else explore_simple_path,
+        "embed_url": explore_simple_path if dashboard_not_imported else dashboard_path,
         "grafana_online": grafana_ok,
         "loki_online": loki_ok,
         "grafana_auth_ok": grafana_auth_ok,

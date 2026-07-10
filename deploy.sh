@@ -1300,9 +1300,30 @@ monitoring_has_running() {
   monitoring_compose ps --status running 2>/dev/null | grep -qE 'loki|grafana|promtail'
 }
 
+monitoring_sync_app_env() {
+  local docker_env="$ROOT/.env.docker"
+  [[ -f "$docker_env" ]] || return 0
+  local val
+  val="$(grep -E '^GRAFANA_ADMIN_PASSWORD=' "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  [[ -n "$val" ]] && export GRAFANA_ADMIN_PASSWORD="$val"
+  val="$(grep -E '^GRAFANA_ADMIN_USER=' "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  [[ -n "$val" ]] && export GRAFANA_ADMIN_USER="$val"
+  val="$(grep -E '^HOST_LOG_DIR=' "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+  if [[ -n "$val" ]]; then
+    if [[ "$val" != /* ]]; then
+      val="$ROOT/$val"
+    fi
+    if [[ -d "$val" ]]; then
+      export HOST_LOG_DIR="$val"
+      export LOG_DIR_HOST="$val"
+    fi
+  fi
+}
+
 monitoring_env() {
   local access_host
   access_host="$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo "127.0.0.1")"
+  monitoring_sync_app_env
   prepare_dirs
   mkdir -p "$LOG_DIR"
   export LOG_DIR_HOST="$(cd "$LOG_DIR" && pwd)"
@@ -1442,9 +1463,11 @@ monitoring_verify_loki() {
     echo "  4. 重置采集: docker compose -f $MONITORING_DIR/docker-compose.yml down -v && ./deploy.sh monitoring start"
     return 1
   fi
-  query_resp="$(curl -sf -G "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/query" \
+  query_resp="$(curl -sf -G "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/query_range" \
     --data-urlencode 'query={job="ai-platform"}' \
-    --data-urlencode 'limit=1' 2>/dev/null || true)"
+    --data-urlencode 'limit=5' \
+    --data-urlencode "start=$(($(date +%s) - 86400))000000000" \
+    --data-urlencode "end=$(date +%s)000000000" 2>/dev/null || true)"
   if [[ -z "$query_resp" ]] || ! echo "$query_resp" | grep -q '"values"'; then
     warn "Loki 有标签但暂无日志行，请产生一些应用访问后再查看 Grafana"
     return 1
@@ -1552,7 +1575,9 @@ monitoring_fix_logs() {
     exit 1
   fi
   ok "Promtail 已挂载 backend.log"
-  sleep 2
+  info "Backend 日志大小: $(docker exec ai-platform-backend wc -c </app/logs/backend.log 2>/dev/null || echo 未知) bytes"
+  info "Promtail 日志大小: $(docker exec ai-platform-promtail wc -c </var/log/ai-platform/backend.log 2>/dev/null || echo 未知) bytes"
+  sleep 3
   monitoring_verify_loki || true
 }
 
@@ -1563,11 +1588,23 @@ monitoring_restart() {
 
 monitoring_recreate_grafana() {
   require_docker
+  monitoring_sync_app_env
   monitoring_write_env
   info "重建 Grafana 容器（应用最新配置）..."
   monitoring_compose up -d --force-recreate grafana
-  sleep 3
+  sleep 5
+  if [[ -f "$ROOT/.env.docker" ]]; then
+    local pass
+    pass="$(grep -E '^GRAFANA_ADMIN_PASSWORD=' "$ROOT/.env.docker" | tail -1 | cut -d= -f2- || true)"
+    if [[ -n "$pass" ]] && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-grafana'; then
+      docker exec ai-platform-grafana grafana-cli admin reset-admin-password "$pass" >/dev/null 2>&1 || true
+    fi
+  fi
   monitoring_provision_dashboard || true
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
+    info "重启 backend 以同步 Grafana 配置..."
+    app_compose up -d --force-recreate backend 2>/dev/null || true
+  fi
   ok "Grafana 已重建: ${GRAFANA_ROOT_URL:-http://127.0.0.1:${GRAFANA_PORT}}"
 }
 
