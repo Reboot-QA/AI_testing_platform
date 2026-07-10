@@ -98,6 +98,9 @@
           <el-menu-item v-if="userStore.hasPermission('system_logs')" index="/system/logs">
             日志监控
           </el-menu-item>
+          <el-menu-item v-if="userStore.hasPermission('system_error_logs')" index="/system/error-logs">
+            错误日志
+          </el-menu-item>
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -192,7 +195,8 @@ const showSystemMenu = computed(
     userStore.hasPermission('system_users') ||
     userStore.hasPermission('system_departments') ||
     userStore.hasPermission('system_permissions') ||
-    userStore.hasPermission('system_logs')
+    userStore.hasPermission('system_logs') ||
+    userStore.hasPermission('system_error_logs')
 )
 
 const activeMenu = computed(() => {

@@ -86,6 +86,7 @@ export const MENU_DEFINITIONS = [
   { key: 'system_departments', label: '部门权限', path: '/system/departments', group: 'system' },
   { key: 'system_permissions', label: '权限管理', path: '/system/permissions', group: 'system' },
   { key: 'system_logs', label: '日志监控', path: '/system/logs', group: 'system' },
+  { key: 'system_error_logs', label: '错误日志', path: '/system/error-logs', group: 'system' },
 ]
 
 export const PAGE_TITLES = {
@@ -106,6 +107,7 @@ export const PAGE_TITLES = {
   '/system/departments': '部门权限',
   '/system/permissions': '权限管理',
   '/system/logs': '日志监控',
+  '/system/error-logs': '错误日志',
 }
 
 export const BUSINESS_MENUS = MENU_DEFINITIONS.filter((item) => item.group === 'business')

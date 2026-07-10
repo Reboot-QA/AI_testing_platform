@@ -173,6 +173,12 @@ const routes = [
         component: () => import('@/views/LogMonitor.vue'),
         meta: { permission: 'system_logs', requiresAdmin: true },
       },
+      {
+        path: 'system/error-logs',
+        name: 'ErrorLogs',
+        component: () => import('@/views/ErrorLogs.vue'),
+        meta: { permission: 'system_error_logs', requiresAdmin: true },
+      },
     ],
   },
 ]

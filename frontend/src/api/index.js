@@ -480,4 +480,9 @@ export const logsApi = {
   tail: (params = {}) => request.get('/logs/tail', { params }),
 }
 
+export const errorLogsApi = {
+  summary: () => request.get('/logs/errors/summary'),
+  tail: (params = {}) => request.get('/logs/errors/tail', { params }),
+}
+
 export default request

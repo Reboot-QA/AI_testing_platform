@@ -88,6 +88,7 @@ MENU_DEFINITIONS: List[Dict[str, str]] = [
     {"key": "system_departments", "label": "部门权限", "path": "/system/departments", "group": "system"},
     {"key": "system_permissions", "label": "权限管理", "path": "/system/permissions", "group": "system"},
     {"key": "system_logs", "label": "日志监控", "path": "/system/logs", "group": "system"},
+    {"key": "system_error_logs", "label": "错误日志", "path": "/system/error-logs", "group": "system"},
 ]
 
 DEFAULT_TESTER_MENUS = [
