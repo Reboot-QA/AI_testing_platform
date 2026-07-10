@@ -280,6 +280,12 @@ core_containers_running() {
   return 0
 }
 
+frontend_container_healthy() {
+  local status
+  status="$(docker inspect ai-platform-frontend --format '{{.State.Status}}' 2>/dev/null || echo missing)"
+  [[ "$status" == "running" ]]
+}
+
 ensure_docker() {
   if command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1; then
     ok "Docker 已就绪: $(docker --version | head -1)"
@@ -525,10 +531,15 @@ wait_backend_ready() {
     if (( i % 5 == 0 )); then
       info "前端探测中... (${i}/30)"
     fi
-    if (( i >= 10 )) && core_containers_running; then
+    if (( i >= 10 )) && core_containers_running && frontend_container_healthy; then
       warn "宿主机端口 ${http_port} 探测超时，但 MySQL/后端/前端容器均已运行"
       ok "部署完成，请在浏览器访问: http://服务器IP:${http_port}"
       return 0
+    fi
+    if (( i >= 5 )) && ! frontend_container_healthy; then
+      warn "前端容器未正常运行（可能在重启），查看日志..."
+      compose_cmd logs frontend --tail=30 >&2 || true
+      return 1
     fi
     sleep 2
   done
