@@ -112,6 +112,7 @@ AI质量平台 - 一键部署脚本
   logs [行数]     查看前后端最近日志 (默认 50 行)
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
+  app-rebuild     重建并重启 Docker 版 backend + frontend（自动加载 .env.docker）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
   monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|fix-logs|fix-dashboard|status|logs|debug)
   docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
@@ -808,11 +809,11 @@ start_docker_mysql_if_needed() {
   [[ -f "$ROOT/docker-compose.yml" ]] || return 1
 
   info "MySQL 未就绪，正在启动 Docker MySQL 容器..."
-  docker compose --env-file "$docker_env" -f "$ROOT/docker-compose.yml" up -d mysql
+  app_compose up -d mysql
 
   local i
   for i in $(seq 1 60); do
-    if docker compose --env-file "$docker_env" -f "$ROOT/docker-compose.yml" ps mysql 2>/dev/null | grep -q "(healthy)"; then
+    if app_compose ps mysql 2>/dev/null | grep -q "(healthy)"; then
       ok "Docker MySQL 已就绪"
       return 0
     fi
@@ -820,6 +821,42 @@ start_docker_mysql_if_needed() {
   done
   warn "Docker MySQL 启动超时"
   return 1
+}
+
+ensure_app_env() {
+  local docker_env="$ROOT/.env.docker"
+  if [[ ! -f "$docker_env" ]]; then
+    error "缺少 $docker_env"
+    echo "  首次 Docker 部署请执行: ./linux-deploy.sh init-env && ./linux-deploy.sh up"
+    exit 1
+  fi
+  local missing=()
+  for key in MYSQL_ROOT_PASSWORD DB_PASSWORD SECRET_KEY; do
+    local val
+    val="$(grep -E "^${key}=" "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
+    if [[ -z "$val" ]]; then
+      missing+=("$key")
+    fi
+  done
+  if ((${#missing[@]} > 0)); then
+    error ".env.docker 缺少必填项: ${missing[*]}"
+    echo "  请执行: ./linux-deploy.sh init-env"
+    echo "  若 MySQL 已在运行且密码不同，请手动编辑 .env.docker 后重试"
+    exit 1
+  fi
+}
+
+app_compose() {
+  ensure_app_env
+  docker compose --env-file "$ROOT/.env.docker" -f "$ROOT/docker-compose.yml" "$@"
+}
+
+app_rebuild() {
+  require_docker
+  info "重建 backend + frontend（使用 .env.docker）..."
+  app_compose build backend frontend
+  app_compose up -d backend frontend
+  ok "应用已重建并启动"
 }
 
 ensure_mysql_ready() {
@@ -1573,7 +1610,7 @@ monitoring_fix_auth() {
 
   if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
     info "重启 backend 以加载新密码..."
-    (cd "$ROOT" && docker compose up -d --force-recreate backend)
+    app_compose up -d --force-recreate backend
   fi
 
   info "验证 Grafana 认证..."
@@ -1743,6 +1780,9 @@ main() {
       ;;
     update)
       update_project
+      ;;
+    app-rebuild)
+      app_rebuild
       ;;
     clone)
       clone_project "${2:-}"
