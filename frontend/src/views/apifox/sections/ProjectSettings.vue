@@ -13,6 +13,32 @@
       </div>
     </div>
 
+    <!-- 基本信息 -->
+    <div v-if="section === 'basic'" class="editor-panel">
+      <div class="basic-form">
+        <div class="field">
+          <span class="lbl">项目名称</span>
+          <el-input v-model="basicForm.name" placeholder="项目名称" style="max-width: 360px" />
+        </div>
+        <div class="field">
+          <span class="lbl">描述</span>
+          <el-input v-model="basicForm.description" type="textarea" :rows="3" placeholder="选填" style="max-width: 360px" />
+        </div>
+        <el-button type="primary" :loading="savingBasic" @click="saveBasic">保存</el-button>
+      </div>
+
+      <div class="danger-zone">
+        <div class="dz-title">危险区域</div>
+        <div class="dz-row">
+          <div>
+            <div class="dz-h">删除项目</div>
+            <div class="dz-desc">永久删除该项目及其全部接口 / 用例 / 场景 / 环境 / 数据模型 / 脚本 / 定时任务 / 运行记录等数据，不可恢复。</div>
+          </div>
+          <el-button type="danger" @click="delProject">删除项目</el-button>
+        </div>
+      </div>
+    </div>
+
     <!-- 脚本库 -->
     <template v-if="section === 'scripts'">
       <div class="list-panel">
@@ -59,22 +85,54 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { apifoxApi } from '@/api'
+import { apifoxApi, projectApi } from '@/api'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
 const route = useRoute()
+const router = useRouter()
 const pid = computed(() => route.params.projectId)
 
 const SECTIONS = [
+  { key: 'basic', label: '基本信息', icon: 'Setting' },
   { key: 'scripts', label: '脚本库', icon: 'Tickets' },
 ]
 
-const section = ref('scripts')
+const section = ref('basic')
 const scripts = ref([])
 const saving = ref(false)
 const scriptForm = reactive({ id: null, name: '', lang: 'javascript', content: '', description: '' })
+
+const savingBasic = ref(false)
+const basicForm = reactive({ name: '', description: '' })
+
+async function loadBasic() {
+  const p = await projectApi.get(pid.value)
+  basicForm.name = p.name
+  basicForm.description = p.description || ''
+}
+
+async function saveBasic() {
+  savingBasic.value = true
+  try {
+    await projectApi.update(pid.value, { name: basicForm.name, description: basicForm.description || null })
+    ElMessage.success('已保存')
+  } finally {
+    savingBasic.value = false
+  }
+}
+
+async function delProject() {
+  await ElMessageBox.confirm(
+    '将永久删除该项目及其全部接口/用例/场景/环境/数据模型/脚本/定时任务/运行记录等数据，不可恢复。确认删除？',
+    '删除项目',
+    { type: 'warning', confirmButtonText: '删除', confirmButtonClass: 'el-button--danger' },
+  )
+  await projectApi.delete(pid.value)
+  ElMessage.success('项目已删除')
+  router.push('/apifox')
+}
 
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
@@ -124,7 +182,10 @@ async function delScript(s) {
   await loadScripts()
 }
 
-onMounted(loadScripts)
+onMounted(() => {
+  loadBasic()
+  loadScripts()
+})
 </script>
 
 <style scoped>
@@ -213,5 +274,55 @@ onMounted(loadScripts)
 
 .desc-input {
   margin-bottom: 10px;
+}
+
+.basic-form {
+  max-width: 480px;
+}
+
+.field {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.lbl {
+  flex-shrink: 0;
+  width: 72px;
+  font-size: 13px;
+  color: var(--ax-text-secondary);
+  padding-top: 6px;
+}
+
+.danger-zone {
+  max-width: 620px;
+  margin-top: 28px;
+  border: 1px solid var(--ax-danger);
+  border-radius: var(--ax-radius-lg);
+  padding: 16px;
+}
+
+.dz-title {
+  font-weight: 600;
+  color: var(--ax-danger);
+  margin-bottom: 12px;
+}
+
+.dz-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.dz-h {
+  font-weight: 600;
+}
+
+.dz-desc {
+  font-size: 12px;
+  color: var(--ax-text-secondary);
+  margin-top: 2px;
 }
 </style>

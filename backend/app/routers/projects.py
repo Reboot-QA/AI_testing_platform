@@ -10,6 +10,7 @@ from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
 from app.schemas import DashboardStats, ProjectCreate, ProjectOut, ProjectUpdate
+from app.services.apifox.project_cleanup import purge_project_apifox
 from app.services.project_access_service import (
     accessible_projects_query,
     get_accessible_project,
@@ -117,6 +118,7 @@ def update_project(
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = get_accessible_project(db, project_id, current_user)
+    purge_project_apifox(db, project.id)  # 先清空该项目的全部 apifox 数据（避免 FK 阻塞/孤儿）
     db.delete(project)
     db.commit()
     return {"message": "删除成功"}
