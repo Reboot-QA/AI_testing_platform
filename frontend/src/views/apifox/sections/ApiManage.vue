@@ -3,9 +3,11 @@
     <ApiTreePanel
       ref="treePanel"
       :project-id="pid"
+      show-schemas
       @select="loadEndpoint"
       @deleted="onDeleted"
       @renamed="onRenamed"
+      @select-schema="goSchema"
     />
 
     <div class="editor-panel">
@@ -76,6 +78,11 @@ const serverNames = computed(() => {
 
 function goDataModels() {
   router.push(`/apifox/project/${pid.value}/datamodels`)
+}
+
+// 树内数据模型点击 → 数据模型 tab（带 schema 便于自动选中）
+function goSchema(id) {
+  router.push(`/apifox/project/${pid.value}/datamodels?schema=${id}`)
 }
 
 async function loadEndpoint(id) {

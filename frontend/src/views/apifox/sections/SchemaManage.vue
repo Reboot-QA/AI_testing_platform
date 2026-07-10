@@ -161,7 +161,12 @@ async function saveSchema() {
   }
 }
 
-onMounted(loadSchemas)
+onMounted(async () => {
+  await loadSchemas()
+  // 从接口树点数据模型跳转时自动选中
+  const sid = Number(route.query.schema)
+  if (sid && schemas.value.some((s) => s.id === sid)) await selectSchema(sid)
+})
 </script>
 
 <style scoped>

@@ -41,7 +41,20 @@
       </template>
     </el-tree>
 
-    <ImportDialog v-model:visible="importVisible" :project-id="pid" @imported="loadAll" />
+    <div v-if="showSchemas" class="schema-section">
+      <div class="schema-head"><el-icon><Box /></el-icon> 数据模型</div>
+      <div
+        v-for="s in filteredSchemas"
+        :key="s.id"
+        class="schema-item"
+        @click="emit('select-schema', s.id)"
+      >
+        <span class="schema-name">{{ s.name }}</span>
+      </div>
+      <div v-if="!filteredSchemas.length" class="schema-empty">暂无数据模型</div>
+    </div>
+
+    <ImportDialog v-model:visible="importVisible" :project-id="pid" @imported="reloadAll" />
     <TreeContextMenu
       :visible="ctx.visible"
       :x="ctx.x"
@@ -65,11 +78,27 @@ import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
 
 const props = defineProps({
   projectId: { type: [String, Number], required: true },
+  showSchemas: { type: Boolean, default: false },  // 接口管理开启：树下方展示数据模型段
 })
-const emit = defineEmits(['select', 'deleted', 'renamed'])
+const emit = defineEmits(['select', 'deleted', 'renamed', 'select-schema'])
 
 const pid = computed(() => props.projectId)
 const { treeData, treeRef, filterText, filterNode, allowDrop, onDrop, reload: loadAll } = useApiTree(pid)
+
+const schemas = ref([])
+const filteredSchemas = computed(() => {
+  const kw = filterText.value.trim().toLowerCase()
+  return kw ? schemas.value.filter((s) => (s.name || '').toLowerCase().includes(kw)) : schemas.value
+})
+
+async function loadSchemas() {
+  if (props.showSchemas) schemas.value = await apifoxApi.listSchemas(pid.value)
+}
+
+async function reloadAll() {
+  await loadAll()
+  await loadSchemas()
+}
 
 const selectedFolderId = ref(null)
 const importVisible = ref(false)
@@ -176,9 +205,9 @@ function openImport() {
   importVisible.value = true
 }
 
-defineExpose({ reload: loadAll, addEndpoint, openImport })
+defineExpose({ reload: reloadAll, addEndpoint, openImport })
 
-onMounted(loadAll)
+onMounted(reloadAll)
 </script>
 
 <style scoped>
@@ -225,5 +254,47 @@ onMounted(loadAll)
 
 .node:hover .node-ops {
   display: inline-flex;
+}
+
+.schema-section {
+  margin-top: 10px;
+  border-top: 1px solid var(--ax-border);
+  padding-top: 8px;
+}
+
+.schema-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ax-text-tertiary);
+  padding: 4px 8px;
+}
+
+.schema-item {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px 6px 26px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--ax-text-secondary);
+}
+
+.schema-item:hover {
+  background: var(--ax-bg-hover);
+}
+
+.schema-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.schema-empty {
+  padding: 4px 8px 4px 26px;
+  font-size: 12px;
+  color: var(--ax-text-placeholder);
 }
 </style>
