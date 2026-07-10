@@ -73,6 +73,17 @@
         <el-tab-pane label="提取" name="extracts">
           <ExtractsEditor :rows="form.extracts" />
         </el-tab-pane>
+        <el-tab-pane label="响应契约" name="contract">
+          <div class="contract-row">
+            <span class="c-label">响应数据模型</span>
+            <el-select v-model="form.response_schema_id" placeholder="不校验" clearable filterable style="width: 260px">
+              <el-option v-for="s in schemas" :key="s.id" :label="s.name" :value="s.id" />
+            </el-select>
+          </div>
+          <el-checkbox v-model="form.contract_strict" :disabled="!form.response_schema_id">
+            契约不符则判失败（默认仅提示，不影响通过）
+          </el-checkbox>
+        </el-tab-pane>
       </template>
     </el-tabs>
   </div>
@@ -93,6 +104,7 @@ defineProps({
   serverNames: { type: Array, default: () => [] },
   showProcessors: { type: Boolean, default: false },
   scripts: { type: Array, default: () => [] },
+  schemas: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 
@@ -126,5 +138,17 @@ const activeTab = ref('params')
 .none-tip {
   color: var(--ax-text-placeholder);
   padding: 12px 0;
+}
+
+.contract-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.c-label {
+  font-size: 13px;
+  color: var(--ax-text-secondary);
 }
 </style>

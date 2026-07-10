@@ -28,6 +28,8 @@ class DebugRequest(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
     post_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    # 绑定的响应模型 id（调试也做契约校验，只展示不判失败）
+    response_schema_id: Optional[int] = None
 
 
 class DebugResponse(BaseModel):
@@ -43,6 +45,7 @@ class DebugResponse(BaseModel):
     assertion_results: List[Dict[str, Any]] = Field(default_factory=list)
     extract_results: List[Dict[str, Any]] = Field(default_factory=list)
     script_logs: List[str] = Field(default_factory=list)
+    contract_result: Optional[Dict[str, Any]] = None
 
 
 @router.post("/projects/{pid}/debug", response_model=DebugResponse)
@@ -64,6 +67,7 @@ def debug_send(
             server_name=data.server_name,
             assertions=data.assertions, extracts=data.extracts,
             pre_scripts=data.pre_scripts, post_scripts=data.post_scripts,
+            response_schema_id=data.response_schema_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
