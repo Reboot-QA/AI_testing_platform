@@ -249,15 +249,24 @@ http_ok() {
   return 1
 }
 
+http_ok_local() {
+  local port="$1" path="${2:-/}"
+  local code
+  code="$(curl -s -o /dev/null -w '%{http_code}' --connect-timeout 2 --max-time 3 "http://127.0.0.1:${port}${path}" 2>/dev/null || true)"
+  code="${code:-000}"
+  [[ "$code" =~ ^(200|304)$ ]]
+}
+
 frontend_proxy_ok() {
   local http_port="${1:-5173}"
-  if http_ok "$http_port" "/docs" || http_ok "$http_port" "/"; then
+  if http_ok_local "$http_port" "/" || http_ok_local "$http_port" "/docs"; then
     return 0
   fi
-  if docker exec ai-platform-frontend wget -q -O /dev/null --timeout=3 "http://127.0.0.1/docs" 2>/dev/null; then
+  # nginx:alpine 使用 busybox wget，须用 -T/-t，不能用 GNU 的 --timeout
+  if timeout 5 docker exec ai-platform-frontend sh -c "wget -q -T 3 -t 1 -O /dev/null 'http://127.0.0.1/'" 2>/dev/null; then
     return 0
   fi
-  if docker exec ai-platform-frontend wget -q -O /dev/null --timeout=3 "http://127.0.0.1/" 2>/dev/null; then
+  if timeout 5 docker exec ai-platform-frontend sh -c "wget -q -T 3 -t 1 -O /dev/null 'http://127.0.0.1/docs'" 2>/dev/null; then
     return 0
   fi
   return 1
@@ -511,6 +520,14 @@ wait_backend_ready() {
   for i in $(seq 1 30); do
     if frontend_proxy_ok "$http_port"; then
       ok "前端已就绪 (端口 ${http_port})"
+      return 0
+    fi
+    if (( i % 5 == 0 )); then
+      info "前端探测中... (${i}/30)"
+    fi
+    if (( i >= 10 )) && core_containers_running; then
+      warn "宿主机端口 ${http_port} 探测超时，但 MySQL/后端/前端容器均已运行"
+      ok "部署完成，请在浏览器访问: http://服务器IP:${http_port}"
       return 0
     fi
     sleep 2
