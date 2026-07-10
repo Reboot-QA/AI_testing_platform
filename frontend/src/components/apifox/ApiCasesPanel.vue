@@ -21,10 +21,8 @@
     <div class="editor">
       <template v-if="form.id">
         <div class="run-bar">
-          <el-select v-model="runEnvId" placeholder="选择环境" size="small" style="width: 180px" clearable>
-            <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
-          </el-select>
           <el-button size="small" type="success" :loading="running" @click="runCase">运行</el-button>
+          <span class="run-hint">环境在顶部选择</span>
         </div>
         <CaseEditor :form="form" :saving="saving" :scripts="scripts" @save="saveCase" />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
@@ -38,6 +36,7 @@
 import { reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { emptySpec, normalizeSpec as normSpec } from '@/utils/apifoxSpec'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
@@ -46,14 +45,13 @@ import RunProgress from '@/components/apifox/RunProgress.vue'
 const props = defineProps({
   endpointId: { type: [String, Number], required: true },
   projectId: { type: [String, Number], required: true },
-  environments: { type: Array, default: () => [] },
 })
 
+const store = useWorkspaceStore()
 const cases = ref([])
 const scripts = ref([])
 const saving = ref(false)
 const running = ref(false)
-const runEnvId = ref(null)
 const runEvents = ref([])
 
 const form = reactive({
@@ -129,24 +127,13 @@ async function runCase() {
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runCaseStream(form.id, runEnvId.value, (e) => runEvents.value.push(e))
+    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId, (e) => runEvents.value.push(e))
   } catch (e) {
     ElMessage.error(e.message || '运行失败')
   } finally {
     running.value = false
   }
 }
-
-watch(
-  () => props.environments,
-  (list) => {
-    if (!runEnvId.value) {
-      const def = list.find((e) => e.is_default)
-      if (def) runEnvId.value = def.id
-    }
-  },
-  { immediate: true }
-)
 
 watch(
   () => props.endpointId,
@@ -211,7 +198,13 @@ loadScripts()
 
 .run-bar {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.run-hint {
+  color: var(--ax-text-placeholder);
+  font-size: 12px;
 }
 </style>

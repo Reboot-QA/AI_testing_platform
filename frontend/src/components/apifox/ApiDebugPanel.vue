@@ -1,11 +1,8 @@
 <template>
   <div class="debug-panel">
     <div class="send-bar">
-      <el-select v-model="envId" placeholder="选择环境" size="small" clearable style="width: 200px">
-        <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
-      </el-select>
       <el-button type="success" size="small" :loading="sending" @click="send">发送</el-button>
-      <span class="hint">直接发一次请求（不建用例、不落报告）</span>
+      <span class="hint">直接发一次请求（不建用例、不落报告）· 环境在顶部选择</span>
     </div>
 
     <ApiEndpointEditor :form="form" :saving="saving" :server-names="serverNames" @save="$emit('save')" />
@@ -30,37 +27,25 @@
 </template>
 
 <script setup>
-import { computed, ref, watch } from 'vue'
+import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 
 const props = defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
-  environments: { type: Array, default: () => [] },
   serverNames: { type: Array, default: () => [] },
   projectId: { type: [String, Number], required: true },
 })
 defineEmits(['save'])
 
-const envId = ref(null)
+const store = useWorkspaceStore()
 const sending = ref(false)
 const resp = ref(null)
 const respTab = ref('body')
-
-// 默认选中默认环境
-watch(
-  () => props.environments,
-  (list) => {
-    if (!envId.value) {
-      const def = list.find((e) => e.is_default)
-      if (def) envId.value = def.id
-    }
-  },
-  { immediate: true }
-)
 
 const statusType = computed(() => {
   const s = resp.value?.status_code
@@ -76,7 +61,7 @@ async function send() {
       path: props.form.path,
       server_name: props.form.server_name,
       request_spec: props.form.request_spec,
-      environment_id: envId.value,
+      environment_id: store.currentEnvironmentId,
     })
     respTab.value = 'body'
   } catch (e) {
