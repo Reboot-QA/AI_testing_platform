@@ -195,6 +195,22 @@ def _rewrite_grafana_location(value: str) -> str:
     if value.startswith(upstream_base):
         suffix = value[len(upstream_base) :] or "/"
         return f"{GRAFANA_PROXY_PREFIX}{suffix}"
+    rewritten = re.sub(
+        rf"https?://[^/]+(?={re.escape(GRAFANA_PROXY_PREFIX)}){re.escape(GRAFANA_PROXY_PREFIX)}",
+        "",
+        value,
+        count=1,
+    )
+    if rewritten != value:
+        return rewritten
+    rewritten = re.sub(
+        r"https?://(?:host\.docker\.internal|grafana|127\.0\.0\.1|localhost)(?::\d+)?(/.*)?$",
+        lambda m: f"{GRAFANA_PROXY_PREFIX}{m.group(1) or '/'}",
+        value,
+        count=1,
+    )
+    if rewritten != value:
+        return rewritten
     if value.startswith("/"):
         return f"{GRAFANA_PROXY_PREFIX}{value}"
     return value

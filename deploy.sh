@@ -113,7 +113,7 @@ AI质量平台 - 一键部署脚本
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
-  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|status|logs|debug)
+  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|fix-logs|status|logs|debug)
   docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
 
 环境变量:
@@ -1405,6 +1405,24 @@ monitoring_stop() {
   ok "监控栈已停止"
 }
 
+monitoring_fix_logs() {
+  require_docker
+  monitoring_env
+  monitoring_write_env
+  info "重建 Promtail 并重新挂载日志源..."
+  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
+    info "  使用 Docker 卷: ${DOCKER_APP_LOGS_VOLUME}"
+  else
+    info "  使用宿主机目录: ${LOG_DIR_HOST}"
+  fi
+  docker volume rm ai-platform-monitoring_promtail-positions 2>/dev/null || true
+  monitoring_compose up -d --force-recreate promtail
+  sleep 3
+  info "Promtail 挂载内容:"
+  docker exec ai-platform-promtail ls -la /var/log/ai-platform/ 2>&1 || true
+  monitoring_verify_loki || true
+}
+
 monitoring_restart() {
   monitoring_stop
   monitoring_start
@@ -1567,12 +1585,13 @@ monitoring_main() {
     restart) monitoring_restart ;;
     recreate-grafana) monitoring_recreate_grafana ;;
     fix-auth) monitoring_fix_auth "${2:-}" ;;
+    fix-logs) monitoring_fix_logs ;;
     status) monitoring_status ;;
     logs) monitoring_logs "${2:-100}" ;;
     debug) monitoring_debug ;;
     *)
       error "未知 monitoring 子命令: $action"
-      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|fix-auth [密码]|status|logs|debug]"
+      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|fix-auth [密码]|fix-logs|status|logs|debug]"
       exit 1
       ;;
   esac
