@@ -1,34 +1,52 @@
 <template>
-  <div>
-    <div class="toolbar">
-      <span class="hint">选择一个项目进入接口自动化工作区</span>
-      <el-button type="primary" @click="openCreate">
-        <el-icon><Plus /></el-icon> 新建项目
-      </el-button>
+  <div v-loading="loading" class="workbench">
+    <WorkbenchStats :projects="projects" />
+
+    <div class="quick-row">
+      <div class="quick-card primary" @click="openCreate">
+        <el-icon><Plus /></el-icon>
+        <span>新建项目</span>
+      </div>
+      <div v-if="lastProject" class="quick-card" @click="enter(lastProject.id)">
+        <el-icon><Position /></el-icon>
+        <span>继续上次：{{ lastProject.name }}</span>
+      </div>
     </div>
 
-    <div v-loading="loading" class="grid">
-      <el-card
-        v-for="p in projects"
-        :key="p.id"
-        class="project-card"
-        shadow="hover"
-        @click="enter(p.id)"
-      >
-        <div class="card-title">{{ p.name }}</div>
-        <div class="card-desc">{{ p.description || '暂无描述' }}</div>
-        <div class="card-meta">
-          <el-tag size="small" type="info">需求 {{ p.requirement_count }}</el-tag>
-          <el-tag size="small" type="info">用例 {{ p.testcase_count }}</el-tag>
-        </div>
-        <div class="card-foot">
-          <span>{{ p.owner_name || '-' }}</span>
-          <span>{{ formatTime(p.created_at) }}</span>
-        </div>
-      </el-card>
+    <section v-if="recentCards.length" class="block">
+      <h3 class="block-title">最近访问</h3>
+      <div class="grid">
+        <ProjectCard
+          v-for="r in recentCards"
+          :key="r.project.id"
+          :project="r.project"
+          :visited-at="r.at"
+          @enter="enter"
+        />
+      </div>
+    </section>
 
-      <el-empty v-if="!loading && projects.length === 0" description="暂无可访问的项目" />
-    </div>
+    <section class="block">
+      <div class="block-head">
+        <h3 class="block-title">全部项目</h3>
+        <el-input
+          v-model="keyword"
+          size="small"
+          clearable
+          placeholder="搜索项目名称"
+          class="search"
+        />
+      </div>
+      <div class="grid">
+        <ProjectCard
+          v-for="p in filteredProjects"
+          :key="p.id"
+          :project="p"
+          @enter="enter"
+        />
+      </div>
+      <el-empty v-if="!loading && filteredProjects.length === 0" :description="emptyText" />
+    </section>
 
     <el-dialog v-model="createVisible" title="新建项目" width="480px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
@@ -53,12 +71,34 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { projectApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useRecentProjects } from '@/composables/useRecentProjects'
+import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
+import ProjectCard from '@/components/apifox/workbench/ProjectCard.vue'
 
 const router = useRouter()
 const store = useWorkspaceStore()
+const { list: recentList } = useRecentProjects()
 
 const loading = ref(false)
+const keyword = ref('')
 const projects = computed(() => store.projects)
+
+// 最近访问记录与现存项目对齐：过滤已删除、附最新计数
+const recentCards = computed(() =>
+  recentList()
+    .map((r) => ({ at: r.at, project: projects.value.find((p) => p.id === r.id) }))
+    .filter((r) => r.project)
+)
+
+const lastProject = computed(() => recentCards.value[0]?.project || null)
+
+const filteredProjects = computed(() => {
+  const kw = keyword.value.trim().toLowerCase()
+  if (!kw) return projects.value
+  return projects.value.filter((p) => (p.name || '').toLowerCase().includes(kw))
+})
+
+const emptyText = computed(() => (keyword.value.trim() ? '没有匹配的项目' : '暂无可访问的项目'))
 
 const createVisible = ref(false)
 const submitting = ref(false)
@@ -66,10 +106,6 @@ const formRef = ref()
 const form = reactive({ name: '', description: '' })
 const rules = {
   name: [{ required: true, message: '请输入项目名', trigger: 'blur' }],
-}
-
-function formatTime(value) {
-  return value ? new Date(value).toLocaleDateString('zh-CN') : '-'
 }
 
 async function loadData() {
@@ -108,61 +144,66 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.toolbar {
+.block {
+  margin-top: 24px;
+}
+
+.block-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
-.hint {
+.block-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ax-text);
+  margin: 0 0 12px;
+}
+
+.block-head .block-title {
+  margin: 0;
+}
+
+.search {
+  width: 220px;
+}
+
+.quick-row {
+  display: flex;
+  gap: 16px;
+}
+
+.quick-card {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 22px;
+  border: 1px dashed var(--ax-border);
+  border-radius: var(--ax-radius-lg);
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.quick-card:hover {
+  border-color: var(--ax-brand);
+  color: var(--ax-brand);
+}
+
+.quick-card.primary {
+  border-style: solid;
+  border-color: var(--ax-brand);
+  color: var(--ax-brand);
+  font-weight: 600;
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
   gap: 16px;
-  min-height: 120px;
-}
-
-.project-card {
-  cursor: pointer;
-  border-left: 3px solid var(--ax-brand);
-  border-radius: var(--ax-radius-lg);
-  transition: transform 0.15s;
-}
-
-.project-card:hover {
-  transform: translateY(-2px);
-}
-
-.card-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ax-brand);
-  margin-bottom: 8px;
-}
-
-.card-desc {
-  color: var(--ax-text-secondary);
-  font-size: 13px;
-  height: 40px;
-  overflow: hidden;
-  margin-bottom: 12px;
-}
-
-.card-meta {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.card-foot {
-  display: flex;
-  justify-content: space-between;
-  color: var(--ax-text-placeholder);
-  font-size: 12px;
+  min-height: 80px;
 }
 </style>
