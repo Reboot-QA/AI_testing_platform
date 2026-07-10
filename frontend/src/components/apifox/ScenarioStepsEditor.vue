@@ -1,64 +1,56 @@
 <template>
-  <div>
-    <div ref="listEl">
-      <div v-for="(row, i) in rows" :key="row._uid" class="step-row">
-        <el-icon class="drag-handle" title="拖拽排序"><Rank /></el-icon>
-        <span class="idx">{{ i + 1 }}</span>
-        <el-checkbox v-model="row.enabled" @click.stop />
-        <el-tag size="small" :type="typeTag(row.type)">{{ typeLabel(row.type) }}</el-tag>
-        <span class="step-name">{{ displayName(row) }}</span>
-        <el-button link type="danger" size="small" @click.stop="rows.splice(i, 1)">移除</el-button>
+  <div class="steps-editor">
+    <div class="steps-col">
+      <div ref="listEl">
+        <div
+          v-for="(row, i) in rows"
+          :key="row._uid"
+          class="step-row"
+          :class="{ active: selectedUid === row._uid }"
+          @click="selectedUid = row._uid"
+        >
+          <el-icon class="drag-handle" title="拖拽排序"><Rank /></el-icon>
+          <span class="idx">{{ i + 1 }}</span>
+          <el-checkbox v-model="row.enabled" @click.stop />
+          <el-tag size="small" :type="typeTag(row.type)">{{ typeLabel(row.type) }}</el-tag>
+          <span class="step-name">{{ displayName(row) }}</span>
+          <el-button link type="danger" size="small" @click.stop="removeStep(i, row)">移除</el-button>
+        </div>
+      </div>
+      <el-empty v-if="rows.length === 0" description="暂无步骤，下方添加" :image-size="50" />
+
+      <div class="add-row">
+        <el-select v-model="newType" size="small" style="width: 90px">
+          <el-option label="用例" value="case" />
+          <el-option label="等待" value="wait" />
+          <el-option label="子场景" value="scenario" />
+        </el-select>
+        <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
+          <el-option
+            v-for="c in cases"
+            :key="c.id"
+            :label="`[${c.endpoint_method}] ${c.endpoint_name} / ${c.name}`"
+            :value="c.id"
+          />
+        </el-select>
+        <el-input-number v-else-if="newType === 'wait'" v-model="waitMs" size="small" :min="1" :step="100" style="width: 130px" />
+        <el-select v-else v-model="pickedScenarioId" size="small" placeholder="选择子场景" style="flex: 1" filterable>
+          <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
+        </el-select>
+        <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
       </div>
     </div>
-    <el-empty v-if="rows.length === 0" description="暂无步骤" :image-size="50" />
 
-    <div class="add-row">
-      <el-select v-model="newType" size="small" style="width: 100px">
-        <el-option label="用例" value="case" />
-        <el-option label="等待" value="wait" />
-        <el-option label="子场景" value="scenario" />
-      </el-select>
-
-      <el-select
-        v-if="newType === 'case'"
-        v-model="pickedCaseId"
-        size="small"
-        placeholder="选择接口用例"
-        style="width: 260px"
-        filterable
-      >
-        <el-option
-          v-for="c in cases"
-          :key="c.id"
-          :label="`[${c.endpoint_method}] ${c.endpoint_name} / ${c.name}`"
-          :value="c.id"
-        />
-      </el-select>
-      <el-input-number
-        v-else-if="newType === 'wait'"
-        v-model="waitMs"
-        size="small"
-        :min="1"
-        :step="100"
-        style="width: 140px"
+    <div class="detail-col">
+      <ScenarioStepDetail
+        v-if="selectedStep"
+        :step="selectedStep"
+        :cases="cases"
+        :scenarios="scenarios"
+        :current-scenario-id="currentScenarioId"
+        :scripts="scripts"
       />
-      <el-select
-        v-else
-        v-model="pickedScenarioId"
-        size="small"
-        placeholder="选择子场景"
-        style="width: 220px"
-        filterable
-      >
-        <el-option
-          v-for="s in availableScenarios"
-          :key="s.id"
-          :label="s.name"
-          :value="s.id"
-        />
-      </el-select>
-
-      <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加步骤</el-button>
+      <el-empty v-else description="点击左侧步骤编辑详情" :image-size="60" />
     </div>
   </div>
 </template>
@@ -66,12 +58,14 @@
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
 import { useDraggable } from 'vue-draggable-plus'
+import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
 
 const props = defineProps({
   rows: { type: Array, required: true },
   cases: { type: Array, default: () => [] },
   scenarios: { type: Array, default: () => [] },
   currentScenarioId: { type: Number, default: null },
+  scripts: { type: Array, default: () => [] },
 })
 
 let _seq = 0
@@ -85,6 +79,14 @@ watch(() => props.rows.length, ensureUids)
 
 const listEl = ref()
 useDraggable(listEl, props.rows, { animation: 150, handle: '.drag-handle' })
+
+const selectedUid = ref(null)
+const selectedStep = computed(() => props.rows.find((r) => r._uid === selectedUid.value) || null)
+
+function removeStep(i, row) {
+  if (selectedUid.value === row._uid) selectedUid.value = null
+  props.rows.splice(i, 1)
+}
 
 const newType = ref('case')
 const pickedCaseId = ref(null)
@@ -134,11 +136,41 @@ function addStep() {
 </script>
 
 <style scoped>
+.steps-editor {
+  display: flex;
+  gap: 16px;
+  height: calc(100vh - 340px);
+}
+
+.steps-col {
+  width: 400px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--ax-border);
+  overflow: auto;
+  padding-right: 10px;
+}
+
+.detail-col {
+  flex: 1;
+  overflow: auto;
+}
+
 .step-row {
   display: flex;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+  padding: 4px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.step-row:hover {
+  background: var(--ax-bg-hover);
+}
+
+.step-row.active {
+  background: var(--ax-bg-active);
 }
 
 .drag-handle {
