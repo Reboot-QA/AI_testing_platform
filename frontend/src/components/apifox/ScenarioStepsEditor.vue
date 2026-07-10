@@ -1,13 +1,14 @@
 <template>
   <div>
-    <div v-for="(row, i) in rows" :key="i" class="step-row">
-      <span class="idx">{{ i + 1 }}</span>
-      <el-checkbox v-model="row.enabled" />
-      <el-tag size="small" :type="typeTag(row.type)">{{ typeLabel(row.type) }}</el-tag>
-      <span class="step-name">{{ displayName(row) }}</span>
-      <el-button link size="small" :disabled="i === 0" @click="move(i, -1)">↑</el-button>
-      <el-button link size="small" :disabled="i === rows.length - 1" @click="move(i, 1)">↓</el-button>
-      <el-button link type="danger" size="small" @click="rows.splice(i, 1)">移除</el-button>
+    <div ref="listEl">
+      <div v-for="(row, i) in rows" :key="row._uid" class="step-row">
+        <el-icon class="drag-handle" title="拖拽排序"><Rank /></el-icon>
+        <span class="idx">{{ i + 1 }}</span>
+        <el-checkbox v-model="row.enabled" @click.stop />
+        <el-tag size="small" :type="typeTag(row.type)">{{ typeLabel(row.type) }}</el-tag>
+        <span class="step-name">{{ displayName(row) }}</span>
+        <el-button link type="danger" size="small" @click.stop="rows.splice(i, 1)">移除</el-button>
+      </div>
     </div>
     <el-empty v-if="rows.length === 0" description="暂无步骤" :image-size="50" />
 
@@ -63,7 +64,8 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { useDraggable } from 'vue-draggable-plus'
 
 const props = defineProps({
   rows: { type: Array, required: true },
@@ -71,6 +73,18 @@ const props = defineProps({
   scenarios: { type: Array, default: () => [] },
   currentScenarioId: { type: Number, default: null },
 })
+
+let _seq = 0
+function ensureUids() {
+  props.rows.forEach((r) => {
+    if (r._uid == null) r._uid = ++_seq
+  })
+}
+onMounted(ensureUids)
+watch(() => props.rows.length, ensureUids)
+
+const listEl = ref()
+useDraggable(listEl, props.rows, { animation: 150, handle: '.drag-handle' })
 
 const newType = ref('case')
 const pickedCaseId = ref(null)
@@ -104,24 +118,18 @@ function addStep() {
     const c = props.cases.find((x) => x.id === pickedCaseId.value)
     props.rows.push({
       type: 'case', ref_case_id: c.id, enabled: true,
-      case_name: c.name, endpoint_method: c.endpoint_method,
+      case_name: c.name, endpoint_method: c.endpoint_method, _uid: ++_seq,
     })
     pickedCaseId.value = null
   } else if (newType.value === 'wait') {
-    props.rows.push({ type: 'wait', wait_ms: waitMs.value, enabled: true })
+    props.rows.push({ type: 'wait', wait_ms: waitMs.value, enabled: true, _uid: ++_seq })
   } else {
     const s = props.scenarios.find((x) => x.id === pickedScenarioId.value)
     props.rows.push({
-      type: 'scenario', ref_scenario_id: s.id, enabled: true, scenario_name: s.name,
+      type: 'scenario', ref_scenario_id: s.id, enabled: true, scenario_name: s.name, _uid: ++_seq,
     })
     pickedScenarioId.value = null
   }
-}
-
-function move(i, delta) {
-  const j = i + delta
-  const [row] = props.rows.splice(i, 1)
-  props.rows.splice(j, 0, row)
 }
 </script>
 
@@ -131,6 +139,15 @@ function move(i, delta) {
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: var(--ax-text-placeholder);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
 }
 
 .idx {
