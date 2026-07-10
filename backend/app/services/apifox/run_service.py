@@ -81,6 +81,7 @@ def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str
         assertion_results=_dumps(detail.get("assertion_results") or []),
         extract_results=_dumps(detail.get("extract_results") or []),
         script_logs=_dumps(detail.get("script_logs") or []),
+        contract_result=_dumps(detail["contract_result"]) if detail.get("contract_result") else None,
         error_message=detail.get("error_message"),
     )
     run_repo.add(ctx.db, step)

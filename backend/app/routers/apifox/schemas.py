@@ -96,6 +96,8 @@ class EndpointCreate(BaseModel):
     server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     description: Optional[str] = None
+    response_schema_id: Optional[int] = None
+    contract_strict: bool = False
     assertions: List[AssertionRow] = Field(default_factory=list)
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
@@ -111,6 +113,8 @@ class EndpointUpdate(BaseModel):
     request_spec: Optional[RequestSpec] = None
     description: Optional[str] = None
     sort_order: Optional[int] = None
+    response_schema_id: Optional[int] = None
+    contract_strict: Optional[bool] = None
     assertions: Optional[List[AssertionRow]] = None
     extracts: Optional[List[ExtractRow]] = None
     pre_scripts: Optional[List[CaseScriptRef]] = None
@@ -139,6 +143,8 @@ class EndpointOut(BaseModel):
     request_spec: RequestSpec
     description: Optional[str] = None
     sort_order: int
+    response_schema_id: Optional[int] = None
+    contract_strict: bool = False
     assertions: List[AssertionRow] = Field(default_factory=list)
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
