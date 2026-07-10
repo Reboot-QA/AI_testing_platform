@@ -21,6 +21,8 @@
 #   DOCKER_BUILD_NETWORK=host  构建时使用宿主机网络（海外 VPS DNS 异常时可试）
 #   SKIP_DOCKER_BUILD=1        跳过镜像构建，直接启动（构建已卡住且镜像已存在时用）
 #   FRONTEND_BUILD_MEMORY_MB=2048  前端 Vite 构建内存上限（小内存 VPS 可设 1536）
+  FORCE_FRONTEND_BUILD=1         强制重新 npm build + 打 frontend 镜像
+  ALWAYS_FRONTEND_BUILD=1        每次部署都重新 npm build（最稳，略慢）
 
 set -euo pipefail
 
@@ -311,12 +313,44 @@ build_frontend_dist_on_host() {
   [[ -f "$ROOT/frontend/dist/index.html" ]]
 }
 
+frontend_dist_needs_rebuild() {
+  [[ "${FORCE_FRONTEND_BUILD:-0}" == "1" ]] && return 0
+  [[ "${ALWAYS_FRONTEND_BUILD:-0}" == "1" ]] && return 0
+  [[ ! -f "$ROOT/frontend/dist/index.html" ]] && return 0
+
+  local dist_ts latest_src_ts
+  dist_ts="$(stat -c %Y "$ROOT/frontend/dist/index.html" 2>/dev/null || echo 0)"
+  latest_src_ts="$(
+    find "$ROOT/frontend/src" "$ROOT/frontend/index.html" "$ROOT/frontend/vite.config.js" \
+      -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1 | cut -d. -f1
+  )"
+  [[ -z "$latest_src_ts" || "$latest_src_ts" -gt "$dist_ts" ]]
+}
+
+verify_frontend_dist() {
+  local assets_dir="$ROOT/frontend/dist/assets"
+  [[ -f "$ROOT/frontend/dist/index.html" ]] || return 1
+  [[ -d "$assets_dir" ]] || return 1
+  local js_count
+  js_count="$(find "$assets_dir" -maxdepth 1 -name '*.js' 2>/dev/null | wc -l | tr -d ' ')"
+  [[ "${js_count:-0}" -ge 5 ]]
+}
+
 build_frontend_image() {
   if command -v node >/dev/null 2>&1; then
-    build_frontend_dist_on_host || warn "宿主机构建 frontend/dist 失败，将尝试使用已有 dist 或容器内构建"
+    if frontend_dist_needs_rebuild; then
+      build_frontend_dist_on_host || warn "宿主机构建 frontend/dist 失败，将尝试使用已有 dist 或容器内构建"
+    else
+      info "frontend/dist 与源码时间戳一致，跳过 npm build（强制重建: FORCE_FRONTEND_BUILD=1）"
+    fi
+  elif frontend_dist_needs_rebuild; then
+    warn "未安装 Node，无法根据最新源码生成 dist，将使用已有 dist 或容器内构建"
   fi
 
   if [[ -f "$ROOT/frontend/dist/index.html" ]]; then
+    if ! verify_frontend_dist; then
+      warn "frontend/dist 内容异常（资源过少），建议 FORCE_FRONTEND_BUILD=1 重新构建"
+    fi
     docker_build_prebuilt_frontend
     return 0
   fi
@@ -330,10 +364,13 @@ cmd_rebuild_frontend() {
   fix_script_permissions
   ensure_docker
   ensure_env_file
-  build_frontend_image
+  FORCE_FRONTEND_BUILD=1 build_frontend_image
   compose_cmd up -d --force-recreate frontend
   ok "前端已重建并重启"
-  info "验证: docker exec ai-platform-frontend ls /usr/share/nginx/html/assets/ | grep -iE 'ErrorLogs|LogMonitor' || true"
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx ai-platform-frontend; then
+    info "容器内前端资源示例:"
+    docker exec ai-platform-frontend ls /usr/share/nginx/html/assets/ 2>/dev/null | head -8 || true
+  fi
 }
 
 health_check_hosts() {
