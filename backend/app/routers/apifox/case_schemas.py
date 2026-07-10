@@ -8,23 +8,28 @@ from typing import Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.routers.apifox.schemas import KvRow, RequestSpec
+from app.routers.apifox.schemas import (
+    AssertionRow,
+    CaseScriptOut,
+    CaseScriptRef,
+    ExtractRow,
+    KvRow,
+    RequestSpec,
+)
 
-
-class AssertionRow(BaseModel):
-    type: str = "status_code"  # status_code|json_path|header|contains|response_time
-    path: Optional[str] = None
-    operator: str = "eq"  # eq|neq|contains|not_contains|gt|gte|lt|lte|regex|exists
-    expected: Optional[str] = None
-    enabled: bool = True
-
-
-class ExtractRow(BaseModel):
-    var_name: str
-    source: str = "response_json"
-    path: Optional[str] = None
-    scope: str = "temporary"  # temporary|environment|global
-    enabled: bool = True
+__all__ = [
+    "AssertionRow",
+    "ExtractRow",
+    "CaseScriptRef",
+    "CaseScriptOut",
+    "DataDriveRow",
+    "DataDrive",
+    "CaseCreate",
+    "CaseUpdate",
+    "CaseBrief",
+    "ProjectCaseBrief",
+    "CaseOut",
+]
 
 
 class DataDriveRow(BaseModel):
@@ -36,18 +41,6 @@ class DataDriveRow(BaseModel):
 class DataDrive(BaseModel):
     enabled: bool = False
     rows: List[DataDriveRow] = Field(default_factory=list)
-
-
-class CaseScriptRef(BaseModel):
-    """用例前后置对项目脚本库的引用。"""
-
-    script_id: int
-    enabled: bool = True
-
-
-class CaseScriptOut(CaseScriptRef):
-    script_name: str = ""
-    script_lang: str = ""
 
 
 class CaseCreate(BaseModel):

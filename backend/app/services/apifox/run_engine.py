@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.apifox.variable import ApifoxEnvironment, ApifoxEnvironmentVariable, ApifoxGlobalVariable
-from app.repositories.apifox import global_param_repo, script_repo, variable_repo
+from app.repositories.apifox import endpoint_repo, global_param_repo, script_repo, variable_repo
 from app.services.api_response_extract import _extract_value_by_source
 from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.api_script_runner import run_post_script, run_pre_script
@@ -316,21 +316,24 @@ def run_extracts(
     return extracted, scoped, results
 
 
-def run_case_scripts(
-    db: Session, case_id: int, phase: str, variables: Dict[str, str],
+def run_script_links(
+    db: Session, links, is_pre: bool, variables: Dict[str, str],
     response: Optional[httpx.Response] = None, duration_ms: float = 0,
 ) -> Tuple[Dict[str, str], List[str], Optional[str]]:
-    """按顺序执行该 phase 引用的库脚本，串联 variables。返回 (variables, logs, first_error)。"""
+    """按给定顺序执行一组已过滤 phase 的脚本引用，串联 variables。返回 (variables, logs, first_error)。
+
+    接口级与用例级脚本合并叠加：调用方按序拼接 links（前置 接口在前、后置 用例在前）。
+    """
     logs: List[str] = []
     first_error: Optional[str] = None
     current = dict(variables)
-    for link in script_repo.list_case_scripts(db, case_id):
-        if link.phase != phase or not link.enabled:
+    for link in links:
+        if not link.enabled:
             continue
         script = script_repo.get_script(db, link.script_id)
         if not script or not (script.content or "").strip():
             continue
-        if phase == "pre":
+        if is_pre:
             current, script_logs, error = run_pre_script(script.content, script.lang, current)
         else:
             current, script_logs, error = run_post_script(
@@ -343,6 +346,10 @@ def run_case_scripts(
         if error and first_error is None:
             first_error = f"[{script.name}] {error}"
     return current, logs, first_error
+
+
+def _phase_links(links, phase: str):
+    return [link for link in links if link.phase == phase]
 
 
 def persist_scoped_extracts(
@@ -408,8 +415,15 @@ def execute_case(
         "script_logs": [], "extracted": {}, "scoped": [], "error_message": None,
     }
 
-    # 前置脚本（error → failed）
-    variables, pre_logs, pre_error = run_case_scripts(db, case.id, "pre", variables)
+    # 处理器合并叠加：接口级 + 用例级
+    ep_scripts = script_repo.list_endpoint_scripts(db, endpoint.id)
+    case_scripts = script_repo.list_case_scripts(db, case.id)
+    ep_assertions = endpoint_repo.list_endpoint_assertions(db, endpoint.id)
+    ep_extracts = endpoint_repo.list_endpoint_extracts(db, endpoint.id)
+
+    # 前置脚本（接口-pre 先于 用例-pre；error → failed）
+    pre_links = _phase_links(ep_scripts, "pre") + _phase_links(case_scripts, "pre")
+    variables, pre_logs, pre_error = run_script_links(db, pre_links, True, variables)
     detail["script_logs"].extend(pre_logs)
     if pre_error:
         detail["error_message"] = f"前置脚本失败: {pre_error}"
@@ -449,21 +463,26 @@ def execute_case(
     detail["response_headers"] = dict(response.headers)
     detail["response_body"] = _truncate(response.text)
 
-    passed, assertion_results = evaluate_assertions(assertions, response, duration_ms)
+    # 断言并集：接口断言 + 用例断言都评估
+    passed, assertion_results = evaluate_assertions(
+        list(ep_assertions) + list(assertions), response, duration_ms
+    )
     detail["assertion_results"] = assertion_results
 
+    # 提取并集：接口提取在前，用例同名变量后写覆盖
     request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
     extracted, scoped, extract_results = run_extracts(
-        extracts, response, request_snapshot, duration_ms
+        list(ep_extracts) + list(extracts), response, request_snapshot, duration_ms
     )
     detail["extracted"] = extracted
     detail["scoped"] = scoped
     detail["extract_results"] = extract_results
 
-    # 后置脚本（error 仅记录）
+    # 后置脚本（用例-post 先于 接口-post；error 仅记录）
     variables.update(extracted)
-    _, post_logs, post_error = run_case_scripts(
-        db, case.id, "post", variables, response=response, duration_ms=duration_ms
+    post_links = _phase_links(case_scripts, "post") + _phase_links(ep_scripts, "post")
+    _, post_logs, post_error = run_script_links(
+        db, post_links, False, variables, response=response, duration_ms=duration_ms
     )
     detail["script_logs"].extend(post_logs)
     if post_error:

@@ -41,3 +41,17 @@ class ApifoxCaseScript(Base):
     phase: Mapped[str] = mapped_column(String(10))
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ApifoxEndpointScript(Base):
+    """接口级前后置脚本引用（镜像 ApifoxCaseScript，挂 endpoint）。"""
+
+    __tablename__ = "apifox_endpoint_scripts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    endpoint_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoints.id"), index=True)
+    script_id: Mapped[int] = mapped_column(ForeignKey("apifox_scripts.id"), index=True)
+    # pre | post
+    phase: Mapped[str] = mapped_column(String(10))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)

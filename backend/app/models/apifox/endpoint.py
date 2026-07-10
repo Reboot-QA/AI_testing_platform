@@ -8,7 +8,7 @@ request_spec 存结构化 JSON（请求「数据」：query/path_params/headers/
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -28,6 +28,39 @@ class ApifoxFolder(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class ApifoxEndpointAssertion(Base):
+    """接口级断言（镜像 ApifoxCaseAssertion，挂 endpoint）。运行/调试时与用例断言合并叠加。"""
+
+    __tablename__ = "apifox_endpoint_assertions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    endpoint_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoints.id"), index=True)
+    # status_code | json_path | header | contains | response_time
+    type: Mapped[str] = mapped_column(String(20))
+    path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    operator: Mapped[str] = mapped_column(String(20), default="eq")
+    expected: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ApifoxEndpointExtract(Base):
+    """接口级提取（镜像 ApifoxCaseExtract，挂 endpoint）。"""
+
+    __tablename__ = "apifox_endpoint_extracts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    endpoint_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoints.id"), index=True)
+    var_name: Mapped[str] = mapped_column(String(200))
+    # response_json | response_header | response_text | ...
+    source: Mapped[str] = mapped_column(String(30), default="response_json")
+    path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # temporary | environment | global
+    scope: Mapped[str] = mapped_column(String(20), default="temporary")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class ApifoxEndpoint(Base):
