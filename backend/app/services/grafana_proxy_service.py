@@ -147,7 +147,26 @@ def _rewrite_grafana_body(content: bytes, content_type: str, public_proxy_base: 
         text,
         flags=re.IGNORECASE,
     )
+    # Grafana 未正确配置 subpath 时，boot 数据里 appSubUrl 为空，前端会把 /api、/login 指到平台根路径
+    text = re.sub(
+        r'"appSubUrl"\s*:\s*"[^"]*"',
+        f'"appSubUrl":"{GRAFANA_PROXY_PREFIX}"',
+        text,
+    )
+    text = re.sub(
+        r'"appUrl"\s*:\s*"[^"]*"',
+        f'"appUrl":"{public_proxy_base}/"',
+        text,
+    )
     return text.encode("utf-8")
+
+
+def _upstream_auth() -> Optional[httpx.BasicAuth]:
+    user = (settings.grafana_admin_user or "").strip()
+    password = settings.grafana_admin_password or ""
+    if user and password:
+        return httpx.BasicAuth(user, password)
+    return None
 
 
 def build_launch_url(origin: str, user_id: int, username: str, role: str, redirect: str) -> str:
@@ -207,7 +226,7 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     headers = {
         key: value
         for key, value in request.headers.items()
-        if key.lower() not in HOP_BY_HOP_HEADERS
+        if key.lower() not in HOP_BY_HOP_HEADERS and key.lower() != "authorization"
     }
     headers["X-WEBAUTH-USER"] = user_ctx["username"]
     headers["X-WEBAUTH-ROLE"] = _grafana_role(user_ctx["role"])
@@ -216,9 +235,16 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     headers["X-Forwarded-Prefix"] = GRAFANA_PROXY_PREFIX
 
     body = await request.body()
+    upstream_auth = _upstream_auth()
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), follow_redirects=False) as client:
-            upstream = await client.request(request.method, target_url, headers=headers, content=body)
+            upstream = await client.request(
+                request.method,
+                target_url,
+                headers=headers,
+                content=body,
+                auth=upstream_auth,
+            )
     except httpx.RequestError as exc:
         logger.warning("Grafana 代理失败: %s", exc)
         raise HTTPException(status_code=502, detail="无法连接 Grafana，请确认监控栈已启动") from exc

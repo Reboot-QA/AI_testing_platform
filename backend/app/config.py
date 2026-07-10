@@ -30,6 +30,8 @@ class Settings(BaseSettings):
     grafana_port: int = 3000
     grafana_public_url: str = ""
     grafana_embed: bool = True
+    grafana_admin_user: str = ""
+    grafana_admin_password: str = ""
     loki_url: str = ""
     loki_port: int = 3100
     loki_public_url: str = ""
