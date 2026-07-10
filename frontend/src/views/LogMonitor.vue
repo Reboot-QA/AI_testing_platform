@@ -1,8 +1,6 @@
 <template>
   <div class="log-monitor">
-    <el-tabs v-model="activeTab" class="monitor-tabs">
-      <el-tab-pane label="内置监控" name="builtin">
-        <el-row :gutter="16" class="stats-row">
+    <el-row :gutter="16" class="stats-row">
       <el-col v-for="item in sources" :key="item.key" :xs="24" :sm="8">
         <el-card shadow="never" class="stat-card" :class="{ active: activeSource === item.key }" @click="switchSource(item.key)">
           <div class="stat-title">{{ item.label }}</div>
@@ -80,178 +78,6 @@
         </div>
       </div>
     </el-card>
-      </el-tab-pane>
-
-      <el-tab-pane label="Grafana Loki" name="grafana">
-        <el-card shadow="never" v-loading="integrationLoading">
-          <template #header>
-            <div class="grafana-header">
-              <span>Grafana + Loki 日志平台</span>
-              <el-button :loading="integrationLoading" @click="loadIntegrations">
-                <el-icon><Refresh /></el-icon>
-                刷新状态
-              </el-button>
-            </div>
-          </template>
-
-          <el-row :gutter="16" class="integration-stats">
-            <el-col :xs="24" :sm="8">
-              <el-card shadow="never" class="integration-card">
-                <div class="integration-title">Grafana</div>
-                <el-tag :type="integrations.grafana_online ? 'success' : 'danger'" size="small">
-                  {{ integrations.grafana_online ? '在线' : '离线' }}
-                </el-tag>
-                <div class="integration-url">{{ integrations.grafana_url || '-' }}</div>
-              </el-card>
-            </el-col>
-            <el-col :xs="24" :sm="8">
-              <el-card shadow="never" class="integration-card">
-                <div class="integration-title">Loki</div>
-                <el-tag :type="integrations.loki_online ? 'success' : 'danger'" size="small">
-                  {{ integrations.loki_online ? '在线' : '离线' }}
-                </el-tag>
-                <div class="integration-url">{{ integrations.loki_url || '-' }}</div>
-              </el-card>
-            </el-col>
-            <el-col :xs="24" :sm="8">
-              <el-card shadow="never" class="integration-card">
-                <div class="integration-title">代理认证</div>
-                <el-tag :type="integrations.grafana_auth_ok ? 'success' : 'warning'" size="small">
-                  {{ integrations.grafana_auth_ok ? '正常' : '异常' }}
-                </el-tag>
-                <div class="integration-url">平台账号免登 · 后端服务账号代理</div>
-              </el-card>
-            </el-col>
-          </el-row>
-
-          <el-alert
-            v-if="integrations.grafana_online && !integrations.grafana_auth_ok"
-            class="setup-alert"
-            type="error"
-            show-icon
-            :closable="false"
-            title="Grafana 自动登录失败"
-          >
-            <template #default>
-              <p>{{ integrations.grafana_auth_message || 'Grafana 管理员密码与后端配置不一致' }}</p>
-              <pre class="setup-code">./deploy.sh monitoring fix-auth 'AIPlatform@2026'</pre>
-            </template>
-          </el-alert>
-
-          <el-alert
-            v-if="integrations.grafana_online && integrations.grafana_auth_ok && !integrations.grafana_dashboard_ok"
-            class="setup-alert"
-            type="warning"
-            show-icon
-            :closable="false"
-            title="Grafana 仪表盘未导入"
-          >
-            <template #default>
-              <p>{{ integrations.grafana_dashboard_message || '预置仪表盘尚未配置，内嵌将临时使用 Explore 查看日志' }}</p>
-              <pre class="setup-code">./deploy.sh monitoring fix-dashboard</pre>
-            </template>
-          </el-alert>
-
-          <el-tabs v-model="grafanaSubTab" class="grafana-sub-tabs">
-            <el-tab-pane label="Loki 直查" name="loki">
-              <div class="loki-toolbar">
-                <el-select v-model="lokiHours" style="width: 130px">
-                  <el-option label="最近 1 小时" :value="1" />
-                  <el-option label="最近 6 小时" :value="6" />
-                  <el-option label="最近 24 小时" :value="24" />
-                </el-select>
-                <el-select v-model="lokiLimit" style="width: 110px">
-                  <el-option label="100 行" :value="100" />
-                  <el-option label="200 行" :value="200" />
-                  <el-option label="500 行" :value="500" />
-                </el-select>
-                <el-input
-                  v-model="lokiQuery"
-                  clearable
-                  placeholder='LogQL，如 {job="ai-platform"}'
-                  class="loki-query-input"
-                  @keyup.enter="runLokiQuery"
-                />
-                <el-button type="primary" :loading="lokiLoading" :disabled="!integrations.loki_online" @click="runLokiQuery">
-                  查询
-                </el-button>
-              </div>
-              <div class="log-meta">
-                <span>匹配: {{ lokiLines.length }} 行</span>
-                <span>数据源: Loki API</span>
-              </div>
-              <div v-loading="lokiLoading" class="log-viewer loki-viewer">
-                <div v-if="!lokiLines.length && !lokiLoading" class="empty-tip">暂无 Loki 日志，请确认 Promtail 已采集</div>
-                <div
-                  v-for="(line, index) in lokiLines"
-                  :key="`${line.timestamp}-${index}`"
-                  class="log-line"
-                  :class="`level-${(line.level || 'INFO').toLowerCase()}`"
-                >
-                  <span class="line-no">{{ line.timestamp || '·' }}</span>
-                  <span class="line-level">{{ line.source || 'loki' }}</span>
-                  <span class="line-text">{{ line.text }}</span>
-                </div>
-              </div>
-            </el-tab-pane>
-
-            <el-tab-pane label="Grafana Explore" name="dashboard">
-              <div class="grafana-actions">
-                <el-button type="primary" :disabled="!integrations.monitoring_online" @click="openGrafana(integrations.dashboard_url)">
-                  新窗口打开仪表盘
-                </el-button>
-                <el-button :disabled="!integrations.monitoring_online" @click="openGrafana(integrations.explore_url)">
-                  新窗口打开 Explore
-                </el-button>
-              </div>
-              <p v-if="integrations.grafana_dashboard_ok" class="grafana-hint">
-                内嵌为 Grafana Explore 日志视图；多面板仪表盘请点「新窗口打开仪表盘」。
-              </p>
-              <p v-else-if="integrations.grafana_online" class="grafana-hint">
-                预置仪表盘 slug 需更新，请执行 <code>./deploy.sh monitoring fix-dashboard</code> 后点「新窗口打开仪表盘」。
-              </p>
-
-              <el-alert
-                v-if="!integrations.monitoring_online"
-                class="setup-alert"
-                type="info"
-                show-icon
-                :closable="false"
-                title="监控栈尚未就绪"
-              >
-                <template #default>
-                  <p>在服务器上执行：</p>
-                  <pre class="setup-code">{{ integrations.startup_hint || './deploy.sh monitoring start' }}</pre>
-                  <p>平台通过后端服务账号代理 Grafana，无需手动输入 Grafana 密码。</p>
-                </template>
-              </el-alert>
-
-              <el-alert
-                v-if="embedError"
-                class="setup-alert"
-                type="error"
-                show-icon
-                :closable="false"
-                title="Grafana 内嵌加载失败"
-              >
-                <template #default>
-                  <p>{{ embedError }}</p>
-                  <el-button type="primary" link @click="loadIntegrations">重新加载</el-button>
-                </template>
-              </el-alert>
-
-              <iframe
-                v-if="showEmbed && embedUrl"
-                class="grafana-embed"
-                :src="embedUrl"
-                title="Grafana Dashboard"
-                @error="handleEmbedError"
-              />
-            </el-tab-pane>
-          </el-tabs>
-        </el-card>
-      </el-tab-pane>
-    </el-tabs>
   </div>
 </template>
 
@@ -272,47 +98,9 @@ const autoScroll = ref(true)
 const displayLines = ref([])
 const totalMatched = ref(0)
 const logContainerRef = ref(null)
-const activeTab = ref('builtin')
-const grafanaSubTab = ref('loki')
-const integrationLoading = ref(false)
-const lokiQuery = ref('{job="ai-platform"}')
-const lokiHours = ref(6)
-const lokiLimit = ref(200)
-const lokiLoading = ref(false)
-const lokiLines = ref([])
-const integrations = ref({
-  enabled: true,
-  embed_enabled: true,
-  use_proxy: true,
-  grafana_url: '',
-  loki_url: '',
-  dashboard_url: '',
-  explore_url: '',
-  embed_url: '',
-  grafana_online: false,
-  loki_online: false,
-  grafana_auth_ok: false,
-  grafana_auth_message: '',
-  grafana_dashboard_ok: true,
-  grafana_dashboard_message: '',
-  monitoring_online: false,
-  anonymous_access: false,
-  startup_hint: './deploy.sh monitoring fix-dashboard',
-})
-const embedUrl = ref('')
 
 let streamAbort = null
 let refreshTimer = null
-let integrationTimer = null
-
-const showEmbed = computed(
-  () =>
-    integrations.value.embed_enabled &&
-    integrations.value.grafana_online &&
-    integrations.value.grafana_auth_ok &&
-    embedUrl.value,
-)
-const embedError = ref('')
 
 const sourceOptions = computed(() =>
   sources.value.map((item) => ({ label: item.label, value: item.key }))
@@ -458,121 +246,10 @@ async function downloadLog() {
   URL.revokeObjectURL(url)
 }
 
-const originParams = () => ({
-  public_host: window.location.hostname,
-  public_origin: window.location.origin,
-})
-
-const GRAFANA_PROXY_PREFIX = '/api/v1/logs/grafana'
-const EMBED_QUERY_PARAM = '_pt'
-const PLATFORM_ACCESS_TOKEN_PARAM = 'access_token'
-
-function buildGrafanaProxyUrl(redirect, embedToken = '') {
-  const path = redirect.startsWith('/') ? redirect : `/${redirect}`
-  let url = `${window.location.origin}${GRAFANA_PROXY_PREFIX}${path}`
-  const appendParam = (name, value) => {
-    url += `${url.includes('?') ? '&' : '?'}${name}=${encodeURIComponent(value)}`
-  }
-  if (embedToken) {
-    appendParam(EMBED_QUERY_PARAM, embedToken)
-  }
-  const platformToken = localStorage.getItem('token')
-  if (platformToken) {
-    appendParam(PLATFORM_ACCESS_TOKEN_PARAM, platformToken)
-  }
-  return url
-}
-
-async function ensureGrafanaSession() {
-  return logsApi.grafanaSession()
-}
-
-function handleEmbedError() {
-  embedError.value = '无法加载 Grafana 页面，请尝试「新窗口打开仪表盘」或刷新页面'
-}
-
-async function runLokiQuery() {
-  if (!integrations.value.loki_online) return
-  lokiLoading.value = true
-  try {
-    const data = await logsApi.lokiQuery({
-      query: lokiQuery.value || undefined,
-      limit: lokiLimit.value,
-      hours: lokiHours.value,
-    })
-    lokiLines.value = data.lines || []
-  } finally {
-    lokiLoading.value = false
-  }
-}
-
-async function loadIntegrations() {
-  integrationLoading.value = true
-  embedError.value = ''
-  try {
-    integrations.value = await logsApi.integrations(originParams())
-    embedUrl.value = ''
-    if (
-      integrations.value.grafana_online &&
-      integrations.value.grafana_auth_ok &&
-      integrations.value.embed_url
-    ) {
-      if (integrations.value.use_proxy) {
-        let embedToken = ''
-        try {
-          const session = await ensureGrafanaSession()
-          embedToken = session?.embed_token || ''
-        } catch {
-          // session 失败时仍可用平台 JWT 嵌入
-        }
-        if (!embedToken && !localStorage.getItem('token')) {
-          embedError.value = 'Grafana 会话创建失败，请刷新页面重试'
-          return
-        }
-        embedUrl.value = buildGrafanaProxyUrl(
-          integrations.value.embed_url,
-          embedToken,
-        )
-      } else {
-        embedUrl.value = integrations.value.embed_url
-      }
-    }
-    if (integrations.value.loki_online && !lokiLines.value.length) {
-      await runLokiQuery()
-    }
-  } finally {
-    integrationLoading.value = false
-  }
-}
-
-async function openGrafana(redirect) {
-  if (!redirect) return
-  if (integrations.value.use_proxy) {
-    let embedToken = ''
-    try {
-      const session = await ensureGrafanaSession()
-      embedToken = session?.embed_token || ''
-    } catch {
-      // session 失败时仍可用平台 JWT 打开
-    }
-    if (!embedToken && !localStorage.getItem('token')) {
-      ElMessage.error('登录已失效，请重新登录后再打开 Grafana')
-      return
-    }
-    window.open(
-      buildGrafanaProxyUrl(redirect, embedToken),
-      '_blank',
-      'noopener,noreferrer',
-    )
-    return
-  }
-  window.open(redirect, '_blank', 'noopener,noreferrer')
-}
-
 onMounted(async () => {
   loading.value = true
   try {
-    await Promise.all([loadSources(), loadIntegrations()])
+    await loadSources()
     if (liveMode.value) {
       await startStream()
     } else {
@@ -584,7 +261,6 @@ onMounted(async () => {
         await refreshLogs()
       }
     }, 10000)
-    integrationTimer = window.setInterval(loadIntegrations, 15000)
   } finally {
     loading.value = false
   }
@@ -594,9 +270,6 @@ onBeforeUnmount(() => {
   stopStream()
   if (refreshTimer) {
     clearInterval(refreshTimer)
-  }
-  if (integrationTimer) {
-    clearInterval(integrationTimer)
   }
 })
 </script>
@@ -729,97 +402,5 @@ onBeforeUnmount(() => {
 .level-debug .line-level,
 .level-debug .line-text {
   color: #86efac;
-}
-
-.monitor-tabs {
-  --el-tabs-header-height: 44px;
-}
-
-.grafana-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.integration-stats {
-  margin-bottom: 16px;
-}
-
-.integration-card {
-  min-height: 110px;
-}
-
-.integration-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.integration-url {
-  margin-top: 10px;
-  color: #909399;
-  font-size: 12px;
-  word-break: break-all;
-}
-
-.grafana-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 16px;
-}
-
-.setup-alert {
-  margin-bottom: 16px;
-}
-
-.setup-code {
-  margin: 8px 0;
-  padding: 10px 12px;
-  background: #0f172a;
-  color: #e2e8f0;
-  border-radius: 6px;
-  font-family: Consolas, Monaco, 'Courier New', monospace;
-}
-
-.grafana-hint {
-  margin: 0 0 12px;
-  color: #606266;
-  font-size: 13px;
-}
-
-.grafana-hint code {
-  font-family: Consolas, Monaco, 'Courier New', monospace;
-  background: #f4f4f5;
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.grafana-embed {
-  width: 100%;
-  height: 720px;
-  border: 1px solid #ebeef5;
-  border-radius: 8px;
-  background: #111;
-}
-
-.grafana-sub-tabs {
-  margin-top: 4px;
-}
-
-.loki-toolbar {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 12px;
-}
-
-.loki-query-input {
-  flex: 1;
-  min-width: 260px;
-}
-
-.loki-viewer {
-  height: 620px;
 }
 </style>

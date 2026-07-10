@@ -76,10 +76,6 @@ class UserPasswordChange(BaseModel):
     new_password: str = Field(min_length=6)
 
 
-class GrafanaLaunchIn(BaseModel):
-    redirect: str = "/"
-
-
 class MenuDefinitionOut(BaseModel):
     key: str
     label: str
