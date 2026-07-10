@@ -16,19 +16,11 @@
 #   WITH_MONITORING=1    同时启动 Grafana + Loki
 #   RESET_MYSQL=1        删除 MySQL 数据卷后重建（会清空数据库）
 #   ENV_FILE=.env.docker 指定 env 文件
-#   BACKUP_DIR=路径      备份目录（默认 /opt/ai-platform-backups/mysql）
+#   BACKUP_DIR=路径      备份目录（默认 .deploy/backups/mysql）
 #   BACKUP_KEEP_DAYS=30  自动清理超过 N 天的备份
 #   DOCKER_BUILD_NETWORK=host  构建时使用宿主机网络（海外 VPS DNS 异常时可试）
-#   SKIP_DOCKER_BUILD=1        跳过镜像构建，直接启动（构建已卡住且镜像已存在时用）
-#   FRONTEND_BUILD_MEMORY_MB=2048  前端 Vite 构建内存上限（小内存 VPS 可设 1536）
-  FORCE_FRONTEND_BUILD=1         强制重新 npm build + 打 frontend 镜像
-  ALWAYS_FRONTEND_BUILD=1        每次部署都重新 npm build（最稳，略慢）
 
 set -euo pipefail
-
-# 避免 Docker BuildKit 在 resolving provenance for metadata file 阶段卡住
-export BUILDX_NO_DEFAULT_ATTESTATIONS="${BUILDX_NO_DEFAULT_ATTESTATIONS:-1}"
-export BUILDKIT_PROGRESS="${BUILDKIT_PROGRESS:-plain}"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
@@ -40,12 +32,8 @@ PUBLIC_HOST="${PUBLIC_HOST:-}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-1}"
 WITH_MONITORING="${WITH_MONITORING:-0}"
 RESET_MYSQL="${RESET_MYSQL:-0}"
-DEFAULT_BACKUP_DIR="/opt/ai-platform-backups/mysql"
-BACKUP_DIR="${BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+BACKUP_DIR="${BACKUP_DIR:-$ROOT/.deploy/backups/mysql}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
-BACKUP_CRON_HOUR="${BACKUP_CRON_HOUR:-3}"
-BACKUP_CRON_MINUTE="${BACKUP_CRON_MINUTE:-0}"
-BACKUP_CRON_FILE="/etc/cron.d/ai-platform-mysql-backup"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-ai-platform-mysql}"
 
 RED='\033[0;31m'
@@ -76,9 +64,6 @@ AI质量平台 - Linux 一键部署（Docker）
   backup-db         备份 MySQL 数据库（mysqldump + gzip）
   backup-list       列出本地备份文件
   backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
-  backup-setup-cron 创建 /opt 备份目录并安装每日自动备份（cron）
-  backup-cron-status 查看自动备份任务状态
-  rebuild-frontend  仅重建前端 dist + 镜像并重启（菜单不更新时用）
   restore-db <文件> 从 .sql / .sql.gz 恢复数据库
   update | pull     从 Git 拉取代码并重新构建部署
   init-env          生成 .env.docker 并写入默认 MySQL 密码
@@ -90,10 +75,8 @@ AI质量平台 - Linux 一键部署（Docker）
   WITH_MONITORING=1 启动 Grafana + Loki
   RESET_MYSQL=1     清空 MySQL 数据卷前自动备份
   ENV_FILE          env 文件路径（默认 .env.docker）
-  BACKUP_DIR        备份目录（默认 /opt/ai-platform-backups/mysql）
+  BACKUP_DIR        备份目录（默认 .deploy/backups/mysql）
   BACKUP_KEEP_DAYS  保留天数（默认 30）
-  BACKUP_CRON_HOUR  每日备份小时（默认 3，即凌晨 3 点）
-  BACKUP_CRON_MINUTE 每日备份分钟（默认 0）
   RESTORE_CONFIRM=1 恢复数据库时跳过交互确认
   DOCKER_BUILD_NETWORK  Docker 构建网络（DNS 异常时可设 host）
 
@@ -103,8 +86,7 @@ AI质量平台 - Linux 一键部署（Docker）
   WITH_MONITORING=1 ./linux-deploy.sh up
   ./linux-deploy.sh logs backend
   ./linux-deploy.sh backup-db
-  ./linux-deploy.sh backup-setup-cron
-  ./linux-deploy.sh restore-db /opt/ai-platform-backups/mysql/ai_testcase_20260703_030000.sql.gz
+  ./linux-deploy.sh restore-db .deploy/backups/mysql/ai_testcase_20260703_030000.sql.gz
 EOF
 }
 
@@ -220,157 +202,7 @@ compose_cmd() {
   if [[ "$WITH_MONITORING" == "1" ]]; then
     profiles+=(--profile monitoring)
   fi
-  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
-}
-
-docker_cli_supports_flag() {
-  local cmd="$1"
-  shift
-  local flag="$1"
-  case "$flag" in
-    --progress)
-      # 旧版 docker build 帮助里可能提到 progress，但实际不支持该参数
-      if [[ "$cmd" == "docker" ]] && [[ "${2:-}" == "build" ]]; then
-        return 1
-      fi
-      ;;
-  esac
-  "$cmd" --help 2>&1 | grep -q -- "$flag"
-}
-
-compose_build_extra_flags() {
-  local flags=()
-  if docker_cli_supports_flag docker compose build '--provenance'; then
-    flags+=(--provenance=false --sbom=false)
-  fi
-  if docker_cli_supports_flag docker compose build '--progress'; then
-    flags+=(--progress=plain)
-  fi
-  printf '%s\n' "${flags[@]}"
-}
-
-compose_build_service() {
-  local service="$1"
-  shift
-  local -a extra=("$@")
-  local -a flags=()
-  mapfile -t flags < <(compose_build_extra_flags)
-
-  info "构建镜像: ${service}"
-  if compose_cmd build "${flags[@]}" "${extra[@]}" "$service"; then
-    return 0
-  fi
-
-  warn "${service} BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
-  DOCKER_BUILDKIT=0 compose_cmd build "${extra[@]}" "$service"
-}
-
-docker_build_prebuilt_frontend() {
-  if [[ ! -f "$ROOT/frontend/dist/index.html" ]]; then
-    error "frontend/dist 不存在，无法打包 nginx 镜像。请先执行: cd frontend && npm ci && npm run build"
-  fi
-
-  local -a args=(
-    --no-cache
-    -f "$ROOT/frontend/Dockerfile.prebuilt"
-    -t ai-testing-platform-frontend:latest
-    "$ROOT/frontend"
-  )
-
-  info "打包 frontend 镜像（--no-cache，确保使用最新 dist）..."
-  if docker build "${args[@]}"; then
-    return 0
-  fi
-
-  warn "frontend 镜像构建失败，改用 DOCKER_BUILDKIT=0..."
-  DOCKER_BUILDKIT=0 docker build "${args[@]}"
-}
-
-compose_build_images() {
-  info "构建镜像 backend + frontend..."
-  compose_build_service backend
-  build_frontend_image
-  ok "镜像构建完成"
-}
-
-build_frontend_dist_on_host() {
-  if ! command -v node >/dev/null 2>&1; then
-    return 1
-  fi
-  if [[ ! -f "$ROOT/frontend/package.json" ]]; then
-    return 1
-  fi
-
-  info "在宿主机构建前端 dist..."
-  (
-    cd "$ROOT/frontend"
-    if [[ ! -d node_modules ]]; then
-      npm ci --prefer-offline 2>/dev/null || npm install
-    fi
-    local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
-    NODE_OPTIONS="--max-old-space-size=${mem_mb}" npm run build
-  )
-  [[ -f "$ROOT/frontend/dist/index.html" ]]
-}
-
-frontend_dist_needs_rebuild() {
-  [[ "${FORCE_FRONTEND_BUILD:-0}" == "1" ]] && return 0
-  [[ "${ALWAYS_FRONTEND_BUILD:-0}" == "1" ]] && return 0
-  [[ ! -f "$ROOT/frontend/dist/index.html" ]] && return 0
-
-  local dist_ts latest_src_ts
-  dist_ts="$(stat -c %Y "$ROOT/frontend/dist/index.html" 2>/dev/null || echo 0)"
-  latest_src_ts="$(
-    find "$ROOT/frontend/src" "$ROOT/frontend/index.html" "$ROOT/frontend/vite.config.js" \
-      -type f -printf '%T@\n' 2>/dev/null | sort -n | tail -1 | cut -d. -f1
-  )"
-  [[ -z "$latest_src_ts" || "$latest_src_ts" -gt "$dist_ts" ]]
-}
-
-verify_frontend_dist() {
-  local assets_dir="$ROOT/frontend/dist/assets"
-  [[ -f "$ROOT/frontend/dist/index.html" ]] || return 1
-  [[ -d "$assets_dir" ]] || return 1
-  local js_count
-  js_count="$(find "$assets_dir" -maxdepth 1 -name '*.js' 2>/dev/null | wc -l | tr -d ' ')"
-  [[ "${js_count:-0}" -ge 5 ]]
-}
-
-build_frontend_image() {
-  if command -v node >/dev/null 2>&1; then
-    if frontend_dist_needs_rebuild; then
-      build_frontend_dist_on_host || warn "宿主机构建 frontend/dist 失败，将尝试使用已有 dist 或容器内构建"
-    else
-      info "frontend/dist 与源码时间戳一致，跳过 npm build（强制重建: FORCE_FRONTEND_BUILD=1）"
-    fi
-  elif frontend_dist_needs_rebuild; then
-    warn "未安装 Node，无法根据最新源码生成 dist，将使用已有 dist 或容器内构建"
-  fi
-
-  if [[ -f "$ROOT/frontend/dist/index.html" ]]; then
-    if ! verify_frontend_dist; then
-      warn "frontend/dist 内容异常（资源过少），建议 FORCE_FRONTEND_BUILD=1 重新构建"
-    fi
-    docker_build_prebuilt_frontend
-    return 0
-  fi
-
-  warn "frontend/dist 不存在，改在 Docker 内完整构建 frontend（耗时较长）..."
-  local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
-  compose_build_service frontend --build-arg "NODE_MEMORY_MB=${mem_mb}"
-}
-
-cmd_rebuild_frontend() {
-  fix_script_permissions
-  ensure_docker
-  ensure_env_file
-  FORCE_FRONTEND_BUILD=1 build_frontend_image
-  compose_cmd up -d --force-recreate frontend
-  ok "前端已重建并重启"
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx ai-platform-frontend; then
-    info "容器内前端资源示例:"
-    docker exec ai-platform-frontend ls /usr/share/nginx/html/assets/ 2>/dev/null | head -8 || true
-  fi
+  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
 }
 
 health_check_hosts() {
@@ -528,19 +360,10 @@ backup_timestamp() {
   date +%Y%m%d_%H%M%S
 }
 
-load_backup_config() {
-  if [[ -f "$ENV_FILE" ]]; then
-    BACKUP_DIR="$(read_env_value BACKUP_DIR "$BACKUP_DIR")"
-    BACKUP_KEEP_DAYS="$(read_env_value BACKUP_KEEP_DAYS "$BACKUP_KEEP_DAYS")"
-  fi
-  mkdir -p "$BACKUP_DIR"
-}
-
 cmd_backup_db() {
   fix_script_permissions
   ensure_docker
   ensure_env_file
-  load_backup_config
   ensure_mysql_container
 
   local db_name tag outfile tmpfile
@@ -575,8 +398,7 @@ cmd_backup_db() {
 
 cmd_backup_list() {
   fix_script_permissions
-  ensure_env_file
-  load_backup_config
+  mkdir -p "$BACKUP_DIR"
   echo "备份目录: $BACKUP_DIR"
   echo
   if ! ls -lh "$BACKUP_DIR"/*.sql.gz "$BACKUP_DIR"/*.sql 2>/dev/null; then
@@ -586,8 +408,7 @@ cmd_backup_list() {
 
 cmd_backup_prune() {
   fix_script_permissions
-  ensure_env_file
-  load_backup_config
+  mkdir -p "$BACKUP_DIR"
   local count
   count="$(find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -mtime +"$BACKUP_KEEP_DAYS" | wc -l | tr -d ' ')"
   if [[ "$count" == "0" ]]; then
@@ -597,81 +418,6 @@ cmd_backup_prune() {
   info "将删除 ${count} 个超过 ${BACKUP_KEEP_DAYS} 天的备份..."
   find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -mtime +"$BACKUP_KEEP_DAYS" -print -delete
   ok "旧备份已清理"
-}
-
-cmd_backup_setup_cron() {
-  fix_script_permissions
-  ensure_env_file
-
-  local backup_dir="${BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
-  local keep_days="${BACKUP_KEEP_DAYS:-30}"
-  local cron_hour="${BACKUP_CRON_HOUR:-3}"
-  local cron_minute="${BACKUP_CRON_MINUTE:-0}"
-  local backup_root
-  backup_root="$(dirname "$backup_dir")"
-  local backup_log="${backup_root}/backup.log"
-  local runner="$ROOT/scripts/mysql-daily-backup.sh"
-
-  mkdir -p "$backup_dir"
-  chmod 755 "$backup_root" 2>/dev/null || true
-  chmod 700 "$backup_dir" 2>/dev/null || true
-  touch "$backup_log" 2>/dev/null || true
-
-  set_env_value BACKUP_DIR "$backup_dir"
-  set_env_value BACKUP_KEEP_DAYS "$keep_days"
-
-  [[ -f "$runner" ]] || error "缺少脚本: $runner"
-  chmod +x "$runner" "$ROOT/linux-deploy.sh"
-
-  if [[ "$(id -u)" -ne 0 ]]; then
-    warn "安装系统 cron 需要 root，尝试写入当前用户 crontab..."
-    local cron_line="${cron_minute} ${cron_hour} * * * cd ${ROOT} && BACKUP_DIR=${backup_dir} BACKUP_KEEP_DAYS=${keep_days} ${runner} >> ${backup_log} 2>&1"
-    (crontab -l 2>/dev/null | grep -v 'mysql-daily-backup.sh' || true; echo "$cron_line") | crontab -
-    ok "已写入当前用户 crontab"
-    ok "执行时间: 每天 ${cron_hour}:$(printf '%02d' "$cron_minute")"
-    ok "备份目录: ${backup_dir}"
-    ok "日志文件: ${backup_log}"
-    return 0
-  fi
-
-  cat >"$BACKUP_CRON_FILE" <<EOF
-# AI质量平台 MySQL 每日自动备份（./linux-deploy.sh backup-setup-cron）
-SHELL=/bin/bash
-PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
-${cron_minute} ${cron_hour} * * * root ${runner} >> ${backup_log} 2>&1
-EOF
-  chmod 644 "$BACKUP_CRON_FILE"
-
-  ok "已安装系统 cron: $BACKUP_CRON_FILE"
-  ok "执行时间: 每天 ${cron_hour}:$(printf '%02d' "$cron_minute")"
-  ok "备份目录: ${backup_dir}"
-  ok "日志文件: ${backup_log}"
-  info "立即试跑一次: ${runner}"
-  BACKUP_DIR="$backup_dir" BACKUP_KEEP_DAYS="$keep_days" "$runner" || warn "试跑失败，请检查 MySQL 容器是否运行"
-}
-
-cmd_backup_cron_status() {
-  ensure_env_file
-  load_backup_config
-  local backup_root backup_log
-  backup_root="$(dirname "$BACKUP_DIR")"
-  backup_log="${backup_root}/backup.log"
-
-  echo "备份目录: $BACKUP_DIR"
-  echo "保留天数: $BACKUP_KEEP_DAYS"
-  echo "日志文件: $backup_log"
-  echo
-  if [[ -f "$BACKUP_CRON_FILE" ]]; then
-    echo "系统 cron ($BACKUP_CRON_FILE):"
-    cat "$BACKUP_CRON_FILE"
-  else
-    warn "未安装系统 cron 文件: $BACKUP_CRON_FILE"
-  fi
-  echo
-  echo "当前用户 crontab（如有）:"
-  crontab -l 2>/dev/null | grep -E 'mysql-daily-backup|backup-db' || echo "(无)"
-  echo
-  cmd_backup_list
 }
 
 cmd_restore_db() {
@@ -909,12 +655,7 @@ cmd_up() {
   if [[ "${DOCKER_BUILD_NETWORK:-}" == "host" ]]; then
     warn "DOCKER_BUILD_NETWORK=host：构建阶段使用宿主机网络（适用于 DNS 解析异常）"
   fi
-  if [[ "${SKIP_DOCKER_BUILD:-0}" != "1" ]]; then
-    compose_build_images
-  else
-    warn "SKIP_DOCKER_BUILD=1：跳过镜像构建，直接启动已有镜像"
-  fi
-  compose_cmd up -d
+  compose_cmd up -d --build
 
   info "等待 MySQL 健康检查..."
   local i mysql_status
@@ -1013,8 +754,7 @@ cmd_update() {
   fi
 
   info "重新构建并启动 Docker 服务..."
-  compose_build_images
-  compose_cmd up -d
+  compose_cmd up -d --build
 
   info "等待 MySQL 健康检查..."
   local i mysql_status
@@ -1060,9 +800,6 @@ main() {
   backup-db|backup) cmd_backup_db ;;
   backup-list|backups) cmd_backup_list ;;
   backup-prune|prune-backups) cmd_backup_prune ;;
-  backup-setup-cron|setup-backup-cron) cmd_backup_setup_cron ;;
-  backup-cron-status|backup-status) cmd_backup_cron_status ;;
-  rebuild-frontend|frontend-rebuild) cmd_rebuild_frontend ;;
   restore-db|restore) shift || true; cmd_restore_db "${1:-}" ;;
   update|pull) cmd_update ;;
   init-env|init) cmd_init_env ;;

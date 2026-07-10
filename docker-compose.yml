@@ -35,8 +35,6 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       network: ${DOCKER_BUILD_NETWORK:-default}
-      provenance: false
-      sbom: false
     container_name: ai-platform-backend
     restart: unless-stopped
     environment:
@@ -54,11 +52,19 @@ services:
       AI_GENERATE_BATCH_SIZE: ${AI_GENERATE_BATCH_SIZE:-8}
       AI_GENERATE_CONCURRENCY: ${AI_GENERATE_CONCURRENCY:-4}
       LOG_DIR: /app/logs
+      GRAFANA_ENABLED: ${GRAFANA_ENABLED:-true}
+      GRAFANA_URL: ${GRAFANA_URL:-http://grafana:3000}
+      GRAFANA_PORT: ${GRAFANA_PORT:-3000}
+      GRAFANA_PUBLIC_URL: ${GRAFANA_PUBLIC_URL:-}
+      GRAFANA_EMBED: "true"
+      LOKI_URL: ${LOKI_URL:-http://loki:3100}
+      LOKI_PORT: ${LOKI_PORT:-3100}
+      LOKI_PUBLIC_URL: ${LOKI_PUBLIC_URL:-}
       TZ: Asia/Shanghai
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - ${HOST_LOG_DIR:-./.deploy/logs}:/app/logs
+      - app-logs:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -72,22 +78,17 @@ services:
       start_period: 180s
     networks:
       - app
+      - monitoring
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        NODE_MEMORY_MB: ${FRONTEND_BUILD_MEMORY_MB:-2048}
-      provenance: false
-      sbom: false
     container_name: ai-platform-frontend
     restart: unless-stopped
     depends_on:
       backend:
         condition: service_started
-    volumes:
-      - ${HOST_LOG_DIR:-./.deploy/logs}:/var/log/ai-platform
     ports:
       - "${HTTP_PORT:-5173}:80"
     networks:
@@ -113,7 +114,7 @@ services:
     container_name: ai-platform-promtail
     restart: unless-stopped
     volumes:
-      - ${HOST_LOG_DIR:-./.deploy/logs}:/var/log/ai-platform:ro
+      - app-logs:/var/log/ai-platform:ro
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
       - promtail-positions:/tmp
     command: -config.file=/etc/promtail/config.yml
@@ -133,7 +134,12 @@ services:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-password}
       GF_SECURITY_ALLOW_EMBEDDING: "true"
-      GF_AUTH_PROXY_ENABLED: "false"
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: X-WEBAUTH-USER
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_HEADERS: "Role:X-WEBAUTH-ROLE"
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: Viewer
       GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_SERVER_SERVE_FROM_SUB_PATH: "true"
       GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://127.0.0.1:5173/api/v1/logs/grafana}
@@ -155,6 +161,7 @@ networks:
 
 volumes:
   mysql-data:
+  app-logs:
   loki-data:
   grafana-data:
   promtail-positions:

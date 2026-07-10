@@ -112,9 +112,8 @@ AI质量平台 - 一键部署脚本
   logs [行数]     查看前后端最近日志 (默认 50 行)
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
-  app-rebuild     重建并重启 Docker 版 backend + frontend（自动加载 .env.docker）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
-  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|fix-logs|fix-dashboard|status|logs|debug)
+  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|status|logs|debug)
   docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
 
 环境变量:
@@ -809,11 +808,11 @@ start_docker_mysql_if_needed() {
   [[ -f "$ROOT/docker-compose.yml" ]] || return 1
 
   info "MySQL 未就绪，正在启动 Docker MySQL 容器..."
-  app_compose up -d mysql
+  docker compose --env-file "$docker_env" -f "$ROOT/docker-compose.yml" up -d mysql
 
   local i
   for i in $(seq 1 60); do
-    if app_compose ps mysql 2>/dev/null | grep -q "(healthy)"; then
+    if docker compose --env-file "$docker_env" -f "$ROOT/docker-compose.yml" ps mysql 2>/dev/null | grep -q "(healthy)"; then
       ok "Docker MySQL 已就绪"
       return 0
     fi
@@ -821,51 +820,6 @@ start_docker_mysql_if_needed() {
   done
   warn "Docker MySQL 启动超时"
   return 1
-}
-
-ensure_app_env() {
-  local docker_env="$ROOT/.env.docker"
-  if [[ ! -f "$docker_env" ]]; then
-    error "缺少 $docker_env"
-    echo "  首次 Docker 部署请执行: ./linux-deploy.sh init-env && ./linux-deploy.sh up"
-    exit 1
-  fi
-  local missing=()
-  for key in MYSQL_ROOT_PASSWORD DB_PASSWORD SECRET_KEY; do
-    local val
-    val="$(grep -E "^${key}=" "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
-    if [[ -z "$val" ]]; then
-      missing+=("$key")
-    fi
-  done
-  if ((${#missing[@]} > 0)); then
-    error ".env.docker 缺少必填项: ${missing[*]}"
-    echo "  请执行: ./linux-deploy.sh init-env"
-    echo "  若 MySQL 已在运行且密码不同，请手动编辑 .env.docker 后重试"
-    exit 1
-  fi
-}
-
-app_compose() {
-  ensure_app_env
-  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --env-file "$ROOT/.env.docker" -f "$ROOT/docker-compose.yml" "$@"
-}
-
-app_rebuild() {
-  require_docker
-  info "重建 backend + frontend（使用 .env.docker）..."
-  export BUILDX_NO_DEFAULT_ATTESTATIONS=1
-  export BUILDKIT_PROGRESS=plain
-  if docker compose build --help 2>&1 | grep -q -- '--provenance'; then
-    if ! app_compose build --provenance=false --sbom=false backend frontend; then
-      warn "BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
-      DOCKER_BUILDKIT=0 app_compose build backend frontend
-    fi
-  elif ! app_compose build backend frontend; then
-    DOCKER_BUILDKIT=0 app_compose build backend frontend
-  fi
-  app_compose up -d backend frontend
-  ok "应用已重建并启动"
 }
 
 ensure_mysql_ready() {
@@ -1296,85 +1250,30 @@ require_docker() {
 
 monitoring_compose() {
   cd "$MONITORING_DIR"
-  local files=(-f docker-compose.yml)
-  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
-    files+=(-f docker-compose.docker-volume.yml)
-  else
-    files+=(-f docker-compose.host-logs.yml)
-  fi
-  docker compose "${files[@]}" "$@"
+  docker compose "$@"
 }
 
 monitoring_has_running() {
   monitoring_compose ps --status running 2>/dev/null | grep -qE 'loki|grafana|promtail'
 }
 
-monitoring_sync_app_env() {
-  local docker_env="$ROOT/.env.docker"
-  [[ -f "$docker_env" ]] || return 0
-  local val
-  val="$(grep -E '^GRAFANA_ADMIN_PASSWORD=' "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
-  [[ -n "$val" ]] && export GRAFANA_ADMIN_PASSWORD="$val"
-  val="$(grep -E '^GRAFANA_ADMIN_USER=' "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
-  [[ -n "$val" ]] && export GRAFANA_ADMIN_USER="$val"
-  val="$(grep -E '^HOST_LOG_DIR=' "$docker_env" 2>/dev/null | tail -1 | cut -d= -f2- || true)"
-  if [[ -n "$val" ]]; then
-    if [[ "$val" != /* ]]; then
-      val="$ROOT/$val"
-    fi
-    if [[ -d "$val" ]]; then
-      export HOST_LOG_DIR="$val"
-      export LOG_DIR_HOST="$val"
-    fi
-  fi
-}
-
 monitoring_env() {
   local access_host
   access_host="$(detect_public_host 2>/dev/null || detect_lan_ip 2>/dev/null || echo "127.0.0.1")"
-  monitoring_sync_app_env
   prepare_dirs
   mkdir -p "$LOG_DIR"
   export LOG_DIR_HOST="$(cd "$LOG_DIR" && pwd)"
   export LOG_DIR_CONTAINER="/var/log/ai-platform"
-  export HOST_LOG_DIR="${HOST_LOG_DIR:-$LOG_DIR_HOST}"
   export GRAFANA_PORT
   export LOKI_PORT
   export GRAFANA_ADMIN_USER
   export GRAFANA_ADMIN_PASSWORD
   export GRAFANA_ROOT_URL="${GRAFANA_ROOT_URL:-http://${access_host}:${FRONTEND_PORT}/api/v1/logs/grafana}"
   export GRAFANA_ANONYMOUS_ENABLED="${GRAFANA_ANONYMOUS_ENABLED:-false}"
-  monitoring_detect_log_volume
-}
-
-monitoring_detect_log_volume() {
-  export DOCKER_APP_LOGS_VOLUME=""
-  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
-    return 0
-  fi
-  local mount_name mount_source mount_type
-  mount_type="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Type}}{{end}}{{end}}' 2>/dev/null || true)"
-  mount_name="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
-  mount_source="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)"
-
-  if [[ "$mount_type" == "volume" && -n "$mount_name" ]]; then
-    export DOCKER_APP_LOGS_VOLUME="$mount_name"
-    info "检测到 backend 日志卷: ${DOCKER_APP_LOGS_VOLUME}（Promtail 将挂载同一卷）"
-    return 0
-  fi
-
-  if [[ -n "$mount_source" && -d "$mount_source" ]]; then
-    export LOG_DIR_HOST="$mount_source"
-    export HOST_LOG_DIR="$mount_source"
-    info "检测到 backend 日志 bind 目录: ${LOG_DIR_HOST}"
-  fi
 }
 
 monitoring_validate() {
   monitoring_env
-  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
-    return 0
-  fi
   if [[ -z "$LOG_DIR_HOST" ]]; then
     error "LOG_DIR_HOST 未设置，请使用: ./deploy.sh monitoring start"
     exit 1
@@ -1385,86 +1284,6 @@ monitoring_validate() {
     exit 1
   fi
   touch "$LOG_DIR_HOST/backend.log" "$LOG_DIR_HOST/frontend.log" 2>/dev/null || true
-}
-
-monitoring_wait_grafana() {
-  local i base="http://127.0.0.1:${GRAFANA_PORT:-3000}"
-  for i in $(seq 1 30); do
-    if curl -sf "${base}/api/health" >/dev/null 2>&1; then
-      return 0
-    fi
-    sleep 2
-  done
-  warn "Grafana 启动超时"
-  return 1
-}
-
-monitoring_provision_dashboard() {
-  local user pass port base dash_file payload http_code
-  user="${GRAFANA_ADMIN_USER:-admin}"
-  pass="${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-password}"
-  port="${GRAFANA_PORT:-3000}"
-  base="http://127.0.0.1:${port}"
-  dash_file="$ROOT/monitoring/grafana/dashboards/ai-platform-logs.json"
-
-  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-grafana'; then
-    warn "Grafana 容器未运行，跳过仪表盘导入"
-    return 1
-  fi
-
-  monitoring_wait_grafana || return 1
-
-  local force="${1:-}"
-  if [[ "$force" != "force" ]]; then
-    local meta_url=""
-    meta_url="$(curl -sf -u "${user}:${pass}" "${base}/api/dashboards/uid/ai-platform-logs" 2>/dev/null \
-      | python3 -c "import sys,json; print(json.load(sys.stdin).get('meta',{}).get('url',''))" 2>/dev/null || true)"
-    if [[ "$meta_url" == *"/d/ai-platform-logs/ai-platform-logs"* ]]; then
-      ok "仪表盘 ai-platform-logs 已就绪（slug 正确）"
-      return 0
-    fi
-    if [[ -n "$meta_url" ]]; then
-      warn "仪表盘 slug 已过期: ${meta_url}"
-      info "将强制覆盖导入（英文标题 → slug: ai-platform-logs）"
-    fi
-  fi
-
-  if [[ ! -f "$dash_file" ]]; then
-    warn "找不到仪表盘文件: $dash_file"
-    return 1
-  fi
-
-  if ! command -v python3 >/dev/null 2>&1; then
-    warn "需要 python3 才能导入仪表盘"
-    return 1
-  fi
-
-  info "导入预置仪表盘「AI Platform Logs」..."
-  payload="$(python3 - "$dash_file" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], encoding="utf-8") as handle:
-    dashboard = json.load(handle)
-dashboard["id"] = None
-print(json.dumps(
-    {"dashboard": dashboard, "overwrite": True, "message": "AI platform provision"},
-    ensure_ascii=False,
-))
-PY
-)"
-  http_code="$(curl -s -o /tmp/grafana-dash-import.json -w "%{http_code}" \
-    -u "${user}:${pass}" \
-    -X POST "${base}/api/dashboards/db" \
-    -H "Content-Type: application/json" \
-    -d "$payload")"
-  if [[ "$http_code" == "200" ]]; then
-    ok "仪表盘导入成功"
-    return 0
-  fi
-  warn "仪表盘导入失败 (HTTP ${http_code})"
-  cat /tmp/grafana-dash-import.json 2>/dev/null || true
-  return 1
 }
 
 monitoring_verify_loki() {
@@ -1482,11 +1301,9 @@ monitoring_verify_loki() {
     echo "  4. 重置采集: docker compose -f $MONITORING_DIR/docker-compose.yml down -v && ./deploy.sh monitoring start"
     return 1
   fi
-  query_resp="$(curl -sf -G "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/query_range" \
+  query_resp="$(curl -sf -G "http://127.0.0.1:${LOKI_PORT}/loki/api/v1/query" \
     --data-urlencode 'query={job="ai-platform"}' \
-    --data-urlencode 'limit=5' \
-    --data-urlencode "start=$(($(date +%s) - 86400))000000000" \
-    --data-urlencode "end=$(date +%s)000000000" 2>/dev/null || true)"
+    --data-urlencode 'limit=1' 2>/dev/null || true)"
   if [[ -z "$query_resp" ]] || ! echo "$query_resp" | grep -q '"values"'; then
     warn "Loki 有标签但暂无日志行，请产生一些应用访问后再查看 Grafana"
     return 1
@@ -1499,7 +1316,6 @@ monitoring_write_env() {
   monitoring_env
   cat >"$MONITORING_DIR/.env" <<EOF
 LOG_DIR_HOST=${LOG_DIR_HOST}
-DOCKER_APP_LOGS_VOLUME=${DOCKER_APP_LOGS_VOLUME:-}
 GRAFANA_PORT=${GRAFANA_PORT}
 LOKI_PORT=${LOKI_PORT}
 GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}
@@ -1516,37 +1332,33 @@ monitoring_start() {
   monitoring_validate
   monitoring_write_env
   info "启动 Grafana + Loki + Promtail ..."
-  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
-    info "  日志卷:   ${DOCKER_APP_LOGS_VOLUME} -> ${LOG_DIR_CONTAINER}"
-  else
-    info "  日志目录: ${LOG_DIR_HOST} -> ${LOG_DIR_CONTAINER}"
-  fi
+  info "  日志目录: $LOG_DIR_HOST -> $LOG_DIR_CONTAINER"
   info "  Grafana:  ${GRAFANA_ROOT_URL}"
-  if ! monitoring_compose config --quiet; then
+  cd "$MONITORING_DIR"
+  if ! docker compose config --quiet; then
     error "docker-compose 配置无效，请执行: ./deploy.sh monitoring debug"
     exit 1
   fi
   info "拉取镜像（首次可能较慢）..."
-  if ! monitoring_compose pull; then
+  if ! docker compose pull; then
     warn "镜像拉取失败，若服务器在国内请配置 Docker 镜像加速后重试"
     warn "参考: ./deploy.sh monitoring debug"
   fi
   info "执行: docker compose up -d"
-  if ! monitoring_compose up -d --remove-orphans; then
+  if ! docker compose up -d --remove-orphans; then
     error "监控栈启动失败，详情如下:"
-    monitoring_compose ps -a || true
-    monitoring_compose logs --tail=50 || true
+    docker compose ps -a || true
+    docker compose logs --tail=50 || true
     exit 1
   fi
   sleep 3
   if ! monitoring_has_running; then
     error "监控容器未正常运行，请查看日志: ./deploy.sh monitoring logs"
-    monitoring_compose ps -a || true
-    monitoring_compose logs --tail=80 || true
+    docker compose ps -a || true
+    docker compose logs --tail=80 || true
     exit 1
   fi
   monitoring_verify_loki || true
-  monitoring_provision_dashboard || true
   ok "监控栈已启动"
   monitoring_status
   warn "Grafana 默认账号: ${GRAFANA_ADMIN_USER} / ${GRAFANA_ADMIN_PASSWORD} （生产环境请修改）"
@@ -1556,48 +1368,9 @@ monitoring_start() {
 monitoring_stop() {
   require_docker
   monitoring_write_env
-  monitoring_compose down --remove-orphans 2>/dev/null || true
+  cd "$MONITORING_DIR"
+  docker compose down --remove-orphans 2>/dev/null || true
   ok "监控栈已停止"
-}
-
-monitoring_fix_logs() {
-  require_docker
-  monitoring_env
-  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
-    error "backend 容器未运行，请先启动应用"
-    exit 1
-  fi
-  if [[ -z "${LOG_DIR_HOST:-}" && -z "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
-    error "无法检测 backend 日志位置"
-    exit 1
-  fi
-  monitoring_write_env
-  info "重建 Promtail 并挂载 backend 日志..."
-  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
-    info "  使用 Docker 卷: ${DOCKER_APP_LOGS_VOLUME}"
-    docker run --rm -v "${DOCKER_APP_LOGS_VOLUME}:/logs:ro" alpine ls -la /logs | head -10 || true
-  else
-    info "  使用宿主机目录: ${LOG_DIR_HOST}"
-  fi
-  docker volume rm ai-platform-monitoring_promtail-positions 2>/dev/null || true
-  monitoring_compose up -d --force-recreate promtail
-  sleep 4
-  info "Promtail 挂载内容:"
-  if ! docker exec ai-platform-promtail ls -la /var/log/ai-platform/; then
-    error "Promtail 无法访问日志目录"
-    exit 1
-  fi
-  if ! docker exec ai-platform-promtail test -f /var/log/ai-platform/backend.log 2>/dev/null; then
-    error "Promtail 仍看不到 backend.log"
-    echo "Promtail mounts:"
-    docker inspect ai-platform-promtail --format '{{json .Mounts}}' 2>/dev/null || true
-    exit 1
-  fi
-  ok "Promtail 已挂载 backend.log"
-  info "Backend 日志大小: $(docker exec ai-platform-backend wc -c </app/logs/backend.log 2>/dev/null || echo 未知) bytes"
-  info "Promtail 日志大小: $(docker exec ai-platform-promtail wc -c </var/log/ai-platform/backend.log 2>/dev/null || echo 未知) bytes"
-  sleep 3
-  monitoring_verify_loki || true
 }
 
 monitoring_restart() {
@@ -1607,94 +1380,26 @@ monitoring_restart() {
 
 monitoring_recreate_grafana() {
   require_docker
-  monitoring_sync_app_env
   monitoring_write_env
+  cd "$MONITORING_DIR"
   info "重建 Grafana 容器（应用最新配置）..."
-  monitoring_compose up -d --force-recreate grafana
-  sleep 5
-  if [[ -f "$ROOT/.env.docker" ]]; then
-    local pass
-    pass="$(grep -E '^GRAFANA_ADMIN_PASSWORD=' "$ROOT/.env.docker" | tail -1 | cut -d= -f2- || true)"
-    if [[ -n "$pass" ]] && docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-grafana'; then
-      docker exec ai-platform-grafana grafana-cli admin reset-admin-password "$pass" >/dev/null 2>&1 || true
-    fi
-  fi
-  monitoring_provision_dashboard || true
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
-    info "重启 backend 以同步 Grafana 配置..."
-    app_compose up -d --force-recreate backend 2>/dev/null || true
-  fi
+  docker compose up -d --force-recreate grafana
   ok "Grafana 已重建: ${GRAFANA_ROOT_URL:-http://127.0.0.1:${GRAFANA_PORT}}"
-}
-
-monitoring_fix_dashboard() {
-  require_docker
-  monitoring_sync_app_env
-  monitoring_write_env
-  monitoring_provision_dashboard force
-}
-
-monitoring_fix_auth() {
-  require_docker
-  local new_pass="${1:-}"
-  if [[ -z "$new_pass" ]]; then
-    new_pass="AiPlatform@$(date +%Y)"
-  fi
-  export GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER:-admin}"
-  export GRAFANA_ADMIN_PASSWORD="$new_pass"
-
-  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-grafana'; then
-    error "Grafana 容器未运行，请先执行: ./deploy.sh monitoring start"
-    exit 1
-  fi
-
-  info "重置 Grafana 管理员密码并同步到配置文件..."
-  docker exec ai-platform-grafana grafana-cli admin reset-admin-password "$new_pass"
-  monitoring_write_env
-
-  local docker_env="$ROOT/.env.docker"
-  if [[ -f "$docker_env" ]]; then
-    if grep -q '^GRAFANA_ADMIN_PASSWORD=' "$docker_env"; then
-      sed -i "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=${new_pass}|" "$docker_env"
-    else
-      echo "GRAFANA_ADMIN_PASSWORD=${new_pass}" >>"$docker_env"
-    fi
-    if ! grep -q '^GRAFANA_ADMIN_USER=' "$docker_env"; then
-      echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}" >>"$docker_env"
-    fi
-  fi
-
-  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
-    info "重启 backend 以加载新密码..."
-    app_compose up -d --force-recreate backend
-  fi
-
-  info "验证 Grafana 认证..."
-  if curl -sf -u "${GRAFANA_ADMIN_USER}:${new_pass}" "http://127.0.0.1:${GRAFANA_PORT}/api/user" >/dev/null; then
-    ok "Grafana API 认证通过"
-  else
-    warn "Grafana API 认证仍失败，请检查 GRAFANA_PORT=${GRAFANA_PORT} 与容器状态"
-  fi
-
-  ok "Grafana 认证已修复"
-  echo "  用户名: ${GRAFANA_ADMIN_USER}"
-  echo "  密码:   ${new_pass}"
-  echo "  已同步: monitoring/.env, .env.docker"
-  echo "  请刷新平台「日志监控」页面"
 }
 
 monitoring_status() {
   require_docker
   monitoring_write_env
+  cd "$MONITORING_DIR"
   local access_host
   access_host="$(detect_access_host)"
   echo "========================================"
   echo "  Grafana + Loki 监控栈"
   echo "========================================"
-  monitoring_compose ps -a
+  docker compose ps -a
   echo
   local count
-  count="$(monitoring_compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)"
+  count="$(docker compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)"
   if [[ "$count" -eq 0 ]]; then
     warn "未发现任何监控容器（尚未启动或已被删除）"
     echo "  请执行: PUBLIC_HOST=你的公网IP ./deploy.sh monitoring start"
@@ -1710,22 +1415,24 @@ monitoring_status() {
   else
     warn "Loki 未监听 :${LOKI_PORT}"
   fi
-  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}/d/ai-platform-logs"
+  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
 }
 
 monitoring_logs() {
   require_docker
   monitoring_write_env
-  if [[ "$(monitoring_compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)" -eq 0 ]]; then
+  cd "$MONITORING_DIR"
+  if [[ "$(docker compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)" -eq 0 ]]; then
     error "没有监控容器，请先执行: ./deploy.sh monitoring start"
     exit 1
   fi
-  monitoring_compose logs --tail="${1:-100}" -f
+  docker compose logs --tail="${1:-100}" -f
 }
 
 monitoring_debug() {
   require_docker
   monitoring_write_env
+  cd "$MONITORING_DIR"
   echo "========================================"
   echo "  监控栈诊断"
   echo "========================================"
@@ -1734,22 +1441,16 @@ monitoring_debug() {
   echo "Compose: $(docker compose version 2>/dev/null || echo 未知)"
   echo
   echo "--- monitoring/.env ---"
-  cat "$MONITORING_DIR/.env" 2>/dev/null || echo "(无 .env 文件)"
+  cat .env 2>/dev/null || echo "(无 .env 文件)"
   echo
-  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
-    echo "--- Docker 日志卷 ---"
-    echo "DOCKER_APP_LOGS_VOLUME=${DOCKER_APP_LOGS_VOLUME}"
-    docker run --rm -v "${DOCKER_APP_LOGS_VOLUME}:/logs:ro" alpine ls -la /logs 2>&1 || true
-  else
-    echo "--- 日志目录 ---"
-    ls -la "$LOG_DIR_HOST" 2>/dev/null || warn "目录不存在: $LOG_DIR_HOST"
-  fi
+  echo "--- 日志目录 ---"
+  ls -la "$LOG_DIR_HOST" 2>/dev/null || warn "目录不存在: $LOG_DIR_HOST"
   echo
   echo "--- docker compose config ---"
-  monitoring_compose config 2>&1 || true
+  docker compose config 2>&1 || true
   echo
   echo "--- docker compose ps -a ---"
-  monitoring_compose ps -a 2>&1 || true
+  docker compose ps -a 2>&1 || true
   echo
   echo "--- 容器内日志目录 ---"
   docker exec ai-platform-promtail ls -la /var/log/ai-platform/ 2>&1 || true
@@ -1782,15 +1483,12 @@ monitoring_main() {
     stop) monitoring_stop ;;
     restart) monitoring_restart ;;
     recreate-grafana) monitoring_recreate_grafana ;;
-    fix-auth) monitoring_fix_auth "${2:-}" ;;
-    fix-logs) monitoring_fix_logs ;;
-    fix-dashboard) monitoring_fix_dashboard ;;
     status) monitoring_status ;;
     logs) monitoring_logs "${2:-100}" ;;
     debug) monitoring_debug ;;
     *)
       error "未知 monitoring 子命令: $action"
-      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|fix-auth [密码]|fix-logs|fix-dashboard|status|logs|debug]"
+      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|status|logs|debug]"
       exit 1
       ;;
   esac
@@ -1836,9 +1534,6 @@ main() {
       ;;
     update)
       update_project
-      ;;
-    app-rebuild)
-      app_rebuild
       ;;
     clone)
       clone_project "${2:-}"
