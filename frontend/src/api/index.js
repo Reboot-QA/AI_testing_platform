@@ -308,6 +308,7 @@ export const apifoxApi = {
 
   importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
   reorderTree: (pid, data) => request.post(`/apifox/projects/${pid}/tree/reorder`, data),
+  debugSend: (pid, data) => request.post(`/apifox/projects/${pid}/debug`, data),
 
   listSchedules: (pid) => request.get(`/apifox/projects/${pid}/schedules`),
   createSchedule: (pid, data) => request.post(`/apifox/projects/${pid}/schedules`, data),

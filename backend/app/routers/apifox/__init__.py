@@ -1,5 +1,6 @@
 from app.routers.apifox.cases import router as cases_router
 from app.routers.apifox.data_models import router as data_models_router
+from app.routers.apifox.debug import router as debug_router
 from app.routers.apifox.endpoints import router
 from app.routers.apifox.global_params import router as global_params_router
 from app.routers.apifox.imports import router as imports_router
@@ -20,4 +21,5 @@ __all__ = [
     "runs_router",
     "imports_router",
     "schedules_router",
+    "debug_router",
 ]
