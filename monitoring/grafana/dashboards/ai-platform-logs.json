@@ -172,7 +172,7 @@
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "AI质量平台日志",
+  "title": "AI Platform Logs",
   "uid": "ai-platform-logs",
   "version": 1,
   "weekStart": ""
