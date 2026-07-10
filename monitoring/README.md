@@ -44,13 +44,27 @@ Explore 示例 LogQL：
 export GRAFANA_PORT=3000
 export LOKI_PORT=3100
 export GRAFANA_ADMIN_PASSWORD=your-password
-export GRAFANA_ROOT_URL=http://你的公网IP:3000
+export GRAFANA_ROOT_URL=http://你的公网IP:5173/api/v1/logs/grafana
 export LOG_DIR_HOST=/opt/AI_testing_platform/.deploy/logs
 ```
 
 `deploy.sh monitoring start` 会自动设置 `LOG_DIR_HOST` 与 `GRAFANA_ROOT_URL`。
 
 ## 故障排查
+
+**平台内嵌 Grafana 报 “failed to load its application files”**：
+
+1. 确认通过平台「日志监控」页打开，不要直接访问 `:3000`。
+2. 检查 `GRAFANA_ROOT_URL` 是否与浏览器地址一致（含端口与 `/api/v1/logs/grafana` 子路径）：
+   ```bash
+   grep GRAFANA_ROOT_URL monitoring/.env
+   # 应为: http://你的IP:5173/api/v1/logs/grafana
+   ```
+3. 修改后重建 Grafana 容器：
+   ```bash
+   PUBLIC_HOST=你的IP ./deploy.sh monitoring recreate-grafana
+   ```
+4. 后端代理会自动修正 `<base href>`；若仍异常，重启 backend 后再试。
 
 **Grafana 显示 No data**：
 
