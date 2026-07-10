@@ -58,6 +58,22 @@
           <el-input v-model="form.request_spec.auth.password" placeholder="密码" class="auth-input" />
         </template>
       </el-tab-pane>
+
+      <!-- 接口级处理器（与用例级合并叠加）；用例编辑器内不显示（用例有自己的处理器 tab） -->
+      <template v-if="showProcessors">
+        <el-tab-pane label="前置操作" name="pre">
+          <ScriptRefsEditor :rows="form.pre_scripts" :scripts="scripts" />
+        </el-tab-pane>
+        <el-tab-pane label="后置操作" name="post">
+          <ScriptRefsEditor :rows="form.post_scripts" :scripts="scripts" />
+        </el-tab-pane>
+        <el-tab-pane label="断言" name="assertions">
+          <AssertionsEditor :rows="form.assertions" />
+        </el-tab-pane>
+        <el-tab-pane label="提取" name="extracts">
+          <ExtractsEditor :rows="form.extracts" />
+        </el-tab-pane>
+      </template>
     </el-tabs>
   </div>
 </template>
@@ -66,12 +82,17 @@
 import { ref } from 'vue'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
+import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
+import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
+import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 
 defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
   showMeta: { type: Boolean, default: true },
   serverNames: { type: Array, default: () => [] },
+  showProcessors: { type: Boolean, default: false },
+  scripts: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 
