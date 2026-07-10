@@ -14,6 +14,7 @@ from app.routers.apifox.schemas import KvRow, RequestSpec
 class AssertionRow(BaseModel):
     type: str = "status_code"  # status_code|json_path|header|contains|response_time
     path: Optional[str] = None
+    operator: str = "eq"  # eq|neq|contains|not_contains|gt|gte|lt|lte|regex|exists
     expected: Optional[str] = None
     enabled: bool = True
 

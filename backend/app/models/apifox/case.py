@@ -39,6 +39,8 @@ class ApifoxCaseAssertion(Base):
     # status_code | json_path | header | contains | response_time
     type: Mapped[str] = mapped_column(String(20))
     path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # eq|neq|contains|not_contains|gt|gte|lt|lte|regex|exists（仅 status_code/json_path/header 用）
+    operator: Mapped[str] = mapped_column(String(20), default="eq")
     expected: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
