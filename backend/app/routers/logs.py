@@ -12,6 +12,7 @@ from app.services.grafana_proxy_service import (
     COOKIE_NAME,
     EMBED_QUERY_PARAM,
     GRAFANA_PROXY_PREFIX,
+    GRAFANA_SESSION_COOKIE_PATH,
     SESSION_TTL,
     attach_grafana_session_to_response,
     build_public_origin,
@@ -57,7 +58,7 @@ def grafana_session(current_user: User = Depends(get_current_admin)):
         embed_token,
         httponly=True,
         max_age=SESSION_TTL,
-        path=GRAFANA_PROXY_PREFIX,
+        path=GRAFANA_SESSION_COOKIE_PATH,
         samesite="lax",
     )
     return response

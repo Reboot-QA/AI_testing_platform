@@ -4,8 +4,7 @@ import hmac
 import logging
 import re
 import time
-from typing import Dict, Optional, Tuple
-from urllib.parse import urljoin
+from typing import Optional, Tuple
 
 import httpx
 from fastapi import HTTPException, Request, Response
@@ -17,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 GRAFANA_PROXY_PREFIX = "/api/v1/logs/grafana"
 COOKIE_NAME = "grafana_proxy_sess"
+GRAFANA_SESSION_COOKIE_PATH = "/"
 EMBED_QUERY_PARAM = "_pt"
 PLATFORM_ACCESS_TOKEN_PARAM = "access_token"
 SESSION_TTL = 8 * 3600
@@ -101,29 +101,26 @@ def build_public_proxy_base(request: Request) -> str:
     return f"{build_public_origin(request)}{GRAFANA_PROXY_PREFIX}"
 
 
-def attach_grafana_session(response: Response, user_ctx: dict) -> str:
-    session = create_session_cookie(user_ctx)
+def _set_grafana_session_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         COOKIE_NAME,
-        session,
+        token,
         httponly=True,
         max_age=SESSION_TTL,
-        path=GRAFANA_PROXY_PREFIX,
+        path=GRAFANA_SESSION_COOKIE_PATH,
         samesite="lax",
     )
+
+
+def attach_grafana_session(response: Response, user_ctx: dict) -> str:
+    session = create_session_cookie(user_ctx)
+    _set_grafana_session_cookie(response, session)
     return session
 
 
 def attach_grafana_session_to_response(response: Response, user_ctx: dict, token: Optional[str] = None) -> str:
     session_token = token if token and _verify_signed(token) else create_session_cookie(user_ctx)
-    response.set_cookie(
-        COOKIE_NAME,
-        session_token,
-        httponly=True,
-        max_age=SESSION_TTL,
-        path=GRAFANA_PROXY_PREFIX,
-        samesite="lax",
-    )
+    _set_grafana_session_cookie(response, session_token)
     return session_token
 
 
@@ -158,6 +155,17 @@ def _is_login_page(content: bytes, content_type: str, path: str) -> bool:
     except UnicodeDecodeError:
         return False
     return "Welcome to Grafana" in text and ('name="password"' in text or 'type="password"' in text)
+
+
+def _build_upstream_grafana_url(path: str, query: str = "") -> str:
+    base = resolve_grafana_upstream().rstrip("/")
+    rel = (path or "").lstrip("/")
+    target = f"{base}{GRAFANA_PROXY_PREFIX}/"
+    if rel:
+        target = f"{base}{GRAFANA_PROXY_PREFIX}/{rel}"
+    if query:
+        target = f"{target}?{query}"
+    return target
 
 
 def _rewrite_grafana_body(content: bytes, content_type: str, public_proxy_base: str) -> bytes:
@@ -203,6 +211,16 @@ def _rewrite_grafana_body(content: bytes, content_type: str, public_proxy_base: 
         '"disableLoginForm":true',
         text,
     )
+    if f'<base href="{base_path}"' not in text and "<base " not in text.lower():
+        text = text.replace("<head>", f'<head><base href="{base_path}">', 1)
+    # 将 Grafana 根路径链接重写到代理子路径，避免 iframe 内跳转到 /d/... 白屏
+    prefix = re.escape(GRAFANA_PROXY_PREFIX)
+    for route in ("d/", "explore", "public/", "avatar/", "apis/", "api/"):
+        text = re.sub(
+            rf'(["\'])(?!{prefix})/({re.escape(route)})',
+            rf"\1{GRAFANA_PROXY_PREFIX}/\2",
+            text,
+        )
     return text.encode("utf-8")
 
 
@@ -210,6 +228,8 @@ def _rewrite_grafana_location(value: str) -> str:
     upstream_base = resolve_grafana_upstream().rstrip("/")
     if value.startswith(upstream_base):
         suffix = value[len(upstream_base) :] or "/"
+        if suffix.startswith(GRAFANA_PROXY_PREFIX):
+            return suffix
         return f"{GRAFANA_PROXY_PREFIX}{suffix}"
     rewritten = re.sub(
         rf"https?://[^/]+(?={re.escape(GRAFANA_PROXY_PREFIX)}){re.escape(GRAFANA_PROXY_PREFIX)}",
@@ -228,6 +248,8 @@ def _rewrite_grafana_location(value: str) -> str:
     if rewritten != value:
         return rewritten
     if value.startswith("/"):
+        if value.startswith(GRAFANA_PROXY_PREFIX):
+            return value
         return f"{GRAFANA_PROXY_PREFIX}{value}"
     return value
 
@@ -238,18 +260,16 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     if auth is None:
         raise HTTPException(status_code=502, detail="未配置 GRAFANA_ADMIN_PASSWORD，无法代理 Grafana")
 
-    upstream_base = resolve_grafana_upstream().rstrip("/") + "/"
-    target_url = urljoin(upstream_base, path or "")
+    query = ""
     if request.url.query:
-        query = str(request.url.query)
         parts = [
             part
-            for part in query.split("&")
+            for part in str(request.url.query).split("&")
             if part.split("=", 1)[0] not in STRIP_QUERY_PARAMS
         ]
         query = "&".join(parts)
-        if query:
-            target_url = f"{target_url}?{query}"
+
+    target_url = _build_upstream_grafana_url(path, query)
 
     public_origin = build_public_origin(request)
     public_proxy_base = f"{public_origin}{GRAFANA_PROXY_PREFIX}"
