@@ -2,15 +2,18 @@
   <div class="api-manage">
     <div class="tree-panel">
       <div class="tree-toolbar">
-        <el-button size="small" @click="addFolder">
-          <el-icon><FolderAdd /></el-icon> 文件夹
-        </el-button>
-        <el-button size="small" type="primary" @click="addEndpoint">
-          <el-icon><Plus /></el-icon> 接口
-        </el-button>
-        <el-button size="small" @click="importVisible = true">
-          <el-icon><Download /></el-icon> 导入
-        </el-button>
+        <el-dropdown trigger="click" @command="onNew">
+          <el-button size="small" type="primary">
+            <el-icon><Plus /></el-icon> 新建<el-icon class="el-icon--right"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="endpoint"><el-icon><Link /></el-icon> 新建接口</el-dropdown-item>
+              <el-dropdown-item command="folder"><el-icon><FolderAdd /></el-icon> 新建文件夹</el-dropdown-item>
+              <el-dropdown-item command="import" divided><el-icon><Download /></el-icon> 导入</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
       <el-input
         v-model="filterText"
@@ -65,7 +68,20 @@
           <ApiCasesPanel :endpoint-id="form.id" :project-id="pid" :environments="environments" />
         </el-tab-pane>
       </el-tabs>
-      <el-empty v-else description="选择或新建一个接口开始编辑" />
+      <div v-else class="empty-cards">
+        <div class="ec-card" @click="addEndpoint">
+          <el-icon class="ec-icon" color="var(--color-blue-6)"><Link /></el-icon>
+          <span>新建 HTTP 接口</span>
+        </div>
+        <div class="ec-card" @click="goDataModels">
+          <el-icon class="ec-icon" color="var(--color-pink-6)"><Box /></el-icon>
+          <span>新建数据模型</span>
+        </div>
+        <div class="ec-card" @click="importVisible = true">
+          <el-icon class="ec-icon" color="var(--color-green-6)"><Download /></el-icon>
+          <span>导入</span>
+        </div>
+      </div>
     </div>
 
     <ImportDialog v-model:visible="importVisible" :project-id="pid" @imported="loadAll" />
@@ -82,7 +98,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
@@ -95,7 +111,18 @@ import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
 
 const route = useRoute()
+const router = useRouter()
 const pid = computed(() => route.params.projectId)
+
+function onNew(command) {
+  if (command === 'endpoint') addEndpoint()
+  else if (command === 'folder') addFolder()
+  else if (command === 'import') importVisible.value = true
+}
+
+function goDataModels() {
+  router.push(`/apifox/project/${pid.value}/datamodels`)
+}
 
 const { treeData, treeRef, filterText, filterNode, allowDrop, onDrop, reload: loadAll } = useApiTree(pid)
 
@@ -306,6 +333,41 @@ onMounted(() => {
 .editor-panel {
   flex: 1;
   overflow: auto;
+}
+
+.empty-cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.ec-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  width: 160px;
+  height: 130px;
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.ec-card:hover {
+  border-color: var(--ax-brand);
+  transform: translateY(-2px);
+}
+
+.ec-icon {
+  font-size: 30px;
 }
 
 .node {
