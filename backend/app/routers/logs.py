@@ -7,9 +7,11 @@ from app.auth import get_current_admin
 from app.models.user import User
 from app.services import log_service
 from app.services.grafana_proxy_service import (
+    COOKIE_NAME,
     GRAFANA_PROXY_PREFIX,
-    attach_grafana_session,
+    SESSION_TTL,
     build_public_origin,
+    create_session_cookie,
     proxy_to_grafana,
     resolve_user_from_cookie,
 )
@@ -37,12 +39,24 @@ def log_integrations(
 
 @router.post("/grafana/session")
 def grafana_session(current_user: User = Depends(get_current_admin)):
-    response = JSONResponse({"ok": True})
-    embed_token = attach_grafana_session(
-        response,
-        {"user_id": current_user.id, "username": current_user.username, "role": current_user.role},
+    user_ctx = {"user_id": current_user.id, "username": current_user.username, "role": current_user.role}
+    embed_token = create_session_cookie(user_ctx)
+    response = JSONResponse(
+        {
+            "ok": True,
+            "embed_token": embed_token,
+            "proxy_prefix": GRAFANA_PROXY_PREFIX,
+        }
     )
-    return {"ok": True, "embed_token": embed_token, "proxy_prefix": GRAFANA_PROXY_PREFIX}
+    response.set_cookie(
+        COOKIE_NAME,
+        embed_token,
+        httponly=True,
+        max_age=SESSION_TTL,
+        path=GRAFANA_PROXY_PREFIX,
+        samesite="lax",
+    )
+    return response
 
 
 @router.api_route("/grafana", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])

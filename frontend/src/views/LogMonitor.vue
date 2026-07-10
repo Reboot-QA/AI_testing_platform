@@ -206,11 +206,26 @@
                 </template>
               </el-alert>
 
+              <el-alert
+                v-if="embedError"
+                class="setup-alert"
+                type="error"
+                show-icon
+                :closable="false"
+                title="Grafana 内嵌加载失败"
+              >
+                <template #default>
+                  <p>{{ embedError }}</p>
+                  <el-button type="primary" link @click="loadIntegrations">重新加载</el-button>
+                </template>
+              </el-alert>
+
               <iframe
                 v-if="showEmbed && embedUrl"
                 class="grafana-embed"
                 :src="embedUrl"
                 title="Grafana Dashboard"
+                @error="handleEmbedError"
               />
             </el-tab-pane>
           </el-tabs>
@@ -269,8 +284,13 @@ let refreshTimer = null
 let integrationTimer = null
 
 const showEmbed = computed(
-  () => integrations.value.embed_enabled && integrations.value.monitoring_online && embedUrl.value
+  () =>
+    integrations.value.embed_enabled &&
+    integrations.value.grafana_online &&
+    integrations.value.grafana_auth_ok &&
+    embedUrl.value,
 )
+const embedError = ref('')
 
 const sourceOptions = computed(() =>
   sources.value.map((item) => ({ label: item.label, value: item.key }))
@@ -437,6 +457,10 @@ async function ensureGrafanaSession() {
   return logsApi.grafanaSession()
 }
 
+function handleEmbedError() {
+  embedError.value = '无法加载 Grafana 页面，请尝试「新窗口打开仪表盘」或刷新页面'
+}
+
 async function runLokiQuery() {
   if (!integrations.value.loki_online) return
   lokiLoading.value = true
@@ -454,15 +478,24 @@ async function runLokiQuery() {
 
 async function loadIntegrations() {
   integrationLoading.value = true
+  embedError.value = ''
   try {
     integrations.value = await logsApi.integrations(originParams())
     embedUrl.value = ''
-    if (integrations.value.monitoring_online && integrations.value.embed_url) {
+    if (
+      integrations.value.grafana_online &&
+      integrations.value.grafana_auth_ok &&
+      integrations.value.embed_url
+    ) {
       if (integrations.value.use_proxy) {
         const session = await ensureGrafanaSession()
+        if (!session?.embed_token) {
+          embedError.value = 'Grafana 会话创建失败，请刷新页面重试'
+          return
+        }
         embedUrl.value = buildGrafanaProxyUrl(
           integrations.value.embed_url,
-          session?.embed_token || '',
+          session.embed_token,
         )
       } else {
         embedUrl.value = integrations.value.embed_url
