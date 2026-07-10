@@ -47,7 +47,17 @@
     </div>
 
     <div class="editor-panel">
-      <ApiEndpointEditor v-if="form.id" :form="form" :saving="saving" @save="saveEndpoint" />
+      <el-tabs v-if="form.id" v-model="endpointTab" class="endpoint-tabs">
+        <el-tab-pane label="调试" name="debug">
+          <ApiDebugPanel
+            :form="form"
+            :saving="saving"
+            :environments="environments"
+            :project-id="pid"
+            @save="saveEndpoint"
+          />
+        </el-tab-pane>
+      </el-tabs>
       <el-empty v-else description="选择或新建一个接口开始编辑" />
     </div>
 
@@ -70,7 +80,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { useApiTree } from '@/composables/useApiTree'
-import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
+import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ImportDialog from '@/components/apifox/ImportDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
@@ -82,6 +92,8 @@ const { treeData, treeRef, filterText, filterNode, allowDrop, onDrop, reload: lo
 
 const selectedFolderId = ref(null)
 const saving = ref(false)
+const endpointTab = ref('debug')
+const environments = ref([])
 const importVisible = ref(false)
 const ctx = reactive({ visible: false, x: 0, y: 0, node: null })
 
@@ -241,7 +253,14 @@ async function saveEndpoint() {
   }
 }
 
-onMounted(loadAll)
+async function loadEnvironments() {
+  environments.value = await apifoxApi.listEnvironments(pid.value)
+}
+
+onMounted(() => {
+  loadAll()
+  loadEnvironments()
+})
 </script>
 
 <style scoped>

@@ -19,6 +19,7 @@ from app.routers.apifox import imports_router as apifox_imports_router
 from app.routers.apifox import runs_router as apifox_runs_router
 from app.routers.apifox import scenarios_router as apifox_scenarios_router
 from app.routers.apifox import schedules_router as apifox_schedules_router
+from app.routers.apifox import debug_router as apifox_debug_router
 from app.routers.apifox import scripts_router as apifox_scripts_router
 from app.services.schedule_service import start_scheduler, stop_scheduler
 from app.request_logging import register_request_logging
@@ -107,6 +108,7 @@ app.include_router(apifox_scenarios_router, prefix="/api/v1")
 app.include_router(apifox_runs_router, prefix="/api/v1")
 app.include_router(apifox_imports_router, prefix="/api/v1")
 app.include_router(apifox_schedules_router, prefix="/api/v1")
+app.include_router(apifox_debug_router, prefix="/api/v1")
 
 register_request_logging(app)
 
