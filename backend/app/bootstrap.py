@@ -9,7 +9,10 @@ from app.services.api_automation_migration import (
     migrate_requirement_created_by,
     migrate_testcase_created_by,
 )
-from app.services.apifox.migration import migrate_apifox_endpoint_server_name
+from app.services.apifox.migration import (
+    migrate_apifox_assertion_operator,
+    migrate_apifox_endpoint_server_name,
+)
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.schedule_service import init_schedules_on_startup
 from app.services.seed import seed_demo_data
@@ -32,6 +35,7 @@ def run_bootstrap() -> None:
         ("迁移需求创建人", migrate_requirement_created_by),
         ("迁移用例创建人", migrate_testcase_created_by),
         ("迁移接口前置URL名列", migrate_apifox_endpoint_server_name),
+        ("迁移断言操作符列", migrate_apifox_assertion_operator),
         ("写入演示数据", seed_demo_data),
         ("加载 LLM 配置", init_llm_settings_from_env),
         ("迁移菜单权限", migrate_all_user_permissions),

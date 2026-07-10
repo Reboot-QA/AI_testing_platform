@@ -68,8 +68,8 @@ def _write_assertions(db: Session, case_id: int, rows: List[AssertionRow]) -> No
         repo.add(
             db,
             ApifoxCaseAssertion(
-                case_id=case_id, type=a.type, path=a.path, expected=a.expected,
-                enabled=a.enabled, sort_order=i,
+                case_id=case_id, type=a.type, path=a.path, operator=a.operator,
+                expected=a.expected, enabled=a.enabled, sort_order=i,
             ),
         )
 
@@ -130,7 +130,7 @@ def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
         variables=_load_variables(case.variables),
         data_drive=_load_data_drive(case.data_drive),
         assertions=[
-            AssertionRow(type=a.type, path=a.path, expected=a.expected, enabled=a.enabled)
+            AssertionRow(type=a.type, path=a.path, operator=a.operator, expected=a.expected, enabled=a.enabled)
             for a in repo.list_assertions(db, case.id)
         ],
         extracts=[
