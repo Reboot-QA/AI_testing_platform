@@ -76,6 +76,7 @@ AI质量平台 - Linux 一键部署（Docker）
   backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
   backup-setup-cron 创建 /opt 备份目录并安装每日自动备份（cron）
   backup-cron-status 查看自动备份任务状态
+  rebuild-frontend  仅重建前端 dist + 镜像并重启（菜单不更新时用）
   restore-db <文件> 从 .sql / .sql.gz 恢复数据库
   update | pull     从 Git 拉取代码并重新构建部署
   init-env          生成 .env.docker 并写入默认 MySQL 密码
@@ -224,6 +225,14 @@ docker_cli_supports_flag() {
   local cmd="$1"
   shift
   local flag="$1"
+  case "$flag" in
+    --progress)
+      # 旧版 docker build 帮助里可能提到 progress，但实际不支持该参数
+      if [[ "$cmd" == "docker" ]] && [[ "${2:-}" == "build" ]]; then
+        return 1
+      fi
+      ;;
+  esac
   "$cmd" --help 2>&1 | grep -q -- "$flag"
 }
 
@@ -260,16 +269,14 @@ docker_build_prebuilt_frontend() {
   fi
 
   local -a args=(
+    --no-cache
     -f "$ROOT/frontend/Dockerfile.prebuilt"
     -t ai-testing-platform-frontend:latest
     "$ROOT/frontend"
   )
 
-  if docker_cli_supports_flag docker build '--progress'; then
-    if docker build --progress=plain "${args[@]}"; then
-      return 0
-    fi
-  elif docker build "${args[@]}"; then
+  info "打包 frontend 镜像（--no-cache，确保使用最新 dist）..."
+  if docker build "${args[@]}"; then
     return 0
   fi
 
@@ -292,7 +299,7 @@ build_frontend_dist_on_host() {
     return 1
   fi
 
-  info "在宿主机构建前端 dist（推荐低内存服务器，可配合 swap）..."
+  info "在宿主机构建前端 dist..."
   (
     cd "$ROOT/frontend"
     if [[ ! -d node_modules ]]; then
@@ -305,21 +312,28 @@ build_frontend_dist_on_host() {
 }
 
 build_frontend_image() {
+  if command -v node >/dev/null 2>&1; then
+    build_frontend_dist_on_host || warn "宿主机构建 frontend/dist 失败，将尝试使用已有 dist 或容器内构建"
+  fi
+
   if [[ -f "$ROOT/frontend/dist/index.html" ]]; then
-    info "使用 frontend/dist 打包 nginx 镜像（跳过容器内 npm build）..."
     docker_build_prebuilt_frontend
     return 0
   fi
 
-  if build_frontend_dist_on_host; then
-    info "宿主机构建成功，打包 frontend 镜像..."
-    docker_build_prebuilt_frontend
-    return 0
-  fi
-
-  warn "frontend/dist 不存在且宿主机无法构建，改在 Docker 内完整构建 frontend（耗时较长）..."
+  warn "frontend/dist 不存在，改在 Docker 内完整构建 frontend（耗时较长）..."
   local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
   compose_build_service frontend --build-arg "NODE_MEMORY_MB=${mem_mb}"
+}
+
+cmd_rebuild_frontend() {
+  fix_script_permissions
+  ensure_docker
+  ensure_env_file
+  build_frontend_image
+  compose_cmd up -d --force-recreate frontend
+  ok "前端已重建并重启"
+  info "验证: docker exec ai-platform-frontend ls /usr/share/nginx/html/assets/ | grep -iE 'ErrorLogs|LogMonitor' || true"
 }
 
 health_check_hosts() {
@@ -1011,6 +1025,7 @@ main() {
   backup-prune|prune-backups) cmd_backup_prune ;;
   backup-setup-cron|setup-backup-cron) cmd_backup_setup_cron ;;
   backup-cron-status|backup-status) cmd_backup_cron_status ;;
+  rebuild-frontend|frontend-rebuild) cmd_rebuild_frontend ;;
   restore-db|restore) shift || true; cmd_restore_db "${1:-}" ;;
   update|pull) cmd_update ;;
   init-env|init) cmd_init_env ;;
