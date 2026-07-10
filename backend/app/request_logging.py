@@ -19,7 +19,18 @@ logger = logging.getLogger("app.api")
 errors_logger = logging.getLogger("app.errors")
 api_errors_logger = logging.getLogger("app.api_errors")
 
+# 已移除的 Grafana/Loki 代理接口，不再记入错误日志
+_DEPRECATED_LOG_API_PREFIXES = (
+    "/api/v1/logs/grafana",
+    "/api/v1/logs/loki",
+    "/api/v1/logs/integrations",
+)
+
 _error_log_handlers_ready = False
+
+
+def _is_deprecated_log_api(path: str) -> bool:
+    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in _DEPRECATED_LOG_API_PREFIXES)
 
 
 def _format_detail(detail: Union[str, dict, list]) -> str:
@@ -91,7 +102,7 @@ def register_request_logging(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def log_http_exception(request: Request, exc: HTTPException) -> Response:
-        if exc.status_code >= 400:
+        if exc.status_code >= 400 and not _is_deprecated_log_api(request.url.path):
             message = (
                 f"{_client_ip(request)} {request.method} {request.url.path} "
                 f"-> HTTP {exc.status_code} | {_format_detail(exc.detail)}"

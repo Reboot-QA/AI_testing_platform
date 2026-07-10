@@ -12,6 +12,12 @@ ERROR_LOG_FILES = {
     "api": {"label": "接口错误", "filename": "api_errors.log"},
 }
 
+_DEPRECATED_LOG_API_PREFIXES = (
+    "/api/v1/logs/grafana",
+    "/api/v1/logs/loki",
+    "/api/v1/logs/integrations",
+)
+
 TIMESTAMP_PREFIX = re.compile(r"^\[(?P<ts>[^\]]+)\]")
 UVICORN_ACCESS = re.compile(
     r'(?P<client>[\d\.]+(?::\d+)?)\s+-\s+"(?P<method>[A-Z]+)\s+(?P<path>\S+)\s+HTTP/[^"]+"\s+(?P<status>\d{3})'
@@ -30,6 +36,12 @@ def _truncate(text: str) -> str:
     if len(text) <= MAX_LINE_LENGTH:
         return text
     return text[: MAX_LINE_LENGTH - 3] + "..."
+
+
+def _is_deprecated_log_api(path: Optional[str]) -> bool:
+    if not path:
+        return False
+    return any(path == prefix or path.startswith(f"{prefix}/") for prefix in _DEPRECATED_LOG_API_PREFIXES)
 
 
 def _extract_timestamp(text: str) -> Optional[str]:
@@ -74,6 +86,8 @@ def _parse_json_error_line(text: str, category: str) -> Optional[Dict]:
     status = payload.get("status")
     if category == "api" and (not isinstance(status, int) or status < 400):
         return None
+    if _is_deprecated_log_api(payload.get("path")):
+        return None
     return {
         "category": category,
         "level": "ERROR" if isinstance(status, int) and status >= 500 else "WARN",
@@ -109,6 +123,8 @@ def _parse_api_line(text: str, source: str, line_no: int) -> Optional[Dict]:
         status = int(app_match.group("status"))
         if status < 400:
             return None
+        if _is_deprecated_log_api(app_match.group("path")):
+            return None
         return {
             "no": line_no,
             "source": source,
@@ -128,6 +144,8 @@ def _parse_api_line(text: str, source: str, line_no: int) -> Optional[Dict]:
     if access_match:
         status = int(access_match.group("status"))
         if status < 400:
+            return None
+        if _is_deprecated_log_api(access_match.group("path")):
             return None
         return {
             "no": line_no,
