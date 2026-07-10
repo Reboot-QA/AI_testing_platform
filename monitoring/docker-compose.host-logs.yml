@@ -1,0 +1,5 @@
+# Promtail 从宿主机目录采集（非 Docker 或 bind mount 部署）
+services:
+  promtail:
+    volumes:
+      - ${LOG_DIR_HOST:-../.deploy/logs}:/var/log/ai-platform:ro

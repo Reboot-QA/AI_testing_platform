@@ -66,7 +66,7 @@ services:
     extra_hosts:
       - "host.docker.internal:host-gateway"
     volumes:
-      - app-logs:/app/logs
+      - ${HOST_LOG_DIR:-./.deploy/logs}:/app/logs
     depends_on:
       mysql:
         condition: service_healthy
@@ -92,7 +92,7 @@ services:
       backend:
         condition: service_started
     volumes:
-      - app-logs:/var/log/ai-platform
+      - ${HOST_LOG_DIR:-./.deploy/logs}:/var/log/ai-platform
     ports:
       - "${HTTP_PORT:-5173}:80"
     networks:
@@ -118,7 +118,7 @@ services:
     container_name: ai-platform-promtail
     restart: unless-stopped
     volumes:
-      - app-logs:/var/log/ai-platform:ro
+      - ${HOST_LOG_DIR:-./.deploy/logs}:/var/log/ai-platform:ro
       - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
       - promtail-positions:/tmp
     command: -config.file=/etc/promtail/config.yml
@@ -166,7 +166,6 @@ networks:
 
 volumes:
   mysql-data:
-  app-logs:
   loki-data:
   grafana-data:
   promtail-positions:
