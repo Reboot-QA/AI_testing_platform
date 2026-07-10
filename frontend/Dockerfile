@@ -6,8 +6,9 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 COPY . .
-# 提高构建时 Node 堆上限，避免 vite 打包（含 Monaco）在受限容器内 OOM。
-ENV NODE_OPTIONS=--max-old-space-size=4096
+# 小内存 VPS 可将 NODE_MEMORY_MB 设为 1536；默认 2048（含 Monaco 打包）
+ARG NODE_MEMORY_MB=2048
+ENV NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY_MB}
 RUN npm run build
 
 FROM nginx:1.27-alpine
