@@ -5,6 +5,12 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.apifox.data_model import ApifoxSchema
+from app.models.apifox.endpoint import ApifoxEndpoint
+
+
+def count_endpoint_refs(db: Session, schema_id: int) -> int:
+    """有多少接口把该数据模型绑为响应契约（删除前置校验）。"""
+    return db.query(ApifoxEndpoint).filter(ApifoxEndpoint.response_schema_id == schema_id).count()
 
 
 def list_schemas(db: Session, project_id: int) -> List[ApifoxSchema]:

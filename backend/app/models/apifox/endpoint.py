@@ -78,6 +78,11 @@ class ApifoxEndpoint(Base):
     server_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # 结构化 JSON：query/path_params/headers/body/auth
     request_spec: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 响应契约：绑定的数据模型 id（空=不校验）+ 契约不符是否判失败
+    response_schema_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("apifox_schemas.id"), nullable=True
+    )
+    contract_strict: Mapped[bool] = mapped_column(Boolean, default=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

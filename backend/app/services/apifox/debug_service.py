@@ -12,7 +12,8 @@ import httpx
 from sqlalchemy.orm import Session
 
 from app.models.apifox.endpoint import ApifoxEndpoint
-from app.repositories.apifox import global_param_repo, variable_repo
+from app.repositories.apifox import global_param_repo, schema_repo, variable_repo
+from app.services.apifox import contract_service
 from app.services.apifox import run_engine as engine
 
 
@@ -29,6 +30,7 @@ def debug_send(
     extracts: Optional[List[Any]] = None,
     pre_scripts: Optional[List[Any]] = None,
     post_scripts: Optional[List[Any]] = None,
+    response_schema_id: Optional[int] = None,
 ) -> Dict[str, Any]:
     assertions = assertions or []
     extracts = extracts or []
@@ -68,6 +70,7 @@ def debug_send(
         "assertion_results": [],
         "extract_results": [],
         "script_logs": script_logs,
+        "contract_result": None,
     }
 
     started = time.perf_counter()
@@ -103,6 +106,14 @@ def debug_send(
     if assertions:
         _passed, assertion_results = engine.evaluate_assertions(assertions, response, duration_ms)
         result["assertion_results"] = assertion_results
+
+    # 契约校验（绑了响应模型才校验，调试只展示不判失败）
+    if response_schema_id:
+        schema = schema_repo.get_schema(db, response_schema_id)
+        if schema and schema.project_id == project_id:
+            contract = contract_service.validate_response(schema.json_schema or "", response)
+            contract["schema_name"] = schema.name
+            result["contract_result"] = contract
 
     # 后置脚本
     _, post_logs, post_error = engine.run_script_links(

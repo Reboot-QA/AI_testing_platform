@@ -17,10 +17,17 @@ from sqlalchemy.orm import Session
 from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.apifox.variable import ApifoxEnvironment, ApifoxEnvironmentVariable, ApifoxGlobalVariable
-from app.repositories.apifox import endpoint_repo, global_param_repo, script_repo, variable_repo
+from app.repositories.apifox import (
+    endpoint_repo,
+    global_param_repo,
+    schema_repo,
+    script_repo,
+    variable_repo,
+)
 from app.services.api_response_extract import _extract_value_by_source
 from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.api_script_runner import run_post_script, run_pre_script
+from app.services.apifox import contract_service
 
 VARIABLE_PATTERN = re.compile(r"\{\{([^}]+)\}\}")
 HTTP_TIMEOUT = 30.0
@@ -412,7 +419,8 @@ def execute_case(
         "method": endpoint.method, "url": "", "request_headers": {}, "request_body": "",
         "response_status": None, "response_headers": {}, "response_body": "",
         "duration_ms": 0.0, "assertion_results": [], "extract_results": [],
-        "script_logs": [], "extracted": {}, "scoped": [], "error_message": None,
+        "script_logs": [], "extracted": {}, "scoped": [], "contract_result": None,
+        "error_message": None,
     }
 
     # 处理器合并叠加：接口级 + 用例级
@@ -468,6 +476,16 @@ def execute_case(
         list(ep_assertions) + list(assertions), response, duration_ms
     )
     detail["assertion_results"] = assertion_results
+
+    # 契约校验：接口绑了响应模型才校验；contract_strict 时契约败拉低 step 状态
+    if endpoint.response_schema_id:
+        schema = schema_repo.get_schema(db, endpoint.response_schema_id)
+        if schema and schema.project_id == case.project_id:
+            contract = contract_service.validate_response(schema.json_schema or "", response)
+            contract["schema_name"] = schema.name
+            detail["contract_result"] = contract
+            if endpoint.contract_strict and not contract["passed"]:
+                passed = False
 
     # 提取并集：接口提取在前，用例同名变量后写覆盖
     request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
