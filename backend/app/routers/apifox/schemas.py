@@ -38,6 +38,35 @@ class RequestSpec(BaseModel):
     auth: AuthSpec = Field(default_factory=AuthSpec)
 
 
+# ---------- 处理器行（接口级与用例级共用，case_schemas 从此导入避免循环依赖） ----------
+class AssertionRow(BaseModel):
+    type: str = "status_code"  # status_code|json_path|header|contains|response_time
+    path: Optional[str] = None
+    operator: str = "eq"  # eq|neq|contains|not_contains|gt|gte|lt|lte|regex|exists
+    expected: Optional[str] = None
+    enabled: bool = True
+
+
+class ExtractRow(BaseModel):
+    var_name: str
+    source: str = "response_json"
+    path: Optional[str] = None
+    scope: str = "temporary"  # temporary|environment|global
+    enabled: bool = True
+
+
+class CaseScriptRef(BaseModel):
+    """前后置对项目脚本库的引用（用例与接口共用）。"""
+
+    script_id: int
+    enabled: bool = True
+
+
+class CaseScriptOut(CaseScriptRef):
+    script_name: str = ""
+    script_lang: str = ""
+
+
 # ---------- folder ----------
 class FolderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
@@ -67,6 +96,10 @@ class EndpointCreate(BaseModel):
     server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     description: Optional[str] = None
+    assertions: List[AssertionRow] = Field(default_factory=list)
+    extracts: List[ExtractRow] = Field(default_factory=list)
+    pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    post_scripts: List[CaseScriptRef] = Field(default_factory=list)
 
 
 class EndpointUpdate(BaseModel):
@@ -78,6 +111,10 @@ class EndpointUpdate(BaseModel):
     request_spec: Optional[RequestSpec] = None
     description: Optional[str] = None
     sort_order: Optional[int] = None
+    assertions: Optional[List[AssertionRow]] = None
+    extracts: Optional[List[ExtractRow]] = None
+    pre_scripts: Optional[List[CaseScriptRef]] = None
+    post_scripts: Optional[List[CaseScriptRef]] = None
 
 
 class EndpointBrief(BaseModel):
@@ -102,6 +139,10 @@ class EndpointOut(BaseModel):
     request_spec: RequestSpec
     description: Optional[str] = None
     sort_order: int
+    assertions: List[AssertionRow] = Field(default_factory=list)
+    extracts: List[ExtractRow] = Field(default_factory=list)
+    pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
+    post_scripts: List[CaseScriptOut] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 

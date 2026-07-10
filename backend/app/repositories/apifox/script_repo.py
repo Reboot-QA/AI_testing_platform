@@ -4,7 +4,7 @@ from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
-from app.models.apifox.script import ApifoxCaseScript, ApifoxScript
+from app.models.apifox.script import ApifoxCaseScript, ApifoxEndpointScript, ApifoxScript
 
 
 def list_scripts(db: Session, project_id: int) -> List[ApifoxScript]:
@@ -31,7 +31,12 @@ def delete(db: Session, obj) -> None:
 
 
 def count_script_refs(db: Session, script_id: int) -> int:
-    return db.query(ApifoxCaseScript).filter(ApifoxCaseScript.script_id == script_id).count()
+    # 用例与接口两处引用都算，避免删掉仍被引用的脚本
+    case_refs = db.query(ApifoxCaseScript).filter(ApifoxCaseScript.script_id == script_id).count()
+    endpoint_refs = (
+        db.query(ApifoxEndpointScript).filter(ApifoxEndpointScript.script_id == script_id).count()
+    )
+    return case_refs + endpoint_refs
 
 
 def list_case_scripts(db: Session, case_id: int) -> List[ApifoxCaseScript]:
@@ -47,4 +52,20 @@ def delete_case_scripts(db: Session, case_id: int, phase: str | None = None) -> 
     query = db.query(ApifoxCaseScript).filter(ApifoxCaseScript.case_id == case_id)
     if phase is not None:
         query = query.filter(ApifoxCaseScript.phase == phase)
+    query.delete(synchronize_session=False)
+
+
+def list_endpoint_scripts(db: Session, endpoint_id: int) -> List[ApifoxEndpointScript]:
+    return (
+        db.query(ApifoxEndpointScript)
+        .filter(ApifoxEndpointScript.endpoint_id == endpoint_id)
+        .order_by(ApifoxEndpointScript.sort_order, ApifoxEndpointScript.id)
+        .all()
+    )
+
+
+def delete_endpoint_scripts(db: Session, endpoint_id: int, phase: str | None = None) -> None:
+    query = db.query(ApifoxEndpointScript).filter(ApifoxEndpointScript.endpoint_id == endpoint_id)
+    if phase is not None:
+        query = query.filter(ApifoxEndpointScript.phase == phase)
     query.delete(synchronize_session=False)

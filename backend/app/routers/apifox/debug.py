@@ -1,6 +1,6 @@
 """Apifox 接口调试 · 路由（直接发一次请求，不落库）。"""
 
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
@@ -10,7 +10,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.repositories.apifox import variable_repo
-from app.routers.apifox.schemas import RequestSpec
+from app.routers.apifox.schemas import AssertionRow, CaseScriptRef, ExtractRow, RequestSpec
 from app.services.apifox import debug_service
 from app.services.project_access_service import get_accessible_project
 
@@ -23,6 +23,11 @@ class DebugRequest(BaseModel):
     server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     environment_id: Optional[int] = None
+    # 接口级处理器（调试也执行；断言/提取直接用行对象，脚本按 ref 取内容）
+    assertions: List[AssertionRow] = Field(default_factory=list)
+    extracts: List[ExtractRow] = Field(default_factory=list)
+    pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    post_scripts: List[CaseScriptRef] = Field(default_factory=list)
 
 
 class DebugResponse(BaseModel):
@@ -35,6 +40,9 @@ class DebugResponse(BaseModel):
     response_body: str
     duration_ms: float
     error: Optional[str] = None
+    assertion_results: List[Dict[str, Any]] = Field(default_factory=list)
+    extract_results: List[Dict[str, Any]] = Field(default_factory=list)
+    script_logs: List[str] = Field(default_factory=list)
 
 
 @router.post("/projects/{pid}/debug", response_model=DebugResponse)
@@ -54,6 +62,8 @@ def debug_send(
             db, pid, data.method, data.path,
             data.request_spec.model_dump(), data.environment_id, user.id,
             server_name=data.server_name,
+            assertions=data.assertions, extracts=data.extracts,
+            pre_scripts=data.pre_scripts, post_scripts=data.post_scripts,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

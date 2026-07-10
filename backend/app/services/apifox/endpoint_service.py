@@ -8,13 +8,24 @@ from typing import List
 
 from sqlalchemy.orm import Session
 
-from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
+from app.models.apifox.endpoint import (
+    ApifoxEndpoint,
+    ApifoxEndpointAssertion,
+    ApifoxEndpointExtract,
+    ApifoxFolder,
+)
+from app.models.apifox.script import ApifoxEndpointScript
 from app.repositories.apifox import endpoint_repo as repo
+from app.repositories.apifox import script_repo
 from app.routers.apifox.schemas import (
+    AssertionRow,
+    CaseScriptOut,
+    CaseScriptRef,
     EndpointBrief,
     EndpointCreate,
     EndpointOut,
     EndpointUpdate,
+    ExtractRow,
     FolderCreate,
     FolderOut,
     FolderUpdate,
@@ -42,7 +53,62 @@ def _folder_out(folder: ApifoxFolder) -> FolderOut:
     )
 
 
-def _endpoint_out(endpoint: ApifoxEndpoint) -> EndpointOut:
+# ---------- 接口级处理器（断言/提取/前后置脚本，镜像 case_service） ----------
+def _write_endpoint_assertions(db: Session, endpoint_id: int, rows: List[AssertionRow]) -> None:
+    for i, a in enumerate(rows):
+        repo.add(
+            db,
+            ApifoxEndpointAssertion(
+                endpoint_id=endpoint_id, type=a.type, path=a.path, operator=a.operator,
+                expected=a.expected, enabled=a.enabled, sort_order=i,
+            ),
+        )
+
+
+def _write_endpoint_extracts(db: Session, endpoint_id: int, rows: List[ExtractRow]) -> None:
+    for i, e in enumerate(rows):
+        repo.add(
+            db,
+            ApifoxEndpointExtract(
+                endpoint_id=endpoint_id, var_name=e.var_name, source=e.source, path=e.path,
+                scope=e.scope, enabled=e.enabled, sort_order=i,
+            ),
+        )
+
+
+def _write_endpoint_scripts(
+    db: Session, endpoint: ApifoxEndpoint, phase: str, refs: List[CaseScriptRef]
+) -> None:
+    for i, ref in enumerate(refs):
+        script = script_repo.get_script(db, ref.script_id)
+        if not script or script.project_id != endpoint.project_id:
+            raise ValueError("引用的脚本不存在或不属于该项目")
+        script_repo.add(
+            db,
+            ApifoxEndpointScript(
+                endpoint_id=endpoint.id, script_id=ref.script_id, phase=phase,
+                enabled=ref.enabled, sort_order=i,
+            ),
+        )
+
+
+def _load_endpoint_scripts(db: Session, endpoint_id: int) -> tuple[List[CaseScriptOut], List[CaseScriptOut]]:
+    pre: List[CaseScriptOut] = []
+    post: List[CaseScriptOut] = []
+    for link in script_repo.list_endpoint_scripts(db, endpoint_id):
+        script = script_repo.get_script(db, link.script_id)
+        out = CaseScriptOut(
+            script_id=link.script_id,
+            enabled=link.enabled,
+            script_name=script.name if script else "",
+            script_lang=script.lang if script else "",
+        )
+        (pre if link.phase == "pre" else post).append(out)
+    return pre, post
+
+
+def _endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
+    pre_scripts, post_scripts = _load_endpoint_scripts(db, endpoint.id)
     return EndpointOut(
         id=endpoint.id,
         project_id=endpoint.project_id,
@@ -54,6 +120,16 @@ def _endpoint_out(endpoint: ApifoxEndpoint) -> EndpointOut:
         request_spec=_load_spec(endpoint.request_spec),
         description=endpoint.description,
         sort_order=endpoint.sort_order,
+        assertions=[
+            AssertionRow(type=a.type, path=a.path, operator=a.operator, expected=a.expected, enabled=a.enabled)
+            for a in repo.list_endpoint_assertions(db, endpoint.id)
+        ],
+        extracts=[
+            ExtractRow(var_name=e.var_name, source=e.source, path=e.path, scope=e.scope, enabled=e.enabled)
+            for e in repo.list_endpoint_extracts(db, endpoint.id)
+        ],
+        pre_scripts=pre_scripts,
+        post_scripts=post_scripts,
         created_at=endpoint.created_at,
         updated_at=endpoint.updated_at,
     )
@@ -164,14 +240,18 @@ def create_endpoint(db: Session, project_id: int, data: EndpointCreate) -> Endpo
         request_spec=data.request_spec.model_dump_json(),
         description=data.description,
     )
-    repo.create_endpoint(db, endpoint)
+    repo.create_endpoint(db, endpoint)  # flush 后 endpoint.id 可用
+    _write_endpoint_assertions(db, endpoint.id, data.assertions)
+    _write_endpoint_extracts(db, endpoint.id, data.extracts)
+    _write_endpoint_scripts(db, endpoint, "pre", data.pre_scripts)
+    _write_endpoint_scripts(db, endpoint, "post", data.post_scripts)
     db.commit()
     db.refresh(endpoint)
-    return _endpoint_out(endpoint)
+    return _endpoint_out(db, endpoint)
 
 
-def get_endpoint_out(endpoint: ApifoxEndpoint) -> EndpointOut:
-    return _endpoint_out(endpoint)
+def get_endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
+    return _endpoint_out(db, endpoint)
 
 
 def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate) -> EndpointOut:
@@ -192,12 +272,29 @@ def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate)
         endpoint.description = data.description
     if data.sort_order is not None:
         endpoint.sort_order = data.sort_order
+    # 处理器：提供即整组替换（先删后插）
+    if data.assertions is not None:
+        repo.delete_endpoint_assertions(db, endpoint.id)
+        _write_endpoint_assertions(db, endpoint.id, data.assertions)
+    if data.extracts is not None:
+        repo.delete_endpoint_extracts(db, endpoint.id)
+        _write_endpoint_extracts(db, endpoint.id, data.extracts)
+    if data.pre_scripts is not None:
+        script_repo.delete_endpoint_scripts(db, endpoint.id, "pre")
+        _write_endpoint_scripts(db, endpoint, "pre", data.pre_scripts)
+    if data.post_scripts is not None:
+        script_repo.delete_endpoint_scripts(db, endpoint.id, "post")
+        _write_endpoint_scripts(db, endpoint, "post", data.post_scripts)
     db.commit()
     db.refresh(endpoint)
-    return _endpoint_out(endpoint)
+    return _endpoint_out(db, endpoint)
 
 
 def delete_endpoint(db: Session, endpoint: ApifoxEndpoint) -> None:
+    # 先清接口级处理器子表，避免遗留孤儿行
+    repo.delete_endpoint_assertions(db, endpoint.id)
+    repo.delete_endpoint_extracts(db, endpoint.id)
+    script_repo.delete_endpoint_scripts(db, endpoint.id)
     repo.delete_endpoint(db, endpoint)
     db.commit()
 
