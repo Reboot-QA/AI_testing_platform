@@ -85,8 +85,22 @@ export const MENU_DEFINITIONS = [
   { key: 'system_users', label: '用户管理', path: '/system/users', group: 'system' },
   { key: 'system_departments', label: '部门权限', path: '/system/departments', group: 'system' },
   { key: 'system_permissions', label: '权限管理', path: '/system/permissions', group: 'system' },
-  { key: 'system_logs', label: '日志监控', path: '/system/logs', group: 'system' },
-  { key: 'system_error_logs', label: '错误日志', path: '/system/error-logs', group: 'system' },
+  {
+    key: 'system_logs',
+    label: '日志监控',
+    path: '/system/logs',
+    group: 'logs',
+    parent: 'log_mgmt',
+    parentLabel: '日志管理',
+  },
+  {
+    key: 'system_error_logs',
+    label: '错误日志',
+    path: '/system/error-logs',
+    group: 'logs',
+    parent: 'log_mgmt',
+    parentLabel: '日志管理',
+  },
 ]
 
 export const PAGE_TITLES = {
@@ -112,6 +126,7 @@ export const PAGE_TITLES = {
 
 export const BUSINESS_MENUS = MENU_DEFINITIONS.filter((item) => item.group === 'business')
 export const SYSTEM_MENUS = MENU_DEFINITIONS.filter((item) => item.group === 'system')
+export const LOG_MENUS = MENU_DEFINITIONS.filter((item) => item.group === 'logs')
 
 export const STANDALONE_BUSINESS_MENUS = BUSINESS_MENUS.filter((item) => !item.parent)
 
@@ -133,6 +148,14 @@ export const BUSINESS_MENU_GROUPS = [
   },
 ]
 
+export const LOG_MENU_GROUPS = [
+  {
+    key: 'log_mgmt',
+    label: '日志管理',
+    items: LOG_MENUS.filter((item) => item.parent === 'log_mgmt'),
+  },
+]
+
 export const SUBMENU_INDEX_BY_PATH = {
   '/apifox': 'api_automation_mgmt',
   '/requirement-docs': 'requirement_mgmt',
@@ -144,4 +167,6 @@ export const SUBMENU_INDEX_BY_PATH = {
   '/api-automation/suites': 'api_automation_mgmt',
   '/api-automation/reports': 'api_automation_mgmt',
   '/api-automation/schedule': 'api_automation_mgmt',
+  '/system/logs': 'log_mgmt',
+  '/system/error-logs': 'log_mgmt',
 }

@@ -78,6 +78,19 @@
           </el-menu-item>
         </el-sub-menu>
 
+        <el-sub-menu v-if="showLogMenu" index="log_mgmt">
+          <template #title>
+            <el-icon><DocumentCopy /></el-icon>
+            <span>日志管理</span>
+          </template>
+          <el-menu-item v-if="userStore.hasPermission('system_logs')" index="/system/logs">
+            日志监控
+          </el-menu-item>
+          <el-menu-item v-if="userStore.hasPermission('system_error_logs')" index="/system/error-logs">
+            错误日志
+          </el-menu-item>
+        </el-sub-menu>
+
         <el-sub-menu v-if="showSystemMenu" index="system">
           <template #title>
             <el-icon><Setting /></el-icon>
@@ -94,12 +107,6 @@
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('system_permissions')" index="/system/permissions">
             权限管理
-          </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('system_logs')" index="/system/logs">
-            日志监控
-          </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('system_error_logs')" index="/system/error-logs">
-            错误日志
           </el-menu-item>
         </el-sub-menu>
       </el-menu>
@@ -189,14 +196,18 @@ const showAutomationMenu = computed(
     userStore.hasPermission('api_automation_schedule')
 )
 
+const showLogMenu = computed(
+  () =>
+    userStore.hasPermission('system_logs') ||
+    userStore.hasPermission('system_error_logs')
+)
+
 const showSystemMenu = computed(
   () =>
     userStore.hasPermission('system_settings') ||
     userStore.hasPermission('system_users') ||
     userStore.hasPermission('system_departments') ||
-    userStore.hasPermission('system_permissions') ||
-    userStore.hasPermission('system_logs') ||
-    userStore.hasPermission('system_error_logs')
+    userStore.hasPermission('system_permissions')
 )
 
 const activeMenu = computed(() => {
@@ -208,7 +219,12 @@ const activeMenu = computed(() => {
 
 const defaultOpeneds = computed(() => {
   const open = []
-  if (route.path.startsWith('/system')) {
+  if (
+    route.path.startsWith('/system/settings') ||
+    route.path.startsWith('/system/users') ||
+    route.path.startsWith('/system/departments') ||
+    route.path.startsWith('/system/permissions')
+  ) {
     open.push('system')
   }
   if (route.path.startsWith('/apifox')) {

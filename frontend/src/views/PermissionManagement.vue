@@ -67,6 +67,24 @@
           </el-checkbox-group>
         </div>
 
+        <div class="menu-group">
+          <div class="group-title">日志管理</div>
+          <el-alert
+            title="日志管理菜单仅管理员账号可访问，分配给测试员不会生效"
+            type="warning"
+            :closable="false"
+            show-icon
+            class="system-tip"
+          />
+          <div v-for="group in logMenuGroups" :key="group.key" class="menu-subgroup">
+            <el-checkbox-group v-model="selectedMenus">
+              <el-checkbox v-for="item in group.items" :key="item.key" :value="item.key">
+                {{ item.label }}
+              </el-checkbox>
+            </el-checkbox-group>
+          </div>
+        </div>
+
         <div class="actions">
           <el-button @click="resetMenus">恢复默认</el-button>
           <el-button type="primary" :loading="saving" @click="handleSave">保存授权</el-button>
@@ -85,6 +103,7 @@ import { userApi } from '@/api'
 import {
   BUSINESS_MENUS,
   BUSINESS_MENU_GROUPS,
+  LOG_MENU_GROUPS,
   STANDALONE_BUSINESS_MENUS,
   SYSTEM_MENUS,
 } from '@/config/menus'
@@ -98,6 +117,7 @@ const saving = ref(false)
 const standaloneBusinessMenus = STANDALONE_BUSINESS_MENUS
 const businessMenuGroups = BUSINESS_MENU_GROUPS
 const systemMenus = SYSTEM_MENUS
+const logMenuGroups = LOG_MENU_GROUPS
 const defaultMenus = BUSINESS_MENUS.map((item) => item.key)
 
 const selectedUser = computed(() => users.value.find((item) => item.id === selectedUserId.value))
