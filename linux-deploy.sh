@@ -220,15 +220,62 @@ compose_cmd() {
   BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
 }
 
-compose_build_images() {
-  local services=(backend frontend)
-  info "构建镜像 backend + frontend（已禁用 provenance 元数据）..."
+docker_cli_supports_flag() {
+  local cmd="$1"
+  shift
+  local flag="$1"
+  "$cmd" --help 2>&1 | grep -q -- "$flag"
+}
 
-  if ! compose_cmd build --provenance=false --sbom=false --progress=plain backend; then
-    warn "backend BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
-    DOCKER_BUILDKIT=0 compose_cmd build --progress=plain backend
+compose_build_extra_flags() {
+  local flags=()
+  if docker_cli_supports_flag docker compose build '--provenance'; then
+    flags+=(--provenance=false --sbom=false)
+  fi
+  if docker_cli_supports_flag docker compose build '--progress'; then
+    flags+=(--progress=plain)
+  fi
+  printf '%s\n' "${flags[@]}"
+}
+
+compose_build_service() {
+  local service="$1"
+  shift
+  local -a extra=("$@")
+  local -a flags=()
+  mapfile -t flags < <(compose_build_extra_flags)
+
+  info "构建镜像: ${service}"
+  if compose_cmd build "${flags[@]}" "${extra[@]}" "$service"; then
+    return 0
   fi
 
+  warn "${service} BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
+  DOCKER_BUILDKIT=0 compose_cmd build "${extra[@]}" "$service"
+}
+
+docker_build_prebuilt_frontend() {
+  local -a args=(
+    -f "$ROOT/frontend/Dockerfile.prebuilt"
+    -t ai-testing-platform-frontend:latest
+    "$ROOT/frontend"
+  )
+
+  if docker_cli_supports_flag docker build '--progress'; then
+    if docker build --progress=plain "${args[@]}"; then
+      return 0
+    fi
+  elif docker build "${args[@]}"; then
+    return 0
+  fi
+
+  warn "frontend 镜像构建失败，改用 DOCKER_BUILDKIT=0..."
+  DOCKER_BUILDKIT=0 docker build "${args[@]}"
+}
+
+compose_build_images() {
+  info "构建镜像 backend + frontend..."
+  compose_build_service backend
   build_frontend_image
   ok "镜像构建完成"
 }
@@ -256,38 +303,19 @@ build_frontend_dist_on_host() {
 build_frontend_image() {
   if [[ -f "$ROOT/frontend/dist/index.html" ]]; then
     info "使用 frontend/dist 打包 nginx 镜像（跳过容器内 npm build）..."
-    docker build \
-      --progress=plain \
-      -f "$ROOT/frontend/Dockerfile.prebuilt" \
-      -t ai-testing-platform-frontend:latest \
-      "$ROOT/frontend"
+    docker_build_prebuilt_frontend
     return 0
   fi
 
   if build_frontend_dist_on_host; then
     info "宿主机构建成功，打包 frontend 镜像..."
-    docker build \
-      --progress=plain \
-      -f "$ROOT/frontend/Dockerfile.prebuilt" \
-      -t ai-testing-platform-frontend:latest \
-      "$ROOT/frontend"
+    docker_build_prebuilt_frontend
     return 0
   fi
 
   warn "宿主机无 Node 或构建失败，改在 Docker 内构建 frontend（小内存机器可能较慢）..."
   local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
-  if ! compose_cmd build \
-    --provenance=false \
-    --sbom=false \
-    --progress=plain \
-    --build-arg "NODE_MEMORY_MB=${mem_mb}" \
-    frontend; then
-    warn "frontend BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
-    DOCKER_BUILDKIT=0 compose_cmd build \
-      --progress=plain \
-      --build-arg "NODE_MEMORY_MB=${mem_mb}" \
-      frontend
-  fi
+  compose_build_service frontend --build-arg "NODE_MEMORY_MB=${mem_mb}"
 }
 
 health_check_hosts() {
