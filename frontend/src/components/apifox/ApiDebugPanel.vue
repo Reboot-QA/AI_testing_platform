@@ -11,6 +11,7 @@
       :server-names="serverNames"
       show-processors
       :scripts="scripts"
+      :schemas="schemas"
       @save="$emit('save')"
     />
 
@@ -43,6 +44,15 @@
         <el-tab-pane v-if="resp.script_logs?.length" label="脚本日志" name="logs">
           <div v-for="(l, i) in resp.script_logs" :key="'l' + i" class="line mono">{{ l }}</div>
         </el-tab-pane>
+        <el-tab-pane v-if="resp.contract_result" label="契约" name="contract">
+          <div class="line">
+            <el-tag size="small" :type="resp.contract_result.passed ? 'success' : 'danger'">
+              {{ resp.contract_result.passed ? '符合' : '不符' }}
+            </el-tag>
+            {{ resp.contract_result.schema_name }} · {{ resp.contract_result.message }}
+          </div>
+          <div v-for="(err, i) in resp.contract_result.errors" :key="'c' + i" class="line mono">{{ err }}</div>
+        </el-tab-pane>
       </el-tabs>
     </div>
   </div>
@@ -62,6 +72,7 @@ const props = defineProps({
   serverNames: { type: Array, default: () => [] },
   projectId: { type: [String, Number], required: true },
   scripts: { type: Array, default: () => [] },
+  schemas: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 
@@ -89,6 +100,7 @@ async function send() {
       extracts: props.form.extracts || [],
       pre_scripts: (props.form.pre_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
       post_scripts: (props.form.post_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
+      response_schema_id: props.form.response_schema_id || null,
     })
     respTab.value = 'body'
   } catch (e) {
