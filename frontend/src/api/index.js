@@ -250,6 +250,7 @@ export const userApi = {
 }
 
 export const apifoxApi = {
+  workbenchOverview: () => request.get('/apifox/workbench/overview'),
   listFolders: (pid) => request.get(`/apifox/projects/${pid}/folders`),
   createFolder: (pid, data) => request.post(`/apifox/projects/${pid}/folders`, data),
   updateFolder: (id, data) => request.put(`/apifox/folders/${id}`, data),
