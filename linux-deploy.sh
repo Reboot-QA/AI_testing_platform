@@ -202,7 +202,7 @@ compose_cmd() {
   if [[ "$WITH_MONITORING" == "1" ]]; then
     profiles+=(--profile monitoring)
   fi
-  docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --env-file "$ENV_FILE" -f "$COMPOSE_FILE" "${profiles[@]}" "$@"
 }
 
 health_check_hosts() {

@@ -35,6 +35,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
       network: ${DOCKER_BUILD_NETWORK:-default}
+      provenance: false
+      sbom: false
     container_name: ai-platform-backend
     restart: unless-stopped
     environment:
@@ -75,6 +77,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      provenance: false
+      sbom: false
     container_name: ai-platform-frontend
     restart: unless-stopped
     depends_on:

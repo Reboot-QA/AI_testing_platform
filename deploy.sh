@@ -848,13 +848,13 @@ ensure_app_env() {
 
 app_compose() {
   ensure_app_env
-  docker compose --env-file "$ROOT/.env.docker" -f "$ROOT/docker-compose.yml" "$@"
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 docker compose --env-file "$ROOT/.env.docker" -f "$ROOT/docker-compose.yml" "$@"
 }
 
 app_rebuild() {
   require_docker
   info "重建 backend + frontend（使用 .env.docker）..."
-  app_compose build backend frontend
+  BUILDX_NO_DEFAULT_ATTESTATIONS=1 app_compose build --progress=plain backend frontend
   app_compose up -d backend frontend
   ok "应用已重建并启动"
 }
