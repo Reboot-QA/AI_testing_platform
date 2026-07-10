@@ -311,6 +311,15 @@ function handleLogout() {
 
 .aside {
   background: #1a365d;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.aside :deep(.el-menu) {
+  flex: 1;
+  overflow-y: auto;
+  border-right: none;
 }
 
 .logo {
@@ -323,10 +332,7 @@ function handleLogout() {
   font-size: 16px;
   font-weight: 600;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-}
-
-.el-menu {
-  border-right: none;
+  flex-shrink: 0;
 }
 
 .header {
