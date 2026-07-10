@@ -39,6 +39,7 @@
           :cases="projectCases"
           :scenarios="scenarios"
           :current-scenario-id="form.id"
+          :scripts="scripts"
         />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
@@ -60,6 +61,7 @@ const pid = computed(() => route.params.projectId)
 
 const scenarios = ref([])
 const projectCases = ref([])
+const scripts = ref([])
 const environments = ref([])
 const saving = ref(false)
 const running = ref(false)
@@ -73,6 +75,10 @@ async function loadScenarios() {
 
 async function loadProjectCases() {
   projectCases.value = await apifoxApi.listProjectCases(pid.value)
+}
+
+async function loadScripts() {
+  scripts.value = await apifoxApi.listScripts(pid.value)
 }
 
 async function loadEnvironments() {
@@ -147,6 +153,7 @@ async function delScenario(s) {
 onMounted(async () => {
   await loadScenarios()
   await loadProjectCases()
+  await loadScripts()
   await loadEnvironments()
 })
 </script>
