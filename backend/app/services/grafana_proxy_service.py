@@ -178,32 +178,42 @@ def _rewrite_grafana_body(content: bytes, content_type: str, public_proxy_base: 
         return content
 
     base_path = f"{GRAFANA_PROXY_PREFIX}/"
+    already_subpath = GRAFANA_PROXY_PREFIX in text
+
+    if not already_subpath or '<base href="/"' in text or "<base href='/'" in text:
+        text = re.sub(
+            r'(<base\s+href=")([^"]*)(")',
+            rf"\1{base_path}\3",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r"(<base\s+href=')([^']*)(')",
+            rf"\1{base_path}\3",
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            rf'https?://[^"\'\s<>]+{re.escape(GRAFANA_PROXY_PREFIX)}',
+            public_proxy_base,
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = re.sub(
+            r'"appSubUrl"\s*:\s*"[^"]*"',
+            f'"appSubUrl":"{GRAFANA_PROXY_PREFIX}"',
+            text,
+        )
+        text = re.sub(
+            r'"appUrl"\s*:\s*"[^"]*"',
+            f'"appUrl":"{public_proxy_base}/"',
+            text,
+        )
+
+    # Grafana 子路径模式下 settings 里仍可能有 "/api/..." 绝对路径，需补代理前缀
     text = re.sub(
-        r'(<base\s+href=")([^"]*)(")',
-        rf"\1{base_path}\3",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r"(<base\s+href=')([^']*)(')",
-        rf"\1{base_path}\3",
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        rf'https?://[^"\'\s<>]+{re.escape(GRAFANA_PROXY_PREFIX)}',
-        public_proxy_base,
-        text,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r'"appSubUrl"\s*:\s*"[^"]*"',
-        f'"appSubUrl":"{GRAFANA_PROXY_PREFIX}"',
-        text,
-    )
-    text = re.sub(
-        r'"appUrl"\s*:\s*"[^"]*"',
-        f'"appUrl":"{public_proxy_base}/"',
+        r'"/api/(?!v1/logs/grafana/)',
+        f'"{GRAFANA_PROXY_PREFIX}/api/',
         text,
     )
     text = re.sub(
@@ -211,16 +221,6 @@ def _rewrite_grafana_body(content: bytes, content_type: str, public_proxy_base: 
         '"disableLoginForm":true',
         text,
     )
-    if f'<base href="{base_path}"' not in text and "<base " not in text.lower():
-        text = text.replace("<head>", f'<head><base href="{base_path}">', 1)
-    # 将 Grafana 根路径链接重写到代理子路径，避免 iframe 内跳转到 /d/... 白屏
-    prefix = re.escape(GRAFANA_PROXY_PREFIX)
-    for route in ("d/", "explore", "public/", "avatar/", "apis/", "api/"):
-        text = re.sub(
-            rf'(["\'])(?!{prefix})/({re.escape(route)})',
-            rf"\1{GRAFANA_PROXY_PREFIX}/\2",
-            text,
-        )
     return text.encode("utf-8")
 
 
@@ -284,6 +284,8 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     ).split(",")[0].strip()
     headers["X-Forwarded-Proto"] = request.headers.get("x-forwarded-proto", request.url.scheme)
     headers["X-Forwarded-Prefix"] = GRAFANA_PROXY_PREFIX
+    if headers["X-Forwarded-Host"]:
+        headers["Host"] = headers["X-Forwarded-Host"]
 
     body = await request.body()
 

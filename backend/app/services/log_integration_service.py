@@ -161,11 +161,13 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
 
     # 仅用 uid 路由，避免中文标题生成的 slug 与硬编码 slug 不一致导致 404
     dashboard_path = "/d/ai-platform-logs?orgId=1&refresh=10s&kiosk"
-    explore_left = (
-        '{"datasource":"loki","queries":[{"expr":"{job=\\"ai-platform\\"}","refId":"A"}],'
-        '"range":{"from":"now-1h","to":"now"}}'
+    # Grafana 11 Explore 使用 panes 参数（left 已废弃，会导致 Page not found）
+    explore_panes = (
+        '{"loki":{"datasource":"loki","queries":[{"refId":"A","expr":"{job=\\"ai-platform\\"}"}],'
+        '"range":{"from":"now-1h","to":"now"}}}'
     )
-    explore_path = f"/explore?orgId=1&left={quote(explore_left)}"
+    explore_path = f"/explore?orgId=1&schemaVersion=1&panes={quote(explore_panes)}"
+    explore_simple_path = "/explore?orgId=1&schemaVersion=1"
 
     proxy_base = f"{public_origin.rstrip('/')}/api/v1/logs/grafana" if public_origin else ""
     use_proxy = settings.grafana_enabled and bool(proxy_base)
@@ -196,7 +198,7 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         "loki_url": public_loki,
         "dashboard_url": dashboard_url,
         "explore_url": explore_url,
-        "embed_url": embed_url if grafana_dashboard_ok else explore_path,
+        "embed_url": embed_url if grafana_dashboard_ok else explore_simple_path,
         "grafana_online": grafana_ok,
         "loki_online": loki_ok,
         "grafana_auth_ok": grafana_auth_ok,

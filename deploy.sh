@@ -1575,7 +1575,12 @@ monitoring_fix_dashboard() {
   require_docker
   monitoring_env
   monitoring_write_env
-  monitoring_provision_dashboard
+  if monitoring_provision_dashboard; then
+    ok "仪表盘已就绪，请刷新平台「日志监控」页面"
+  else
+    error "仪表盘导入失败，请检查 Grafana 密码: ./deploy.sh monitoring fix-auth '你的密码'"
+    exit 1
+  fi
 }
 
 monitoring_fix_auth() {
