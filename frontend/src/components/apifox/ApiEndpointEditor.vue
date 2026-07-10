@@ -2,8 +2,11 @@
   <div class="editor">
     <template v-if="showMeta">
       <div class="row1">
-        <el-select v-model="form.method" style="width: 110px">
+        <el-select v-model="form.method" style="width: 100px">
           <el-option v-for="m in METHODS" :key="m" :label="m" :value="m" />
+        </el-select>
+        <el-select v-model="form.server_name" placeholder="默认前置URL" clearable style="width: 150px">
+          <el-option v-for="n in serverNames" :key="n" :label="n" :value="n" />
         </el-select>
         <el-input v-model="form.path" placeholder="/path/to/api" />
         <el-button type="primary" :loading="saving" @click="$emit('save')">保存</el-button>
@@ -68,6 +71,7 @@ defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
   showMeta: { type: Boolean, default: true },
+  serverNames: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 
