@@ -5,7 +5,14 @@
       <span class="hint">直接发一次请求（不建用例、不落报告）· 环境在顶部选择</span>
     </div>
 
-    <ApiEndpointEditor :form="form" :saving="saving" :server-names="serverNames" @save="$emit('save')" />
+    <ApiEndpointEditor
+      :form="form"
+      :saving="saving"
+      :server-names="serverNames"
+      show-processors
+      :scripts="scripts"
+      @save="$emit('save')"
+    />
 
     <div v-if="resp" class="resp">
       <div class="resp-head">
@@ -20,6 +27,21 @@
         </el-tab-pane>
         <el-tab-pane label="Headers" name="headers">
           <div class="resp-box"><JsonView :data="resp.response_headers" :deep="2" /></div>
+        </el-tab-pane>
+        <el-tab-pane v-if="resp.assertion_results?.length" label="断言" name="assertions">
+          <div v-for="(a, i) in resp.assertion_results" :key="'a' + i" class="line">
+            <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{ a.passed ? '过' : '败' }}</el-tag>
+            {{ a.message }}
+          </div>
+        </el-tab-pane>
+        <el-tab-pane v-if="resp.extract_results?.length" label="提取" name="extracts">
+          <div v-for="(e, i) in resp.extract_results" :key="'e' + i" class="line">
+            <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{ e.passed ? '成' : '败' }}</el-tag>
+            {{ e.var_name }} = {{ e.value || e.message }}（{{ e.scope }}）
+          </div>
+        </el-tab-pane>
+        <el-tab-pane v-if="resp.script_logs?.length" label="脚本日志" name="logs">
+          <div v-for="(l, i) in resp.script_logs" :key="'l' + i" class="line mono">{{ l }}</div>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -39,6 +61,7 @@ const props = defineProps({
   saving: { type: Boolean, default: false },
   serverNames: { type: Array, default: () => [] },
   projectId: { type: [String, Number], required: true },
+  scripts: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 
@@ -62,6 +85,10 @@ async function send() {
       server_name: props.form.server_name,
       request_spec: props.form.request_spec,
       environment_id: store.currentEnvironmentId,
+      assertions: props.form.assertions || [],
+      extracts: props.form.extracts || [],
+      pre_scripts: (props.form.pre_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
+      post_scripts: (props.form.post_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
     })
     respTab.value = 'body'
   } catch (e) {
@@ -119,5 +146,15 @@ async function send() {
   border: 1px solid var(--ax-border);
   border-radius: var(--ax-radius);
   padding: 8px;
+}
+
+.line {
+  font-size: 13px;
+  padding: 3px 0;
+}
+
+.mono {
+  font-family: Consolas, Monaco, monospace;
+  color: var(--ax-text-secondary);
 }
 </style>

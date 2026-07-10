@@ -122,7 +122,7 @@ def get_endpoint(
     eid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
     endpoint = _endpoint_checked(db, eid, user)
-    return service.get_endpoint_out(endpoint)
+    return service.get_endpoint_out(db, endpoint)
 
 
 @router.put("/endpoints/{eid}", response_model=EndpointOut)

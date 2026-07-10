@@ -4,12 +4,17 @@ from app.models.apifox.case import (
     ApifoxEndpointCase,
 )
 from app.models.apifox.data_model import ApifoxSchema
-from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
+from app.models.apifox.endpoint import (
+    ApifoxEndpoint,
+    ApifoxEndpointAssertion,
+    ApifoxEndpointExtract,
+    ApifoxFolder,
+)
 from app.models.apifox.global_param import ApifoxGlobalParam
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.schedule import ApifoxSchedule
-from app.models.apifox.script import ApifoxCaseScript, ApifoxScript
+from app.models.apifox.script import ApifoxCaseScript, ApifoxEndpointScript, ApifoxScript
 from app.models.apifox.variable import (
     ApifoxEnvironment,
     ApifoxEnvironmentServer,
@@ -22,6 +27,9 @@ from app.models.apifox.variable import (
 __all__ = [
     "ApifoxFolder",
     "ApifoxEndpoint",
+    "ApifoxEndpointAssertion",
+    "ApifoxEndpointExtract",
+    "ApifoxEndpointScript",
     "ApifoxEnvironment",
     "ApifoxEnvironmentServer",
     "ApifoxEnvironmentVariable",
@@ -34,6 +42,7 @@ __all__ = [
     "ApifoxSchema",
     "ApifoxScript",
     "ApifoxCaseScript",
+    "ApifoxEndpointScript",
     "ApifoxGlobalParam",
     "ApifoxScenario",
     "ApifoxScenarioStep",
