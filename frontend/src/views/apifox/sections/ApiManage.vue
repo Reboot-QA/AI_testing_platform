@@ -18,6 +18,7 @@
             :saving="saving"
             :server-names="serverNames"
             :project-id="pid"
+            :scripts="scripts"
             @save="saveEndpoint"
           />
         </el-tab-pane>
@@ -47,12 +48,13 @@
 </template>
 
 <script setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useProjectScripts } from '@/composables/useProjectScripts'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
@@ -66,8 +68,12 @@ const store = useWorkspaceStore()
 const treePanel = ref(null)
 const saving = ref(false)
 const endpointTab = ref('debug')
+const { scripts, loadScripts } = useProjectScripts(pid)
 
-const form = reactive({ id: null, name: '', method: 'GET', path: '', server_name: null, description: '', request_spec: emptySpec() })
+const form = reactive({
+  id: null, name: '', method: 'GET', path: '', server_name: null, description: '',
+  request_spec: emptySpec(), assertions: [], extracts: [], pre_scripts: [], post_scripts: [],
+})
 
 // server 名取自工作区环境（顶部统一加载），供接口选择前置服务
 const serverNames = computed(() => {
@@ -94,6 +100,10 @@ async function loadEndpoint(id) {
   form.server_name = e.server_name || null
   form.description = e.description || ''
   form.request_spec = normalizeSpec(e.request_spec)
+  form.assertions = e.assertions || []
+  form.extracts = e.extracts || []
+  form.pre_scripts = e.pre_scripts || []
+  form.post_scripts = e.post_scripts || []
 }
 
 function onDeleted(id) {
@@ -110,6 +120,9 @@ async function saveEndpoint() {
     await apifoxApi.updateEndpoint(form.id, {
       name: form.name, method: form.method, path: form.path, server_name: form.server_name,
       description: form.description, request_spec: form.request_spec,
+      assertions: form.assertions, extracts: form.extracts,
+      pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+      post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
     })
     ElMessage.success('已保存')
     treePanel.value?.reload()
@@ -117,6 +130,8 @@ async function saveEndpoint() {
     saving.value = false
   }
 }
+
+onMounted(loadScripts)
 </script>
 
 <style scoped>
