@@ -34,7 +34,32 @@
     </div>
 
     <div class="var-panel">
-      <div class="var-title">
+      <template v-if="selected.type === 'env'">
+        <div class="var-title">前置 URL · {{ selectedName }}</div>
+        <div class="base-row">
+          <span class="base-label">默认前置 URL</span>
+          <el-input
+            v-model="baseUrl"
+            size="small"
+            placeholder="如 https://api.xxx.com（接口相对路径会拼在它前面）"
+            @change="saveBaseUrl"
+          />
+        </div>
+        <div v-for="s in servers" :key="s.id" class="server-row">
+          <el-input v-model="s.name" size="small" placeholder="名称(如 服务A)" style="width: 160px" @change="saveServer(s)" />
+          <el-input v-model="s.base_url" size="small" placeholder="URL" @change="saveServer(s)" />
+          <el-button link type="danger" size="small" @click="delServer(s)">删</el-button>
+        </div>
+        <div class="add-server">
+          <el-input v-model="newServer.name" size="small" placeholder="名称" style="width: 160px" />
+          <el-input v-model="newServer.base_url" size="small" placeholder="URL" />
+          <el-button size="small" type="primary" :disabled="!newServer.name.trim()" @click="addServer">
+            + 命名前置 URL
+          </el-button>
+        </div>
+      </template>
+
+      <div class="var-title" :style="{ marginTop: selected.type === 'env' ? '18px' : '0' }">
         {{ selected.type === 'global' ? '全局变量（项目级，跨环境）' : `环境变量 · ${selectedName}` }}
       </div>
       <VariableTable
@@ -60,12 +85,54 @@ const pid = computed(() => route.params.projectId)
 
 const environments = ref([])
 const vars = ref([])
+const servers = ref([])
+const baseUrl = ref('')
+const newServer = reactive({ name: '', base_url: '' })
 const selected = reactive({ type: 'global', id: null })
 
 const selectedName = computed(() => environments.value.find((e) => e.id === selected.id)?.name || '')
 
 async function loadEnvs() {
   environments.value = await apifoxApi.listEnvironments(pid.value)
+  syncEnvDetail()
+}
+
+function syncEnvDetail() {
+  const e = environments.value.find((x) => x.id === selected.id)
+  if (selected.type === 'env' && e) {
+    baseUrl.value = e.base_url || ''
+    servers.value = (e.servers || []).map((s) => ({ ...s }))
+  }
+}
+
+async function saveBaseUrl() {
+  await apifoxApi.updateEnvironment(selected.id, { base_url: baseUrl.value })
+  await loadEnvs()
+}
+
+async function addServer() {
+  try {
+    await apifoxApi.createEnvServer(selected.id, { name: newServer.name.trim(), base_url: newServer.base_url })
+    newServer.name = ''
+    newServer.base_url = ''
+    await loadEnvs()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '添加失败')
+  }
+}
+
+async function saveServer(s) {
+  try {
+    await apifoxApi.updateEnvServer(s.id, { name: s.name, base_url: s.base_url })
+    await loadEnvs()
+  } catch (e) {
+    ElMessage.error(e.response?.data?.detail || '保存失败')
+  }
+}
+
+async function delServer(s) {
+  await apifoxApi.deleteEnvServer(s.id)
+  await loadEnvs()
 }
 
 async function reloadVars() {
@@ -76,6 +143,7 @@ async function reloadVars() {
 function selectEnv(e) {
   selected.type = 'env'
   selected.id = e.id
+  syncEnvDetail()
   reloadVars()
 }
 
@@ -215,5 +283,26 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--ax-brand);
   margin-bottom: 12px;
+}
+
+.base-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.base-label {
+  flex-shrink: 0;
+  font-size: 13px;
+  color: var(--ax-text-secondary);
+}
+
+.server-row,
+.add-server {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 </style>

@@ -53,6 +53,7 @@
             :form="form"
             :saving="saving"
             :environments="environments"
+            :server-names="serverNames"
             :project-id="pid"
             @save="saveEndpoint"
           />
@@ -105,7 +106,13 @@ const environments = ref([])
 const importVisible = ref(false)
 const ctx = reactive({ visible: false, x: 0, y: 0, node: null })
 
-const form = reactive({ id: null, name: '', method: 'GET', path: '', description: '', request_spec: emptySpec() })
+const form = reactive({ id: null, name: '', method: 'GET', path: '', server_name: null, description: '', request_spec: emptySpec() })
+
+const serverNames = computed(() => {
+  const names = new Set()
+  environments.value.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
+  return [...names]
+})
 
 function emptySpec() {
   return {
@@ -205,6 +212,7 @@ async function loadEndpoint(id) {
   form.name = e.name
   form.method = e.method
   form.path = e.path
+  form.server_name = e.server_name || null
   form.description = e.description || ''
   form.request_spec = normalizeSpec(e.request_spec)
   selectedFolderId.value = e.folder_id
@@ -251,7 +259,7 @@ async function saveEndpoint() {
   saving.value = true
   try {
     await apifoxApi.updateEndpoint(form.id, {
-      name: form.name, method: form.method, path: form.path,
+      name: form.name, method: form.method, path: form.path, server_name: form.server_name,
       description: form.description, request_spec: form.request_spec,
     })
     ElMessage.success('已保存')
