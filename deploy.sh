@@ -1415,7 +1415,7 @@ monitoring_status() {
   else
     warn "Loki 未监听 :${LOKI_PORT}"
   fi
-  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}/d/ai-platform-logs/ai-platform-logs"
+  echo "仪表盘: ${GRAFANA_ROOT_URL:-http://${access_host}:${GRAFANA_PORT}}/d/ai-platform-logs"
 }
 
 monitoring_logs() {

@@ -44,6 +44,11 @@ def setup_logging() -> None:
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
 
+    backend_log = log_dir / "backend.log"
+    file_handler = logging.FileHandler(backend_log, encoding="utf-8")
+    file_handler.setFormatter(formatter)
+    root_logger.addHandler(file_handler)
+
     for logger_name in ("uvicorn", "uvicorn.error", "uvicorn.access"):
         uvicorn_logger = logging.getLogger(logger_name)
         uvicorn_logger.handlers.clear()

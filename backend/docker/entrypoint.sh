@@ -3,6 +3,7 @@ set -e
 
 cd /app
 mkdir -p /app/logs
+touch /app/logs/backend.log /app/logs/ensure.log 2>/dev/null || true
 
 echo "[INFO] Waiting for MySQL at ${DB_HOST:-mysql}:${DB_PORT:-3306} ..."
 python - <<'PY'

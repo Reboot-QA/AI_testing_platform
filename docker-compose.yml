@@ -89,6 +89,8 @@ services:
     depends_on:
       backend:
         condition: service_started
+    volumes:
+      - app-logs:/var/log/ai-platform
     ports:
       - "${HTTP_PORT:-5173}:80"
     networks:

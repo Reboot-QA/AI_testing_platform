@@ -117,7 +117,8 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
     public_grafana = _resolve_public_url(grafana_url, settings.grafana_public_url, public_host)
     public_loki = _resolve_public_url(loki_url, settings.loki_public_url, public_host)
 
-    dashboard_path = "/d/ai-platform-logs/ai-platform-logs?orgId=1&refresh=10s&kiosk"
+    # 仅用 uid 路由，避免中文标题生成的 slug 与硬编码 slug 不一致导致 404
+    dashboard_path = "/d/ai-platform-logs?orgId=1&refresh=10s&kiosk"
     explore_left = (
         '{"datasource":"loki","queries":[{"expr":"{job=\\"ai-platform\\"}","refId":"A"}],'
         '"range":{"from":"now-1h","to":"now"}}'
