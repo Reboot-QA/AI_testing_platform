@@ -255,6 +255,10 @@ compose_build_service() {
 }
 
 docker_build_prebuilt_frontend() {
+  if [[ ! -f "$ROOT/frontend/dist/index.html" ]]; then
+    error "frontend/dist 不存在，无法打包 nginx 镜像。请先执行: cd frontend && npm ci && npm run build"
+  fi
+
   local -a args=(
     -f "$ROOT/frontend/Dockerfile.prebuilt"
     -t ai-testing-platform-frontend:latest
@@ -313,7 +317,7 @@ build_frontend_image() {
     return 0
   fi
 
-  warn "宿主机无 Node 或构建失败，改在 Docker 内构建 frontend（小内存机器可能较慢）..."
+  warn "frontend/dist 不存在且宿主机无法构建，改在 Docker 内完整构建 frontend（耗时较长）..."
   local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
   compose_build_service frontend --build-arg "NODE_MEMORY_MB=${mem_mb}"
 }

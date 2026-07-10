@@ -1,6 +1,6 @@
 node_modules/
-dist/
 .git/
 *.log
 .env
 .env.*
+# 注意：dist/ 不能忽略，Dockerfile.prebuilt 需要把宿主机构建产物打进镜像
