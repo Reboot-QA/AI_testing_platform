@@ -110,6 +110,27 @@ def _probe_loki() -> bool:
     return _probe(f"{resolve_loki_upstream()}/ready")
 
 
+def verify_grafana_credentials() -> tuple[bool, str]:
+    user = (settings.grafana_admin_user or "admin").strip()
+    password = settings.grafana_admin_password or ""
+    if not password:
+        return False, "未配置 GRAFANA_ADMIN_PASSWORD"
+    base = resolve_grafana_upstream().rstrip("/")
+    try:
+        import httpx
+
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0), follow_redirects=False) as client:
+            login_resp = client.post(f"{base}/login", json={"user": user, "password": password})
+            if login_resp.status_code != 200:
+                return False, "Grafana 管理员密码不正确"
+            user_resp = client.get(f"{base}/api/user", cookies=login_resp.cookies)
+            if user_resp.status_code != 200:
+                return False, "Grafana 登录后无法获取用户信息"
+    except Exception as exc:
+        return False, f"无法连接 Grafana: {exc}"
+    return True, ""
+
+
 def get_integration_status(public_host: Optional[str] = None, public_origin: Optional[str] = None) -> Dict:
     grafana_url = get_grafana_url()
     loki_url = get_loki_url()
@@ -141,6 +162,7 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
 
     grafana_ok = _probe_grafana()
     loki_ok = _probe_loki()
+    grafana_auth_ok, grafana_auth_message = verify_grafana_credentials() if grafana_ok else (False, "Grafana 未启动")
 
     return {
         "enabled": settings.grafana_enabled,
@@ -153,7 +175,9 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         "embed_url": embed_url,
         "grafana_online": grafana_ok,
         "loki_online": loki_ok,
-        "monitoring_online": grafana_ok and loki_ok,
+        "grafana_auth_ok": grafana_auth_ok,
+        "grafana_auth_message": grafana_auth_message,
+        "monitoring_online": grafana_ok and loki_ok and grafana_auth_ok,
         "anonymous_access": not use_proxy,
         "startup_hint": "./deploy.sh monitoring recreate-grafana",
         "docs_path": "monitoring/README.md",

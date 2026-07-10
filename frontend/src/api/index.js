@@ -483,7 +483,7 @@ export const logsApi = {
   tail: (params = {}) => request.get('/logs/tail', { params }),
   integrations: (params = {}) => request.get('/logs/integrations', { params }),
   grafanaSession: () => request.post('/logs/grafana/session', {}, { withCredentials: true }),
-  grafanaLaunch: (data, params = {}) => request.post('/logs/grafana/launch', data, { params }),
+  lokiQuery: (params = {}) => request.get('/logs/loki/query', { params }),
 }
 
 export default request

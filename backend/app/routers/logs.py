@@ -1,21 +1,20 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 
 from app.auth import get_current_admin
 from app.models.user import User
-from app.schemas import GrafanaLaunchIn
 from app.services import log_service
 from app.services.grafana_proxy_service import (
+    GRAFANA_PROXY_PREFIX,
     attach_grafana_session,
-    build_enter_response,
-    build_launch_url,
     build_public_origin,
     proxy_to_grafana,
     resolve_user_from_cookie,
 )
 from app.services.log_integration_service import get_integration_status
+from app.services.loki_query_service import query_loki
 
 router = APIRouter(prefix="/logs", tags=["日志监控"])
 
@@ -39,28 +38,11 @@ def log_integrations(
 @router.post("/grafana/session")
 def grafana_session(current_user: User = Depends(get_current_admin)):
     response = JSONResponse({"ok": True})
-    attach_grafana_session(
+    embed_token = attach_grafana_session(
         response,
         {"user_id": current_user.id, "username": current_user.username, "role": current_user.role},
     )
-    return response
-
-
-@router.post("/grafana/launch")
-def grafana_launch(
-    body: GrafanaLaunchIn,
-    request: Request,
-    public_origin: Optional[str] = Query(None, max_length=300),
-    current_user: User = Depends(get_current_admin),
-):
-    origin = build_public_origin(request, (public_origin or "").strip() or None)
-    url = build_launch_url(origin, current_user.id, current_user.username, current_user.role, body.redirect)
-    return {"url": url}
-
-
-@router.get("/grafana/enter")
-def grafana_enter(token: str = Query(..., min_length=8), redirect: str = Query("/")):
-    return build_enter_response(token, redirect)
+    return {"ok": True, "embed_token": embed_token, "proxy_prefix": GRAFANA_PROXY_PREFIX}
 
 
 @router.api_route("/grafana", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
@@ -74,6 +56,16 @@ async def grafana_proxy(request: Request, path: str = ""):
             headers={"X-Grafana-Proxy": "auth-required"},
         )
     return await proxy_to_grafana(path, request, user_ctx)
+
+
+@router.get("/loki/query")
+async def loki_query(
+    query: Optional[str] = Query(None, max_length=500),
+    limit: int = Query(200, ge=1, le=1000),
+    hours: int = Query(6, ge=1, le=168),
+    _: User = Depends(get_current_admin),
+):
+    return await query_loki(expr=query, limit=limit, hours=hours)
 
 
 @router.get("/sources")

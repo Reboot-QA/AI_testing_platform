@@ -86,7 +86,7 @@
         <el-card shadow="never" v-loading="integrationLoading">
           <template #header>
             <div class="grafana-header">
-              <span>Grafana + Loki 外部日志平台</span>
+              <span>Grafana + Loki 日志平台</span>
               <el-button :loading="integrationLoading" @click="loadIntegrations">
                 <el-icon><Refresh /></el-icon>
                 刷新状态
@@ -115,50 +115,107 @@
             </el-col>
             <el-col :xs="24" :sm="8">
               <el-card shadow="never" class="integration-card">
-                <div class="integration-title">采集状态</div>
-                <el-tag :type="integrations.monitoring_online ? 'success' : 'warning'" size="small">
-                  {{ integrations.monitoring_online ? '监控栈正常' : '未启动或异常' }}
+                <div class="integration-title">代理认证</div>
+                <el-tag :type="integrations.grafana_auth_ok ? 'success' : 'warning'" size="small">
+                  {{ integrations.grafana_auth_ok ? '正常' : '异常' }}
                 </el-tag>
-                <div class="integration-url">Promtail → Loki → Grafana</div>
+                <div class="integration-url">平台账号免登 · 后端服务账号代理</div>
               </el-card>
             </el-col>
           </el-row>
 
-          <div class="grafana-actions">
-            <el-button type="primary" :disabled="!integrations.grafana_online" @click="openGrafana(integrations.dashboard_url)">
-              打开 Grafana 仪表盘
-            </el-button>
-            <el-button :disabled="!integrations.grafana_online" @click="openGrafana(integrations.explore_url)">
-              打开 Explore 查询
-            </el-button>
-            <el-button :disabled="!integrations.grafana_online" @click="openGrafana(integrations.use_proxy ? '/' : integrations.grafana_url)">
-              打开 Grafana 控制台
-            </el-button>
-          </div>
-
           <el-alert
-            v-if="!integrations.monitoring_online"
+            v-if="integrations.grafana_online && !integrations.grafana_auth_ok"
             class="setup-alert"
-            type="info"
+            type="error"
             show-icon
             :closable="false"
-            title="监控栈尚未启动"
+            title="Grafana 自动登录失败"
           >
             <template #default>
-              <p>在 Linux 服务器上执行以下命令启动 Grafana + Loki + Promtail：</p>
-              <pre class="setup-code">{{ integrations.startup_hint || './deploy.sh monitoring start' }}</pre>
-              <p v-if="integrations.use_proxy">从本平台打开 Grafana 将通过平台账号自动登录，无需输入 Grafana 密码。</p>
-              <p v-else-if="integrations.anonymous_access">从本平台打开 Grafana 将自动以只读身份进入，无需输入密码。</p>
-              <p>详细说明见项目目录 <code>monitoring/README.md</code></p>
+              <p>{{ integrations.grafana_auth_message || 'Grafana 管理员密码与后端配置不一致' }}</p>
+              <pre class="setup-code">docker exec ai-platform-grafana grafana-cli admin reset-admin-password '你的新密码'
+grep GRAFANA_ADMIN .env.docker monitoring/.env
+docker compose up -d backend</pre>
             </template>
           </el-alert>
 
-          <iframe
-            v-if="showEmbed && embedUrl"
-            class="grafana-embed"
-            :src="embedUrl"
-            title="Grafana Dashboard"
-          />
+          <el-tabs v-model="grafanaSubTab" class="grafana-sub-tabs">
+            <el-tab-pane label="Loki 直查" name="loki">
+              <div class="loki-toolbar">
+                <el-select v-model="lokiHours" style="width: 130px">
+                  <el-option label="最近 1 小时" :value="1" />
+                  <el-option label="最近 6 小时" :value="6" />
+                  <el-option label="最近 24 小时" :value="24" />
+                </el-select>
+                <el-select v-model="lokiLimit" style="width: 110px">
+                  <el-option label="100 行" :value="100" />
+                  <el-option label="200 行" :value="200" />
+                  <el-option label="500 行" :value="500" />
+                </el-select>
+                <el-input
+                  v-model="lokiQuery"
+                  clearable
+                  placeholder='LogQL，如 {job="ai-platform"}'
+                  class="loki-query-input"
+                  @keyup.enter="runLokiQuery"
+                />
+                <el-button type="primary" :loading="lokiLoading" :disabled="!integrations.loki_online" @click="runLokiQuery">
+                  查询
+                </el-button>
+              </div>
+              <div class="log-meta">
+                <span>匹配: {{ lokiLines.length }} 行</span>
+                <span>数据源: Loki API</span>
+              </div>
+              <div v-loading="lokiLoading" class="log-viewer loki-viewer">
+                <div v-if="!lokiLines.length && !lokiLoading" class="empty-tip">暂无 Loki 日志，请确认 Promtail 已采集</div>
+                <div
+                  v-for="(line, index) in lokiLines"
+                  :key="`${line.timestamp}-${index}`"
+                  class="log-line"
+                  :class="`level-${(line.level || 'INFO').toLowerCase()}`"
+                >
+                  <span class="line-no">{{ line.timestamp || '·' }}</span>
+                  <span class="line-level">{{ line.source || 'loki' }}</span>
+                  <span class="line-text">{{ line.text }}</span>
+                </div>
+              </div>
+            </el-tab-pane>
+
+            <el-tab-pane label="Grafana 仪表盘" name="dashboard">
+              <div class="grafana-actions">
+                <el-button type="primary" :disabled="!integrations.monitoring_online" @click="openGrafana(integrations.dashboard_url)">
+                  新窗口打开仪表盘
+                </el-button>
+                <el-button :disabled="!integrations.monitoring_online" @click="openGrafana(integrations.explore_url)">
+                  新窗口打开 Explore
+                </el-button>
+              </div>
+
+              <el-alert
+                v-if="!integrations.monitoring_online"
+                class="setup-alert"
+                type="info"
+                show-icon
+                :closable="false"
+                title="监控栈尚未就绪"
+              >
+                <template #default>
+                  <p>在服务器上执行：</p>
+                  <pre class="setup-code">{{ integrations.startup_hint || './deploy.sh monitoring start' }}</pre>
+                  <p>平台通过后端服务账号代理 Grafana，无需手动输入 Grafana 密码。</p>
+                </template>
+              </el-alert>
+
+              <iframe
+                v-if="showEmbed && embedUrl"
+                class="grafana-embed"
+                :src="embedUrl"
+                title="Grafana Dashboard"
+              />
+            </el-tab-pane>
+          </el-tabs>
         </el-card>
       </el-tab-pane>
     </el-tabs>
@@ -183,7 +240,13 @@ const displayLines = ref([])
 const totalMatched = ref(0)
 const logContainerRef = ref(null)
 const activeTab = ref('builtin')
+const grafanaSubTab = ref('loki')
 const integrationLoading = ref(false)
+const lokiQuery = ref('{job="ai-platform"}')
+const lokiHours = ref(6)
+const lokiLimit = ref(200)
+const lokiLoading = ref(false)
+const lokiLines = ref([])
 const integrations = ref({
   enabled: true,
   embed_enabled: true,
@@ -195,6 +258,8 @@ const integrations = ref({
   embed_url: '',
   grafana_online: false,
   loki_online: false,
+  grafana_auth_ok: false,
+  grafana_auth_message: '',
   monitoring_online: false,
   anonymous_access: false,
   startup_hint: './deploy.sh monitoring recreate-grafana',
@@ -359,14 +424,34 @@ const originParams = () => ({
 })
 
 const GRAFANA_PROXY_PREFIX = '/api/v1/logs/grafana'
+const EMBED_QUERY_PARAM = '_pt'
 
-function buildGrafanaProxyUrl(redirect) {
+function buildGrafanaProxyUrl(redirect, embedToken = '') {
   const path = redirect.startsWith('/') ? redirect : `/${redirect}`
-  return `${window.location.origin}${GRAFANA_PROXY_PREFIX}${path}`
+  let url = `${window.location.origin}${GRAFANA_PROXY_PREFIX}${path}`
+  if (embedToken) {
+    url += `${path.includes('?') ? '&' : '?'}${EMBED_QUERY_PARAM}=${encodeURIComponent(embedToken)}`
+  }
+  return url
 }
 
 async function ensureGrafanaSession() {
-  await logsApi.grafanaSession()
+  return logsApi.grafanaSession()
+}
+
+async function runLokiQuery() {
+  if (!integrations.value.loki_online) return
+  lokiLoading.value = true
+  try {
+    const data = await logsApi.lokiQuery({
+      query: lokiQuery.value || undefined,
+      limit: lokiLimit.value,
+      hours: lokiHours.value,
+    })
+    lokiLines.value = data.lines || []
+  } finally {
+    lokiLoading.value = false
+  }
 }
 
 async function loadIntegrations() {
@@ -376,11 +461,17 @@ async function loadIntegrations() {
     embedUrl.value = ''
     if (integrations.value.monitoring_online && integrations.value.embed_url) {
       if (integrations.value.use_proxy) {
-        await ensureGrafanaSession()
-        embedUrl.value = buildGrafanaProxyUrl(integrations.value.embed_url)
+        const session = await ensureGrafanaSession()
+        embedUrl.value = buildGrafanaProxyUrl(
+          integrations.value.embed_url,
+          session?.embed_token || '',
+        )
       } else {
         embedUrl.value = integrations.value.embed_url
       }
+    }
+    if (integrations.value.loki_online && !lokiLines.value.length) {
+      await runLokiQuery()
     }
   } finally {
     integrationLoading.value = false
@@ -390,8 +481,12 @@ async function loadIntegrations() {
 async function openGrafana(redirect) {
   if (!redirect) return
   if (integrations.value.use_proxy) {
-    await ensureGrafanaSession()
-    window.open(buildGrafanaProxyUrl(redirect), '_blank', 'noopener,noreferrer')
+    const session = await ensureGrafanaSession()
+    window.open(
+      buildGrafanaProxyUrl(redirect, session?.embed_token || ''),
+      '_blank',
+      'noopener,noreferrer',
+    )
     return
   }
   window.open(redirect, '_blank', 'noopener,noreferrer')
@@ -616,5 +711,25 @@ onBeforeUnmount(() => {
   border: 1px solid #ebeef5;
   border-radius: 8px;
   background: #111;
+}
+
+.grafana-sub-tabs {
+  margin-top: 4px;
+}
+
+.loki-toolbar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.loki-query-input {
+  flex: 1;
+  min-width: 260px;
+}
+
+.loki-viewer {
+  height: 620px;
 }
 </style>
