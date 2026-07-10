@@ -443,12 +443,20 @@ const originParams = () => ({
 
 const GRAFANA_PROXY_PREFIX = '/api/v1/logs/grafana'
 const EMBED_QUERY_PARAM = '_pt'
+const PLATFORM_ACCESS_TOKEN_PARAM = 'access_token'
 
 function buildGrafanaProxyUrl(redirect, embedToken = '') {
   const path = redirect.startsWith('/') ? redirect : `/${redirect}`
   let url = `${window.location.origin}${GRAFANA_PROXY_PREFIX}${path}`
+  const appendParam = (name, value) => {
+    url += `${url.includes('?') ? '&' : '?'}${name}=${encodeURIComponent(value)}`
+  }
   if (embedToken) {
-    url += `${path.includes('?') ? '&' : '?'}${EMBED_QUERY_PARAM}=${encodeURIComponent(embedToken)}`
+    appendParam(EMBED_QUERY_PARAM, embedToken)
+  }
+  const platformToken = localStorage.getItem('token')
+  if (platformToken) {
+    appendParam(PLATFORM_ACCESS_TOKEN_PARAM, platformToken)
   }
   return url
 }
@@ -488,14 +496,20 @@ async function loadIntegrations() {
       integrations.value.embed_url
     ) {
       if (integrations.value.use_proxy) {
-        const session = await ensureGrafanaSession()
-        if (!session?.embed_token) {
+        let embedToken = ''
+        try {
+          const session = await ensureGrafanaSession()
+          embedToken = session?.embed_token || ''
+        } catch {
+          // session 失败时仍可用平台 JWT 嵌入
+        }
+        if (!embedToken && !localStorage.getItem('token')) {
           embedError.value = 'Grafana 会话创建失败，请刷新页面重试'
           return
         }
         embedUrl.value = buildGrafanaProxyUrl(
           integrations.value.embed_url,
-          session.embed_token,
+          embedToken,
         )
       } else {
         embedUrl.value = integrations.value.embed_url
@@ -512,9 +526,19 @@ async function loadIntegrations() {
 async function openGrafana(redirect) {
   if (!redirect) return
   if (integrations.value.use_proxy) {
-    const session = await ensureGrafanaSession()
+    let embedToken = ''
+    try {
+      const session = await ensureGrafanaSession()
+      embedToken = session?.embed_token || ''
+    } catch {
+      // session 失败时仍可用平台 JWT 打开
+    }
+    if (!embedToken && !localStorage.getItem('token')) {
+      ElMessage.error('登录已失效，请重新登录后再打开 Grafana')
+      return
+    }
     window.open(
-      buildGrafanaProxyUrl(redirect, session?.embed_token || ''),
+      buildGrafanaProxyUrl(redirect, embedToken),
       '_blank',
       'noopener,noreferrer',
     )

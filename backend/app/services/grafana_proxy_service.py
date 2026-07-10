@@ -18,7 +18,10 @@ logger = logging.getLogger(__name__)
 GRAFANA_PROXY_PREFIX = "/api/v1/logs/grafana"
 COOKIE_NAME = "grafana_proxy_sess"
 EMBED_QUERY_PARAM = "_pt"
+PLATFORM_ACCESS_TOKEN_PARAM = "access_token"
 SESSION_TTL = 8 * 3600
+
+STRIP_QUERY_PARAMS = {EMBED_QUERY_PARAM, PLATFORM_ACCESS_TOKEN_PARAM}
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -109,6 +112,19 @@ def attach_grafana_session(response: Response, user_ctx: dict) -> str:
         samesite="lax",
     )
     return session
+
+
+def attach_grafana_session_to_response(response: Response, user_ctx: dict, token: Optional[str] = None) -> str:
+    session_token = token if token and _verify_signed(token) else create_session_cookie(user_ctx)
+    response.set_cookie(
+        COOKIE_NAME,
+        session_token,
+        httponly=True,
+        max_age=SESSION_TTL,
+        path=GRAFANA_PROXY_PREFIX,
+        samesite="lax",
+    )
+    return session_token
 
 
 def _admin_credentials() -> Tuple[str, str]:
@@ -226,9 +242,12 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     target_url = urljoin(upstream_base, path or "")
     if request.url.query:
         query = str(request.url.query)
-        if EMBED_QUERY_PARAM in request.query_params:
-            parts = [part for part in query.split("&") if not part.startswith(f"{EMBED_QUERY_PARAM}=")]
-            query = "&".join(parts)
+        parts = [
+            part
+            for part in query.split("&")
+            if part.split("=", 1)[0] not in STRIP_QUERY_PARAMS
+        ]
+        query = "&".join(parts)
         if query:
             target_url = f"{target_url}?{query}"
 
