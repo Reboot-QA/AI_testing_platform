@@ -209,44 +209,36 @@ RESET_MYSQL=1 ./linux-deploy.sh up       # 清空前自动备份并重建 MySQL
 
 ### 数据库备份策略
 
-备份文件默认保存在 **`/opt/ai-platform-backups/mysql/`**（可在 `.env.docker` 中设置 `BACKUP_DIR`）。
+备份文件默认保存在 `.deploy/backups/mysql/`（已加入 `.gitignore`）。
 
 | 命令 | 说明 |
 |------|------|
 | `./linux-deploy.sh backup-db` | 立即备份（`mysqldump` + gzip，含 `CREATE DATABASE`） |
 | `./linux-deploy.sh backup-list` | 查看已有备份 |
 | `./linux-deploy.sh backup-prune` | 删除超过 30 天的旧备份（`BACKUP_KEEP_DAYS` 可调） |
-| `./linux-deploy.sh backup-setup-cron` | 创建 `/opt` 备份目录并安装**每日自动备份**（默认凌晨 3 点） |
-| `./linux-deploy.sh backup-cron-status` | 查看自动备份任务与备份列表 |
 | `./linux-deploy.sh restore-db <文件>` | 从 `.sql` / `.sql.gz` 恢复 |
-
-**一键配置每日自动备份**（在项目目录执行）：
-
-```bash
-./linux-deploy.sh backup-setup-cron
-```
-
-备份日志：`/opt/ai-platform-backups/backup.log`
 
 **自动备份时机**：执行 `fix-db`、`RESET_MYSQL=1` 清空数据卷前，脚本会**先自动备份**一份（文件名带 `pre-reset` 标记）。
 
-自定义备份时间（例如每天 2:30）：
+**推荐定时任务**（每天凌晨 3 点备份并清理旧文件）：
 
 ```bash
-BACKUP_CRON_HOUR=2 BACKUP_CRON_MINUTE=30 ./linux-deploy.sh backup-setup-cron
+crontab -e
+# 加入：
+0 3 * * * cd /opt/AI_testing_platform && ./linux-deploy.sh backup-db && ./linux-deploy.sh backup-prune >> .deploy/logs/backup.log 2>&1
 ```
 
 **异地备份**（建议同步到对象存储或另一台机器）：
 
 ```bash
-rsync -avz /opt/ai-platform-backups/mysql/ user@backup-server:/data/ai-platform/mysql/
+rsync -avz .deploy/backups/mysql/ user@backup-server:/data/ai-platform/mysql/
 ```
 
 **恢复示例**：
 
 ```bash
 ./linux-deploy.sh backup-list
-RESTORE_CONFIRM=1 ./linux-deploy.sh restore-db /opt/ai-platform-backups/mysql/ai_testcase_pre-reset_20260703_120000.sql.gz
+RESTORE_CONFIRM=1 ./linux-deploy.sh restore-db .deploy/backups/mysql/ai_testcase_pre-reset_20260703_120000.sql.gz
 ```
 
 **访问地址（默认端口）：**
