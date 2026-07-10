@@ -43,8 +43,17 @@ REWRITABLE_CONTENT_TYPES = {
     "application/javascript",
     "text/javascript",
     "text/css",
-    "application/json",
 }
+
+
+def _should_rewrite_response_body(path: str, content_type: str, method: str) -> bool:
+    if method.upper() != "GET":
+        return False
+    lower_type = (content_type or "").lower().split(";", 1)[0].strip()
+    if lower_type not in REWRITABLE_CONTENT_TYPES:
+        return False
+    rel = (path or "").lstrip("/")
+    return not rel.startswith("api/")
 
 
 def _sign_payload(payload: str) -> str:
@@ -255,7 +264,6 @@ def _rewrite_grafana_location(value: str) -> str:
 
 
 async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Response:
-    del user_ctx
     auth = upstream_basic_auth()
     if auth is None:
         raise HTTPException(status_code=502, detail="未配置 GRAFANA_ADMIN_PASSWORD，无法代理 Grafana")
@@ -284,8 +292,8 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     ).split(",")[0].strip()
     headers["X-Forwarded-Proto"] = request.headers.get("x-forwarded-proto", request.url.scheme)
     headers["X-Forwarded-Prefix"] = GRAFANA_PROXY_PREFIX
-    if headers["X-Forwarded-Host"]:
-        headers["Host"] = headers["X-Forwarded-Host"]
+    headers["X-WEBAUTH-USER"] = user_ctx.get("username", "admin")
+    headers["X-WEBAUTH-ROLE"] = "Admin" if user_ctx.get("role") == "admin" else "Viewer"
 
     body = await request.body()
 
@@ -325,7 +333,7 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     response_body = upstream.content
     content_type = upstream.headers.get("content-type", "")
     content_encoding = upstream.headers.get("content-encoding", "")
-    if response_body and request.method.upper() == "GET":
+    if response_body and _should_rewrite_response_body(path, content_type, request.method):
         decoded_body, was_gzip = _decompress_body(response_body, content_encoding)
         rewritten = _rewrite_grafana_body(decoded_body, content_type, public_proxy_base)
         if rewritten != decoded_body:
