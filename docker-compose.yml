@@ -77,6 +77,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NODE_MEMORY_MB: ${FRONTEND_BUILD_MEMORY_MB:-2048}
       provenance: false
       sbom: false
     container_name: ai-platform-frontend

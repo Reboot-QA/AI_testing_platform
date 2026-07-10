@@ -20,6 +20,7 @@
 #   BACKUP_KEEP_DAYS=30  自动清理超过 N 天的备份
 #   DOCKER_BUILD_NETWORK=host  构建时使用宿主机网络（海外 VPS DNS 异常时可试）
   SKIP_DOCKER_BUILD=1        跳过镜像构建，直接启动（构建已卡住且镜像已存在时用）
+  FRONTEND_BUILD_MEMORY_MB=2048  前端 Vite 构建内存上限（小内存 VPS 可设 1536）
 
 set -euo pipefail
 
@@ -214,14 +215,70 @@ compose_build_images() {
   local services=(backend frontend)
   info "构建镜像 backend + frontend（已禁用 provenance 元数据）..."
 
-  if compose_cmd build --provenance=false --sbom=false --progress=plain "${services[@]}"; then
-    ok "镜像构建完成"
+  if ! compose_cmd build --provenance=false --sbom=false --progress=plain backend; then
+    warn "backend BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
+    DOCKER_BUILDKIT=0 compose_cmd build --progress=plain backend
+  fi
+
+  build_frontend_image
+  ok "镜像构建完成"
+}
+
+build_frontend_dist_on_host() {
+  if ! command -v node >/dev/null 2>&1; then
+    return 1
+  fi
+  if [[ ! -f "$ROOT/frontend/package.json" ]]; then
+    return 1
+  fi
+
+  info "在宿主机构建前端 dist（推荐低内存服务器，可配合 swap）..."
+  (
+    cd "$ROOT/frontend"
+    if [[ ! -d node_modules ]]; then
+      npm ci --prefer-offline 2>/dev/null || npm install
+    fi
+    local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
+    NODE_OPTIONS="--max-old-space-size=${mem_mb}" npm run build
+  )
+  [[ -f "$ROOT/frontend/dist/index.html" ]]
+}
+
+build_frontend_image() {
+  if [[ -f "$ROOT/frontend/dist/index.html" ]]; then
+    info "使用 frontend/dist 打包 nginx 镜像（跳过容器内 npm build）..."
+    docker build \
+      --progress=plain \
+      -f "$ROOT/frontend/Dockerfile.prebuilt" \
+      -t ai-testing-platform-frontend:latest \
+      "$ROOT/frontend"
     return 0
   fi
 
-  warn "BuildKit 构建失败，改用传统 builder（DOCKER_BUILDKIT=0）..."
-  DOCKER_BUILDKIT=0 compose_cmd build --progress=plain "${services[@]}"
-  ok "镜像构建完成（legacy builder）"
+  if build_frontend_dist_on_host; then
+    info "宿主机构建成功，打包 frontend 镜像..."
+    docker build \
+      --progress=plain \
+      -f "$ROOT/frontend/Dockerfile.prebuilt" \
+      -t ai-testing-platform-frontend:latest \
+      "$ROOT/frontend"
+    return 0
+  fi
+
+  warn "宿主机无 Node 或构建失败，改在 Docker 内构建 frontend（小内存机器可能较慢）..."
+  local mem_mb="${FRONTEND_BUILD_MEMORY_MB:-2048}"
+  if ! compose_cmd build \
+    --provenance=false \
+    --sbom=false \
+    --progress=plain \
+    --build-arg "NODE_MEMORY_MB=${mem_mb}" \
+    frontend; then
+    warn "frontend BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
+    DOCKER_BUILDKIT=0 compose_cmd build \
+      --progress=plain \
+      --build-arg "NODE_MEMORY_MB=${mem_mb}" \
+      frontend
+  fi
 }
 
 health_check_hosts() {
