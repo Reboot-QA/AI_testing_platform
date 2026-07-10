@@ -1405,9 +1405,19 @@ monitoring_provision_dashboard() {
 
   monitoring_wait_grafana || return 1
 
-  if curl -sf -u "${user}:${pass}" "${base}/api/dashboards/uid/ai-platform-logs" 2>/dev/null | grep -q '"uid":"ai-platform-logs"'; then
-    ok "仪表盘 ai-platform-logs 已就绪"
-    return 0
+  local force="${1:-}"
+  if [[ "$force" != "force" ]]; then
+    local meta_url=""
+    meta_url="$(curl -sf -u "${user}:${pass}" "${base}/api/dashboards/uid/ai-platform-logs" 2>/dev/null \
+      | python3 -c "import sys,json; print(json.load(sys.stdin).get('meta',{}).get('url',''))" 2>/dev/null || true)"
+    if [[ "$meta_url" == *"/d/ai-platform-logs/ai-platform-logs"* ]]; then
+      ok "仪表盘 ai-platform-logs 已就绪（slug 正确）"
+      return 0
+    fi
+    if [[ -n "$meta_url" ]]; then
+      warn "仪表盘 slug 已过期: ${meta_url}"
+      info "将强制覆盖导入（英文标题 → slug: ai-platform-logs）"
+    fi
   fi
 
   if [[ ! -f "$dash_file" ]]; then
@@ -1420,7 +1430,7 @@ monitoring_provision_dashboard() {
     return 1
   fi
 
-  info "导入预置仪表盘「AI质量平台日志」..."
+  info "导入预置仪表盘「AI Platform Logs」..."
   payload="$(python3 - "$dash_file" <<'PY'
 import json
 import sys
@@ -1610,14 +1620,9 @@ monitoring_recreate_grafana() {
 
 monitoring_fix_dashboard() {
   require_docker
-  monitoring_env
+  monitoring_sync_app_env
   monitoring_write_env
-  if monitoring_provision_dashboard; then
-    ok "仪表盘已就绪，请刷新平台「日志监控」页面"
-  else
-    error "仪表盘导入失败，请检查 Grafana 密码: ./deploy.sh monitoring fix-auth '你的密码'"
-    exit 1
-  fi
+  monitoring_provision_dashboard force
 }
 
 monitoring_fix_auth() {

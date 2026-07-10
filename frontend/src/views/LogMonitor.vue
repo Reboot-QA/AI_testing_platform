@@ -195,7 +195,7 @@
               </div>
             </el-tab-pane>
 
-            <el-tab-pane label="Grafana 仪表盘" name="dashboard">
+            <el-tab-pane label="Grafana Explore" name="dashboard">
               <div class="grafana-actions">
                 <el-button type="primary" :disabled="!integrations.monitoring_online" @click="openGrafana(integrations.dashboard_url)">
                   新窗口打开仪表盘
@@ -204,6 +204,12 @@
                   新窗口打开 Explore
                 </el-button>
               </div>
+              <p v-if="integrations.grafana_dashboard_ok" class="grafana-hint">
+                内嵌为 Grafana Explore 日志视图；多面板仪表盘请点「新窗口打开仪表盘」。
+              </p>
+              <p v-else-if="integrations.grafana_online" class="grafana-hint">
+                预置仪表盘 slug 需更新，请执行 <code>./deploy.sh monitoring fix-dashboard</code> 后点「新窗口打开仪表盘」。
+              </p>
 
               <el-alert
                 v-if="!integrations.monitoring_online"
@@ -774,6 +780,19 @@ onBeforeUnmount(() => {
   color: #e2e8f0;
   border-radius: 6px;
   font-family: Consolas, Monaco, 'Courier New', monospace;
+}
+
+.grafana-hint {
+  margin: 0 0 12px;
+  color: #606266;
+  font-size: 13px;
+}
+
+.grafana-hint code {
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  background: #f4f4f5;
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 .grafana-embed {

@@ -17,6 +17,7 @@ DASHBOARD_ROUTE_FALLBACK = "/d/ai-platform-logs/ai-platform-logs"
 _grafana_upstream_cache: Optional[tuple] = None
 _loki_upstream_cache: Optional[tuple] = None
 _dashboard_meta_cache: Optional[tuple] = None
+DASHBOARD_META_CACHE_TTL = 15
 
 
 def _host_gateway_candidates(port: int) -> List[str]:
@@ -140,7 +141,7 @@ def _meta_url_to_dashboard_route(meta_url: str) -> Optional[str]:
 def _fetch_dashboard_meta() -> tuple[bool, str, Optional[str]]:
     global _dashboard_meta_cache
     now = time.time()
-    if _dashboard_meta_cache and now - _dashboard_meta_cache[0] < 60:
+    if _dashboard_meta_cache and now - _dashboard_meta_cache[0] < DASHBOARD_META_CACHE_TTL:
         return _dashboard_meta_cache[1], _dashboard_meta_cache[2], _dashboard_meta_cache[3]
 
     auth, _, _ = _grafana_admin_auth()
@@ -230,7 +231,6 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         _fetch_dashboard_meta() if grafana_ok and grafana_auth_ok else (False, "", None)
     )
     dashboard_path = resolve_dashboard_path()
-    dashboard_not_imported = "未导入" in (grafana_dashboard_message or "")
 
     # Grafana 11 Explore 使用 panes 参数（left 已废弃，会导致 Page not found）
     explore_panes = (
@@ -247,12 +247,13 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         grafana_display = proxy_base
         dashboard_url = dashboard_path
         explore_url = explore_path
-        embed_url = dashboard_path
     else:
         grafana_display = public_grafana
         dashboard_url = f"{public_grafana}{dashboard_path}"
         explore_url = f"{public_grafana}{explore_path}"
-        embed_url = dashboard_url
+
+    # iframe 默认嵌入 Explore（路径稳定）；完整仪表盘用「新窗口打开」
+    embed_path = explore_path
 
     return {
         "enabled": settings.grafana_enabled,
@@ -262,7 +263,7 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         "loki_url": public_loki,
         "dashboard_url": dashboard_url,
         "explore_url": explore_url,
-        "embed_url": explore_simple_path if dashboard_not_imported else dashboard_path,
+        "embed_url": embed_path,
         "grafana_online": grafana_ok,
         "loki_online": loki_ok,
         "grafana_auth_ok": grafana_auth_ok,
