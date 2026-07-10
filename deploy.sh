@@ -854,7 +854,12 @@ app_compose() {
 app_rebuild() {
   require_docker
   info "重建 backend + frontend（使用 .env.docker）..."
-  BUILDX_NO_DEFAULT_ATTESTATIONS=1 app_compose build --progress=plain backend frontend
+  export BUILDX_NO_DEFAULT_ATTESTATIONS=1
+  export BUILDKIT_PROGRESS=plain
+  if ! app_compose build --provenance=false --sbom=false --progress=plain backend frontend; then
+    warn "BuildKit 构建失败，改用 DOCKER_BUILDKIT=0..."
+    DOCKER_BUILDKIT=0 app_compose build --progress=plain backend frontend
+  fi
   app_compose up -d backend frontend
   ok "应用已重建并启动"
 }
