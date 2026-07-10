@@ -1,9 +1,11 @@
+import gzip
 import hashlib
 import hmac
 import logging
+import re
 import secrets
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from urllib.parse import quote, urljoin
 
 import httpx
@@ -33,6 +35,14 @@ HOP_BY_HOP_HEADERS = {
     "upgrade",
     "host",
     "content-length",
+}
+
+REWRITABLE_CONTENT_TYPES = {
+    "text/html",
+    "application/javascript",
+    "text/javascript",
+    "text/css",
+    "application/json",
 }
 
 
@@ -98,6 +108,48 @@ def build_public_origin(request: Request, fallback_origin: Optional[str] = None)
     return f"{scheme}://{host}"
 
 
+def build_public_proxy_base(request: Request) -> str:
+    return f"{build_public_origin(request)}{GRAFANA_PROXY_PREFIX}"
+
+
+def _decompress_body(content: bytes, content_encoding: str) -> Tuple[bytes, bool]:
+    encoding = (content_encoding or "").lower()
+    if "gzip" in encoding:
+        return gzip.decompress(content), True
+    return content, False
+
+
+def _rewrite_grafana_body(content: bytes, content_type: str, public_proxy_base: str) -> bytes:
+    lower_type = (content_type or "").lower().split(";", 1)[0].strip()
+    if lower_type not in REWRITABLE_CONTENT_TYPES:
+        return content
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        return content
+
+    base_path = f"{GRAFANA_PROXY_PREFIX}/"
+    text = re.sub(
+        r'(<base\s+href=")([^"]*)(")',
+        rf"\1{base_path}\3",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        r"(<base\s+href=')([^']*)(')",
+        rf"\1{base_path}\3",
+        text,
+        flags=re.IGNORECASE,
+    )
+    text = re.sub(
+        rf'https?://[^"\'\s<>]+{re.escape(GRAFANA_PROXY_PREFIX)}',
+        public_proxy_base,
+        text,
+        flags=re.IGNORECASE,
+    )
+    return text.encode("utf-8")
+
+
 def build_launch_url(origin: str, user_id: int, username: str, role: str, redirect: str) -> str:
     token = create_launch_token(user_id, username, role)
     redirect_path = redirect if redirect.startswith("/") else f"/{redirect}"
@@ -149,6 +201,9 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     if request.url.query:
         target_url = f"{target_url}?{request.url.query}"
 
+    public_origin = build_public_origin(request)
+    public_proxy_base = f"{public_origin}{GRAFANA_PROXY_PREFIX}"
+
     headers = {
         key: value
         for key, value in request.headers.items()
@@ -156,6 +211,9 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
     }
     headers["X-WEBAUTH-USER"] = user_ctx["username"]
     headers["X-WEBAUTH-ROLE"] = _grafana_role(user_ctx["role"])
+    headers["X-Forwarded-Host"] = (request.headers.get("x-forwarded-host") or request.headers.get("host") or "").split(",")[0].strip()
+    headers["X-Forwarded-Proto"] = request.headers.get("x-forwarded-proto", request.url.scheme)
+    headers["X-Forwarded-Prefix"] = GRAFANA_PROXY_PREFIX
 
     body = await request.body()
     try:
@@ -165,6 +223,19 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
         logger.warning("Grafana 代理失败: %s", exc)
         raise HTTPException(status_code=502, detail="无法连接 Grafana，请确认监控栈已启动") from exc
 
+    response_body = upstream.content
+    content_type = upstream.headers.get("content-type", "")
+    content_encoding = upstream.headers.get("content-encoding", "")
+    if response_body and request.method.upper() == "GET":
+        decoded_body, was_gzip = _decompress_body(response_body, content_encoding)
+        rewritten = _rewrite_grafana_body(decoded_body, content_type, public_proxy_base)
+        if rewritten != decoded_body:
+            response_body = rewritten
+            content_encoding = ""
+        elif was_gzip:
+            response_body = decoded_body
+            content_encoding = ""
+
     response_headers = {}
     for key, value in upstream.headers.items():
         lower = key.lower()
@@ -172,7 +243,12 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
             continue
         if lower in {"x-frame-options", "content-security-policy"}:
             continue
+        if lower in {"content-encoding", "content-length"} and (
+            content_encoding != upstream.headers.get("content-encoding", "")
+            or response_body is not upstream.content
+        ):
+            continue
         if lower == "location":
             value = _rewrite_grafana_location(value)
         response_headers[key] = value
-    return Response(content=upstream.content, status_code=upstream.status_code, headers=response_headers)
+    return Response(content=response_body, status_code=upstream.status_code, headers=response_headers)
