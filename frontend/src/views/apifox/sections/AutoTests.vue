@@ -14,7 +14,6 @@
         v-if="selectedEndpointId"
         :endpoint-id="selectedEndpointId"
         :project-id="pid"
-        :environments="environments"
         class="cases-area"
       />
       <el-empty v-else description="选择左侧接口，管理其测试用例" class="cases-area" />
@@ -23,9 +22,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { apifoxApi } from '@/api'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
 import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
@@ -36,7 +34,6 @@ const pid = computed(() => route.params.projectId)
 
 const section = ref('cases')
 const selectedEndpointId = ref(null)
-const environments = ref([])
 
 function onSelectEndpoint(id) {
   selectedEndpointId.value = id
@@ -45,12 +42,6 @@ function onSelectEndpoint(id) {
 function onDeleted(id) {
   if (selectedEndpointId.value === id) selectedEndpointId.value = null
 }
-
-async function loadEnvironments() {
-  environments.value = await apifoxApi.listEnvironments(pid.value)
-}
-
-onMounted(loadEnvironments)
 </script>
 
 <style scoped>

@@ -14,7 +14,6 @@
           <ApiDebugPanel
             :form="form"
             :saving="saving"
-            :environments="environments"
             :server-names="serverNames"
             :project-id="pid"
             @save="saveEndpoint"
@@ -24,7 +23,7 @@
           <ApiDocPreview :form="form" />
         </el-tab-pane>
         <el-tab-pane label="测试用例" name="cases">
-          <ApiCasesPanel :endpoint-id="form.id" :project-id="pid" :environments="environments" />
+          <ApiCasesPanel :endpoint-id="form.id" :project-id="pid" />
         </el-tab-pane>
       </el-tabs>
       <div v-else class="empty-cards">
@@ -46,11 +45,12 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
+import { useWorkspaceStore } from '@/stores/workspace'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
@@ -59,17 +59,18 @@ import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
 const route = useRoute()
 const router = useRouter()
 const pid = computed(() => route.params.projectId)
+const store = useWorkspaceStore()
 
 const treePanel = ref(null)
 const saving = ref(false)
 const endpointTab = ref('debug')
-const environments = ref([])
 
 const form = reactive({ id: null, name: '', method: 'GET', path: '', server_name: null, description: '', request_spec: emptySpec() })
 
+// server 名取自工作区环境（顶部统一加载），供接口选择前置服务
 const serverNames = computed(() => {
   const names = new Set()
-  environments.value.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
+  store.environments.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
   return [...names]
 })
 
@@ -109,12 +110,6 @@ async function saveEndpoint() {
     saving.value = false
   }
 }
-
-async function loadEnvironments() {
-  environments.value = await apifoxApi.listEnvironments(pid.value)
-}
-
-onMounted(loadEnvironments)
 </script>
 
 <style scoped>
