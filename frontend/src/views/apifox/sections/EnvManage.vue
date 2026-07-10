@@ -31,9 +31,19 @@
         <el-icon><Star /></el-icon>
         <span class="env-name">全局变量</span>
       </div>
+      <div
+        class="env-item"
+        :class="{ active: selected.type === 'params' }"
+        @click="selectParams"
+      >
+        <el-icon><SetUp /></el-icon>
+        <span class="env-name">全局参数</span>
+      </div>
     </div>
 
     <div class="var-panel">
+      <GlobalParamsPanel v-if="selected.type === 'params'" :project-id="pid" />
+      <template v-else>
       <template v-if="selected.type === 'env'">
         <div class="var-title">前置 URL · {{ selectedName }}</div>
         <div class="base-row">
@@ -69,6 +79,7 @@
         @delete="onDelete"
         @set-local="onSetLocal"
       />
+      </template>
     </div>
   </div>
 </template>
@@ -79,6 +90,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import VariableTable from '@/components/apifox/VariableTable.vue'
+import GlobalParamsPanel from '@/components/apifox/GlobalParamsPanel.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -151,6 +163,11 @@ function selectGlobal() {
   selected.type = 'global'
   selected.id = null
   reloadVars()
+}
+
+function selectParams() {
+  selected.type = 'params'
+  selected.id = null
 }
 
 async function addEnv() {
