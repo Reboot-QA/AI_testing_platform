@@ -115,6 +115,10 @@ def _expand_schema(doc: Dict[str, Any], schema: Optional[Dict[str, Any]],
             out[key] = schema[key]
 
     schema_type = schema.get("type")
+    if isinstance(schema_type, list):  # OAS 3.1 可空写法 type: ["integer", "null"]
+        schema_type = next((t for t in schema_type if t != "null"), None)
+    combinator = schema.get("anyOf") or schema.get("oneOf") or schema.get("allOf")
+
     if schema_type == "object" or "properties" in schema:
         out["type"] = "object"
         out["properties"] = {
@@ -128,8 +132,16 @@ def _expand_schema(doc: Dict[str, Any], schema: Optional[Dict[str, Any]],
         out["items"] = _expand_schema(doc, schema.get("items") or {}, depth + 1, seen)
     elif schema_type:
         out["type"] = schema_type
+    elif isinstance(combinator, list) and combinator:
+        # anyOf/oneOf/allOf：取第一个非 null 分支展开（Optional[X] → X），保留父级已收集的元信息
+        branch = next(
+            (s for s in combinator if isinstance(s, dict) and s.get("type") != "null"), None
+        )
+        expanded = _expand_schema(doc, branch, depth, seen) if branch else {"type": "object"}
+        for key, value in out.items():
+            expanded.setdefault(key, value)
+        return expanded
     else:
-        # allOf/oneOf/anyOf 等组合或空 schema：降级为 object（不深入合并）
         out["type"] = "object"
     return out
 
