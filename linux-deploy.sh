@@ -16,8 +16,10 @@
 #   WITH_MONITORING=1    同时启动 Grafana + Loki
 #   RESET_MYSQL=1        删除 MySQL 数据卷后重建（会清空数据库）
 #   ENV_FILE=.env.docker 指定 env 文件
-#   BACKUP_DIR=路径      备份目录（默认 .deploy/backups/mysql）
+#   BACKUP_DIR=路径      备份目录（默认 /opt/ai-platform-backups/mysql）
 #   BACKUP_KEEP_DAYS=30  自动清理超过 N 天的备份
+#   BACKUP_CRON_HOUR=3   每日自动备份小时（默认凌晨 3 点）
+#   BACKUP_CRON_MINUTE=0 每日自动备份分钟
 #   DOCKER_BUILD_NETWORK=host  构建时使用宿主机网络（海外 VPS DNS 异常时可试）
 
 set -euo pipefail
@@ -32,8 +34,12 @@ PUBLIC_HOST="${PUBLIC_HOST:-}"
 INSTALL_DOCKER="${INSTALL_DOCKER:-1}"
 WITH_MONITORING="${WITH_MONITORING:-0}"
 RESET_MYSQL="${RESET_MYSQL:-0}"
-BACKUP_DIR="${BACKUP_DIR:-$ROOT/.deploy/backups/mysql}"
+DEFAULT_BACKUP_DIR="/opt/ai-platform-backups/mysql"
+BACKUP_DIR="${BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
 BACKUP_KEEP_DAYS="${BACKUP_KEEP_DAYS:-30}"
+BACKUP_CRON_HOUR="${BACKUP_CRON_HOUR:-3}"
+BACKUP_CRON_MINUTE="${BACKUP_CRON_MINUTE:-0}"
+BACKUP_CRON_FILE="/etc/cron.d/ai-platform-mysql-backup"
 MYSQL_CONTAINER="${MYSQL_CONTAINER:-ai-platform-mysql}"
 
 RED='\033[0;31m'
@@ -64,6 +70,8 @@ AI质量平台 - Linux 一键部署（Docker）
   backup-db         备份 MySQL 数据库（mysqldump + gzip）
   backup-list       列出本地备份文件
   backup-prune      清理超过 BACKUP_KEEP_DAYS 天的旧备份
+  backup-setup-cron 创建 /opt 备份目录并安装每日自动备份（cron）
+  backup-cron-status 查看自动备份任务状态
   restore-db <文件> 从 .sql / .sql.gz 恢复数据库
   update | pull     从 Git 拉取代码并重新构建部署
   init-env          生成 .env.docker 并写入默认 MySQL 密码
@@ -75,8 +83,10 @@ AI质量平台 - Linux 一键部署（Docker）
   WITH_MONITORING=1 启动 Grafana + Loki
   RESET_MYSQL=1     清空 MySQL 数据卷前自动备份
   ENV_FILE          env 文件路径（默认 .env.docker）
-  BACKUP_DIR        备份目录（默认 .deploy/backups/mysql）
+  BACKUP_DIR        备份目录（默认 /opt/ai-platform-backups/mysql）
   BACKUP_KEEP_DAYS  保留天数（默认 30）
+  BACKUP_CRON_HOUR  每日备份小时（默认 3，即凌晨 3 点）
+  BACKUP_CRON_MINUTE 每日备份分钟（默认 0）
   RESTORE_CONFIRM=1 恢复数据库时跳过交互确认
   DOCKER_BUILD_NETWORK  Docker 构建网络（DNS 异常时可设 host）
 
@@ -86,7 +96,8 @@ AI质量平台 - Linux 一键部署（Docker）
   WITH_MONITORING=1 ./linux-deploy.sh up
   ./linux-deploy.sh logs backend
   ./linux-deploy.sh backup-db
-  ./linux-deploy.sh restore-db .deploy/backups/mysql/ai_testcase_20260703_030000.sql.gz
+  ./linux-deploy.sh backup-setup-cron
+  ./linux-deploy.sh restore-db /opt/ai-platform-backups/mysql/ai_testcase_20260703_030000.sql.gz
 EOF
 }
 
@@ -375,10 +386,19 @@ backup_timestamp() {
   date +%Y%m%d_%H%M%S
 }
 
+load_backup_config() {
+  if [[ -f "$ENV_FILE" ]]; then
+    BACKUP_DIR="$(read_env_value BACKUP_DIR "$BACKUP_DIR")"
+    BACKUP_KEEP_DAYS="$(read_env_value BACKUP_KEEP_DAYS "$BACKUP_KEEP_DAYS")"
+  fi
+  mkdir -p "$BACKUP_DIR"
+}
+
 cmd_backup_db() {
   fix_script_permissions
   ensure_docker
   ensure_env_file
+  load_backup_config
   ensure_mysql_container
 
   local db_name tag outfile tmpfile
@@ -413,7 +433,8 @@ cmd_backup_db() {
 
 cmd_backup_list() {
   fix_script_permissions
-  mkdir -p "$BACKUP_DIR"
+  ensure_env_file
+  load_backup_config
   echo "备份目录: $BACKUP_DIR"
   echo
   if ! ls -lh "$BACKUP_DIR"/*.sql.gz "$BACKUP_DIR"/*.sql 2>/dev/null; then
@@ -423,7 +444,8 @@ cmd_backup_list() {
 
 cmd_backup_prune() {
   fix_script_permissions
-  mkdir -p "$BACKUP_DIR"
+  ensure_env_file
+  load_backup_config
   local count
   count="$(find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -mtime +"$BACKUP_KEEP_DAYS" | wc -l | tr -d ' ')"
   if [[ "$count" == "0" ]]; then
@@ -433,6 +455,81 @@ cmd_backup_prune() {
   info "将删除 ${count} 个超过 ${BACKUP_KEEP_DAYS} 天的备份..."
   find "$BACKUP_DIR" -maxdepth 1 -type f \( -name '*.sql.gz' -o -name '*.sql' \) -mtime +"$BACKUP_KEEP_DAYS" -print -delete
   ok "旧备份已清理"
+}
+
+cmd_backup_setup_cron() {
+  fix_script_permissions
+  ensure_env_file
+
+  local backup_dir="${BACKUP_DIR:-$DEFAULT_BACKUP_DIR}"
+  local keep_days="${BACKUP_KEEP_DAYS:-30}"
+  local cron_hour="${BACKUP_CRON_HOUR:-3}"
+  local cron_minute="${BACKUP_CRON_MINUTE:-0}"
+  local backup_root backup_log runner
+  backup_root="$(dirname "$backup_dir")"
+  backup_log="${backup_root}/backup.log"
+  runner="$ROOT/scripts/mysql-daily-backup.sh"
+
+  mkdir -p "$backup_dir"
+  chmod 755 "$backup_root" 2>/dev/null || true
+  chmod 700 "$backup_dir" 2>/dev/null || true
+  touch "$backup_log" 2>/dev/null || true
+
+  set_env_value BACKUP_DIR "$backup_dir"
+  set_env_value BACKUP_KEEP_DAYS "$keep_days"
+
+  [[ -f "$runner" ]] || error "缺少脚本: $runner"
+  chmod +x "$runner" "$ROOT/linux-deploy.sh"
+
+  if [[ "$(id -u)" -ne 0 ]]; then
+    warn "安装系统 cron 需要 root，尝试写入当前用户 crontab..."
+    local cron_line="${cron_minute} ${cron_hour} * * * cd ${ROOT} && BACKUP_DIR=${backup_dir} BACKUP_KEEP_DAYS=${keep_days} ${runner} >> ${backup_log} 2>&1"
+    (crontab -l 2>/dev/null | grep -v 'mysql-daily-backup.sh' || true; echo "$cron_line") | crontab -
+    ok "已写入当前用户 crontab"
+    ok "执行时间: 每天 ${cron_hour}:$(printf '%02d' "$cron_minute")"
+    ok "备份目录: ${backup_dir}"
+    ok "日志文件: ${backup_log}"
+    return 0
+  fi
+
+  cat >"$BACKUP_CRON_FILE" <<EOF
+# AI质量平台 MySQL 每日自动备份（由 ./linux-deploy.sh backup-setup-cron 生成）
+SHELL=/bin/bash
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+${cron_minute} ${cron_hour} * * * root ${runner} >> ${backup_log} 2>&1
+EOF
+  chmod 644 "$BACKUP_CRON_FILE"
+
+  ok "已安装系统 cron: $BACKUP_CRON_FILE"
+  ok "执行时间: 每天 ${cron_hour}:$(printf '%02d' "$cron_minute")"
+  ok "备份目录: ${backup_dir}"
+  ok "日志文件: ${backup_log}"
+  info "立即试跑一次: ${runner}"
+  BACKUP_DIR="$backup_dir" BACKUP_KEEP_DAYS="$keep_days" "$runner" || warn "试跑失败，请检查 MySQL 容器是否运行"
+}
+
+cmd_backup_cron_status() {
+  ensure_env_file
+  load_backup_config
+  local backup_root backup_log
+  backup_root="$(dirname "$BACKUP_DIR")"
+  backup_log="${backup_root}/backup.log"
+
+  echo "备份目录: $BACKUP_DIR"
+  echo "保留天数: $BACKUP_KEEP_DAYS"
+  echo "日志文件: $backup_log"
+  echo
+  if [[ -f "$BACKUP_CRON_FILE" ]]; then
+    echo "系统 cron ($BACKUP_CRON_FILE):"
+    cat "$BACKUP_CRON_FILE"
+  else
+    warn "未安装系统 cron 文件: $BACKUP_CRON_FILE"
+  fi
+  echo
+  echo "当前用户 crontab（如有）:"
+  crontab -l 2>/dev/null | grep -E 'mysql-daily-backup|backup-db' || echo "(无)"
+  echo
+  cmd_backup_list
 }
 
 cmd_restore_db() {
@@ -828,6 +925,8 @@ main() {
   backup-db|backup) cmd_backup_db ;;
   backup-list|backups) cmd_backup_list ;;
   backup-prune|prune-backups) cmd_backup_prune ;;
+  backup-setup-cron|setup-backup-cron) cmd_backup_setup_cron ;;
+  backup-cron-status|backup-status) cmd_backup_cron_status ;;
   restore-db|restore) shift || true; cmd_restore_db "${1:-}" ;;
   update|pull) cmd_update ;;
   init-env|init) cmd_init_env ;;
