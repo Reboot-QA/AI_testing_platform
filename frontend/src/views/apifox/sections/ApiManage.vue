@@ -101,7 +101,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
-import { ensureKvRows } from '@/utils/apiCaseConfig'
+import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { useApiTree } from '@/composables/useApiTree'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
@@ -140,37 +140,6 @@ const serverNames = computed(() => {
   environments.value.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
   return [...names]
 })
-
-function emptySpec() {
-  return {
-    query: [],
-    path_params: [],
-    headers: [],
-    body: { type: 'none', raw: '', form: [] },
-    auth: { type: 'none', token: '', username: '', password: '' },
-  }
-}
-
-function normalizeSpec(spec) {
-  const s = spec || {}
-  const body = s.body || {}
-  return {
-    query: ensureKvRows(s.query || []),
-    path_params: ensureKvRows(s.path_params || []),
-    headers: ensureKvRows(s.headers || []),
-    body: {
-      type: body.type || 'none',
-      raw: body.raw || '',
-      form: ensureKvRows(body.form || []),
-    },
-    auth: {
-      type: s.auth?.type || 'none',
-      token: s.auth?.token || '',
-      username: s.auth?.username || '',
-      password: s.auth?.password || '',
-    },
-  }
-}
 
 // ---------- 右键菜单 ----------
 const ctxItems = computed(() => {
