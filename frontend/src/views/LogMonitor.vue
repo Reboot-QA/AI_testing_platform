@@ -138,6 +138,20 @@
             </template>
           </el-alert>
 
+          <el-alert
+            v-if="integrations.grafana_online && integrations.grafana_auth_ok && !integrations.grafana_dashboard_ok"
+            class="setup-alert"
+            type="warning"
+            show-icon
+            :closable="false"
+            title="Grafana 仪表盘未导入"
+          >
+            <template #default>
+              <p>{{ integrations.grafana_dashboard_message || '预置仪表盘尚未配置，内嵌将临时使用 Explore 查看日志' }}</p>
+              <pre class="setup-code">./deploy.sh monitoring fix-dashboard</pre>
+            </template>
+          </el-alert>
+
           <el-tabs v-model="grafanaSubTab" class="grafana-sub-tabs">
             <el-tab-pane label="Loki 直查" name="loki">
               <div class="loki-toolbar">
@@ -273,9 +287,11 @@ const integrations = ref({
   loki_online: false,
   grafana_auth_ok: false,
   grafana_auth_message: '',
+  grafana_dashboard_ok: true,
+  grafana_dashboard_message: '',
   monitoring_online: false,
   anonymous_access: false,
-  startup_hint: './deploy.sh monitoring recreate-grafana',
+  startup_hint: './deploy.sh monitoring fix-dashboard',
 })
 const embedUrl = ref('')
 

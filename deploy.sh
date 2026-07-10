@@ -113,7 +113,7 @@ AI质量平台 - 一键部署脚本
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
-  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|fix-logs|status|logs|debug)
+  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|fix-logs|fix-dashboard|status|logs|debug)
   docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
 
 环境变量:
@@ -1320,6 +1320,76 @@ monitoring_validate() {
   touch "$LOG_DIR_HOST/backend.log" "$LOG_DIR_HOST/frontend.log" 2>/dev/null || true
 }
 
+monitoring_wait_grafana() {
+  local i base="http://127.0.0.1:${GRAFANA_PORT:-3000}"
+  for i in $(seq 1 30); do
+    if curl -sf "${base}/api/health" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 2
+  done
+  warn "Grafana 启动超时"
+  return 1
+}
+
+monitoring_provision_dashboard() {
+  local user pass port base dash_file payload http_code
+  user="${GRAFANA_ADMIN_USER:-admin}"
+  pass="${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-password}"
+  port="${GRAFANA_PORT:-3000}"
+  base="http://127.0.0.1:${port}"
+  dash_file="$ROOT/monitoring/grafana/dashboards/ai-platform-logs.json"
+
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-grafana'; then
+    warn "Grafana 容器未运行，跳过仪表盘导入"
+    return 1
+  fi
+
+  monitoring_wait_grafana || return 1
+
+  if curl -sf -u "${user}:${pass}" "${base}/api/dashboards/uid/ai-platform-logs" 2>/dev/null | grep -q '"uid":"ai-platform-logs"'; then
+    ok "仪表盘 ai-platform-logs 已就绪"
+    return 0
+  fi
+
+  if [[ ! -f "$dash_file" ]]; then
+    warn "找不到仪表盘文件: $dash_file"
+    return 1
+  fi
+
+  if ! command -v python3 >/dev/null 2>&1; then
+    warn "需要 python3 才能导入仪表盘"
+    return 1
+  fi
+
+  info "导入预置仪表盘「AI质量平台日志」..."
+  payload="$(python3 - "$dash_file" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    dashboard = json.load(handle)
+dashboard["id"] = None
+print(json.dumps(
+    {"dashboard": dashboard, "overwrite": True, "message": "AI platform provision"},
+    ensure_ascii=False,
+))
+PY
+)"
+  http_code="$(curl -s -o /tmp/grafana-dash-import.json -w "%{http_code}" \
+    -u "${user}:${pass}" \
+    -X POST "${base}/api/dashboards/db" \
+    -H "Content-Type: application/json" \
+    -d "$payload")"
+  if [[ "$http_code" == "200" ]]; then
+    ok "仪表盘导入成功"
+    return 0
+  fi
+  warn "仪表盘导入失败 (HTTP ${http_code})"
+  cat /tmp/grafana-dash-import.json 2>/dev/null || true
+  return 1
+}
+
 monitoring_verify_loki() {
   local labels query_resp
   if ! curl -sf "http://127.0.0.1:${LOKI_PORT}/ready" >/dev/null 2>&1; then
@@ -1397,6 +1467,7 @@ monitoring_start() {
     exit 1
   fi
   monitoring_verify_loki || true
+  monitoring_provision_dashboard || true
   ok "监控栈已启动"
   monitoring_status
   warn "Grafana 默认账号: ${GRAFANA_ADMIN_USER} / ${GRAFANA_ADMIN_PASSWORD} （生产环境请修改）"
@@ -1458,7 +1529,16 @@ monitoring_recreate_grafana() {
   monitoring_write_env
   info "重建 Grafana 容器（应用最新配置）..."
   monitoring_compose up -d --force-recreate grafana
+  sleep 3
+  monitoring_provision_dashboard || true
   ok "Grafana 已重建: ${GRAFANA_ROOT_URL:-http://127.0.0.1:${GRAFANA_PORT}}"
+}
+
+monitoring_fix_dashboard() {
+  require_docker
+  monitoring_env
+  monitoring_write_env
+  monitoring_provision_dashboard
 }
 
 monitoring_fix_auth() {
@@ -1611,12 +1691,13 @@ monitoring_main() {
     recreate-grafana) monitoring_recreate_grafana ;;
     fix-auth) monitoring_fix_auth "${2:-}" ;;
     fix-logs) monitoring_fix_logs ;;
+    fix-dashboard) monitoring_fix_dashboard ;;
     status) monitoring_status ;;
     logs) monitoring_logs "${2:-100}" ;;
     debug) monitoring_debug ;;
     *)
       error "未知 monitoring 子命令: $action"
-      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|fix-auth [密码]|fix-logs|status|logs|debug]"
+      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|fix-auth [密码]|fix-logs|fix-dashboard|status|logs|debug]"
       exit 1
       ;;
   esac

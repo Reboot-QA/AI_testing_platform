@@ -110,6 +110,27 @@ def _probe_loki() -> bool:
     return _probe(f"{resolve_loki_upstream()}/ready")
 
 
+def verify_grafana_dashboard() -> tuple[bool, str]:
+    user = (settings.grafana_admin_user or "admin").strip()
+    password = settings.grafana_admin_password or ""
+    if not password:
+        return False, "未配置 GRAFANA_ADMIN_PASSWORD"
+    base = resolve_grafana_upstream().rstrip("/")
+    try:
+        import httpx
+
+        auth = httpx.BasicAuth(user, password)
+        with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0), follow_redirects=False) as client:
+            resp = client.get(f"{base}/api/dashboards/uid/ai-platform-logs", auth=auth)
+            if resp.status_code == 200:
+                return True, ""
+            if resp.status_code == 404:
+                return False, "预置仪表盘未导入，请执行: ./deploy.sh monitoring fix-dashboard"
+            return False, f"仪表盘检查失败 (HTTP {resp.status_code})"
+    except Exception as exc:
+        return False, f"无法检查仪表盘: {exc}"
+
+
 def verify_grafana_credentials() -> tuple[bool, str]:
     user = (settings.grafana_admin_user or "admin").strip()
     password = settings.grafana_admin_password or ""
@@ -163,6 +184,9 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
     grafana_ok = _probe_grafana()
     loki_ok = _probe_loki()
     grafana_auth_ok, grafana_auth_message = verify_grafana_credentials() if grafana_ok else (False, "Grafana 未启动")
+    grafana_dashboard_ok, grafana_dashboard_message = (
+        verify_grafana_dashboard() if grafana_ok and grafana_auth_ok else (False, "")
+    )
 
     return {
         "enabled": settings.grafana_enabled,
@@ -172,13 +196,15 @@ def get_integration_status(public_host: Optional[str] = None, public_origin: Opt
         "loki_url": public_loki,
         "dashboard_url": dashboard_url,
         "explore_url": explore_url,
-        "embed_url": embed_url,
+        "embed_url": embed_url if grafana_dashboard_ok else explore_path,
         "grafana_online": grafana_ok,
         "loki_online": loki_ok,
         "grafana_auth_ok": grafana_auth_ok,
         "grafana_auth_message": grafana_auth_message,
+        "grafana_dashboard_ok": grafana_dashboard_ok,
+        "grafana_dashboard_message": grafana_dashboard_message,
         "monitoring_online": grafana_ok and loki_ok and grafana_auth_ok,
         "anonymous_access": not use_proxy,
-        "startup_hint": "./deploy.sh monitoring recreate-grafana",
+        "startup_hint": "./deploy.sh monitoring fix-dashboard",
         "docs_path": "monitoring/README.md",
     }
