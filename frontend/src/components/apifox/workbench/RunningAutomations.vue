@@ -1,0 +1,118 @@
+<template>
+  <div class="card">
+    <div class="card-h">
+      <span><span class="live-dot" />&nbsp;正在运行的自动化</span>
+      <span class="hint">实时</span>
+    </div>
+    <div v-if="running.length" class="rows">
+      <div v-for="r in running" :key="r.run_id" class="runrow" @click="$emit('open', r)">
+        <div class="pi" :style="{ background: colorOf(r.project_id) }">{{ letterOf(r.project_name) }}</div>
+        <div class="mid">
+          <div class="nm">{{ r.target_name }}</div>
+          <div class="sb">{{ r.project_name }} · {{ r.environment_name || '未选环境' }} · {{ time(r.started_at) }}</div>
+        </div>
+        <span class="pill run">运行中</span>
+      </div>
+    </div>
+    <el-empty v-else description="当前没有正在运行的自动化" :image-size="48" />
+  </div>
+</template>
+
+<script setup>
+defineProps({
+  running: { type: Array, default: () => [] },
+})
+defineEmits(['open'])
+
+const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
+const colorOf = (id) => PALETTE[id % PALETTE.length]
+const letterOf = (name) => (name || '?').trim().charAt(0).toUpperCase()
+const time = (v) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
+</script>
+
+<style scoped>
+.card {
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  background: var(--ax-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.card-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ax-border);
+  font-weight: 600;
+}
+
+.hint {
+  color: var(--ax-text-tertiary);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-green-6);
+  display: inline-block;
+  box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.5);
+  animation: pulse 1.6s infinite;
+}
+
+@keyframes pulse {
+  0% { box-shadow: 0 0 0 0 rgba(103, 194, 58, 0.5); }
+  70% { box-shadow: 0 0 0 6px rgba(103, 194, 58, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(103, 194, 58, 0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot { animation: none; }
+}
+
+.runrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ax-border);
+  cursor: pointer;
+}
+
+.runrow:last-child { border-bottom: none; }
+.runrow:hover { background: var(--ax-bg-subtle); }
+
+.pi {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  flex: none;
+}
+
+.mid { flex: 1; overflow: hidden; }
+.nm { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sb { color: var(--ax-text-tertiary); font-size: 12px; }
+
+.pill {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 9px;
+  border-radius: 20px;
+  white-space: nowrap;
+  flex: none;
+}
+
+.pill.run {
+  color: var(--color-blue-6);
+  background: rgba(64, 128, 255, 0.1);
+}
+</style>

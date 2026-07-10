@@ -1,52 +1,41 @@
 <template>
   <div v-loading="loading" class="workbench">
-    <WorkbenchStats :projects="projects" />
+    <WorkbenchStats :stats="overview.stats" />
 
-    <div class="quick-row">
-      <div class="quick-card primary" @click="openCreate">
-        <el-icon><Plus /></el-icon>
-        <span>新建项目</span>
+    <div class="dash-grid">
+      <div class="card projects-card">
+        <div class="card-h">
+          我的项目
+          <el-button type="primary" size="small" @click="openCreate">
+            <el-icon><Plus /></el-icon> 新建项目
+          </el-button>
+        </div>
+        <div class="projgrid-wrap">
+          <div class="projgrid">
+            <DashboardProjectCard
+              v-for="p in overview.projects"
+              :key="p.id"
+              :project="p"
+              @enter="enter"
+            />
+            <div class="projcard newcard" @click="openCreate">
+              <div class="plus">＋</div>
+              新建项目
+            </div>
+          </div>
+          <el-empty
+            v-if="!loading && !overview.projects.length"
+            description="暂无可访问的项目"
+            :image-size="60"
+          />
+        </div>
       </div>
-      <div v-if="lastProject" class="quick-card" @click="enter(lastProject.id)">
-        <el-icon><Position /></el-icon>
-        <span>继续上次：{{ lastProject.name }}</span>
+
+      <div class="side-col">
+        <RunningAutomations :running="overview.running" @open="openReports" />
+        <RecentReports :reports="overview.recent_reports" @open="openReports" />
       </div>
     </div>
-
-    <section v-if="recentCards.length" class="block">
-      <h3 class="block-title">最近访问</h3>
-      <div class="grid">
-        <ProjectCard
-          v-for="r in recentCards"
-          :key="r.project.id"
-          :project="r.project"
-          :visited-at="r.at"
-          @enter="enter"
-        />
-      </div>
-    </section>
-
-    <section class="block">
-      <div class="block-head">
-        <h3 class="block-title">全部项目</h3>
-        <el-input
-          v-model="keyword"
-          size="small"
-          clearable
-          placeholder="搜索项目名称"
-          class="search"
-        />
-      </div>
-      <div class="grid">
-        <ProjectCard
-          v-for="p in filteredProjects"
-          :key="p.id"
-          :project="p"
-          @enter="enter"
-        />
-      </div>
-      <el-empty v-if="!loading && filteredProjects.length === 0" :description="emptyText" />
-    </section>
 
     <el-dialog v-model="createVisible" title="新建项目" width="480px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
@@ -66,39 +55,19 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { projectApi } from '@/api'
-import { useWorkspaceStore } from '@/stores/workspace'
-import { useRecentProjects } from '@/composables/useRecentProjects'
+import { apifoxApi, projectApi } from '@/api'
 import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
-import ProjectCard from '@/components/apifox/workbench/ProjectCard.vue'
+import DashboardProjectCard from '@/components/apifox/workbench/DashboardProjectCard.vue'
+import RunningAutomations from '@/components/apifox/workbench/RunningAutomations.vue'
+import RecentReports from '@/components/apifox/workbench/RecentReports.vue'
 
 const router = useRouter()
-const store = useWorkspaceStore()
-const { list: recentList } = useRecentProjects()
 
 const loading = ref(false)
-const keyword = ref('')
-const projects = computed(() => store.projects)
-
-// 最近访问记录与现存项目对齐：过滤已删除、附最新计数
-const recentCards = computed(() =>
-  recentList()
-    .map((r) => ({ at: r.at, project: projects.value.find((p) => p.id === r.id) }))
-    .filter((r) => r.project)
-)
-
-const lastProject = computed(() => recentCards.value[0]?.project || null)
-
-const filteredProjects = computed(() => {
-  const kw = keyword.value.trim().toLowerCase()
-  if (!kw) return projects.value
-  return projects.value.filter((p) => (p.name || '').toLowerCase().includes(kw))
-})
-
-const emptyText = computed(() => (keyword.value.trim() ? '没有匹配的项目' : '暂无可访问的项目'))
+const overview = reactive({ stats: {}, projects: [], running: [], recent_reports: [] })
 
 const createVisible = ref(false)
 const submitting = ref(false)
@@ -111,7 +80,10 @@ const rules = {
 async function loadData() {
   loading.value = true
   try {
-    await store.loadProjects()
+    const data = await apifoxApi.workbenchOverview()
+    Object.assign(overview, data)
+  } catch {
+    // 全局响应拦截器已提示错误；此处仅避免 onMounted 未捕获的 rejection
   } finally {
     loading.value = false
   }
@@ -119,6 +91,10 @@ async function loadData() {
 
 function enter(id) {
   router.push(`/apifox/project/${id}`)
+}
+
+function openReports(run) {
+  router.push(`/apifox/project/${run.project_id}/reports`)
 }
 
 function openCreate() {
@@ -144,66 +120,66 @@ onMounted(loadData)
 </script>
 
 <style scoped>
-.block {
-  margin-top: 24px;
+.dash-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 16px;
+  align-items: start;
 }
 
-.block-head {
+@media (max-width: 900px) {
+  .dash-grid { grid-template-columns: 1fr; }
+}
+
+.card {
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  background: var(--ax-bg);
+}
+
+.card-h {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.block-title {
-  font-size: 15px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ax-border);
   font-weight: 600;
-  color: var(--ax-text);
-  margin: 0 0 12px;
 }
 
-.block-head .block-title {
-  margin: 0;
+.projgrid-wrap {
+  padding: 14px;
 }
 
-.search {
-  width: 220px;
+.projgrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
 }
 
-.quick-row {
-  display: flex;
-  gap: 16px;
-}
-
-.quick-card {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 14px 22px;
+.projcard.newcard {
   border: 1px dashed var(--ax-border);
   border-radius: var(--ax-radius-lg);
-  color: var(--ax-text-secondary);
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--ax-text-tertiary);
   cursor: pointer;
+  min-height: 118px;
   transition: all 0.15s;
 }
 
-.quick-card:hover {
-  border-color: var(--ax-brand);
+.projcard.newcard:hover {
   color: var(--ax-brand);
+  border-color: var(--ax-brand);
 }
 
-.quick-card.primary {
-  border-style: solid;
-  border-color: var(--ax-brand);
-  color: var(--ax-brand);
-  font-weight: 600;
-}
+.plus { font-size: 24px; }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+.side-col {
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  min-height: 80px;
 }
 </style>
