@@ -41,6 +41,8 @@ class ApifoxEndpoint(Base):
     name: Mapped[str] = mapped_column(String(200))
     method: Mapped[str] = mapped_column(String(10), default="GET")
     path: Mapped[str] = mapped_column(String(500))
+    # 选用的命名前置 URL 名（空=用环境默认前置 URL base_url）
+    server_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     # 结构化 JSON：query/path_params/headers/body/auth
     request_spec: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

@@ -4,9 +4,28 @@ VariableOut 的 effective_value = 当前用户 local_value 若存在 else remote
 本切密文不脱敏（is_secret 仅标记），脱敏留后续。
 """
 
-from typing import Optional
+from typing import List, Optional
 
 from pydantic import BaseModel, Field
+
+
+# ---------- environment server（命名前置 URL） ----------
+class ServerCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    base_url: Optional[str] = None
+
+
+class ServerUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=100)
+    base_url: Optional[str] = None
+    sort_order: Optional[int] = None
+
+
+class ServerOut(BaseModel):
+    id: int
+    name: str
+    base_url: Optional[str] = None
+    sort_order: int
 
 
 # ---------- environment ----------
@@ -30,6 +49,7 @@ class EnvironmentOut(BaseModel):
     base_url: Optional[str] = None
     is_default: bool
     sort_order: int
+    servers: List[ServerOut] = Field(default_factory=list)
 
 
 # ---------- variable (环境变量 / 全局变量 共用) ----------

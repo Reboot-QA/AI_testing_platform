@@ -12,6 +12,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.apifox.variable import (
     ApifoxEnvironment,
+    ApifoxEnvironmentServer,
     ApifoxEnvironmentVariable,
     ApifoxGlobalVariable,
 )
@@ -22,6 +23,9 @@ from app.routers.apifox.variable_schemas import (
     EnvironmentOut,
     EnvironmentUpdate,
     LocalValueSet,
+    ServerCreate,
+    ServerOut,
+    ServerUpdate,
     VariableCreate,
     VariableOut,
     VariableUpdate,
@@ -59,6 +63,17 @@ def _global_var_checked(db: Session, gid: int, user: User) -> ApifoxGlobalVariab
     return var
 
 
+def _server_checked(db: Session, sid: int, user: User) -> ApifoxEnvironmentServer:
+    server = repo.get_server(db, sid)
+    if not server:
+        raise HTTPException(status_code=404, detail="前置 URL 不存在")
+    env = repo.get_environment(db, server.environment_id)
+    if not env:
+        raise HTTPException(status_code=404, detail="环境不存在")
+    get_accessible_project(db, env.project_id, user)
+    return server
+
+
 # ---------- environments ----------
 @router.get("/projects/{pid}/environments", response_model=List[EnvironmentOut])
 def list_environments(pid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -87,6 +102,42 @@ def delete_environment(eid: int, db: Session = Depends(get_db), user: User = Dep
     env = _env_checked(db, eid, user)
     service.delete_environment(db, env)
     return {"message": "环境已删除"}
+
+
+# ---------- environment servers（命名前置 URL） ----------
+@router.get("/environments/{eid}/servers", response_model=List[ServerOut])
+def list_servers(eid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    env = _env_checked(db, eid, user)
+    return service.list_servers(db, env.id)
+
+
+@router.post("/environments/{eid}/servers", response_model=ServerOut)
+def create_server(
+    eid: int, data: ServerCreate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    env = _env_checked(db, eid, user)
+    try:
+        return service.create_server(db, env.id, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/environment-servers/{sid}", response_model=ServerOut)
+def update_server(
+    sid: int, data: ServerUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    server = _server_checked(db, sid, user)
+    try:
+        return service.update_server(db, server, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/environment-servers/{sid}")
+def delete_server(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    server = _server_checked(db, sid, user)
+    service.delete_server(db, server)
+    return {"message": "前置 URL 已删除"}
 
 
 # ---------- 环境变量 ----------
