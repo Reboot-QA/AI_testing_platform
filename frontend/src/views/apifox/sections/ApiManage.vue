@@ -57,6 +57,12 @@
             @save="saveEndpoint"
           />
         </el-tab-pane>
+        <el-tab-pane label="文档预览" name="doc">
+          <ApiDocPreview :form="form" />
+        </el-tab-pane>
+        <el-tab-pane label="测试用例" name="cases">
+          <ApiCasesPanel :endpoint-id="form.id" :project-id="pid" :environments="environments" />
+        </el-tab-pane>
       </el-tabs>
       <el-empty v-else description="选择或新建一个接口开始编辑" />
     </div>
@@ -81,6 +87,8 @@ import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { useApiTree } from '@/composables/useApiTree'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
+import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
+import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
 import ImportDialog from '@/components/apifox/ImportDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
