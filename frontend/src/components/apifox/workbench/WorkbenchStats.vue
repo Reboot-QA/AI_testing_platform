@@ -1,66 +1,61 @@
 <template>
-  <div class="stat-row">
-    <div v-for="s in stats" :key="s.label" class="stat-card">
-      <el-icon class="stat-icon" :color="s.color"><component :is="s.icon" /></el-icon>
-      <div class="stat-body">
-        <div class="stat-num">{{ s.value }}</div>
-        <div class="stat-label">{{ s.label }}</div>
-      </div>
+  <div class="tiles">
+    <div v-for="t in tiles" :key="t.label" class="tile">
+      <div class="n" :class="{ live: t.live }">{{ t.value }}</div>
+      <div class="l">{{ t.label }}</div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
-import { Folder, Document, Tickets } from '@element-plus/icons-vue'
 
 const props = defineProps({
-  projects: { type: Array, default: () => [] },
+  stats: { type: Object, default: () => ({}) },
 })
 
-const stats = computed(() => {
-  const reqs = props.projects.reduce((sum, p) => sum + (p.requirement_count || 0), 0)
-  const cases = props.projects.reduce((sum, p) => sum + (p.testcase_count || 0), 0)
+const tiles = computed(() => {
+  const s = props.stats
+  const rate = s.today_pass_rate == null ? '—' : `${s.today_pass_rate}%`
   return [
-    { label: '项目', value: props.projects.length, icon: Folder, color: 'var(--color-blue-6)' },
-    { label: '需求总数', value: reqs, icon: Document, color: 'var(--color-pink-6)' },
-    { label: '用例总数', value: cases, icon: Tickets, color: 'var(--color-green-6)' },
+    { label: '项目', value: s.project_count ?? 0 },
+    { label: '接口', value: s.endpoint_count ?? 0 },
+    { label: '测试场景', value: s.scenario_count ?? 0 },
+    { label: '正在运行', value: s.running_count ?? 0, live: (s.running_count ?? 0) > 0 },
+    { label: '今日通过率', value: rate },
   ]
 })
 </script>
 
 <style scoped>
-.stat-row {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 20px;
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
 }
 
-.stat-card {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex: 1;
-  min-width: 160px;
-  padding: 16px 20px;
+.tile {
+  background: var(--ax-bg-subtle);
   border: 1px solid var(--ax-border);
   border-radius: var(--ax-radius-lg);
-  background: var(--ax-bg-subtle);
+  padding: 15px 16px;
 }
 
-.stat-icon {
-  font-size: 28px;
-}
-
-.stat-num {
-  font-size: 24px;
+.n {
+  font-size: 26px;
   font-weight: 700;
-  color: var(--ax-text);
-  line-height: 1.1;
+  color: var(--ax-brand);
+  font-variant-numeric: tabular-nums;
 }
 
-.stat-label {
-  font-size: 13px;
+.n.live {
+  color: var(--color-green-6);
+}
+
+.l {
   color: var(--ax-text-secondary);
+  font-size: 12.5px;
+  margin-top: 4px;
 }
 </style>

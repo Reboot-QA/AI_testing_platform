@@ -21,12 +21,10 @@ import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useRecentProjects } from '@/composables/useRecentProjects'
 
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
-const { record: recordRecent } = useRecentProjects()
 
 const sections = [
   { key: 'apis', label: '接口管理' },
@@ -54,7 +52,6 @@ watch(
     if (!id) return
     try {
       await store.loadProject(id)
-      recordRecent(store.currentProject)
     } catch {
       ElMessage.error('项目不存在或无访问权限')
       router.push('/apifox')
