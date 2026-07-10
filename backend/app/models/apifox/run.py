@@ -54,4 +54,6 @@ class ApifoxRunStep(Base):
     assertion_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     extract_results: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     script_logs: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 响应契约校验结果 JSON（{passed,message,errors} 或 null）
+    contract_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

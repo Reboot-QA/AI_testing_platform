@@ -74,6 +74,17 @@
               </div>
             </template>
 
+            <template v-if="s.contract_result">
+              <div class="sec-title">契约校验</div>
+              <div class="line">
+                <el-tag size="small" :type="s.contract_result.passed ? 'success' : 'danger'">
+                  {{ s.contract_result.passed ? '符合' : '不符' }}
+                </el-tag>
+                {{ s.contract_result.schema_name }} · {{ s.contract_result.message }}
+              </div>
+              <div v-for="(err, i) in s.contract_result.errors" :key="'c' + i" class="line mono">{{ err }}</div>
+            </template>
+
             <template v-if="s.extract_results.length">
               <div class="sec-title">提取</div>
               <div v-for="(e, i) in s.extract_results" :key="'e' + i" class="line">

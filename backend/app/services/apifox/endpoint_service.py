@@ -16,7 +16,7 @@ from app.models.apifox.endpoint import (
 )
 from app.models.apifox.script import ApifoxEndpointScript
 from app.repositories.apifox import endpoint_repo as repo
-from app.repositories.apifox import script_repo
+from app.repositories.apifox import schema_repo, script_repo
 from app.routers.apifox.schemas import (
     AssertionRow,
     CaseScriptOut,
@@ -120,6 +120,8 @@ def _endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
         request_spec=_load_spec(endpoint.request_spec),
         description=endpoint.description,
         sort_order=endpoint.sort_order,
+        response_schema_id=endpoint.response_schema_id,
+        contract_strict=endpoint.contract_strict,
         assertions=[
             AssertionRow(type=a.type, path=a.path, operator=a.operator, expected=a.expected, enabled=a.enabled)
             for a in repo.list_endpoint_assertions(db, endpoint.id)
@@ -141,6 +143,14 @@ def _require_folder_in_project(db: Session, folder_id: int | None, project_id: i
     folder = repo.get_folder(db, folder_id)
     if not folder or folder.project_id != project_id:
         raise ValueError("所选文件夹不存在或不属于该项目")
+
+
+def _require_schema_in_project(db: Session, schema_id: int | None, project_id: int) -> None:
+    if schema_id is None:
+        return
+    schema = schema_repo.get_schema(db, schema_id)
+    if not schema or schema.project_id != project_id:
+        raise ValueError("所选响应模型不存在或不属于该项目")
 
 
 def _would_create_cycle(db: Session, folder_id: int, new_parent_id: int | None, project_id: int) -> bool:
@@ -230,6 +240,7 @@ def list_endpoints(db: Session, project_id: int) -> List[EndpointBrief]:
 
 def create_endpoint(db: Session, project_id: int, data: EndpointCreate) -> EndpointOut:
     _require_folder_in_project(db, data.folder_id, project_id)
+    _require_schema_in_project(db, data.response_schema_id, project_id)
     endpoint = ApifoxEndpoint(
         project_id=project_id,
         folder_id=data.folder_id,
@@ -239,6 +250,8 @@ def create_endpoint(db: Session, project_id: int, data: EndpointCreate) -> Endpo
         server_name=data.server_name,
         request_spec=data.request_spec.model_dump_json(),
         description=data.description,
+        response_schema_id=data.response_schema_id,
+        contract_strict=data.contract_strict,
     )
     repo.create_endpoint(db, endpoint)  # flush 后 endpoint.id 可用
     _write_endpoint_assertions(db, endpoint.id, data.assertions)
@@ -272,6 +285,11 @@ def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate)
         endpoint.description = data.description
     if data.sort_order is not None:
         endpoint.sort_order = data.sort_order
+    if "response_schema_id" in data.model_fields_set:
+        _require_schema_in_project(db, data.response_schema_id, endpoint.project_id)
+        endpoint.response_schema_id = data.response_schema_id
+    if data.contract_strict is not None:
+        endpoint.contract_strict = data.contract_strict
     # 处理器：提供即整组替换（先删后插）
     if data.assertions is not None:
         repo.delete_endpoint_assertions(db, endpoint.id)

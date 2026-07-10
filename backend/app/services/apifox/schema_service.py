@@ -87,5 +87,8 @@ def update_schema(db: Session, schema: ApifoxSchema, data: SchemaUpdate) -> Sche
 
 
 def delete_schema(db: Session, schema: ApifoxSchema) -> None:
+    refs = repo.count_endpoint_refs(db, schema.id)
+    if refs:
+        raise ValueError(f"数据模型被 {refs} 个接口绑为响应契约，请先解除引用再删除")
     repo.delete(db, schema)
     db.commit()

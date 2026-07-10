@@ -19,6 +19,7 @@
             :server-names="serverNames"
             :project-id="pid"
             :scripts="scripts"
+            :schemas="schemas"
             @save="saveEndpoint"
           />
         </el-tab-pane>
@@ -70,9 +71,11 @@ const saving = ref(false)
 const endpointTab = ref('debug')
 const { scripts, loadScripts } = useProjectScripts(pid)
 
+const schemas = ref([])
 const form = reactive({
   id: null, name: '', method: 'GET', path: '', server_name: null, description: '',
   request_spec: emptySpec(), assertions: [], extracts: [], pre_scripts: [], post_scripts: [],
+  response_schema_id: null, contract_strict: false,
 })
 
 // server 名取自工作区环境（顶部统一加载），供接口选择前置服务
@@ -104,6 +107,8 @@ async function loadEndpoint(id) {
   form.extracts = e.extracts || []
   form.pre_scripts = e.pre_scripts || []
   form.post_scripts = e.post_scripts || []
+  form.response_schema_id = e.response_schema_id || null
+  form.contract_strict = e.contract_strict || false
 }
 
 function onDeleted(id) {
@@ -123,6 +128,7 @@ async function saveEndpoint() {
       assertions: form.assertions, extracts: form.extracts,
       pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
       post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+      response_schema_id: form.response_schema_id, contract_strict: form.contract_strict,
     })
     ElMessage.success('已保存')
     treePanel.value?.reload()
@@ -131,7 +137,14 @@ async function saveEndpoint() {
   }
 }
 
-onMounted(loadScripts)
+async function loadSchemas() {
+  schemas.value = await apifoxApi.listSchemas(pid.value)
+}
+
+onMounted(() => {
+  loadScripts()
+  loadSchemas()
+})
 </script>
 
 <style scoped>
