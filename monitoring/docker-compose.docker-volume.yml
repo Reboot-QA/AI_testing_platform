@@ -1,0 +1,10 @@
+# Promtail 从 Docker 应用日志卷采集（backend 使用 app-logs 命名卷时）
+services:
+  promtail:
+    volumes:
+      - app-logs:/var/log/ai-platform:ro
+
+volumes:
+  app-logs:
+    external: true
+    name: ${DOCKER_APP_LOGS_VOLUME:-ai-testing-platform_app-logs}

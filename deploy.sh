@@ -1250,7 +1250,13 @@ require_docker() {
 
 monitoring_compose() {
   cd "$MONITORING_DIR"
-  docker compose "$@"
+  local files=(-f docker-compose.yml)
+  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
+    files+=(-f docker-compose.docker-volume.yml)
+  else
+    files+=(-f docker-compose.host-logs.yml)
+  fi
+  docker compose "${files[@]}" "$@"
 }
 
 monitoring_has_running() {
@@ -1264,16 +1270,39 @@ monitoring_env() {
   mkdir -p "$LOG_DIR"
   export LOG_DIR_HOST="$(cd "$LOG_DIR" && pwd)"
   export LOG_DIR_CONTAINER="/var/log/ai-platform"
+  export HOST_LOG_DIR="${HOST_LOG_DIR:-$LOG_DIR_HOST}"
   export GRAFANA_PORT
   export LOKI_PORT
   export GRAFANA_ADMIN_USER
   export GRAFANA_ADMIN_PASSWORD
   export GRAFANA_ROOT_URL="${GRAFANA_ROOT_URL:-http://${access_host}:${FRONTEND_PORT}/api/v1/logs/grafana}"
   export GRAFANA_ANONYMOUS_ENABLED="${GRAFANA_ANONYMOUS_ENABLED:-false}"
+  monitoring_detect_log_volume
+}
+
+monitoring_detect_log_volume() {
+  export DOCKER_APP_LOGS_VOLUME=""
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
+    return 0
+  fi
+  local mount_name mount_source
+  mount_name="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Name}}{{end}}{{end}}' 2>/dev/null || true)"
+  mount_source="$(docker inspect ai-platform-backend --format '{{range .Mounts}}{{if eq .Destination "/app/logs"}}{{.Source}}{{end}}{{end}}' 2>/dev/null || true)"
+  if [[ -n "$mount_name" ]]; then
+    export DOCKER_APP_LOGS_VOLUME="$mount_name"
+    info "检测到 Docker 日志卷: ${DOCKER_APP_LOGS_VOLUME}（Promtail 将挂载同一卷）"
+  elif [[ -n "$mount_source" && -d "$mount_source" ]]; then
+    export LOG_DIR_HOST="$mount_source"
+    export HOST_LOG_DIR="$mount_source"
+    info "检测到 backend 日志目录: ${LOG_DIR_HOST}"
+  fi
 }
 
 monitoring_validate() {
   monitoring_env
+  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
+    return 0
+  fi
   if [[ -z "$LOG_DIR_HOST" ]]; then
     error "LOG_DIR_HOST 未设置，请使用: ./deploy.sh monitoring start"
     exit 1
@@ -1316,6 +1345,7 @@ monitoring_write_env() {
   monitoring_env
   cat >"$MONITORING_DIR/.env" <<EOF
 LOG_DIR_HOST=${LOG_DIR_HOST}
+DOCKER_APP_LOGS_VOLUME=${DOCKER_APP_LOGS_VOLUME:-}
 GRAFANA_PORT=${GRAFANA_PORT}
 LOKI_PORT=${LOKI_PORT}
 GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}
@@ -1332,30 +1362,33 @@ monitoring_start() {
   monitoring_validate
   monitoring_write_env
   info "启动 Grafana + Loki + Promtail ..."
-  info "  日志目录: $LOG_DIR_HOST -> $LOG_DIR_CONTAINER"
+  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
+    info "  日志卷:   ${DOCKER_APP_LOGS_VOLUME} -> ${LOG_DIR_CONTAINER}"
+  else
+    info "  日志目录: ${LOG_DIR_HOST} -> ${LOG_DIR_CONTAINER}"
+  fi
   info "  Grafana:  ${GRAFANA_ROOT_URL}"
-  cd "$MONITORING_DIR"
-  if ! docker compose config --quiet; then
+  if ! monitoring_compose config --quiet; then
     error "docker-compose 配置无效，请执行: ./deploy.sh monitoring debug"
     exit 1
   fi
   info "拉取镜像（首次可能较慢）..."
-  if ! docker compose pull; then
+  if ! monitoring_compose pull; then
     warn "镜像拉取失败，若服务器在国内请配置 Docker 镜像加速后重试"
     warn "参考: ./deploy.sh monitoring debug"
   fi
   info "执行: docker compose up -d"
-  if ! docker compose up -d --remove-orphans; then
+  if ! monitoring_compose up -d --remove-orphans; then
     error "监控栈启动失败，详情如下:"
-    docker compose ps -a || true
-    docker compose logs --tail=50 || true
+    monitoring_compose ps -a || true
+    monitoring_compose logs --tail=50 || true
     exit 1
   fi
   sleep 3
   if ! monitoring_has_running; then
     error "监控容器未正常运行，请查看日志: ./deploy.sh monitoring logs"
-    docker compose ps -a || true
-    docker compose logs --tail=80 || true
+    monitoring_compose ps -a || true
+    monitoring_compose logs --tail=80 || true
     exit 1
   fi
   monitoring_verify_loki || true
@@ -1368,8 +1401,7 @@ monitoring_start() {
 monitoring_stop() {
   require_docker
   monitoring_write_env
-  cd "$MONITORING_DIR"
-  docker compose down --remove-orphans 2>/dev/null || true
+  monitoring_compose down --remove-orphans 2>/dev/null || true
   ok "监控栈已停止"
 }
 
@@ -1381,9 +1413,8 @@ monitoring_restart() {
 monitoring_recreate_grafana() {
   require_docker
   monitoring_write_env
-  cd "$MONITORING_DIR"
   info "重建 Grafana 容器（应用最新配置）..."
-  docker compose up -d --force-recreate grafana
+  monitoring_compose up -d --force-recreate grafana
   ok "Grafana 已重建: ${GRAFANA_ROOT_URL:-http://127.0.0.1:${GRAFANA_PORT}}"
 }
 
@@ -1439,16 +1470,15 @@ monitoring_fix_auth() {
 monitoring_status() {
   require_docker
   monitoring_write_env
-  cd "$MONITORING_DIR"
   local access_host
   access_host="$(detect_access_host)"
   echo "========================================"
   echo "  Grafana + Loki 监控栈"
   echo "========================================"
-  docker compose ps -a
+  monitoring_compose ps -a
   echo
   local count
-  count="$(docker compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)"
+  count="$(monitoring_compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)"
   if [[ "$count" -eq 0 ]]; then
     warn "未发现任何监控容器（尚未启动或已被删除）"
     echo "  请执行: PUBLIC_HOST=你的公网IP ./deploy.sh monitoring start"
@@ -1470,18 +1500,16 @@ monitoring_status() {
 monitoring_logs() {
   require_docker
   monitoring_write_env
-  cd "$MONITORING_DIR"
-  if [[ "$(docker compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)" -eq 0 ]]; then
+  if [[ "$(monitoring_compose ps -a --format '{{.Name}}' 2>/dev/null | grep -c . || echo 0)" -eq 0 ]]; then
     error "没有监控容器，请先执行: ./deploy.sh monitoring start"
     exit 1
   fi
-  docker compose logs --tail="${1:-100}" -f
+  monitoring_compose logs --tail="${1:-100}" -f
 }
 
 monitoring_debug() {
   require_docker
   monitoring_write_env
-  cd "$MONITORING_DIR"
   echo "========================================"
   echo "  监控栈诊断"
   echo "========================================"
@@ -1490,16 +1518,22 @@ monitoring_debug() {
   echo "Compose: $(docker compose version 2>/dev/null || echo 未知)"
   echo
   echo "--- monitoring/.env ---"
-  cat .env 2>/dev/null || echo "(无 .env 文件)"
+  cat "$MONITORING_DIR/.env" 2>/dev/null || echo "(无 .env 文件)"
   echo
-  echo "--- 日志目录 ---"
-  ls -la "$LOG_DIR_HOST" 2>/dev/null || warn "目录不存在: $LOG_DIR_HOST"
+  if [[ -n "${DOCKER_APP_LOGS_VOLUME:-}" ]]; then
+    echo "--- Docker 日志卷 ---"
+    echo "DOCKER_APP_LOGS_VOLUME=${DOCKER_APP_LOGS_VOLUME}"
+    docker run --rm -v "${DOCKER_APP_LOGS_VOLUME}:/logs:ro" alpine ls -la /logs 2>&1 || true
+  else
+    echo "--- 日志目录 ---"
+    ls -la "$LOG_DIR_HOST" 2>/dev/null || warn "目录不存在: $LOG_DIR_HOST"
+  fi
   echo
   echo "--- docker compose config ---"
-  docker compose config 2>&1 || true
+  monitoring_compose config 2>&1 || true
   echo
   echo "--- docker compose ps -a ---"
-  docker compose ps -a 2>&1 || true
+  monitoring_compose ps -a 2>&1 || true
   echo
   echo "--- 容器内日志目录 ---"
   docker exec ai-platform-promtail ls -la /var/log/ai-platform/ 2>&1 || true
