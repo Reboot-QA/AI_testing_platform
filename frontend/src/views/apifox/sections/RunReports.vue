@@ -17,6 +17,9 @@
           {{ row.target_name }}
         </template>
       </el-table-column>
+      <el-table-column label="环境" width="120">
+        <template #default="{ row }">{{ envName(row.environment_id) }}</template>
+      </el-table-column>
       <el-table-column label="状态" width="90">
         <template #default="{ row }">
           <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
@@ -101,11 +104,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { apifoxApi } from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
+const store = useWorkspaceStore()
+
+const envName = (id) => (id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-')
 
 const runs = ref([])
 const detail = ref(null)
