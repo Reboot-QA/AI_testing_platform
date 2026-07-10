@@ -5,21 +5,45 @@
         <el-icon><ArrowLeft /></el-icon> 工作台
       </el-button>
       <el-divider direction="vertical" />
-      <span class="ws-title">{{ store.currentProjectName || '加载中…' }}</span>
+      <el-select
+        :model-value="projectId"
+        size="small"
+        filterable
+        class="proj-switch"
+        @change="switchProject"
+      >
+        <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="String(p.id)" />
+      </el-select>
+
+      <div class="spacer" />
+
+      <span class="env-label">环境</span>
+      <el-select
+        :model-value="store.currentEnvironmentId"
+        size="small"
+        clearable
+        placeholder="选择环境"
+        class="env-switch"
+        @change="store.setCurrentEnvironment"
+      >
+        <el-option v-for="e in store.environments" :key="e.id" :label="e.name" :value="e.id" />
+      </el-select>
     </div>
 
     <el-tabs v-model="activeTab" @tab-change="onTabChange">
       <el-tab-pane v-for="s in sections" :key="s.key" :label="s.label" :name="s.key" />
     </el-tabs>
 
-    <router-view />
+    <!-- 按 projectId 加 key：切项目时命中同一路由记录，强制子树重挂载以重载数据 -->
+    <router-view :key="projectId" />
   </div>
 </template>
 
 <script setup>
-import { computed, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { projectApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const route = useRoute()
@@ -35,23 +59,37 @@ const sections = [
   { key: 'settings', label: '项目设置' },
 ]
 
+const projects = ref([])
 const projectId = computed(() => route.params.projectId)
 const activeTab = computed(() => route.path.split('/').pop())
 
+function currentTab() {
+  const seg = route.path.split('/').pop()
+  return sections.some((s) => s.key === seg) ? seg : 'apis'
+}
+
 function onTabChange(name) {
   router.push(`/apifox/project/${projectId.value}/${name}`)
+}
+
+function switchProject(id) {
+  if (id && id !== projectId.value) router.push(`/apifox/project/${id}/${currentTab()}`)
 }
 
 function backToWorkbench() {
   router.push('/apifox')
 }
 
+onMounted(async () => {
+  projects.value = await projectApi.list()
+})
+
 watch(
   projectId,
   async (id) => {
     if (!id) return
     try {
-      await store.loadProject(id)
+      await Promise.all([store.loadProject(id), store.loadEnvironments(id)])
     } catch {
       ElMessage.error('项目不存在或无访问权限')
       router.push('/apifox')
@@ -65,13 +103,24 @@ watch(
 .ws-header {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   margin-bottom: 8px;
 }
 
-.ws-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ax-brand);
+.proj-switch {
+  width: 200px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.env-label {
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+}
+
+.env-switch {
+  width: 180px;
 }
 </style>

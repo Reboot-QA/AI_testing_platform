@@ -27,10 +27,8 @@
         <div class="row1">
           <el-input v-model="form.name" placeholder="场景名称" style="width: 260px" />
           <el-button type="primary" :loading="saving" @click="saveScenario">保存</el-button>
-          <el-select v-model="runEnvId" placeholder="选择环境" size="default" style="width: 160px" clearable>
-            <el-option v-for="e in environments" :key="e.id" :label="e.name" :value="e.id" />
-          </el-select>
           <el-button type="success" :loading="running" @click="runScenario">运行</el-button>
+          <span class="run-hint">环境在顶部选择</span>
         </div>
         <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
         <div class="steps-title">步骤（按序执行 · 执行引擎 P4 接入）</div>
@@ -53,19 +51,19 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
+const store = useWorkspaceStore()
 
 const scenarios = ref([])
 const projectCases = ref([])
 const scripts = ref([])
-const environments = ref([])
 const saving = ref(false)
 const running = ref(false)
-const runEnvId = ref(null)
 const runEvents = ref([])
 const form = reactive({ id: null, name: '', description: '', steps: [] })
 
@@ -81,17 +79,11 @@ async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
 }
 
-async function loadEnvironments() {
-  environments.value = await apifoxApi.listEnvironments(pid.value)
-  const def = environments.value.find((e) => e.is_default)
-  if (def && !runEnvId.value) runEnvId.value = def.id
-}
-
 async function runScenario() {
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runScenarioStream(form.id, runEnvId.value, (e) => runEvents.value.push(e))
+    await apifoxApi.runScenarioStream(form.id, store.currentEnvironmentId, (e) => runEvents.value.push(e))
   } catch (e) {
     ElMessage.error(e.message || '运行失败')
   } finally {
@@ -154,7 +146,6 @@ onMounted(async () => {
   await loadScenarios()
   await loadProjectCases()
   await loadScripts()
-  await loadEnvironments()
 })
 </script>
 
@@ -212,8 +203,14 @@ onMounted(async () => {
 
 .row1 {
   display: flex;
+  align-items: center;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.run-hint {
+  color: var(--ax-text-placeholder);
+  font-size: 12px;
 }
 
 .desc-input {
