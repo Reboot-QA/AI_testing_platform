@@ -1,98 +1,13 @@
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import FileResponse, StreamingResponse
 
-from app.auth import get_current_admin, resolve_admin_user_context
-from app.database import get_db
+from app.auth import get_current_admin
 from app.models.user import User
 from app.services import log_service
-from app.services.grafana_proxy_service import (
-    COOKIE_NAME,
-    EMBED_QUERY_PARAM,
-    GRAFANA_PROXY_PREFIX,
-    GRAFANA_SESSION_COOKIE_PATH,
-    SESSION_TTL,
-    attach_grafana_session_to_response,
-    build_public_origin,
-    create_session_cookie,
-    proxy_to_grafana,
-    resolve_user_from_cookie,
-)
-from app.services.log_integration_service import get_integration_status
-from app.services.loki_query_service import query_loki
 
 router = APIRouter(prefix="/logs", tags=["日志监控"])
-
-
-@router.get("/integrations")
-def log_integrations(
-    request: Request,
-    public_host: Optional[str] = Query(None, max_length=200),
-    public_origin: Optional[str] = Query(None, max_length=300),
-    _: User = Depends(get_current_admin),
-):
-    host = (public_host or "").strip()
-    if not host:
-        forwarded = (request.headers.get("x-forwarded-host") or "").split(",")[0].strip()
-        raw_host = forwarded or (request.headers.get("host") or "")
-        host = raw_host.split(":")[0].strip()
-    origin = build_public_origin(request, (public_origin or "").strip() or None)
-    return get_integration_status(public_host=host or None, public_origin=origin)
-
-
-@router.post("/grafana/session")
-def grafana_session(current_user: User = Depends(get_current_admin)):
-    user_ctx = {"user_id": current_user.id, "username": current_user.username, "role": current_user.role}
-    embed_token = create_session_cookie(user_ctx)
-    response = JSONResponse(
-        {
-            "ok": True,
-            "embed_token": embed_token,
-            "proxy_prefix": GRAFANA_PROXY_PREFIX,
-        }
-    )
-    response.set_cookie(
-        COOKIE_NAME,
-        embed_token,
-        httponly=True,
-        max_age=SESSION_TTL,
-        path=GRAFANA_SESSION_COOKIE_PATH,
-        samesite="lax",
-    )
-    return response
-
-
-@router.api_route("/grafana", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
-@router.api_route("/grafana/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"])
-async def grafana_proxy(request: Request, path: str = "", db: Session = Depends(get_db)):
-    user_ctx = resolve_user_from_cookie(request)
-    if not user_ctx:
-        user_ctx = resolve_admin_user_context(request, db)
-    if not user_ctx:
-        raise HTTPException(
-            status_code=401,
-            detail="请从平台「日志监控」页面打开 Grafana",
-            headers={"X-Grafana-Proxy": "auth-required"},
-        )
-
-    had_cookie = bool(request.cookies.get(COOKIE_NAME))
-    query_token = request.query_params.get(EMBED_QUERY_PARAM)
-    response = await proxy_to_grafana(path, request, user_ctx)
-    if not had_cookie:
-        attach_grafana_session_to_response(response, user_ctx, query_token)
-    return response
-
-
-@router.get("/loki/query")
-async def loki_query(
-    query: Optional[str] = Query(None, max_length=500),
-    limit: int = Query(200, ge=1, le=1000),
-    hours: int = Query(6, ge=1, le=168),
-    _: User = Depends(get_current_admin),
-):
-    return await query_loki(expr=query, limit=limit, hours=hours)
 
 
 @router.get("/sources")

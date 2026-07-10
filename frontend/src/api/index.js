@@ -19,12 +19,9 @@ request.interceptors.response.use(
   (error) => {
     const msg = error.response?.data?.detail || error.message || '请求失败'
     if (error.response?.status === 401) {
-      const isGrafanaProxy = error.config?.url?.includes('/logs/grafana')
-      if (!isGrafanaProxy) {
-        localStorage.removeItem('token')
-        if (!window.location.pathname.includes('/login')) {
-          window.location.href = '/login'
-        }
+      localStorage.removeItem('token')
+      if (!window.location.pathname.includes('/login')) {
+        window.location.href = '/login'
       }
     }
     ElMessage.error(typeof msg === 'string' ? msg : JSON.stringify(msg))
@@ -481,9 +478,6 @@ export const apiAutomationApi = {
 export const logsApi = {
   sources: () => request.get('/logs/sources'),
   tail: (params = {}) => request.get('/logs/tail', { params }),
-  integrations: (params = {}) => request.get('/logs/integrations', { params }),
-  grafanaSession: () => request.post('/logs/grafana/session', {}, { withCredentials: true }),
-  lokiQuery: (params = {}) => request.get('/logs/loki/query', { params }),
 }
 
 export default request

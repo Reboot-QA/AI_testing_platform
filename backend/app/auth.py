@@ -1,9 +1,9 @@
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Tuple
+from typing import Optional
 
 from jose import JWTError, jwt
 from passlib.context import CryptContext
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
@@ -54,24 +54,3 @@ def get_current_admin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
     return current_user
-
-
-def resolve_admin_user_context(request: Request, db: Session) -> Optional[dict]:
-    token = request.query_params.get("access_token")
-    if not token:
-        auth = request.headers.get("authorization", "")
-        if auth.lower().startswith("bearer "):
-            token = auth[7:].strip()
-    if not token:
-        return None
-    try:
-        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        username = payload.get("sub")
-        if not username:
-            return None
-        user = db.query(User).filter(User.username == username).first()
-        if not user or not user.is_active or user.role != "admin":
-            return None
-        return {"user_id": user.id, "username": user.username, "role": user.role}
-    except JWTError:
-        return None
