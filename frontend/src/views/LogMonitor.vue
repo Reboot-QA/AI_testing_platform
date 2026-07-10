@@ -134,9 +134,7 @@
           >
             <template #default>
               <p>{{ integrations.grafana_auth_message || 'Grafana 管理员密码与后端配置不一致' }}</p>
-              <pre class="setup-code">docker exec ai-platform-grafana grafana-cli admin reset-admin-password '你的新密码'
-grep GRAFANA_ADMIN .env.docker monitoring/.env
-docker compose up -d backend</pre>
+              <pre class="setup-code">./deploy.sh monitoring fix-auth 'AIPlatform@2026'</pre>
             </template>
           </el-alert>
 

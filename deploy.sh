@@ -113,7 +113,7 @@ AI质量平台 - 一键部署脚本
   prod            构建前端 + 生产模式启动后端
   update          从仓库拉取最新代码、更新依赖（若服务在运行则自动重启）
   clone [目录]    首次部署：克隆仓库（默认 ../AI_testing_platform）
-  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|status|logs|debug)
+  monitoring      Grafana + Loki 监控栈 (start|stop|restart|recreate-grafana|fix-auth|status|logs|debug)
   docker [子命令]   Docker Compose 部署 (up|down|restart|status|logs|build)
 
 环境变量:
@@ -1387,6 +1387,55 @@ monitoring_recreate_grafana() {
   ok "Grafana 已重建: ${GRAFANA_ROOT_URL:-http://127.0.0.1:${GRAFANA_PORT}}"
 }
 
+monitoring_fix_auth() {
+  require_docker
+  local new_pass="${1:-}"
+  if [[ -z "$new_pass" ]]; then
+    new_pass="AiPlatform@$(date +%Y)"
+  fi
+  export GRAFANA_ADMIN_USER="${GRAFANA_ADMIN_USER:-admin}"
+  export GRAFANA_ADMIN_PASSWORD="$new_pass"
+
+  if ! docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-grafana'; then
+    error "Grafana 容器未运行，请先执行: ./deploy.sh monitoring start"
+    exit 1
+  fi
+
+  info "重置 Grafana 管理员密码并同步到配置文件..."
+  docker exec ai-platform-grafana grafana-cli admin reset-admin-password "$new_pass"
+  monitoring_write_env
+
+  local docker_env="$ROOT/.env.docker"
+  if [[ -f "$docker_env" ]]; then
+    if grep -q '^GRAFANA_ADMIN_PASSWORD=' "$docker_env"; then
+      sed -i "s|^GRAFANA_ADMIN_PASSWORD=.*|GRAFANA_ADMIN_PASSWORD=${new_pass}|" "$docker_env"
+    else
+      echo "GRAFANA_ADMIN_PASSWORD=${new_pass}" >>"$docker_env"
+    fi
+    if ! grep -q '^GRAFANA_ADMIN_USER=' "$docker_env"; then
+      echo "GRAFANA_ADMIN_USER=${GRAFANA_ADMIN_USER}" >>"$docker_env"
+    fi
+  fi
+
+  if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx 'ai-platform-backend'; then
+    info "重启 backend 以加载新密码..."
+    (cd "$ROOT" && docker compose up -d --force-recreate backend)
+  fi
+
+  info "验证 Grafana 认证..."
+  if curl -sf -u "${GRAFANA_ADMIN_USER}:${new_pass}" "http://127.0.0.1:${GRAFANA_PORT}/api/user" >/dev/null; then
+    ok "Grafana API 认证通过"
+  else
+    warn "Grafana API 认证仍失败，请检查 GRAFANA_PORT=${GRAFANA_PORT} 与容器状态"
+  fi
+
+  ok "Grafana 认证已修复"
+  echo "  用户名: ${GRAFANA_ADMIN_USER}"
+  echo "  密码:   ${new_pass}"
+  echo "  已同步: monitoring/.env, .env.docker"
+  echo "  请刷新平台「日志监控」页面"
+}
+
 monitoring_status() {
   require_docker
   monitoring_write_env
@@ -1483,12 +1532,13 @@ monitoring_main() {
     stop) monitoring_stop ;;
     restart) monitoring_restart ;;
     recreate-grafana) monitoring_recreate_grafana ;;
+    fix-auth) monitoring_fix_auth "${2:-}" ;;
     status) monitoring_status ;;
     logs) monitoring_logs "${2:-100}" ;;
     debug) monitoring_debug ;;
     *)
       error "未知 monitoring 子命令: $action"
-      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|status|logs|debug]"
+      echo "用法: $0 monitoring [start|stop|restart|recreate-grafana|fix-auth [密码]|status|logs|debug]"
       exit 1
       ;;
   esac

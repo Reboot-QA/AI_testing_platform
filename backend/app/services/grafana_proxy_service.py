@@ -19,10 +19,6 @@ GRAFANA_PROXY_PREFIX = "/api/v1/logs/grafana"
 COOKIE_NAME = "grafana_proxy_sess"
 EMBED_QUERY_PARAM = "_pt"
 SESSION_TTL = 8 * 3600
-GRAFANA_UPSTREAM_SESSION_TTL = 50 * 60
-
-_grafana_upstream_cookies: Optional[httpx.Cookies] = None
-_grafana_upstream_expires: float = 0
 
 HOP_BY_HOP_HEADERS = {
     "connection",
@@ -36,6 +32,7 @@ HOP_BY_HOP_HEADERS = {
     "host",
     "content-length",
     "cookie",
+    "authorization",
 }
 
 REWRITABLE_CONTENT_TYPES = {
@@ -120,39 +117,11 @@ def _admin_credentials() -> Tuple[str, str]:
     return user, password
 
 
-async def _clear_upstream_session() -> None:
-    global _grafana_upstream_cookies, _grafana_upstream_expires
-    _grafana_upstream_cookies = None
-    _grafana_upstream_expires = 0
-
-
-async def _ensure_upstream_session(client: httpx.AsyncClient, force: bool = False) -> httpx.Cookies:
-    global _grafana_upstream_cookies, _grafana_upstream_expires
-    now = time.time()
-    if not force and _grafana_upstream_cookies and now < _grafana_upstream_expires:
-        return _grafana_upstream_cookies
-
+def upstream_basic_auth() -> Optional[httpx.BasicAuth]:
     user, password = _admin_credentials()
-    if not password:
-        raise HTTPException(status_code=502, detail="未配置 GRAFANA_ADMIN_PASSWORD，无法代理 Grafana")
-
-    base = resolve_grafana_upstream().rstrip("/")
-    login_resp = await client.post(f"{base}/login", json={"user": user, "password": password})
-    if login_resp.status_code != 200:
-        await _clear_upstream_session()
-        raise HTTPException(
-            status_code=502,
-            detail="Grafana 管理员密码不正确，请在服务器执行: docker exec ai-platform-grafana grafana-cli admin reset-admin-password '新密码' 并同步 .env.docker",
-        )
-
-    user_resp = await client.get(f"{base}/api/user", cookies=login_resp.cookies)
-    if user_resp.status_code != 200:
-        await _clear_upstream_session()
-        raise HTTPException(status_code=502, detail="Grafana 登录失败，请检查监控栈配置")
-
-    _grafana_upstream_cookies = login_resp.cookies
-    _grafana_upstream_expires = now + GRAFANA_UPSTREAM_SESSION_TTL
-    return _grafana_upstream_cookies
+    if not user or not password:
+        return None
+    return httpx.BasicAuth(user, password)
 
 
 def _decompress_body(content: bytes, content_encoding: str) -> Tuple[bytes, bool]:
@@ -232,7 +201,11 @@ def _rewrite_grafana_location(value: str) -> str:
 
 
 async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Response:
-    del user_ctx  # 平台侧鉴权已在路由层完成；上游统一使用 Grafana 服务账号
+    del user_ctx
+    auth = upstream_basic_auth()
+    if auth is None:
+        raise HTTPException(status_code=502, detail="未配置 GRAFANA_ADMIN_PASSWORD，无法代理 Grafana")
+
     upstream_base = resolve_grafana_upstream().rstrip("/") + "/"
     target_url = urljoin(upstream_base, path or "")
     if request.url.query:
@@ -259,31 +232,29 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
 
     body = await request.body()
 
-    async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), follow_redirects=False) as client:
-        upstream_cookies = await _ensure_upstream_session(client)
-        upstream = await client.request(
-            request.method,
-            target_url,
-            headers=headers,
-            content=body,
-            cookies=upstream_cookies,
-        )
-
-        if upstream.status_code in {401, 403} or _is_login_page(upstream.content, upstream.headers.get("content-type", ""), path):
-            await _clear_upstream_session()
-            upstream_cookies = await _ensure_upstream_session(client, force=True)
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=10.0), follow_redirects=False) as client:
             upstream = await client.request(
                 request.method,
                 target_url,
                 headers=headers,
                 content=body,
-                cookies=upstream_cookies,
+                auth=auth,
             )
+    except httpx.RequestError as exc:
+        logger.warning("Grafana 代理失败: %s", exc)
+        raise HTTPException(status_code=502, detail="无法连接 Grafana，请确认监控栈已启动") from exc
+
+    if upstream.status_code == 401:
+        raise HTTPException(
+            status_code=502,
+            detail="Grafana 管理员密码不正确，请执行: ./deploy.sh monitoring fix-auth '你的新密码'",
+        )
 
     if _is_login_page(upstream.content, upstream.headers.get("content-type", ""), path):
         raise HTTPException(
             status_code=502,
-            detail="Grafana 认证失败：请确认 .env.docker 中 GRAFANA_ADMIN_PASSWORD 与 Grafana 实际密码一致",
+            detail="Grafana 认证失败，请执行: ./deploy.sh monitoring fix-auth '你的新密码'",
         )
 
     if upstream.status_code in {301, 302, 303, 307, 308}:
@@ -291,7 +262,7 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
         if "/login" in location:
             raise HTTPException(
                 status_code=502,
-                detail="Grafana 会话失效，请检查 GRAFANA_ADMIN_USER / GRAFANA_ADMIN_PASSWORD 配置",
+                detail="Grafana 会话失效，请执行: ./deploy.sh monitoring fix-auth '你的新密码'",
             )
 
     response_body = upstream.content
@@ -312,7 +283,7 @@ async def proxy_to_grafana(path: str, request: Request, user_ctx: dict) -> Respo
         lower = key.lower()
         if lower in HOP_BY_HOP_HEADERS:
             continue
-        if lower in {"x-frame-options", "content-security-policy", "set-cookie"}:
+        if lower in {"x-frame-options", "content-security-policy", "set-cookie", "www-authenticate"}:
             continue
         if lower in {"content-encoding", "content-length"} and (
             content_encoding != upstream.headers.get("content-encoding", "")

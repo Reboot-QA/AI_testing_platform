@@ -119,16 +119,16 @@ def verify_grafana_credentials() -> tuple[bool, str]:
     try:
         import httpx
 
+        auth = httpx.BasicAuth(user, password)
         with httpx.Client(timeout=httpx.Timeout(10.0, connect=5.0), follow_redirects=False) as client:
-            login_resp = client.post(f"{base}/login", json={"user": user, "password": password})
-            if login_resp.status_code != 200:
-                return False, "Grafana 管理员密码不正确"
-            user_resp = client.get(f"{base}/api/user", cookies=login_resp.cookies)
-            if user_resp.status_code != 200:
-                return False, "Grafana 登录后无法获取用户信息"
+            user_resp = client.get(f"{base}/api/user", auth=auth)
+            if user_resp.status_code == 200:
+                return True, ""
+            if user_resp.status_code == 401:
+                return False, "Grafana 管理员密码不正确，请执行: ./deploy.sh monitoring fix-auth '你的新密码'"
+            return False, f"Grafana 认证异常 (HTTP {user_resp.status_code})"
     except Exception as exc:
         return False, f"无法连接 Grafana: {exc}"
-    return True, ""
 
 
 def get_integration_status(public_host: Optional[str] = None, public_origin: Optional[str] = None) -> Dict:
