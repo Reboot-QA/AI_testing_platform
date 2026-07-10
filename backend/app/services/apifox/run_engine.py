@@ -19,7 +19,7 @@ from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.apifox.variable import ApifoxEnvironment, ApifoxEnvironmentVariable, ApifoxGlobalVariable
 from app.repositories.apifox import global_param_repo, script_repo, variable_repo
 from app.services.api_response_extract import _extract_value_by_source
-from app.services.api_runner_service import _evaluate_assertion
+from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.api_script_runner import run_post_script, run_pre_script
 
 VARIABLE_PATTERN = re.compile(r"\{\{([^}]+)\}\}")
@@ -215,18 +215,69 @@ def _adapt_assertion(row) -> Dict[str, Any]:
     return data
 
 
+_NUMERIC_OPS = {"gt", "gte", "lt", "lte"}
+_OP_WITH_OPERATOR = {"status_code", "json_path", "header"}
+
+
+def _apply_operator(actual: Any, expected: Optional[str], operator: str) -> Tuple[bool, str]:
+    """按操作符比较（actual 可为数字/布尔/None，expected 为字符串）。返回 (通过, 说明)。"""
+    op = operator or "eq"
+    a_str = "" if actual is None else str(actual)
+    e_str = "" if expected is None else str(expected)
+    if op == "exists":
+        return actual is not None, f"值{'存在' if actual is not None else '不存在'}"
+    if op in _NUMERIC_OPS:
+        try:
+            a_num, e_num = float(actual), float(e_str)
+        except (TypeError, ValueError):
+            return False, f"非数值无法比较：{a_str}"
+        passed = {"gt": a_num > e_num, "gte": a_num >= e_num, "lt": a_num < e_num, "lte": a_num <= e_num}[op]
+        sym = {"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[op]
+        return passed, f"{a_num} {sym if passed else '!' + sym} {e_num}"
+    if op == "regex":
+        try:
+            passed = re.search(e_str, a_str) is not None
+        except re.error:
+            return False, f"正则无效：{e_str}"
+        return passed, f"{'匹配' if passed else '不匹配'}正则 {e_str}"
+    if op == "contains":
+        return e_str in a_str, f"{'包含' if e_str in a_str else '不包含'} \"{e_str}\""
+    if op == "not_contains":
+        return e_str not in a_str, f"{'不包含' if e_str not in a_str else '包含'} \"{e_str}\""
+    if op == "neq":
+        return a_str != e_str, f"{a_str} {'!=' if a_str != e_str else '=='} {e_str}"
+    return a_str == e_str, f"{a_str} {'==' if a_str == e_str else '!='} {e_str}"  # eq（字符串宽松等价）
+
+
+def _evaluate_with_operator(row, response: httpx.Response) -> Dict[str, Any]:
+    if row.type == "status_code":
+        actual: Any = response.status_code
+    elif row.type == "header":
+        actual = response.headers.get(row.path or "", "")
+    else:  # json_path
+        try:
+            payload = response.json()
+        except (json.JSONDecodeError, ValueError):
+            payload = None
+        actual = _extract_json_path(payload, row.path or "")
+    passed, message = _apply_operator(actual, row.expected, getattr(row, "operator", "eq"))
+    return {
+        "type": row.type, "operator": getattr(row, "operator", "eq") or "eq",
+        "passed": passed, "expected": row.expected, "actual": actual, "message": message,
+    }
+
+
 def evaluate_assertions(rows, response: httpx.Response, duration_ms: float) -> Tuple[bool, List[Dict]]:
     results: List[Dict[str, Any]] = []
     all_passed = True
     for row in rows:
         if not row.enabled:
             continue
-        result = _evaluate_assertion(_adapt_assertion(row), response, duration_ms)
-        # 行表 expected 为字符串，json_path 实际值可能是数字/布尔——补字符串宽松比较
-        if not result.get("passed") and row.type == "json_path":
-            if str(result.get("actual")) == str(row.expected):
-                result["passed"] = True
-                result["message"] += "（字符串等价）"
+        # status_code/json_path/header 走操作符比较；contains/response_time 保持既有语义（含隐式操作符）
+        if row.type in _OP_WITH_OPERATOR:
+            result = _evaluate_with_operator(row, response)
+        else:
+            result = _evaluate_assertion(_adapt_assertion(row), response, duration_ms)
         results.append(result)
         if not result.get("passed"):
             all_passed = False

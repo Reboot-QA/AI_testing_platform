@@ -17,3 +17,16 @@ def migrate_apifox_endpoint_server_name(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_endpoints ADD COLUMN server_name VARCHAR(100)"))
     db.expire_all()
+
+
+def migrate_apifox_assertion_operator(db: Session) -> None:
+    """apifox_case_assertions 加 operator 列（断言比较操作符，默认 eq）。"""
+    inspector = inspect(engine)
+    if "apifox_case_assertions" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_case_assertions")}
+    if "operator" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_case_assertions ADD COLUMN operator VARCHAR(20) NOT NULL DEFAULT 'eq'"))
+    db.expire_all()
