@@ -1,22 +1,24 @@
 <template>
   <div class="steps-editor">
     <div class="steps-col">
-      <div ref="listEl">
-        <div
+      <VueDraggable
+        v-model="props.rows"
+        :group="{ name: 'scenario-steps' }"
+        handle=".drag-handle"
+        :animation="150"
+      >
+        <ScenarioStepRow
           v-for="(row, i) in rows"
           :key="row._uid"
-          class="step-row"
-          :class="{ active: selectedUid === row._uid }"
-          @click="selectedUid = row._uid"
-        >
-          <el-icon class="drag-handle" title="拖拽排序"><Rank /></el-icon>
-          <span class="idx">{{ i + 1 }}</span>
-          <el-checkbox v-model="row.enabled" @click.stop />
-          <el-tag size="small" :type="typeTag(row.type)">{{ typeLabel(row.type) }}</el-tag>
-          <span class="step-name">{{ displayName(row) }}</span>
-          <el-button link type="danger" size="small" @click.stop="removeStep(i, row)">移除</el-button>
-        </div>
-      </div>
+          :row="row"
+          :index="i"
+          :cases="cases"
+          :scenarios="scenarios"
+          :current-scenario-id="currentScenarioId"
+          :selection="selection"
+          @remove="removeTop(i)"
+        />
+      </VueDraggable>
       <el-empty v-if="rows.length === 0" description="暂无步骤，下方添加" :image-size="50" />
 
       <div class="add-row">
@@ -24,6 +26,7 @@
           <el-option label="用例" value="case" />
           <el-option label="等待" value="wait" />
           <el-option label="子场景" value="scenario" />
+          <el-option label="分组" value="group" />
         </el-select>
         <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
           <el-option
@@ -34,9 +37,10 @@
           />
         </el-select>
         <el-input-number v-else-if="newType === 'wait'" v-model="waitMs" size="small" :min="1" :step="100" style="width: 130px" />
-        <el-select v-else v-model="pickedScenarioId" size="small" placeholder="选择子场景" style="flex: 1" filterable>
+        <el-select v-else-if="newType === 'scenario'" v-model="pickedScenarioId" size="small" placeholder="选择子场景" style="flex: 1" filterable>
           <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
+        <el-input v-else v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
         <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
       </div>
     </div>
@@ -44,6 +48,7 @@
     <div class="detail-col">
       <ScenarioStepDetail
         v-if="selectedStep"
+        :key="selectedStep._uid"
         :step="selectedStep"
         :cases="cases"
         :scenarios="scenarios"
@@ -56,8 +61,9 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
-import { useDraggable } from 'vue-draggable-plus'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { VueDraggable } from 'vue-draggable-plus'
+import ScenarioStepRow from '@/components/apifox/ScenarioStepRow.vue'
 import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
 
 const props = defineProps({
@@ -69,22 +75,35 @@ const props = defineProps({
 })
 
 let _seq = 0
-function ensureUids() {
-  props.rows.forEach((r) => {
+function ensureUids(rows) {
+  rows.forEach((r) => {
     if (r._uid == null) r._uid = ++_seq
+    if (r.type === 'group') {
+      if (!Array.isArray(r.children)) r.children = []
+      ensureUids(r.children)
+    }
   })
 }
-onMounted(ensureUids)
-watch(() => props.rows.length, ensureUids)
+onMounted(() => ensureUids(props.rows))
+watch(() => props.rows.length, () => ensureUids(props.rows))
 
-const listEl = ref()
-useDraggable(listEl, props.rows, { animation: 150, handle: '.drag-handle' })
+// 选中态用共享 reactive（UI 态，非业务数据，显式传 prop，不走 provide/inject）
+const selection = reactive({ uid: null })
 
-const selectedUid = ref(null)
-const selectedStep = computed(() => props.rows.find((r) => r._uid === selectedUid.value) || null)
+function findByUid(rows, uid) {
+  for (const r of rows) {
+    if (r._uid === uid) return r
+    if (r.type === 'group' && r.children) {
+      const hit = findByUid(r.children, uid)
+      if (hit) return hit
+    }
+  }
+  return null
+}
+const selectedStep = computed(() => findByUid(props.rows, selection.uid))
 
-function removeStep(i, row) {
-  if (selectedUid.value === row._uid) selectedUid.value = null
+function removeTop(i) {
+  if (props.rows[i]?._uid === selection.uid) selection.uid = null
   props.rows.splice(i, 1)
 }
 
@@ -92,6 +111,7 @@ const newType = ref('case')
 const pickedCaseId = ref(null)
 const pickedScenarioId = ref(null)
 const waitMs = ref(500)
+const groupName = ref('')
 
 const availableScenarios = computed(() =>
   props.scenarios.filter((s) => s.id !== props.currentScenarioId)
@@ -100,20 +120,9 @@ const availableScenarios = computed(() =>
 const canAdd = computed(() => {
   if (newType.value === 'case') return !!pickedCaseId.value
   if (newType.value === 'wait') return waitMs.value > 0
-  return !!pickedScenarioId.value
+  if (newType.value === 'scenario') return !!pickedScenarioId.value
+  return true
 })
-
-const typeLabel = (t) => ({ case: '用例', wait: '等待', scenario: '子场景' }[t] || t)
-const typeTag = (t) => ({ case: 'success', wait: 'warning', scenario: 'info' }[t] || 'info')
-
-function displayName(row) {
-  if (row.type === 'case') {
-    const prefix = row.endpoint_method ? `[${row.endpoint_method}] ` : ''
-    return `${prefix}${row.case_name || `用例#${row.ref_case_id}`}`
-  }
-  if (row.type === 'wait') return `等待 ${row.wait_ms} ms`
-  return row.scenario_name || `场景#${row.ref_scenario_id}`
-}
 
 function addStep() {
   if (newType.value === 'case') {
@@ -125,12 +134,17 @@ function addStep() {
     pickedCaseId.value = null
   } else if (newType.value === 'wait') {
     props.rows.push({ type: 'wait', wait_ms: waitMs.value, enabled: true, _uid: ++_seq })
-  } else {
+  } else if (newType.value === 'scenario') {
     const s = props.scenarios.find((x) => x.id === pickedScenarioId.value)
     props.rows.push({
       type: 'scenario', ref_scenario_id: s.id, enabled: true, scenario_name: s.name, _uid: ++_seq,
     })
     pickedScenarioId.value = null
+  } else {
+    props.rows.push({
+      type: 'group', name: groupName.value || '分组', enabled: true, children: [], _uid: ++_seq,
+    })
+    groupName.value = ''
   }
 }
 </script>
@@ -153,47 +167,6 @@ function addStep() {
 .detail-col {
   flex: 1;
   overflow: auto;
-}
-
-.step-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  padding: 4px 6px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.step-row:hover {
-  background: var(--ax-bg-hover);
-}
-
-.step-row.active {
-  background: var(--ax-bg-active);
-}
-
-.drag-handle {
-  cursor: grab;
-  color: var(--ax-text-placeholder);
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-.idx {
-  width: 20px;
-  color: var(--ax-text-placeholder);
-  font-size: 12px;
-  text-align: right;
-}
-
-.step-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .add-row {

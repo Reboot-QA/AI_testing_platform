@@ -57,3 +57,30 @@ def migrate_apifox_run_step_contract(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN contract_result TEXT"))
     db.expire_all()
+
+
+def migrate_apifox_scenario_step_tree(db: Session) -> None:
+    """apifox_scenario_steps 加 parent_step_id（控制步骤嵌套父）与 config（控制步骤配置 JSON）。"""
+    inspector = inspect(engine)
+    if "apifox_scenario_steps" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_scenario_steps")}
+    with engine.begin() as conn:
+        if "parent_step_id" not in cols:
+            conn.execute(text("ALTER TABLE apifox_scenario_steps ADD COLUMN parent_step_id INTEGER"))
+        if "config" not in cols:
+            conn.execute(text("ALTER TABLE apifox_scenario_steps ADD COLUMN config TEXT"))
+    db.expire_all()
+
+
+def migrate_apifox_run_step_depth(db: Session) -> None:
+    """apifox_run_steps 加 depth（步骤在场景树中的嵌套深度，供报告缩进）。"""
+    inspector = inspect(engine)
+    if "apifox_run_steps" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_run_steps")}
+    if "depth" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN depth INTEGER NOT NULL DEFAULT 0"))
+    db.expire_all()

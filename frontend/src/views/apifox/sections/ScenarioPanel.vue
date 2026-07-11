@@ -31,7 +31,7 @@
           <span class="run-hint">环境在顶部选择</span>
         </div>
         <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
-        <div class="steps-title">步骤（按序执行 · 执行引擎 P4 接入）</div>
+        <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
         <ScenarioStepsEditor
           :rows="form.steps"
           :cases="projectCases"
@@ -110,20 +110,32 @@ async function addScenario() {
   await selectScenario(created.id)
 }
 
+const MAX_STEP_DEPTH = 50
+
+function serializeStep(s, depth = 0) {
+  const children =
+    s.type === 'group' && depth < MAX_STEP_DEPTH
+      ? (s.children || []).map((c) => serializeStep(c, depth + 1))
+      : []
+  return {
+    type: s.type,
+    ref_case_id: s.ref_case_id ?? null,
+    ref_scenario_id: s.ref_scenario_id ?? null,
+    wait_ms: s.wait_ms ?? null,
+    config: s.config ?? null,
+    name: s.name ?? null,
+    enabled: s.enabled !== false,
+    children,
+  }
+}
+
 async function saveScenario() {
   saving.value = true
   try {
     await apifoxApi.updateScenario(form.id, {
       name: form.name,
       description: form.description || null,
-      steps: form.steps.map((s) => ({
-        type: s.type,
-        ref_case_id: s.ref_case_id ?? null,
-        ref_scenario_id: s.ref_scenario_id ?? null,
-        wait_ms: s.wait_ms ?? null,
-        name: s.name ?? null,
-        enabled: s.enabled !== false,
-      })),
+      steps: form.steps.map(serializeStep),
     })
     ElMessage.success('已保存')
     await loadScenarios()

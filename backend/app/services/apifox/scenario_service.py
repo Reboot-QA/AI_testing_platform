@@ -1,9 +1,11 @@
-"""Apifox 场景编排 · 业务层（步骤校验 + 子场景防循环 + bulk replace + 展示字段回显）。
+"""Apifox 场景编排 · 业务层（步骤树校验 + 子场景防循环 + bulk replace + 展示字段回显）。
 
-非法输入抛 ValueError（router 转 400）。写操作末尾 commit。权限在 router。执行留 P4。
+步骤为可嵌套树：控制步骤(group)用 children 承载子步骤，邻接表 parent_step_id 落库。
+非法输入抛 ValueError（router 转 400）。写操作末尾 commit。权限在 router。
 """
 
-from typing import List
+import json
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -19,7 +21,9 @@ from app.routers.apifox.scenario_schemas import (
     StepOut,
 )
 
-VALID_STEP_TYPES = {"case", "wait", "scenario"}
+VALID_STEP_TYPES = {"case", "wait", "scenario", "group"}
+# 可嵌套子步骤的容器型步骤（后续片加 if | loop）
+CONTAINER_STEP_TYPES = {"group"}
 _MAX_NEST_DEPTH = 50
 
 
@@ -43,6 +47,8 @@ def _would_cycle(db: Session, root_id: int, ref_scenario_id: int) -> bool:
 def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
     if step.type not in VALID_STEP_TYPES:
         raise ValueError("无效的步骤类型")
+    if step.children and step.type not in CONTAINER_STEP_TYPES:
+        raise ValueError("仅容器型步骤（分组）可包含子步骤")
     if step.type == "case":
         if not step.ref_case_id:
             raise ValueError("用例步骤必须指定 ref_case_id")
@@ -64,32 +70,49 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
             raise ValueError("子场景引用形成循环，请调整场景结构")
 
 
-def _write_steps(db: Session, scenario: ApifoxScenario, steps: List[StepIn]) -> None:
+def _write_steps(
+    db: Session,
+    scenario: ApifoxScenario,
+    steps: List[StepIn],
+    parent_id: Optional[int] = None,
+    depth: int = 0,
+) -> None:
+    """递归落库步骤树：先写父行拿到 id，再以其为 parent_id 写子步骤。"""
+    if depth > _MAX_NEST_DEPTH:
+        raise ValueError("步骤嵌套层级过深")
     for i, s in enumerate(steps):
         _validate_step(db, scenario, s)
-        repo.add(
-            db,
-            ApifoxScenarioStep(
-                scenario_id=scenario.id,
-                type=s.type,
-                ref_case_id=s.ref_case_id if s.type == "case" else None,
-                ref_scenario_id=s.ref_scenario_id if s.type == "scenario" else None,
-                wait_ms=s.wait_ms if s.type == "wait" else None,
-                name=s.name,
-                enabled=s.enabled,
-                sort_order=i,
-            ),
+        row = ApifoxScenarioStep(
+            scenario_id=scenario.id,
+            parent_step_id=parent_id,
+            type=s.type,
+            ref_case_id=s.ref_case_id if s.type == "case" else None,
+            ref_scenario_id=s.ref_scenario_id if s.type == "scenario" else None,
+            wait_ms=s.wait_ms if s.type == "wait" else None,
+            config=json.dumps(s.config, ensure_ascii=False) if s.config else None,
+            name=s.name,
+            enabled=s.enabled,
+            sort_order=i,
         )
+        repo.add(db, row)  # flush 后 row.id 可用作子步骤 parent_id
+        if s.children:
+            _write_steps(db, scenario, s.children, parent_id=row.id, depth=depth + 1)
 
 
-def _step_out(db: Session, step: ApifoxScenarioStep) -> StepOut:
+def _step_out(
+    db: Session,
+    step: ApifoxScenarioStep,
+    by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
+) -> StepOut:
     out = StepOut(
         type=step.type,
         ref_case_id=step.ref_case_id,
         ref_scenario_id=step.ref_scenario_id,
         wait_ms=step.wait_ms,
+        config=json.loads(step.config) if step.config else None,
         name=step.name,
         enabled=step.enabled,
+        children=[_step_out(db, c, by_parent) for c in by_parent.get(step.id, [])],
     )
     if step.type == "case" and step.ref_case_id:
         case = case_repo.get_case(db, step.ref_case_id)
@@ -107,12 +130,13 @@ def _step_out(db: Session, step: ApifoxScenarioStep) -> StepOut:
 
 
 def _out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
+    by_parent = repo.group_steps_by_parent(db, scenario.id)
     return ScenarioOut(
         id=scenario.id,
         project_id=scenario.project_id,
         name=scenario.name,
         description=scenario.description,
-        steps=[_step_out(db, s) for s in repo.list_steps(db, scenario.id)],
+        steps=[_step_out(db, s, by_parent) for s in by_parent.get(None, [])],
         sort_order=scenario.sort_order,
         created_at=scenario.created_at,
         updated_at=scenario.updated_at,

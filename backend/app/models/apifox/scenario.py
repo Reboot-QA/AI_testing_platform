@@ -32,7 +32,11 @@ class ApifoxScenarioStep(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     scenario_id: Mapped[int] = mapped_column(ForeignKey("apifox_scenarios.id"), index=True)
-    # case | wait | scenario
+    # 控制步骤(group/if/loop)嵌套父步骤；顶层步骤为 NULL
+    parent_step_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("apifox_scenario_steps.id"), nullable=True, index=True
+    )
+    # case | wait | scenario | group（后续片加 if | loop）
     type: Mapped[str] = mapped_column(String(20))
     ref_case_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("apifox_endpoint_cases.id"), nullable=True, index=True
@@ -41,6 +45,8 @@ class ApifoxScenarioStep(Base):
         ForeignKey("apifox_scenarios.id"), nullable=True, index=True
     )
     wait_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # 控制步骤配置 JSON（分组无配置；条件/循环后续片用）
+    config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 步骤备注（可选）
     name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)

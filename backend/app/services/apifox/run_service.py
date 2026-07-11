@@ -6,13 +6,13 @@
 import json
 import time
 from datetime import datetime
-from typing import Any, Dict, Generator, Optional
+from typing import Any, Dict, Generator, List, Optional
 
 from sqlalchemy.orm import Session
 
 from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
-from app.models.apifox.scenario import ApifoxScenario
+from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.variable import ApifoxEnvironment
 from app.repositories.apifox import case_repo, endpoint_repo, run_repo, scenario_repo
 from app.services.apifox import run_engine as engine
@@ -32,8 +32,18 @@ def _count_case_steps(case: ApifoxEndpointCase) -> int:
 def _count_scenario_steps(db: Session, scenario_id: int, depth: int = 0) -> int:
     if depth > _MAX_DEPTH:
         return 0
+    by_parent = scenario_repo.group_steps_by_parent(db, scenario_id)
+    return _count_steps(db, by_parent, by_parent.get(None, []), depth)
+
+
+def _count_steps(
+    db: Session,
+    by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
+    steps: List[ApifoxScenarioStep],
+    depth: int,
+) -> int:
     total = 0
-    for step in scenario_repo.list_steps(db, scenario_id):
+    for step in steps:
         if not step.enabled:
             continue
         if step.type == "case" and step.ref_case_id:
@@ -44,6 +54,8 @@ def _count_scenario_steps(db: Session, scenario_id: int, depth: int = 0) -> int:
             total += 1
         elif step.type == "scenario" and step.ref_scenario_id:
             total += _count_scenario_steps(db, step.ref_scenario_id, depth + 1)
+        elif step.type == "group" and depth < _MAX_DEPTH:
+            total += _count_steps(db, by_parent, by_parent.get(step.id, []), depth + 1)
     return total
 
 
@@ -63,10 +75,12 @@ class _RunContext:
 
 
 def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str, Any],
-                 case: Optional[ApifoxEndpointCase] = None, case_name: str = "") -> ApifoxRunStep:
+                 case: Optional[ApifoxEndpointCase] = None, case_name: str = "",
+                 depth: int = 0) -> ApifoxRunStep:
     step = ApifoxRunStep(
         run_id=ctx.run.id,
         step_type=step_type,
+        depth=depth,
         case_id=case.id if case else None,
         case_name=case_name or (case.name if case else ""),
         method=detail.get("method") or "",
@@ -105,7 +119,7 @@ def _step_event(ctx: _RunContext, total: int, status: str, detail: Dict[str, Any
 
 def _run_case_block(
     ctx: _RunContext, case: ApifoxEndpointCase, total: int,
-    env_vars: Dict[str, str], global_vars: Dict[str, str],
+    env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int = 0,
 ) -> Generator[Dict[str, Any], None, None]:
     """执行一个用例（含数据驱动多迭代），落库并 yield step 事件。"""
     endpoint = endpoint_repo.get_endpoint(ctx.db, case.endpoint_id)
@@ -136,7 +150,7 @@ def _run_case_block(
         else:
             ctx.failed += 1
         name = case.name if not drive_row else f"{case.name} · 数据集{ctx.index}"
-        _record_step(ctx, "case", status, detail, case=case, case_name=name)
+        _record_step(ctx, "case", status, detail, case=case, case_name=name, depth=depth)
         yield _step_event(ctx, total, status, detail, name)
 
 
@@ -146,24 +160,38 @@ def _run_scenario_block(
 ) -> Generator[Dict[str, Any], None, None]:
     if depth > _MAX_DEPTH:
         return
-    for step in scenario_repo.list_steps(ctx.db, scenario_id):
+    by_parent = scenario_repo.group_steps_by_parent(ctx.db, scenario_id)
+    yield from _run_steps(ctx, by_parent, by_parent.get(None, []), total, env_vars, global_vars, depth)
+
+
+def _run_steps(
+    ctx: _RunContext, by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
+    steps: List[ApifoxScenarioStep], total: int,
+    env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
+) -> Generator[Dict[str, Any], None, None]:
+    """按序执行一层步骤；控制步骤(group)递归其子步骤，深度 +1（供报告缩进）。"""
+    for step in steps:
         if not step.enabled:
             continue
         if step.type == "case" and step.ref_case_id:
             case = case_repo.get_case(ctx.db, step.ref_case_id)
             if case:
-                yield from _run_case_block(ctx, case, total, env_vars, global_vars)
+                yield from _run_case_block(ctx, case, total, env_vars, global_vars, depth)
         elif step.type == "wait":
             ctx.index += 1
             wait_ms = min(step.wait_ms or 0, MAX_WAIT_MS)
             time.sleep(wait_ms / 1000)
             detail = {"method": "", "url": "", "duration_ms": float(wait_ms)}
             ctx.passed += 1
-            _record_step(ctx, "wait", "passed", detail, case_name=f"等待 {wait_ms} ms")
+            _record_step(ctx, "wait", "passed", detail, case_name=f"等待 {wait_ms} ms", depth=depth)
             yield _step_event(ctx, total, "passed", detail, f"等待 {wait_ms} ms")
         elif step.type == "scenario" and step.ref_scenario_id:
             yield from _run_scenario_block(
                 ctx, step.ref_scenario_id, total, env_vars, global_vars, depth + 1
+            )
+        elif step.type == "group" and depth < _MAX_DEPTH:
+            yield from _run_steps(
+                ctx, by_parent, by_parent.get(step.id, []), total, env_vars, global_vars, depth + 1
             )
 
 
