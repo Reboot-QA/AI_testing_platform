@@ -7,6 +7,9 @@ backend/ai_testcase.db
 backend/*.db
 *.db-journal
 
+# 前端构建产物（部署从源码 npm build，不入库）
+frontend/dist/
+
 # Python
 __pycache__/
 *.py[cod]

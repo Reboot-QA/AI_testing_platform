@@ -39,6 +39,8 @@ class ApifoxRunStep(Base):
     run_id: Mapped[int] = mapped_column(ForeignKey("apifox_runs.id"), index=True)
     # case | wait
     step_type: Mapped[str] = mapped_column(String(20), default="case")
+    # 步骤在场景树中的嵌套深度（顶层 0），供报告缩进展示
+    depth: Mapped[int] = mapped_column(Integer, default=0)
     case_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     case_name: Mapped[str] = mapped_column(String(200), default="")
     method: Mapped[str] = mapped_column(String(10), default="")
