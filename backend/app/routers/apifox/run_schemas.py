@@ -26,6 +26,7 @@ class RunBrief(BaseModel):
 class RunStepOut(BaseModel):
     id: int
     step_type: str
+    depth: int = 0
     case_id: Optional[int] = None
     case_name: str
     method: str

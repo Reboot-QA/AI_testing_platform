@@ -159,6 +159,7 @@ def _step_out(step: ApifoxRunStep) -> RunStepOut:
     return RunStepOut(
         id=step.id,
         step_type=step.step_type,
+        depth=step.depth,
         case_id=step.case_id,
         case_name=step.case_name,
         method=step.method,
