@@ -1,0 +1,21 @@
+# 仅用于工具配置（ruff / mypy）。项目仍用 pip + requirements.txt，非 uv/poetry 工程。
+[tool.ruff]
+line-length = 120
+target-version = "py312"
+
+[tool.ruff.lint]
+# 存量代码务实基线：先开明显有价值的规则，避免大面积误伤；稳定后再逐步收紧。
+select = ["E", "F", "W", "I"]   # pycodestyle / pyflakes / isort
+ignore = ["E501"]               # 行长交给 line-length，先不硬报
+
+[tool.mypy]
+python_version = "3.12"
+ignore_missing_imports = true
+# 存量未类型化：不强制注解，只做已注解部分的检查（在 make check 跑，不逐文件卡）
+disallow_untyped_defs = false
+check_untyped_defs = false
+warn_unused_ignores = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
