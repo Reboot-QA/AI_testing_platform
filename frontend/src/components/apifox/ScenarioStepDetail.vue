@@ -48,6 +48,18 @@
         <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
       </el-select>
     </div>
+
+    <template v-else-if="step.type === 'if'">
+      <div class="sd-field">
+        <span class="sd-label">条件</span>
+        <ConditionEditor :condition="ifCondition" />
+      </div>
+      <div class="sd-field">
+        <span class="sd-label">否则分支</span>
+        <el-switch v-model="step.elseEnabled" @change="onElseToggle" />
+        <span class="sd-hint">条件不成立时执行 else 分支</span>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -58,6 +70,7 @@ import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { normalizeSpec } from '@/utils/apifoxSpec'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
+import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -66,6 +79,13 @@ const props = defineProps({
   currentScenarioId: { type: Number, default: null },
   scripts: { type: Array, default: () => [] },
 })
+
+// config.condition 由 normalizeStep(加载)/addStep(新建) 保证存在；此处纯读取，不在 computed 里改 props
+const ifCondition = computed(() => props.step.config?.condition ?? { left: '', operator: 'eq', right: '' })
+
+function onElseToggle(enabled) {
+  if (enabled && !Array.isArray(props.step.elseChildren)) props.step.elseChildren = []
+}
 
 const savingCase = ref(false)
 const caseForm = reactive({
@@ -155,5 +175,10 @@ async function saveCase() {
 
 .sd-alert {
   margin-bottom: 12px;
+}
+
+.sd-hint {
+  font-size: 12px;
+  color: var(--ax-text-placeholder);
 }
 </style>

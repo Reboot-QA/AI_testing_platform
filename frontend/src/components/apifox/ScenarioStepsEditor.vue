@@ -27,6 +27,7 @@
           <el-option label="等待" value="wait" />
           <el-option label="子场景" value="scenario" />
           <el-option label="分组" value="group" />
+          <el-option label="条件" value="if" />
         </el-select>
         <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
           <el-option
@@ -40,7 +41,8 @@
         <el-select v-else-if="newType === 'scenario'" v-model="pickedScenarioId" size="small" placeholder="选择子场景" style="flex: 1" filterable>
           <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
-        <el-input v-else v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
+        <el-input v-else-if="newType === 'group'" v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
+        <span v-else class="add-hint">添加后在右侧编辑条件</span>
         <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
       </div>
     </div>
@@ -75,13 +77,24 @@ const props = defineProps({
 })
 
 let _seq = 0
+// 容器步骤的可嵌套子列表：分组一个，条件(if)两个（then=children / else=elseChildren）
+function stepChildLists(r) {
+  if (r.type === 'group') {
+    if (!Array.isArray(r.children)) r.children = []
+    return [r.children]
+  }
+  if (r.type === 'if') {
+    if (!Array.isArray(r.children)) r.children = []
+    if (!Array.isArray(r.elseChildren)) r.elseChildren = []
+    return [r.children, r.elseChildren]
+  }
+  return []
+}
+
 function ensureUids(rows) {
   rows.forEach((r) => {
     if (r._uid == null) r._uid = ++_seq
-    if (r.type === 'group') {
-      if (!Array.isArray(r.children)) r.children = []
-      ensureUids(r.children)
-    }
+    stepChildLists(r).forEach(ensureUids)
   })
 }
 onMounted(() => ensureUids(props.rows))
@@ -93,8 +106,8 @@ const selection = reactive({ uid: null })
 function findByUid(rows, uid) {
   for (const r of rows) {
     if (r._uid === uid) return r
-    if (r.type === 'group' && r.children) {
-      const hit = findByUid(r.children, uid)
+    for (const list of stepChildLists(r)) {
+      const hit = findByUid(list, uid)
       if (hit) return hit
     }
   }
@@ -140,11 +153,17 @@ function addStep() {
       type: 'scenario', ref_scenario_id: s.id, enabled: true, scenario_name: s.name, _uid: ++_seq,
     })
     pickedScenarioId.value = null
-  } else {
+  } else if (newType.value === 'group') {
     props.rows.push({
       type: 'group', name: groupName.value || '分组', enabled: true, children: [], _uid: ++_seq,
     })
     groupName.value = ''
+  } else {
+    props.rows.push({
+      type: 'if', enabled: true, _uid: ++_seq,
+      config: { condition: { left: '', operator: 'eq', right: '' } },
+      children: [], elseEnabled: false, elseChildren: [],
+    })
   }
 }
 </script>
@@ -174,5 +193,11 @@ function addStep() {
   align-items: center;
   gap: 8px;
   margin-top: 12px;
+}
+
+.add-hint {
+  flex: 1;
+  font-size: 12px;
+  color: var(--ax-text-placeholder);
 }
 </style>

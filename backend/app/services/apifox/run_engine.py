@@ -256,6 +256,27 @@ def _apply_operator(actual: Any, expected: Optional[str], operator: str) -> Tupl
     return a_str == e_str, f"{a_str} {'==' if a_str == e_str else '!='} {e_str}"  # eq（字符串宽松等价）
 
 
+# 场景条件步骤(if)可用操作符（复用断言操作符语义）
+CONDITION_OPERATORS = {"eq", "neq", "contains", "not_contains", "gt", "gte", "lt", "lte", "regex", "exists"}
+
+
+def evaluate_condition(condition: Dict[str, Any], variables: Dict[str, str]) -> Tuple[bool, str]:
+    """求值场景条件 {left, operator, right}：left/right 先 {{var}} 插值再按操作符比较。
+
+    exists：left 插值后为非空且不含未解析 {{...}} 占位符时视为存在（即变量确有值）。
+    其余操作符复用 _apply_operator（left 作 actual、right 作 expected）。
+    """
+    raw_left = str(condition.get("left") or "")
+    left = apply_vars(raw_left, variables)
+    operator = str(condition.get("operator") or "eq")
+    if operator == "exists":
+        unresolved = bool(VARIABLE_PATTERN.search(left))
+        exists = bool(left) and not unresolved
+        return exists, f"{raw_left} {'存在' if exists else '不存在'}"
+    right = apply_vars(str(condition.get("right") or ""), variables)
+    return _apply_operator(left, right, operator)
+
+
 def _evaluate_with_operator(row, response: httpx.Response) -> Dict[str, Any]:
     if row.type == "status_code":
         actual: Any = response.status_code

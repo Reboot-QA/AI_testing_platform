@@ -20,10 +20,11 @@ from app.routers.apifox.scenario_schemas import (
     StepIn,
     StepOut,
 )
+from app.services.apifox.run_engine import CONDITION_OPERATORS
 
-VALID_STEP_TYPES = {"case", "wait", "scenario", "group"}
-# 可嵌套子步骤的容器型步骤（后续片加 if | loop）
-CONTAINER_STEP_TYPES = {"group"}
+VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else"}
+# 可嵌套子步骤的容器型步骤（后续片加 loop）
+CONTAINER_STEP_TYPES = {"group", "if", "else"}
 _MAX_NEST_DEPTH = 50
 
 
@@ -68,6 +69,13 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
             raise ValueError("引用的子场景不存在或不属于该项目")
         if _would_cycle(db, scenario.id, step.ref_scenario_id):
             raise ValueError("子场景引用形成循环，请调整场景结构")
+    elif step.type == "if":
+        condition = (step.config or {}).get("condition") if step.config else None
+        if not isinstance(condition, dict):
+            raise ValueError("条件(if)步骤必须配置 condition")
+        operator = str(condition.get("operator") or "")
+        if operator not in CONDITION_OPERATORS:
+            raise ValueError(f"条件操作符非法：{operator or '(空)'}")
 
 
 def _write_steps(
@@ -76,11 +84,19 @@ def _write_steps(
     steps: List[StepIn],
     parent_id: Optional[int] = None,
     depth: int = 0,
+    parent_type: Optional[str] = None,
 ) -> None:
     """递归落库步骤树：先写父行拿到 id，再以其为 parent_id 写子步骤。"""
     if depth > _MAX_NEST_DEPTH:
         raise ValueError("步骤嵌套层级过深")
+    else_count = 0
     for i, s in enumerate(steps):
+        if s.type == "else":
+            if parent_type != "if":
+                raise ValueError("else 步骤只能作为条件(if)步骤的子步骤")
+            else_count += 1
+            if else_count > 1:
+                raise ValueError("一个条件(if)步骤至多一个 else 分支")
         _validate_step(db, scenario, s)
         row = ApifoxScenarioStep(
             scenario_id=scenario.id,
@@ -96,7 +112,9 @@ def _write_steps(
         )
         repo.add(db, row)  # flush 后 row.id 可用作子步骤 parent_id
         if s.children:
-            _write_steps(db, scenario, s.children, parent_id=row.id, depth=depth + 1)
+            _write_steps(
+                db, scenario, s.children, parent_id=row.id, depth=depth + 1, parent_type=s.type
+            )
 
 
 def _step_out(
