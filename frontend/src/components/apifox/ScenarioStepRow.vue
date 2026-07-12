@@ -83,6 +83,30 @@
         <div v-if="row.elseChildren.length === 0" class="group-empty">拖步骤到 Else 分支</div>
       </template>
     </div>
+
+    <div v-else-if="row.type === 'loop'" class="group-body">
+      <div class="branch-label">循环体</div>
+      <VueDraggable
+        v-model="row.children"
+        :group="{ name: 'scenario-steps' }"
+        handle=".drag-handle"
+        :animation="150"
+        class="group-drop"
+      >
+        <ScenarioStepRow
+          v-for="(child, i) in row.children"
+          :key="child._uid"
+          :row="child"
+          :index="i"
+          :cases="cases"
+          :scenarios="scenarios"
+          :current-scenario-id="currentScenarioId"
+          :selection="selection"
+          @remove="row.children.splice(i, 1)"
+        />
+      </VueDraggable>
+      <div v-if="row.children.length === 0" class="group-empty">拖步骤到循环体内</div>
+    </div>
   </div>
 </template>
 
@@ -104,10 +128,10 @@ const props = defineProps({
 defineEmits(['remove'])
 
 const typeLabel = computed(
-  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组', if: '条件' }[props.row.type] || props.row.type)
+  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组', if: '条件', loop: '循环' }[props.row.type] || props.row.type)
 )
 const typeTag = computed(
-  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary', if: 'danger' }[props.row.type] || 'info')
+  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary', if: 'danger', loop: 'warning' }[props.row.type] || 'info')
 )
 
 const displayName = computed(() => {
@@ -115,6 +139,12 @@ const displayName = computed(() => {
   if (row.type === 'if') {
     const c = row.config?.condition || {}
     return `如果 ${c.left || '?'} ${c.operator || 'eq'} ${c.operator === 'exists' ? '' : (c.right ?? '')}`.trim()
+  }
+  if (row.type === 'loop') {
+    const c = row.config || {}
+    if (c.mode === 'list') return `遍历 ${c.list_var || '?'}`
+    if (c.mode === 'while') return `当 ${c.condition?.left || '?'} ${c.condition?.operator || ''} … 时循环`
+    return `循环 ${c.count ?? '?'} 次`
   }
   if (row.name) return row.name
   if (row.type === 'case') {

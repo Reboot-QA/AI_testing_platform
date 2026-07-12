@@ -259,6 +259,41 @@ def _apply_operator(actual: Any, expected: Optional[str], operator: str) -> Tupl
 # 场景条件步骤(if)可用操作符（复用断言操作符语义）
 CONDITION_OPERATORS = {"eq", "neq", "contains", "not_contains", "gt", "gte", "lt", "lte", "regex", "exists"}
 
+# 循环步骤(loop)硬上限：三种模式都兜底，防死循环/超大 count 拖垮执行
+MAX_LOOP_ITERATIONS = 1000
+
+
+def loop_iterations(config: Dict[str, Any], variables: Dict[str, str]) -> List[Dict[str, str]]:
+    """count/list 模式的每轮变量注入列表（while 由编排层逐轮求值，不走这里）。
+
+    count：注入 index_var（0 基）；list：解析 list_var（JSON 数组）注入 item_var+index_var，
+    非字符串元素 JSON 序列化。无效/缺失 → []；超硬上限 → 截断。
+    """
+    mode = config.get("mode")
+    index_var = str(config.get("index_var") or "index")
+    if mode == "count":
+        try:
+            n = int(config.get("count") or 0)
+        except (TypeError, ValueError):
+            n = 0
+        n = max(0, min(n, MAX_LOOP_ITERATIONS))
+        return [{index_var: str(i)} for i in range(n)]
+    if mode == "list":
+        item_var = str(config.get("item_var") or "item")
+        raw = variables.get(str(config.get("list_var") or ""), "")
+        try:
+            items = json.loads(raw) if raw else []
+        except (ValueError, TypeError):
+            items = []
+        if not isinstance(items, list):
+            items = []
+        result: List[Dict[str, str]] = []
+        for i, it in enumerate(items[:MAX_LOOP_ITERATIONS]):
+            val = it if isinstance(it, str) else json.dumps(it, ensure_ascii=False)
+            result.append({item_var: val, index_var: str(i)})
+        return result
+    return []
+
 
 def evaluate_condition(condition: Dict[str, Any], variables: Dict[str, str]) -> Tuple[bool, str]:
     """求值场景条件 {left, operator, right}：left/right 先 {{var}} 插值再按操作符比较。
