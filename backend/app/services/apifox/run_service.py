@@ -56,6 +56,15 @@ def _count_steps(
             total += _count_scenario_steps(db, step.ref_scenario_id, depth + 1)
         elif step.type == "group" and depth < _MAX_DEPTH:
             total += _count_steps(db, by_parent, by_parent.get(step.id, []), depth + 1)
+        elif step.type == "if" and depth < _MAX_DEPTH:
+            # total 仅进度估算：运行前未知走哪支，取两分支较大值，保证实际 index 不超 total
+            children = by_parent.get(step.id, [])
+            then_steps = [c for c in children if c.type != "else"]
+            counts = [_count_steps(db, by_parent, then_steps, depth + 1)]
+            else_step = next((c for c in children if c.type == "else"), None)
+            if else_step:
+                counts.append(_count_steps(db, by_parent, by_parent.get(else_step.id, []), depth + 1))
+            total += max(counts)
     return total
 
 
@@ -193,6 +202,29 @@ def _run_steps(
             yield from _run_steps(
                 ctx, by_parent, by_parent.get(step.id, []), total, env_vars, global_vars, depth + 1
             )
+        elif step.type == "if" and depth < _MAX_DEPTH:
+            yield from _run_if_block(ctx, by_parent, step, total, env_vars, global_vars, depth)
+
+
+def _run_if_block(
+    ctx: _RunContext, by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
+    step: ApifoxScenarioStep, total: int,
+    env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
+) -> Generator[Dict[str, Any], None, None]:
+    """条件步骤：对当前变量求值，命中 then 分支或 else 分支（未命中分支不执行不落库）。
+
+    then 分支 = if 的非 else 子步骤；else 分支 = else 子容器的子步骤（else 透明不额外加深度）。
+    """
+    children = by_parent.get(step.id, [])
+    condition = (engine._loads(step.config, {}) or {}).get("condition") or {}
+    cond_vars = engine.merge_vars(global_vars, env_vars, ctx.runtime)
+    passed, _msg = engine.evaluate_condition(condition, cond_vars)
+    if passed:
+        branch = [c for c in children if c.type != "else"]
+    else:
+        else_step = next((c for c in children if c.type == "else" and c.enabled), None)
+        branch = by_parent.get(else_step.id, []) if else_step else []
+    yield from _run_steps(ctx, by_parent, branch, total, env_vars, global_vars, depth + 1)
 
 
 def _start_run(db: Session, project_id: int, target_type: str, target_id: int,

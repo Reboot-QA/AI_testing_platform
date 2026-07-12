@@ -17,6 +17,16 @@ def _group(name: str, children: list) -> StepIn:
     return StepIn(type="group", name=name, children=children)
 
 
+_COND = {"left": "{{x}}", "operator": "eq", "right": "1"}
+
+
+def _if(then_children: list, else_children: list | None = None, condition: dict = _COND) -> StepIn:
+    children = list(then_children)
+    if else_children is not None:
+        children.append(StepIn(type="else", children=else_children))
+    return StepIn(type="if", config={"condition": condition}, children=children)
+
+
 def test_roundtrip_group_wrapping_cases_preserves_tree(db, make_case):
     case_a = make_case(name="A")
     case_b = make_case(name="B")
@@ -109,6 +119,93 @@ def test_legacy_flat_steps_roundtrip_unchanged(db, make_case):
     assert [s.type for s in out.steps] == ["case", "wait"]
     assert all(s.children == [] for s in out.steps)
     assert out.steps[1].wait_ms == 500
+
+
+def test_if_roundtrip_with_then_and_else(db, make_case):
+    then_c = make_case(name="THEN")
+    else_c = make_case(name="ELSE")
+
+    out = svc.create_scenario(
+        db,
+        project_id=1,
+        data=ScenarioCreate(
+            name="条件",
+            steps=[_if([_case_step(then_c.id)], else_children=[_case_step(else_c.id)])],
+        ),
+    )
+
+    if_step = out.steps[0]
+    assert if_step.type == "if"
+    assert if_step.config["condition"]["operator"] == "eq"
+    then_children = [c for c in if_step.children if c.type != "else"]
+    else_step = next(c for c in if_step.children if c.type == "else")
+    assert then_children[0].ref_case_id == then_c.id
+    assert else_step.children[0].ref_case_id == else_c.id
+
+
+def test_if_roundtrip_without_else(db, make_case):
+    then_c = make_case(name="THEN")
+
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(name="s", steps=[_if([_case_step(then_c.id)])])
+    )
+
+    if_step = out.steps[0]
+    assert if_step.type == "if"
+    assert all(c.type != "else" for c in if_step.children)
+
+
+def test_if_missing_condition_is_rejected(db, make_case):
+    bad = StepIn(type="if", children=[_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="condition"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_if_invalid_operator_is_rejected(db, make_case):
+    bad = _if([_case_step(make_case().id)], condition={"left": "a", "operator": "xx", "right": "b"})
+
+    with pytest.raises(ValueError, match="操作符"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_else_outside_if_is_rejected(db, make_case):
+    bad = StepIn(type="else", children=[_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="else"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_two_else_under_if_is_rejected(db, make_case):
+    a, b = make_case(name="a"), make_case(name="b")
+    bad = StepIn(
+        type="if",
+        config={"condition": _COND},
+        children=[StepIn(type="else", children=[_case_step(a.id)]),
+                  StepIn(type="else", children=[_case_step(b.id)])],
+    )
+
+    with pytest.raises(ValueError, match="至多一个 else"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_nested_if_in_else_roundtrip(db, make_case):
+    inner = make_case(name="inner")
+    outer_then = make_case(name="outer_then")
+
+    out = svc.create_scenario(
+        db,
+        project_id=1,
+        data=ScenarioCreate(
+            name="elif",
+            steps=[_if([_case_step(outer_then.id)], else_children=[_if([_case_step(inner.id)])])],
+        ),
+    )
+
+    else_step = next(c for c in out.steps[0].children if c.type == "else")
+    nested_if = else_step.children[0]
+    assert nested_if.type == "if"
+    assert nested_if.children[0].ref_case_id == inner.id
 
 
 def test_update_replaces_tree(db, make_case):

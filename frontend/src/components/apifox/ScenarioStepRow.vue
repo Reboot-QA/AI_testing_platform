@@ -35,6 +35,54 @@
       </VueDraggable>
       <div v-if="row.children.length === 0" class="group-empty">拖步骤到此分组内</div>
     </div>
+
+    <div v-else-if="row.type === 'if'" class="group-body">
+      <div class="branch-label">Then（条件成立）</div>
+      <VueDraggable
+        v-model="row.children"
+        :group="{ name: 'scenario-steps' }"
+        handle=".drag-handle"
+        :animation="150"
+        class="group-drop"
+      >
+        <ScenarioStepRow
+          v-for="(child, i) in row.children"
+          :key="child._uid"
+          :row="child"
+          :index="i"
+          :cases="cases"
+          :scenarios="scenarios"
+          :current-scenario-id="currentScenarioId"
+          :selection="selection"
+          @remove="row.children.splice(i, 1)"
+        />
+      </VueDraggable>
+      <div v-if="row.children.length === 0" class="group-empty">拖步骤到 Then 分支</div>
+
+      <template v-if="row.elseEnabled">
+        <div class="branch-label">Else（条件不成立）</div>
+        <VueDraggable
+          v-model="row.elseChildren"
+          :group="{ name: 'scenario-steps' }"
+          handle=".drag-handle"
+          :animation="150"
+          class="group-drop"
+        >
+          <ScenarioStepRow
+            v-for="(child, i) in row.elseChildren"
+            :key="child._uid"
+            :row="child"
+            :index="i"
+            :cases="cases"
+            :scenarios="scenarios"
+            :current-scenario-id="currentScenarioId"
+            :selection="selection"
+            @remove="row.elseChildren.splice(i, 1)"
+          />
+        </VueDraggable>
+        <div v-if="row.elseChildren.length === 0" class="group-empty">拖步骤到 Else 分支</div>
+      </template>
+    </div>
   </div>
 </template>
 
@@ -56,14 +104,18 @@ const props = defineProps({
 defineEmits(['remove'])
 
 const typeLabel = computed(
-  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组' }[props.row.type] || props.row.type)
+  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组', if: '条件' }[props.row.type] || props.row.type)
 )
 const typeTag = computed(
-  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary' }[props.row.type] || 'info')
+  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary', if: 'danger' }[props.row.type] || 'info')
 )
 
 const displayName = computed(() => {
   const row = props.row
+  if (row.type === 'if') {
+    const c = row.config?.condition || {}
+    return `如果 ${c.left || '?'} ${c.operator || 'eq'} ${c.operator === 'exists' ? '' : (c.right ?? '')}`.trim()
+  }
   if (row.name) return row.name
   if (row.type === 'case') {
     const prefix = row.endpoint_method ? `[${row.endpoint_method}] ` : ''
@@ -136,5 +188,12 @@ const displayName = computed(() => {
   color: var(--ax-text-placeholder);
   font-size: 12px;
   padding: 4px 6px;
+}
+
+.branch-label {
+  font-size: 12px;
+  color: var(--ax-text-secondary);
+  font-weight: 600;
+  margin: 4px 0 2px;
 }
 </style>
