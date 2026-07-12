@@ -28,6 +28,7 @@
           <el-option label="子场景" value="scenario" />
           <el-option label="分组" value="group" />
           <el-option label="条件" value="if" />
+          <el-option label="循环" value="loop" />
         </el-select>
         <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
           <el-option
@@ -42,7 +43,7 @@
           <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
         <el-input v-else-if="newType === 'group'" v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
-        <span v-else class="add-hint">添加后在右侧编辑条件</span>
+        <span v-else class="add-hint">添加后在右侧配置</span>
         <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
       </div>
     </div>
@@ -79,7 +80,7 @@ const props = defineProps({
 let _seq = 0
 // 容器步骤的可嵌套子列表：分组一个，条件(if)两个（then=children / else=elseChildren）
 function stepChildLists(r) {
-  if (r.type === 'group') {
+  if (r.type === 'group' || r.type === 'loop') {
     if (!Array.isArray(r.children)) r.children = []
     return [r.children]
   }
@@ -158,11 +159,19 @@ function addStep() {
       type: 'group', name: groupName.value || '分组', enabled: true, children: [], _uid: ++_seq,
     })
     groupName.value = ''
-  } else {
+  } else if (newType.value === 'if') {
     props.rows.push({
       type: 'if', enabled: true, _uid: ++_seq,
       config: { condition: { left: '', operator: 'eq', right: '' } },
       children: [], elseEnabled: false, elseChildren: [],
+    })
+  } else {
+    props.rows.push({
+      type: 'loop', enabled: true, _uid: ++_seq, children: [],
+      config: {
+        mode: 'count', count: 1, list_var: '', item_var: 'item', index_var: 'index',
+        max_iterations: 10, condition: { left: '', operator: 'eq', right: '' },
+      },
     })
   }
 }

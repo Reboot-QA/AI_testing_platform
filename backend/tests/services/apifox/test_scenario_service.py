@@ -221,3 +221,108 @@ def test_update_replaces_tree(db, make_case):
 
     assert [s.type for s in updated.steps] == ["group"]
     assert updated.steps[0].children[0].ref_case_id == case.id
+
+
+# ---------- S3 循环 loop：校验 + 往返 ----------
+def _loop(config: dict, children: list) -> StepIn:
+    return StepIn(type="loop", config=config, children=children)
+
+
+def test_loop_count_roundtrip(db, make_case):
+    body = make_case(name="body")
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s", steps=[_loop({"mode": "count", "count": 3}, [_case_step(body.id)])]
+        ),
+    )
+
+    loop = out.steps[0]
+    assert loop.type == "loop"
+    assert loop.config == {"mode": "count", "count": 3}
+    assert loop.children[0].ref_case_id == body.id
+
+
+def test_loop_list_roundtrip(db, make_case):
+    body = make_case(name="body")
+    cfg = {"mode": "list", "list_var": "items", "item_var": "it", "index_var": "i"}
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(name="s", steps=[_loop(cfg, [_case_step(body.id)])])
+    )
+
+    assert out.steps[0].config == cfg
+
+
+def test_loop_while_roundtrip(db, make_case):
+    body = make_case(name="body")
+    cfg = {"mode": "while", "condition": {"left": "{{x}}", "operator": "lt", "right": "3"},
+           "max_iterations": 10}
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(name="s", steps=[_loop(cfg, [_case_step(body.id)])])
+    )
+
+    assert out.steps[0].config["max_iterations"] == 10
+
+
+def test_loop_count_zero_is_rejected(db, make_case):
+    bad = _loop({"mode": "count", "count": 0}, [_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="循环次数"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_loop_list_missing_var_is_rejected(db, make_case):
+    bad = _loop({"mode": "list"}, [_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="list_var"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_loop_while_invalid_condition_is_rejected(db, make_case):
+    bad = _loop({"mode": "while", "max_iterations": 5}, [_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="condition"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_loop_while_nonpositive_maxiter_is_rejected(db, make_case):
+    bad = _loop(
+        {"mode": "while", "condition": {"left": "1", "operator": "eq", "right": "1"}, "max_iterations": 0},
+        [_case_step(make_case().id)],
+    )
+
+    with pytest.raises(ValueError, match="max_iterations"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_loop_invalid_mode_is_rejected(db, make_case):
+    bad = _loop({"mode": "forever"}, [_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="循环模式"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+def test_loop_nested_in_loop_roundtrip(db, make_case):
+    inner = make_case(name="inner")
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 2},
+                         [_loop({"mode": "count", "count": 3}, [_case_step(inner.id)])])],
+        ),
+    )
+
+    outer = out.steps[0]
+    nested = outer.children[0]
+    assert nested.type == "loop" and nested.config["count"] == 3
+    assert nested.children[0].ref_case_id == inner.id
+
+
+def test_loop_while_maxiter_over_limit_is_rejected(db, make_case):
+    bad = _loop(
+        {"mode": "while", "condition": {"left": "1", "operator": "eq", "right": "1"},
+         "max_iterations": 999999},
+        [_case_step(make_case().id)],
+    )
+
+    with pytest.raises(ValueError, match="max_iterations"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))

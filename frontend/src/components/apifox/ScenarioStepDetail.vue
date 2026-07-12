@@ -60,6 +60,11 @@
         <span class="sd-hint">条件不成立时执行 else 分支</span>
       </div>
     </template>
+
+    <div v-else-if="step.type === 'loop'" class="sd-field sd-field-top">
+      <span class="sd-label">循环</span>
+      <LoopEditor :config="loopConfig" />
+    </div>
   </div>
 </template>
 
@@ -71,6 +76,7 @@ import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { normalizeSpec } from '@/utils/apifoxSpec'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
+import LoopEditor from '@/components/apifox/LoopEditor.vue'
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -82,6 +88,8 @@ const props = defineProps({
 
 // config.condition 由 normalizeStep(加载)/addStep(新建) 保证存在；此处纯读取，不在 computed 里改 props
 const ifCondition = computed(() => props.step.config?.condition ?? { left: '', operator: 'eq', right: '' })
+// loop 的 config 由 addStep 初始化好全部字段，此处纯读取
+const loopConfig = computed(() => props.step.config ?? { mode: 'count', count: 1 })
 
 function onElseToggle(enabled) {
   if (enabled && !Array.isArray(props.step.elseChildren)) props.step.elseChildren = []
@@ -180,5 +188,9 @@ async function saveCase() {
 .sd-hint {
   font-size: 12px;
   color: var(--ax-text-placeholder);
+}
+
+.sd-field-top {
+  align-items: flex-start;
 }
 </style>
