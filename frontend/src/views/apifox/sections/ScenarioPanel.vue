@@ -91,12 +91,31 @@ async function runScenario() {
   }
 }
 
+// 后端契约树 → 前端工作态：条件(if)的 else 子步骤拆成 elseEnabled/elseChildren（便于两个独立拖放区）
+function normalizeSteps(steps) {
+  return (steps || []).map(normalizeStep)
+}
+function normalizeStep(s) {
+  const node = { ...s }
+  if (s.type === 'if') {
+    const kids = normalizeSteps(s.children)
+    const elseStep = kids.find((k) => k.type === 'else')
+    node.children = kids.filter((k) => k.type !== 'else')
+    node.elseEnabled = !!elseStep
+    node.elseChildren = elseStep ? elseStep.children || [] : []
+    if (!node.config?.condition) node.config = { condition: { left: '', operator: 'eq', right: '' } }
+  } else {
+    node.children = normalizeSteps(s.children)
+  }
+  return node
+}
+
 async function selectScenario(sid) {
   const s = await apifoxApi.getScenario(sid)
   form.id = s.id
   form.name = s.name
   form.description = s.description || ''
-  form.steps = s.steps || []
+  form.steps = normalizeSteps(s.steps || [])
 }
 
 async function addScenario() {
@@ -112,21 +131,33 @@ async function addScenario() {
 
 const MAX_STEP_DEPTH = 50
 
-function serializeStep(s, depth = 0) {
-  const children =
-    s.type === 'group' && depth < MAX_STEP_DEPTH
-      ? (s.children || []).map((c) => serializeStep(c, depth + 1))
-      : []
+function leafStep(overrides) {
   return {
-    type: s.type,
-    ref_case_id: s.ref_case_id ?? null,
-    ref_scenario_id: s.ref_scenario_id ?? null,
-    wait_ms: s.wait_ms ?? null,
-    config: s.config ?? null,
-    name: s.name ?? null,
-    enabled: s.enabled !== false,
-    children,
+    type: overrides.type,
+    ref_case_id: overrides.ref_case_id ?? null,
+    ref_scenario_id: overrides.ref_scenario_id ?? null,
+    wait_ms: overrides.wait_ms ?? null,
+    config: overrides.config ?? null,
+    name: overrides.name ?? null,
+    enabled: overrides.enabled !== false,
+    children: overrides.children || [],
   }
+}
+
+function serializeStep(s, depth = 0) {
+  const deep = depth < MAX_STEP_DEPTH
+  // 条件(if)：then=children，elseEnabled 时把 elseChildren 包成一个 else 子步骤（还原后端嵌套树）
+  if (s.type === 'if') {
+    const children = deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
+    if (s.elseEnabled) {
+      const elseChildren = deep ? (s.elseChildren || []).map((c) => serializeStep(c, depth + 1)) : []
+      children.push(leafStep({ type: 'else', children: elseChildren }))
+    }
+    return leafStep({ type: 'if', config: s.config, name: s.name, enabled: s.enabled, children })
+  }
+  const children =
+    s.type === 'group' && deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
+  return leafStep({ ...s, children })
 }
 
 async function saveScenario() {

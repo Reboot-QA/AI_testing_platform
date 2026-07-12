@@ -35,6 +35,17 @@ def _group(name, children, enabled=True):
     return StepIn(type="group", name=name, children=children, enabled=enabled)
 
 
+def _if(condition, then_children, else_children=None):
+    children = list(then_children)
+    if else_children is not None:
+        children.append(StepIn(type="else", children=else_children))
+    return StepIn(type="if", config={"condition": condition}, children=children)
+
+
+_TRUE = {"left": "1", "operator": "eq", "right": "1"}
+_FALSE = {"left": "1", "operator": "eq", "right": "2"}
+
+
 def _run(db, scenario_out):
     scenario = svc.repo.get_scenario(db, scenario_out.id)
     events = list(
@@ -119,3 +130,88 @@ def test_nested_group_depth_increments(db, make_case, stub_execute_case):
     _events, steps = _run(db, scenario_out)
 
     assert [s.depth for s in steps] == [2]
+
+
+def test_if_true_runs_then_skips_else(db, make_case, stub_execute_case):
+    then_c, else_c = make_case(name="THEN"), make_case(name="ELSE")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s", steps=[_if(_TRUE, [_case_step(then_c.id)], else_children=[_case_step(else_c.id)])]
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.case_name for s in steps] == ["THEN"]
+
+
+def test_if_false_runs_else_skips_then(db, make_case, stub_execute_case):
+    then_c, else_c = make_case(name="THEN"), make_case(name="ELSE")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s", steps=[_if(_FALSE, [_case_step(then_c.id)], else_children=[_case_step(else_c.id)])]
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.case_name for s in steps] == ["ELSE"]
+
+
+def test_if_false_without_else_runs_nothing(db, make_case, stub_execute_case):
+    then_c = make_case(name="THEN")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(name="s", steps=[_if(_FALSE, [_case_step(then_c.id)])]),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert steps == []
+
+
+def test_elif_via_nested_if(db, make_case, stub_execute_case):
+    outer_then, inner_then = make_case(name="OUTER"), make_case(name="INNER")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_if(_FALSE, [_case_step(outer_then.id)],
+                       else_children=[_if(_TRUE, [_case_step(inner_then.id)])])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.case_name for s in steps] == ["INNER"]
+
+
+def test_branch_steps_depth_is_if_depth_plus_one(db, make_case, stub_execute_case):
+    then_c = make_case(name="THEN")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(name="s", steps=[_if(_TRUE, [_case_step(then_c.id)])]),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.depth for s in steps] == [1]
+
+
+def test_runtime_extraction_drives_branch(db, make_case, monkeypatch):
+    setter, then_c = make_case(name="setter"), make_case(name="THEN")
+
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+        extracted = {"flag": "go"} if case.name == "setter" else {}
+        return "passed", {"method": endpoint.method, "url": endpoint.path,
+                          "extracted": extracted, "scoped": []}
+
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_case_step(setter.id),
+                   _if({"left": "{{flag}}", "operator": "eq", "right": "go"}, [_case_step(then_c.id)])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.case_name for s in steps] == ["setter", "THEN"]
