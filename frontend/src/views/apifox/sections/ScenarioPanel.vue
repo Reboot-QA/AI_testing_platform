@@ -155,8 +155,8 @@ function serializeStep(s, depth = 0) {
     }
     return leafStep({ type: 'if', config: s.config, name: s.name, enabled: s.enabled, children })
   }
-  const children =
-    s.type === 'group' && deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
+  const hasBody = s.type === 'group' || s.type === 'loop'
+  const children = hasBody && deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
   return leafStep({ ...s, children })
 }
 

@@ -20,11 +20,11 @@ from app.routers.apifox.scenario_schemas import (
     StepIn,
     StepOut,
 )
-from app.services.apifox.run_engine import CONDITION_OPERATORS
+from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
 
-VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else"}
-# 可嵌套子步骤的容器型步骤（后续片加 loop）
-CONTAINER_STEP_TYPES = {"group", "if", "else"}
+VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop"}
+# 可嵌套子步骤的容器型步骤
+CONTAINER_STEP_TYPES = {"group", "if", "else", "loop"}
 _MAX_NEST_DEPTH = 50
 
 
@@ -76,6 +76,28 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
         operator = str(condition.get("operator") or "")
         if operator not in CONDITION_OPERATORS:
             raise ValueError(f"条件操作符非法：{operator or '(空)'}")
+    elif step.type == "loop":
+        _validate_loop(step.config or {})
+
+
+def _validate_loop(config: dict) -> None:
+    mode = config.get("mode")
+    if mode == "count":
+        count = config.get("count")
+        if not isinstance(count, int) or isinstance(count, bool) or not 0 < count <= MAX_LOOP_ITERATIONS:
+            raise ValueError(f"循环次数必须为 1~{MAX_LOOP_ITERATIONS} 的整数")
+    elif mode == "list":
+        if not config.get("list_var"):
+            raise ValueError("列表循环必须指定 list_var（存 JSON 数组的变量名）")
+    elif mode == "while":
+        condition = config.get("condition")
+        if not isinstance(condition, dict) or str(condition.get("operator") or "") not in CONDITION_OPERATORS:
+            raise ValueError("while 循环必须配置合法 condition")
+        max_iter = config.get("max_iterations")
+        if not isinstance(max_iter, int) or isinstance(max_iter, bool) or not 0 < max_iter <= MAX_LOOP_ITERATIONS:
+            raise ValueError(f"while 循环 max_iterations 必须为 1~{MAX_LOOP_ITERATIONS} 的整数")
+    else:
+        raise ValueError("循环模式非法（count/list/while）")
 
 
 def _write_steps(

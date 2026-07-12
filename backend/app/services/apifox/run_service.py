@@ -65,6 +65,14 @@ def _count_steps(
             if else_step:
                 counts.append(_count_steps(db, by_parent, by_parent.get(else_step.id, []), depth + 1))
             total += max(counts)
+        elif step.type == "loop" and depth < _MAX_DEPTH:
+            body_count = _count_steps(db, by_parent, by_parent.get(step.id, []), depth + 1)
+            config = engine._loads(step.config, {}) or {}
+            # count 模式次数已知按 体量×次数 估；list/while 运行前未知，估 1 轮
+            if config.get("mode") == "count" and isinstance(config.get("count"), int):
+                total += body_count * min(config["count"], engine.MAX_LOOP_ITERATIONS)
+            else:
+                total += body_count
     return total
 
 
@@ -204,6 +212,51 @@ def _run_steps(
             )
         elif step.type == "if" and depth < _MAX_DEPTH:
             yield from _run_if_block(ctx, by_parent, step, total, env_vars, global_vars, depth)
+        elif step.type == "loop" and depth < _MAX_DEPTH:
+            yield from _run_loop_block(ctx, by_parent, step, total, env_vars, global_vars, depth)
+
+
+def _run_loop_block(
+    ctx: _RunContext, by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
+    step: ApifoxScenarioStep, total: int,
+    env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
+) -> Generator[Dict[str, Any], None, None]:
+    """循环步骤：按模式跑循环体（depth+1）。count/list 预算迭代序列并逐轮注入循环变量；
+    while 逐轮重求条件；三模式都受 MAX_LOOP_ITERATIONS 硬上限兜底。循环变量写 ctx.runtime。"""
+    config = engine._loads(step.config, {}) or {}
+    body = by_parent.get(step.id, [])
+    if config.get("mode") == "while":
+        condition = config.get("condition") or {}
+        try:
+            max_iter = min(int(config.get("max_iterations") or 0), engine.MAX_LOOP_ITERATIONS)
+        except (TypeError, ValueError):
+            max_iter = 0
+        n = 0
+        while n < max_iter:
+            cond_vars = engine.merge_vars(global_vars, env_vars, ctx.runtime)
+            passed, _msg = engine.evaluate_condition(condition, cond_vars)
+            if not passed:
+                break
+            n += 1
+            yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+        return
+    # 循环变量(index/item)按 loop 层级作用域：进入前快照、退出后恢复，
+    # 避免嵌套同名循环变量互相污染（内层跑完不该把 index 残留给外层后续步骤）
+    scoped = {str(config.get("index_var") or "index")}
+    if config.get("mode") == "list":
+        scoped.add(str(config.get("item_var") or "item"))
+    saved = {k: ctx.runtime[k] for k in scoped if k in ctx.runtime}
+    entry_vars = engine.merge_vars(global_vars, env_vars, ctx.runtime)
+    try:
+        for injection in engine.loop_iterations(config, entry_vars):
+            ctx.runtime.update(injection)
+            yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+    finally:
+        for k in scoped:
+            if k in saved:
+                ctx.runtime[k] = saved[k]
+            else:
+                ctx.runtime.pop(k, None)
 
 
 def _run_if_block(
