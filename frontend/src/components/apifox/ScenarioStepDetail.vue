@@ -126,6 +126,7 @@ import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { normalizeSpec } from '@/utils/apifoxSpec'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
 import LoopEditor from '@/components/apifox/LoopEditor.vue'
@@ -166,7 +167,7 @@ function onElseToggle(enabled) {
 const savingCase = ref(false)
 const caseForm = reactive({
   id: null, name: '', request_spec: null, variables: [], assertions: [], extracts: [],
-  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] },
+  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] }, version: 1,
 })
 
 const availableScenarios = computed(() =>
@@ -183,6 +184,7 @@ function applyCase(c) {
   caseForm.pre_scripts = c.pre_scripts || []
   caseForm.post_scripts = c.post_scripts || []
   caseForm.data_drive = c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+  caseForm.version = c.version ?? 1
 }
 
 async function loadCase(id) {
@@ -213,17 +215,38 @@ function onScenarioChange(id) {
   if (s) props.step.scenario_name = s.name
 }
 
+function caseFormPayload() {
+  return {
+    name: caseForm.name, request_spec: caseForm.request_spec, variables: caseForm.variables,
+    data_drive: caseForm.data_drive, assertions: caseForm.assertions, extracts: caseForm.extracts,
+    pre_scripts: caseForm.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+    post_scripts: caseForm.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+  }
+}
+
+async function doSaveCase() {
+  const updated = await apifoxApi.updateCase(caseForm.id, {
+    ...caseFormPayload(), expected_version: caseForm.version,
+  })
+  caseForm.version = updated.version
+  props.step.case_name = caseForm.name // 同步步骤显示名
+}
+
 async function saveCase() {
   savingCase.value = true
   try {
-    await apifoxApi.updateCase(caseForm.id, {
-      name: caseForm.name, request_spec: caseForm.request_spec, variables: caseForm.variables,
-      data_drive: caseForm.data_drive, assertions: caseForm.assertions, extracts: caseForm.extracts,
-      pre_scripts: caseForm.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-      post_scripts: caseForm.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    })
-    props.step.case_name = caseForm.name // 同步步骤显示名
+    await doSaveCase()
     ElMessage.success('用例已保存')
+  } catch (e) {
+    if (!isConflict(e)) throw e
+    await resolveSaveConflict({
+      reload: () => loadCase(caseForm.id),
+      overwrite: async () => {
+        const latest = await apifoxApi.getCase(caseForm.id)
+        caseForm.version = latest.version
+        await doSaveCase()
+      },
+    })
   } finally {
     savingCase.value = false
   }

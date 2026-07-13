@@ -17,6 +17,10 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // 409 乐观锁冲突：交由调用方自定义处理（提示放弃本地改动/重载），不弹通用错误
+    if (error.response?.status === 409) {
+      return Promise.reject(error)
+    }
     const msg = error.response?.data?.detail || error.message || '请求失败'
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
