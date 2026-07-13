@@ -40,8 +40,8 @@ def _dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
 
-def _count_case_steps(case: ApifoxEndpointCase) -> int:
-    return len(engine.data_drive_rows(case))
+def _count_case_steps(db: Session, case: ApifoxEndpointCase) -> int:
+    return len(engine.data_drive_rows(case, db))
 
 
 def _count_scenario_steps(db: Session, scenario_id: int, depth: int = 0) -> int:
@@ -64,7 +64,7 @@ def _count_steps(
         if step.type == "case" and step.ref_case_id:
             case = case_repo.get_case(db, step.ref_case_id)
             if case:
-                total += _count_case_steps(case)
+                total += _count_case_steps(db, case)
         elif step.type == "wait":
             total += 1
         elif step.type in ("break", "continue"):
@@ -161,7 +161,7 @@ def _run_case_block(
     extracts = case_repo.list_extracts(ctx.db, case.id)
     case_vars = engine.case_variable_rows(case)
 
-    for drive_row in engine.data_drive_rows(case):
+    for drive_row in engine.data_drive_rows(case, ctx.db):
         ctx.index += 1
         merged = engine.merge_vars(global_vars, env_vars, ctx.runtime, case_vars, drive_row or {})
         status: str
@@ -361,7 +361,7 @@ def iter_case_run(
     db: Session, case: ApifoxEndpointCase, environment: Optional[ApifoxEnvironment],
     triggered_by: str, user_id: Optional[int], parent_run_id: Optional[int] = None,
 ) -> Generator[Dict[str, Any], None, None]:
-    total = _count_case_steps(case)
+    total = _count_case_steps(db, case)
     run = _start_run(db, case.project_id, "case", case.id, case.name, environment, triggered_by,
                      total, parent_run_id)
     yield {"type": "start", "run_id": run.id, "total": total, "message": f"开始执行用例「{case.name}」"}

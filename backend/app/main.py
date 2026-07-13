@@ -1,6 +1,6 @@
-from contextlib import asynccontextmanager
 import logging
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -8,23 +8,35 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.bootstrap import run_bootstrap
 from app.config import settings
-from app.routers import auth, projects, requirements, testcases, users, api_automation, test_execution, logs, departments, assistant
+from app.request_logging import register_request_logging
+from app.routers import (
+    api_automation,
+    assistant,
+    auth,
+    departments,
+    logs,
+    projects,
+    requirements,
+    test_execution,
+    testcases,
+    users,
+)
 from app.routers import settings as settings_router
-from app.routers.apifox import router as apifox_router
-from app.routers.apifox import variables_router as apifox_variables_router
 from app.routers.apifox import cases_router as apifox_cases_router
 from app.routers.apifox import data_models_router as apifox_data_models_router
+from app.routers.apifox import datasets_router as apifox_datasets_router
+from app.routers.apifox import debug_router as apifox_debug_router
 from app.routers.apifox import global_params_router as apifox_global_params_router
 from app.routers.apifox import imports_router as apifox_imports_router
+from app.routers.apifox import router as apifox_router
 from app.routers.apifox import runs_router as apifox_runs_router
 from app.routers.apifox import scenarios_router as apifox_scenarios_router
 from app.routers.apifox import schedules_router as apifox_schedules_router
-from app.routers.apifox import debug_router as apifox_debug_router
 from app.routers.apifox import scripts_router as apifox_scripts_router
-from app.routers.apifox import workbench_router as apifox_workbench_router
 from app.routers.apifox import suites_router as apifox_suites_router
+from app.routers.apifox import variables_router as apifox_variables_router
+from app.routers.apifox import workbench_router as apifox_workbench_router
 from app.services.schedule_service import start_scheduler, stop_scheduler
-from app.request_logging import register_request_logging
 
 
 def setup_logging() -> None:
@@ -118,6 +130,7 @@ app.include_router(apifox_schedules_router, prefix="/api/v1")
 app.include_router(apifox_debug_router, prefix="/api/v1")
 app.include_router(apifox_workbench_router, prefix="/api/v1")
 app.include_router(apifox_suites_router, prefix="/api/v1")
+app.include_router(apifox_datasets_router, prefix="/api/v1")
 
 register_request_logging(app)
 

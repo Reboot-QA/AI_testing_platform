@@ -317,6 +317,12 @@ export const apifoxApi = {
   updateSuite: (sid, data) => request.put(`/apifox/suites/${sid}`, data),
   deleteSuite: (sid) => request.delete(`/apifox/suites/${sid}`),
 
+  listDatasets: (pid) => request.get(`/apifox/projects/${pid}/datasets`),
+  getDataset: (did) => request.get(`/apifox/datasets/${did}`),
+  createDataset: (pid, data) => request.post(`/apifox/projects/${pid}/datasets`, data),
+  updateDataset: (did, data) => request.put(`/apifox/datasets/${did}`, data),
+  deleteDataset: (did) => request.delete(`/apifox/datasets/${did}`),
+
   importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
   reorderTree: (pid, data) => request.post(`/apifox/projects/${pid}/tree/reorder`, data),
   debugSend: (pid, data) => request.post(`/apifox/projects/${pid}/debug`, data),

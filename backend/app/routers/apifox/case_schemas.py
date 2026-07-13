@@ -40,6 +40,9 @@ class DataDriveRow(BaseModel):
 
 class DataDrive(BaseModel):
     enabled: bool = False
+    # inline（内联行，默认）| dataset（引用项目级数据集，按其行迭代）
+    source: str = "inline"
+    dataset_id: Optional[int] = None
     rows: List[DataDriveRow] = Field(default_factory=list)
 
 
