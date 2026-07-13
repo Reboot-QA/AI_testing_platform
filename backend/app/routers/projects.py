@@ -118,6 +118,13 @@ def update_project(
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = get_accessible_project(db, project_id, current_user)
+    req_count = db.query(Requirement).filter(Requirement.project_id == project_id).count()
+    case_count = db.query(TestCase).filter(TestCase.project_id == project_id).count()
+    if req_count > 0 or case_count > 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"该项目下存在 {req_count} 条需求、{case_count} 条用例，请先清理全部关联需求和用例后再删除",
+        )
     purge_project_apifox(db, project.id)  # 先清空该项目的全部 apifox 数据（避免 FK 阻塞/孤儿）
     db.delete(project)
     db.commit()

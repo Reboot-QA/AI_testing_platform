@@ -34,7 +34,7 @@
             <div class="dz-h">删除项目</div>
             <div class="dz-desc">永久删除该项目及其全部接口 / 用例 / 场景 / 环境 / 数据模型 / 脚本 / 定时任务 / 运行记录等数据，不可恢复。</div>
           </div>
-          <el-button type="danger" @click="delProject">删除项目</el-button>
+          <el-button type="danger" :disabled="hasLinkedData" @click="delProject">删除项目</el-button>
         </div>
       </div>
     </div>
@@ -106,11 +106,16 @@ const scriptForm = reactive({ id: null, name: '', lang: 'javascript', content: '
 
 const savingBasic = ref(false)
 const basicForm = reactive({ name: '', description: '' })
+const requirementCount = ref(0)
+const testcaseCount = ref(0)
+const hasLinkedData = computed(() => requirementCount.value > 0 || testcaseCount.value > 0)
 
 async function loadBasic() {
   const p = await projectApi.get(pid.value)
   basicForm.name = p.name
   basicForm.description = p.description || ''
+  requirementCount.value = p.requirement_count || 0
+  testcaseCount.value = p.testcase_count || 0
 }
 
 async function saveBasic() {
@@ -124,6 +129,13 @@ async function saveBasic() {
 }
 
 async function delProject() {
+  if (hasLinkedData.value) {
+    ElMessage.warning(
+      `该项目下存在 ${requirementCount.value} 条需求、${testcaseCount.value} 条用例，请先清理全部关联需求和用例后再删除`
+    )
+    return
+  }
+
   await ElMessageBox.confirm(
     '将永久删除该项目及其全部接口/用例/场景/环境/数据模型/脚本/定时任务/运行记录等数据，不可恢复。确认删除？',
     '删除项目',

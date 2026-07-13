@@ -188,7 +188,7 @@ function formatProviderLabel(item) {
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
   const suffix = tags.length ? ` (${tags.join(' / ')})` : ''
-  return `${item.name} · ${item.model}${suffix}`
+  return `${item.name}${suffix}`
 }
 
 async function loadProjects() {
