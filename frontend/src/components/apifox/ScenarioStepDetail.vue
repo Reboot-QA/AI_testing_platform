@@ -65,6 +65,11 @@
       <span class="sd-label">循环</span>
       <LoopEditor :config="loopConfig" />
     </div>
+
+    <div v-else-if="step.type === 'break' || step.type === 'continue'" class="sd-field">
+      <span class="sd-label">说明</span>
+      <span class="sd-hint">{{ step.type === 'break' ? '立即跳出所在循环，不再执行后续轮次' : '跳过循环体剩余步骤，直接进入下一轮' }}</span>
+    </div>
   </div>
 </template>
 
