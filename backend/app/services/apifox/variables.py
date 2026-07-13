@@ -109,7 +109,10 @@ def data_drive_rows(
     if not drive.get("enabled"):
         return [None]
     if drive.get("source") == "dataset" and drive.get("dataset_id") and db is not None:
-        rows = _dataset_rows(db, case.project_id, int(drive["dataset_id"]))
+        try:
+            rows = _dataset_rows(db, case.project_id, int(drive["dataset_id"]))
+        except (ValueError, TypeError):
+            rows = []  # 非法 dataset_id（绕过 schema 的写入路径）兑现文档承诺：视为无行
     else:
         rows = drive.get("rows") or []
     result: List[Optional[Dict[str, str]]] = [

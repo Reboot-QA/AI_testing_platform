@@ -161,3 +161,15 @@ def test_data_drive_rows_dataset_without_db_falls_back_to_none(db):
     result = data_drive_rows(_ds_case(ds.id), None)
 
     assert result == [None]
+
+
+def test_data_drive_rows_dataset_non_int_id_degrades(db):
+    """评审：绕过 schema 的写入路径给出非法 dataset_id 时兑现文档承诺，视为无行不抛。"""
+    case = SimpleNamespace(
+        variables="", project_id=1,
+        data_drive=json.dumps({"enabled": True, "source": "dataset", "dataset_id": "abc"}),
+    )
+
+    result = data_drive_rows(case, db)
+
+    assert result == [None]
