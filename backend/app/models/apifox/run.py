@@ -14,7 +14,11 @@ class ApifoxRun(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
-    # case | scenario
+    # 套件运行的父运行 id；套件子运行(各用例/场景)指向它，单跑为 NULL
+    parent_run_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("apifox_runs.id"), nullable=True, index=True
+    )
+    # case | scenario | suite
     target_type: Mapped[str] = mapped_column(String(20))
     target_id: Mapped[int] = mapped_column(Integer)
     target_name: Mapped[str] = mapped_column(String(200), default="")

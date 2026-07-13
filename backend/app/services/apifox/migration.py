@@ -73,6 +73,19 @@ def migrate_apifox_scenario_step_tree(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_run_parent(db: Session) -> None:
+    """apifox_runs 加 parent_run_id（套件运行的父运行 id，供父+子两级报告）。"""
+    inspector = inspect(engine)
+    if "apifox_runs" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_runs")}
+    if "parent_run_id" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_runs ADD COLUMN parent_run_id INTEGER"))
+    db.expire_all()
+
+
 def migrate_apifox_run_step_depth(db: Session) -> None:
     """apifox_run_steps 加 depth（步骤在场景树中的嵌套深度，供报告缩进）。"""
     inspector = inspect(engine)
