@@ -22,9 +22,11 @@ from app.routers.apifox.scenario_schemas import (
 )
 from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
 
-VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop"}
+VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue"}
 # 可嵌套子步骤的容器型步骤
 CONTAINER_STEP_TYPES = {"group", "if", "else", "loop"}
+# 仅在循环体内（loop 祖先）合法的流程控制步骤
+LOOP_ONLY_STEP_TYPES = {"break", "continue"}
 _MAX_NEST_DEPTH = 50
 
 
@@ -107,8 +109,12 @@ def _write_steps(
     parent_id: Optional[int] = None,
     depth: int = 0,
     parent_type: Optional[str] = None,
+    in_loop: bool = False,
 ) -> None:
-    """递归落库步骤树：先写父行拿到 id，再以其为 parent_id 写子步骤。"""
+    """递归落库步骤树：先写父行拿到 id，再以其为 parent_id 写子步骤。
+
+    in_loop 表示祖先链是否含 loop，用于校验 break/continue 只落在循环体内。
+    """
     if depth > _MAX_NEST_DEPTH:
         raise ValueError("步骤嵌套层级过深")
     else_count = 0
@@ -119,6 +125,8 @@ def _write_steps(
             else_count += 1
             if else_count > 1:
                 raise ValueError("一个条件(if)步骤至多一个 else 分支")
+        if s.type in LOOP_ONLY_STEP_TYPES and not in_loop:
+            raise ValueError("break/continue 步骤只能放在循环(loop)体内")
         _validate_step(db, scenario, s)
         row = ApifoxScenarioStep(
             scenario_id=scenario.id,
@@ -135,7 +143,8 @@ def _write_steps(
         repo.add(db, row)  # flush 后 row.id 可用作子步骤 parent_id
         if s.children:
             _write_steps(
-                db, scenario, s.children, parent_id=row.id, depth=depth + 1, parent_type=s.type
+                db, scenario, s.children, parent_id=row.id, depth=depth + 1, parent_type=s.type,
+                in_loop=in_loop or s.type == "loop",
             )
 
 
