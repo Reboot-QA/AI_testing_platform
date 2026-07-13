@@ -22,7 +22,7 @@ from app.routers.apifox.scenario_schemas import (
 )
 from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
 
-VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue"}
+VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue", "db"}
 # 可嵌套子步骤的容器型步骤
 CONTAINER_STEP_TYPES = {"group", "if", "else", "loop"}
 # 仅在循环体内（loop 祖先）合法的流程控制步骤
@@ -80,6 +80,12 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
             raise ValueError(f"条件操作符非法：{operator or '(空)'}")
     elif step.type == "loop":
         _validate_loop(step.config or {})
+    elif step.type == "db":
+        config = step.config or {}
+        if not config.get("connection_id"):
+            raise ValueError("数据库步骤必须指定数据库连接")
+        if not str(config.get("sql") or "").strip():
+            raise ValueError("数据库步骤必须填写 SQL")
 
 
 def _validate_loop(config: dict) -> None:

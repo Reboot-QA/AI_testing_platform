@@ -13,6 +13,7 @@ from app.repositories.apifox import database_conn_repo as repo
 from app.repositories.apifox import variable_repo
 from app.routers.apifox.database_schemas import DatabaseCreate, DatabaseOut, DatabaseUpdate
 from app.services.apifox import database_conn_service as service
+from app.services.apifox import db_executor
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·数据库连接"])
@@ -59,6 +60,13 @@ def update_database(
         return service.update_database(db, conn, data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/env-databases/{cid}/test")
+def test_database(cid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    conn = _conn_checked(db, cid, user)
+    result = db_executor.test_connection(conn)
+    return {"passed": result["passed"], "message": result.get("error") or "连接成功"}
 
 
 @router.delete("/env-databases/{cid}")
