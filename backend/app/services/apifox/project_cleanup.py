@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.case import ApifoxCaseAssertion, ApifoxCaseExtract, ApifoxEndpointCase
 from app.models.apifox.data_model import ApifoxSchema
+from app.models.apifox.dataset import ApifoxDataset, ApifoxDatasetRow
 from app.models.apifox.endpoint import (
     ApifoxEndpoint,
     ApifoxEndpointAssertion,
@@ -32,6 +33,7 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     run_ids = select(ApifoxRun.id).where(ApifoxRun.project_id == project_id)
     scen_ids = select(ApifoxScenario.id).where(ApifoxScenario.project_id == project_id)
     suite_ids = select(ApifoxSuite.id).where(ApifoxSuite.project_id == project_id)
+    dataset_ids = select(ApifoxDataset.id).where(ApifoxDataset.project_id == project_id)
     case_ids = select(ApifoxEndpointCase.id).where(ApifoxEndpointCase.project_id == project_id)
     ep_ids = select(ApifoxEndpoint.id).where(ApifoxEndpoint.project_id == project_id)
     env_ids = select(ApifoxEnvironment.id).where(ApifoxEnvironment.project_id == project_id)
@@ -52,6 +54,9 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     # 测试套件
     wipe(ApifoxSuiteItem, ApifoxSuiteItem.suite_id.in_(suite_ids))
     wipe(ApifoxSuite, ApifoxSuite.project_id == project_id)
+    # 项目级数据集
+    wipe(ApifoxDatasetRow, ApifoxDatasetRow.dataset_id.in_(dataset_ids))
+    wipe(ApifoxDataset, ApifoxDataset.project_id == project_id)
     # 场景
     wipe(ApifoxScenarioStep, ApifoxScenarioStep.scenario_id.in_(scen_ids))
     wipe(ApifoxScenario, ApifoxScenario.project_id == project_id)
