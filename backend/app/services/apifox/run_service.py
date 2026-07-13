@@ -17,11 +17,13 @@ from app.models.apifox.suite import ApifoxSuite, ApifoxSuiteItem
 from app.models.apifox.variable import ApifoxEnvironment
 from app.repositories.apifox import (
     case_repo,
+    database_conn_repo,
     endpoint_repo,
     run_repo,
     scenario_repo,
     suite_repo,
 )
+from app.services.apifox import db_executor
 from app.services.apifox import run_engine as engine
 
 MAX_WAIT_MS = 60000
@@ -68,6 +70,8 @@ def _count_steps(
         elif step.type == "wait":
             total += 1
         elif step.type in ("break", "continue"):
+            total += 1
+        elif step.type == "db":
             total += 1
         elif step.type == "scenario" and step.ref_scenario_id:
             total += _count_scenario_steps(db, step.ref_scenario_id, depth + 1)
@@ -188,6 +192,94 @@ def _run_case_block(
         yield _step_event(ctx, total, status, detail, name)
 
 
+def _extract_db_row(
+    config: Dict[str, Any], first_row: Dict[str, Any], ctx: _RunContext
+) -> tuple[List[Dict[str, Any]], List[Dict[str, str]]]:
+    """按提取配置从结果首行取列到变量；返回 (extract_results, scoped)。"""
+    extract_results: List[Dict[str, Any]] = []
+    scoped: List[Dict[str, str]] = []
+    for ex in config.get("extracts") or []:
+        var_name = str(ex.get("var_name") or "").strip()
+        column = str(ex.get("column") or "").strip()
+        scope = ex.get("scope") or "temporary"
+        if not var_name or not column:
+            continue
+        if column in first_row:
+            raw = first_row[column]
+            value = "" if raw is None else str(raw)
+            ctx.runtime[var_name] = value
+            extract_results.append({"var_name": var_name, "column": column, "scope": scope,
+                                    "passed": True, "value": value, "message": ""})
+            if scope in ("environment", "global"):
+                scoped.append({"key": var_name, "value": value, "scope": scope})
+        else:
+            extract_results.append({"var_name": var_name, "column": column, "scope": scope,
+                                    "passed": False, "value": "", "message": f"结果集无列「{column}」"})
+    return extract_results, scoped
+
+
+def _run_db_step(
+    ctx: _RunContext, step: ApifoxScenarioStep, total: int,
+    env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
+) -> Generator[Dict[str, Any], None, None]:
+    """数据库操作步骤：解析连接(须属当前环境)→{{var}}插值 SQL→执行→首行提取变量→落库。"""
+    ctx.index += 1
+    config = engine._loads(step.config, {}) or {}
+    label = step.name or "数据库操作"
+    merged = engine.merge_vars(global_vars, env_vars, ctx.runtime)
+    sql = engine.apply_vars(config.get("sql") or "", merged)
+
+    conn = None
+    if ctx.environment and config.get("connection_id"):
+        try:  # 防旧脏数据/绕过保存校验的非法 connection_id 抛异常卡 running
+            conn_id = int(config["connection_id"])
+        except (TypeError, ValueError):
+            conn_id = None
+        if conn_id is not None:
+            candidate = database_conn_repo.get(ctx.db, conn_id)
+            if candidate and candidate.environment_id == ctx.environment.id:
+                conn = candidate
+
+    if conn is None:
+        detail = {"method": "SQL", "url": "", "request_body": sql, "duration_ms": 0.0,
+                  "error_message": "数据库连接不存在或不属于当前环境（需先配置连接并选中环境）"}
+        ctx.failed += 1
+        _record_step(ctx, "db", "failed", detail, case_name=label, depth=depth)
+        yield _step_event(ctx, total, "failed", detail, label)
+        return
+
+    started = time.perf_counter()
+    result = db_executor.run_sql(conn, sql)
+    duration_ms = (time.perf_counter() - started) * 1000
+
+    extract_results: List[Dict[str, Any]] = []
+    scoped: List[Dict[str, str]] = []
+    if result["passed"]:
+        first_row = result["rows"][0] if result["rows"] else {}
+        extract_results, scoped = _extract_db_row(config, first_row, ctx)
+
+    status = "passed" if result["passed"] else "failed"
+    detail = {
+        "method": "SQL", "url": conn.name, "duration_ms": duration_ms,
+        "request_body": sql,
+        "response_body": _dumps({"columns": result["columns"], "rows": result["rows"],
+                                 "rowcount": result["rowcount"]}),
+        "extract_results": extract_results,
+        "error_message": result.get("error"),
+    }
+    if scoped:
+        engine.persist_scoped_extracts(
+            ctx.db, ctx.run.project_id,
+            ctx.environment.id if ctx.environment else None, ctx.user_id, scoped,
+        )
+    if status == "passed":
+        ctx.passed += 1
+    else:
+        ctx.failed += 1
+    _record_step(ctx, "db", status, detail, case_name=label, depth=depth)
+    yield _step_event(ctx, total, status, detail, label)
+
+
 def _run_scenario_block(
     ctx: _RunContext, scenario_id: int, total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int = 0,
@@ -239,6 +331,8 @@ def _run_steps(
             yield from _run_if_block(ctx, by_parent, step, total, env_vars, global_vars, depth)
         elif step.type == "loop" and depth < _MAX_DEPTH:
             yield from _run_loop_block(ctx, by_parent, step, total, env_vars, global_vars, depth)
+        elif step.type == "db":
+            yield from _run_db_step(ctx, step, total, env_vars, global_vars, depth)
 
 
 def _run_loop_block(

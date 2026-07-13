@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.case import ApifoxCaseAssertion, ApifoxCaseExtract, ApifoxEndpointCase
 from app.models.apifox.data_model import ApifoxSchema
+from app.models.apifox.database_conn import ApifoxEnvironmentDatabase
 from app.models.apifox.dataset import ApifoxDataset, ApifoxDatasetRow
 from app.models.apifox.endpoint import (
     ApifoxEndpoint,
@@ -81,6 +82,7 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     wipe(ApifoxEnvironmentVarLocal, ApifoxEnvironmentVarLocal.environment_variable_id.in_(envvar_ids))
     wipe(ApifoxEnvironmentVariable, ApifoxEnvironmentVariable.environment_id.in_(env_ids))
     wipe(ApifoxEnvironmentServer, ApifoxEnvironmentServer.environment_id.in_(env_ids))
+    wipe(ApifoxEnvironmentDatabase, ApifoxEnvironmentDatabase.environment_id.in_(env_ids))
     wipe(ApifoxEnvironment, ApifoxEnvironment.project_id == project_id)
     # 全局变量 / 参数
     wipe(ApifoxGlobalVarLocal, ApifoxGlobalVarLocal.global_variable_id.in_(gvar_ids))

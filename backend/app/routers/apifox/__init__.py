@@ -1,5 +1,6 @@
 from app.routers.apifox.cases import router as cases_router
 from app.routers.apifox.data_models import router as data_models_router
+from app.routers.apifox.databases import router as databases_router
 from app.routers.apifox.datasets import router as datasets_router
 from app.routers.apifox.debug import router as debug_router
 from app.routers.apifox.endpoints import router
@@ -28,4 +29,5 @@ __all__ = [
     "workbench_router",
     "suites_router",
     "datasets_router",
+    "databases_router",
 ]

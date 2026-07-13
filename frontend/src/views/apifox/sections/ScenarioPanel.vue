@@ -38,6 +38,7 @@
           :scenarios="scenarios"
           :current-scenario-id="form.id"
           :scripts="scripts"
+          :databases="databases"
         />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
@@ -47,7 +48,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
@@ -62,6 +63,7 @@ const store = useWorkspaceStore()
 const scenarios = ref([])
 const projectCases = ref([])
 const scripts = ref([])
+const databases = ref([])
 const saving = ref(false)
 const running = ref(false)
 const runEvents = ref([])
@@ -78,6 +80,14 @@ async function loadProjectCases() {
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
 }
+
+async function loadDatabases() {
+  databases.value = store.currentEnvironmentId
+    ? await apifoxApi.listDatabases(store.currentEnvironmentId)
+    : []
+}
+// 数据库连接按环境划分：切环境时重载
+watch(() => store.currentEnvironmentId, loadDatabases)
 
 async function runScenario() {
   runEvents.value = []
@@ -189,6 +199,7 @@ onMounted(async () => {
   await loadScenarios()
   await loadProjectCases()
   await loadScripts()
+  await loadDatabases()
 })
 </script>
 

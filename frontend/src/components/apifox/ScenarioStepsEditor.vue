@@ -31,6 +31,7 @@
           <el-option label="循环" value="loop" />
           <el-option label="跳出循环" value="break" />
           <el-option label="跳过本轮" value="continue" />
+          <el-option label="数据库操作" value="db" />
         </el-select>
         <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
           <el-option
@@ -60,6 +61,7 @@
         :scenarios="scenarios"
         :current-scenario-id="currentScenarioId"
         :scripts="scripts"
+        :databases="databases"
       />
       <el-empty v-else description="点击左侧步骤编辑详情" :image-size="60" />
     </div>
@@ -78,6 +80,7 @@ const props = defineProps({
   scenarios: { type: Array, default: () => [] },
   currentScenarioId: { type: Number, default: null },
   scripts: { type: Array, default: () => [] },
+  databases: { type: Array, default: () => [] },
 })
 
 let _seq = 0
@@ -170,6 +173,11 @@ function addStep() {
     })
   } else if (newType.value === 'break' || newType.value === 'continue') {
     props.rows.push({ type: newType.value, enabled: true, _uid: ++_seq })
+  } else if (newType.value === 'db') {
+    props.rows.push({
+      type: 'db', enabled: true, name: '数据库操作', _uid: ++_seq,
+      config: { connection_id: null, sql: '', extracts: [] },
+    })
   } else {
     props.rows.push({
       type: 'loop', enabled: true, _uid: ++_seq, children: [],

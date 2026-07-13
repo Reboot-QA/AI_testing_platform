@@ -323,6 +323,12 @@ export const apifoxApi = {
   updateDataset: (did, data) => request.put(`/apifox/datasets/${did}`, data),
   deleteDataset: (did) => request.delete(`/apifox/datasets/${did}`),
 
+  listDatabases: (eid) => request.get(`/apifox/environments/${eid}/databases`),
+  createDatabase: (eid, data) => request.post(`/apifox/environments/${eid}/databases`, data),
+  updateDatabase: (cid, data) => request.put(`/apifox/env-databases/${cid}`, data),
+  deleteDatabase: (cid) => request.delete(`/apifox/env-databases/${cid}`),
+  testDatabase: (cid) => request.post(`/apifox/env-databases/${cid}/test`),
+
   importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
   reorderTree: (pid, data) => request.post(`/apifox/projects/${pid}/tree/reorder`, data),
   debugSend: (pid, data) => request.post(`/apifox/projects/${pid}/debug`, data),
