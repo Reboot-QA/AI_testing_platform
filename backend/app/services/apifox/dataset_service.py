@@ -39,7 +39,7 @@ def _require_unique_name(db: Session, project_id: int, name: str, exclude_id: in
 def _dataset_ref_counts(db: Session, project_id: int) -> Dict[int, int]:
     """项目内各数据集被多少用例数据驱动引用（一次扫描全量用例的 data_drive）。"""
     counts: Dict[int, int] = {}
-    for case, _endpoint in case_repo.list_project_cases(db, project_id):
+    for case in case_repo.list_cases_by_project(db, project_id):
         drive = _loads(case.data_drive, {})
         if drive.get("source") == "dataset" and drive.get("dataset_id"):
             did = int(drive["dataset_id"])

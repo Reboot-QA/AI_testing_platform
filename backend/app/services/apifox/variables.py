@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.apifox.case import ApifoxEndpointCase
-from app.repositories.apifox import variable_repo
+from app.repositories.apifox import dataset_repo, variable_repo
 
 VARIABLE_PATTERN = re.compile(r"\{\{([^}]+)\}\}")
 
@@ -87,16 +87,34 @@ def case_variable_rows(case: ApifoxEndpointCase) -> Dict[str, str]:
     return result
 
 
-def data_drive_rows(case: ApifoxEndpointCase) -> List[Optional[Dict[str, str]]]:
-    """返回执行迭代列表：未启用数据驱动 → [None]；启用 → 各 enabled 行的 values。"""
+def _dataset_rows(db: Session, project_id: int, dataset_id: int) -> List[Dict[str, Any]]:
+    """拉数据集行（校验属本项目，跨项目忽略）；转成与内联行同构的 {values, enabled}。"""
+    dataset = dataset_repo.get_dataset(db, dataset_id)
+    if not dataset or dataset.project_id != project_id:
+        return []
+    return [
+        {"values": _loads(r.values, {}), "enabled": r.enabled}
+        for r in dataset_repo.list_rows(db, dataset_id)
+    ]
+
+
+def data_drive_rows(
+    case: ApifoxEndpointCase, db: Optional[Session] = None
+) -> List[Optional[Dict[str, str]]]:
+    """返回执行迭代列表：未启用 → [None]；内联 → 各 enabled 行；数据集源 → 数据集各 enabled 行。
+
+    source=dataset 需传 db 解析项目级数据集（缺 db 或数据集不存在则视为无行）。
+    """
     drive = _loads(case.data_drive, {})
-    result: List[Optional[Dict[str, str]]] = []
-    if drive.get("enabled"):
-        for row in drive.get("rows") or []:
-            if row.get("enabled") is not False:
-                result.append(
-                    {str(k): str(v or "") for k, v in (row.get("values") or {}).items()}
-                )
-    if not result:
-        result.append(None)
-    return result
+    if not drive.get("enabled"):
+        return [None]
+    if drive.get("source") == "dataset" and drive.get("dataset_id") and db is not None:
+        rows = _dataset_rows(db, case.project_id, int(drive["dataset_id"]))
+    else:
+        rows = drive.get("rows") or []
+    result: List[Optional[Dict[str, str]]] = [
+        {str(k): str(v or "") for k, v in (row.get("values") or {}).items()}
+        for row in rows
+        if row.get("enabled") is not False
+    ]
+    return result or [None]
