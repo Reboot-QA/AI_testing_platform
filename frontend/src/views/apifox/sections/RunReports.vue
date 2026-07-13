@@ -11,8 +11,8 @@
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column label="目标" min-width="180">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.target_type === 'scenario' ? 'info' : 'success'">
-            {{ row.target_type === 'scenario' ? '场景' : '用例' }}
+          <el-tag size="small" :type="targetTag(row.target_type)">
+            {{ targetTypeLabel(row.target_type) }}
           </el-tag>
           {{ row.target_name }}
         </template>
@@ -45,14 +45,41 @@
 
     <el-drawer v-model="drawerVisible" :title="`运行 #${detail?.id} · ${detail?.target_name || ''}`" size="60%">
       <template v-if="detail">
+        <el-button v-if="parentDetail" link type="primary" class="back-btn" @click="backToParent">
+          ← 返回套件报告
+        </el-button>
+
         <el-descriptions :column="4" size="small" border class="summary">
           <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
           <el-descriptions-item label="通过率">{{ detail.pass_rate }}%</el-descriptions-item>
-          <el-descriptions-item label="通过/失败">{{ detail.passed_count }}/{{ detail.failed_count }}</el-descriptions-item>
+          <el-descriptions-item :label="isSuite ? '通过/失败(项)' : '通过/失败'">{{ detail.passed_count }}/{{ detail.failed_count }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ Math.round(detail.duration_ms || 0) }}ms</el-descriptions-item>
         </el-descriptions>
 
-        <el-collapse>
+        <el-table v-if="isSuite" :data="detail.children" size="small" border @row-click="openChild">
+          <el-table-column label="套件项" min-width="200">
+            <template #default="{ row }">
+              <el-tag size="small" :type="targetTag(row.target_type)">{{ targetTypeLabel(row.target_type) }}</el-tag>
+              {{ row.target_name }}
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="90">
+            <template #default="{ row }">
+              <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="通过率" width="110">
+            <template #default="{ row }">
+              {{ row.pass_rate != null ? row.pass_rate + '%' : '-' }}
+              <span class="sub">({{ row.passed_count }}/{{ row.total_count }})</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="耗时" width="90">
+            <template #default="{ row }">{{ row.duration_ms != null ? Math.round(row.duration_ms) + 'ms' : '-' }}</template>
+          </el-table-column>
+        </el-table>
+
+        <el-collapse v-else>
           <el-collapse-item v-for="s in detail.steps" :key="s.id" :name="s.id">
             <template #title>
               <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
@@ -127,10 +154,15 @@ const envName = (id) => (id == null ? '-' : store.environments.find((e) => e.id 
 
 const runs = ref([])
 const detail = ref(null)
+const parentDetail = ref(null)
 const drawerVisible = ref(false)
+
+const isSuite = computed(() => detail.value?.target_type === 'suite')
 
 const statusLabel = (s) => ({ running: '执行中', passed: '通过', failed: '失败' }[s] || s)
 const statusTag = (s) => ({ running: 'warning', passed: 'success', failed: 'danger' }[s] || 'info')
+const targetTypeLabel = (t) => (t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例')
+const targetTag = (t) => (t === 'scenario' ? 'info' : t === 'suite' ? 'primary' : 'success')
 
 function formatTime(value) {
   return value ? new Date(value).toLocaleString('zh-CN') : '-'
@@ -141,8 +173,19 @@ async function loadRuns() {
 }
 
 async function openDetail(row) {
+  parentDetail.value = null
   detail.value = await apifoxApi.getRun(row.id)
   drawerVisible.value = true
+}
+
+async function openChild(row) {
+  parentDetail.value = detail.value
+  detail.value = await apifoxApi.getRun(row.id)
+}
+
+function backToParent() {
+  detail.value = parentDetail.value
+  parentDetail.value = null
 }
 
 onMounted(loadRuns)
@@ -165,6 +208,10 @@ onMounted(loadRuns)
   color: var(--ax-text-placeholder);
   font-size: 12px;
   margin-left: 6px;
+}
+
+.back-btn {
+  margin-bottom: 10px;
 }
 
 .summary {

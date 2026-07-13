@@ -308,6 +308,12 @@ export const apifoxApi = {
   updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
 
+  listSuites: (pid) => request.get(`/apifox/projects/${pid}/suites`),
+  getSuite: (sid) => request.get(`/apifox/suites/${sid}`),
+  createSuite: (pid, data) => request.post(`/apifox/projects/${pid}/suites`, data),
+  updateSuite: (sid, data) => request.put(`/apifox/suites/${sid}`, data),
+  deleteSuite: (sid) => request.delete(`/apifox/suites/${sid}`),
+
   importOpenapi: (pid, data) => request.post(`/apifox/projects/${pid}/import/openapi`, data),
   reorderTree: (pid, data) => request.post(`/apifox/projects/${pid}/tree/reorder`, data),
   debugSend: (pid, data) => request.post(`/apifox/projects/${pid}/debug`, data),
@@ -324,6 +330,8 @@ export const apifoxApi = {
     apifoxRunStream(`/api/v1/apifox/cases/${cid}/run/stream`, environmentId, onEvent, options),
   runScenarioStream: (sid, environmentId, onEvent, options = {}) =>
     apifoxRunStream(`/api/v1/apifox/scenarios/${sid}/run/stream`, environmentId, onEvent, options),
+  runSuiteStream: (sid, environmentId, onEvent, options = {}) =>
+    apifoxRunStream(`/api/v1/apifox/suites/${sid}/run/stream`, environmentId, onEvent, options),
 }
 
 function apifoxRunStream(url, environmentId, onEvent, options = {}) {
