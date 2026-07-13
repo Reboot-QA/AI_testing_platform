@@ -11,8 +11,8 @@
       <el-table-column label="名称" prop="name" min-width="140" />
       <el-table-column label="目标" min-width="180">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.target_type === 'scenario' ? 'warning' : 'success'">
-            {{ row.target_type === 'scenario' ? '场景' : '用例' }}
+          <el-tag size="small" :type="targetTagType(row.target_type)">
+            {{ targetTypeLabel(row.target_type) }}
           </el-tag>
           <span class="target-name">{{ row.target_name }}</span>
         </template>
@@ -62,6 +62,7 @@
           <el-radio-group v-model="form.target_type" @change="form.target_id = null">
             <el-radio value="case">用例</el-radio>
             <el-radio value="scenario">场景</el-radio>
+            <el-radio value="suite">套件</el-radio>
           </el-radio-group>
         </el-form-item>
         <el-form-item label="执行目标">
@@ -128,6 +129,7 @@ const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '�
 const schedules = ref([])
 const cases = ref([])
 const scenarios = ref([])
+const suites = ref([])
 const environments = ref([])
 const dialogVisible = ref(false)
 const editing = ref(null)
@@ -141,26 +143,36 @@ const form = reactive({
   schedule_type: 'daily', week_day: 0, interval_minutes: 60, enabled: true,
 })
 
-const targetOptions = computed(() =>
-  form.target_type === 'scenario'
-    ? scenarios.value.map((s) => ({ id: s.id, label: s.name }))
-    : cases.value.map((c) => ({ id: c.id, label: `[${c.endpoint_method}] ${c.name}` }))
-)
+const targetOptions = computed(() => {
+  if (form.target_type === 'scenario') return scenarios.value.map((s) => ({ id: s.id, label: s.name }))
+  if (form.target_type === 'suite') return suites.value.map((s) => ({ id: s.id, label: s.name }))
+  return cases.value.map((c) => ({ id: c.id, label: `[${c.endpoint_method}] ${c.name}` }))
+})
 
 function fmt(t) {
   return t ? String(t).replace('T', ' ').slice(0, 16) : ''
 }
 
+function targetTypeLabel(t) {
+  return t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例'
+}
+
+function targetTagType(t) {
+  return t === 'scenario' ? 'warning' : t === 'suite' ? 'primary' : 'success'
+}
+
 async function loadAll() {
-  const [sch, cs, scn, envs] = await Promise.all([
+  const [sch, cs, scn, sui, envs] = await Promise.all([
     apifoxApi.listSchedules(pid.value),
     apifoxApi.listProjectCases(pid.value),
     apifoxApi.listScenarios(pid.value),
+    apifoxApi.listSuites(pid.value),
     apifoxApi.listEnvironments(pid.value),
   ])
   schedules.value = sch
   cases.value = cs
   scenarios.value = scn
+  suites.value = sui
   environments.value = envs
 }
 

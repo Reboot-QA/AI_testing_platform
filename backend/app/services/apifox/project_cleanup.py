@@ -16,6 +16,7 @@ from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.schedule import ApifoxSchedule
 from app.models.apifox.script import ApifoxCaseScript, ApifoxEndpointScript, ApifoxScript
+from app.models.apifox.suite import ApifoxSuite, ApifoxSuiteItem
 from app.models.apifox.variable import (
     ApifoxEnvironment,
     ApifoxEnvironmentServer,
@@ -30,6 +31,7 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     """按 FK 依赖倒序清空该项目所有 apifox 表数据。用批量删，不 commit。"""
     run_ids = select(ApifoxRun.id).where(ApifoxRun.project_id == project_id)
     scen_ids = select(ApifoxScenario.id).where(ApifoxScenario.project_id == project_id)
+    suite_ids = select(ApifoxSuite.id).where(ApifoxSuite.project_id == project_id)
     case_ids = select(ApifoxEndpointCase.id).where(ApifoxEndpointCase.project_id == project_id)
     ep_ids = select(ApifoxEndpoint.id).where(ApifoxEndpoint.project_id == project_id)
     env_ids = select(ApifoxEnvironment.id).where(ApifoxEnvironment.project_id == project_id)
@@ -41,9 +43,15 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     def wipe(model, cond) -> None:
         db.query(model).filter(cond).delete(synchronize_session=False)
 
-    # 运行记录
+    # 运行记录（先断 parent_run_id 自引用再删，避免 InnoDB 逐行 FK 检查报错，同 ApifoxFolder 范式）
+    db.query(ApifoxRun).filter(ApifoxRun.project_id == project_id).update(
+        {ApifoxRun.parent_run_id: None}, synchronize_session=False
+    )
     wipe(ApifoxRunStep, ApifoxRunStep.run_id.in_(run_ids))
     wipe(ApifoxRun, ApifoxRun.project_id == project_id)
+    # 测试套件
+    wipe(ApifoxSuiteItem, ApifoxSuiteItem.suite_id.in_(suite_ids))
+    wipe(ApifoxSuite, ApifoxSuite.project_id == project_id)
     # 场景
     wipe(ApifoxScenarioStep, ApifoxScenarioStep.scenario_id.in_(scen_ids))
     wipe(ApifoxScenario, ApifoxScenario.project_id == project_id)

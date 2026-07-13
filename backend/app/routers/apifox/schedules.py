@@ -3,7 +3,7 @@
 router 仅参数校验与编排；增删改后一律 refresh_schedule(force_from_now=True) 写 next_run_at。
 """
 
-from typing import List
+from typing import Any, List
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -12,7 +12,13 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.apifox.schedule import ApifoxSchedule
 from app.models.user import User
-from app.repositories.apifox import case_repo, scenario_repo, schedule_repo, variable_repo
+from app.repositories.apifox import (
+    case_repo,
+    scenario_repo,
+    schedule_repo,
+    suite_repo,
+    variable_repo,
+)
 from app.routers.apifox.schedule_schemas import ScheduleCreate, ScheduleOut, ScheduleUpdate
 from app.services.apifox import schedule_service
 from app.services.project_access_service import get_accessible_project
@@ -23,13 +29,16 @@ router = APIRouter(prefix="/apifox", tags=["接口自动化v2·定时任务"])
 def _resolve_target(db: Session, project_id: int, target_type: str, target_id: int) -> str:
     """校验目标类型/存在/归属，返回目标名称。"""
     if target_type not in schedule_service.TARGET_TYPES:
-        raise ValueError("目标类型无效，支持 case / scenario")
-    target = (
-        case_repo.get_case(db, target_id) if target_type == "case"
-        else scenario_repo.get_scenario(db, target_id)
-    )
+        raise ValueError("目标类型无效，支持 case / scenario / suite")
+    target: Any
+    if target_type == "case":
+        target = case_repo.get_case(db, target_id)
+    elif target_type == "scenario":
+        target = scenario_repo.get_scenario(db, target_id)
+    else:
+        target = suite_repo.get_suite(db, target_id)
     if not target or target.project_id != project_id:
-        raise ValueError("目标用例/场景不存在或不属于该项目")
+        raise ValueError("目标用例/场景/套件不存在或不属于该项目")
     return target.name
 
 

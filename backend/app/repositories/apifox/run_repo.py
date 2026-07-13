@@ -8,9 +8,10 @@ from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 
 
 def list_runs(db: Session, project_id: int, limit: int = 100) -> List[ApifoxRun]:
+    # 仅列顶层运行（套件子运行不刷屏；子运行从父运行 drill-down 进入）
     return (
         db.query(ApifoxRun)
-        .filter(ApifoxRun.project_id == project_id)
+        .filter(ApifoxRun.project_id == project_id, ApifoxRun.parent_run_id.is_(None))
         .order_by(ApifoxRun.id.desc())
         .limit(limit)
         .all()
@@ -19,6 +20,15 @@ def list_runs(db: Session, project_id: int, limit: int = 100) -> List[ApifoxRun]
 
 def get_run(db: Session, run_id: int) -> Optional[ApifoxRun]:
     return db.query(ApifoxRun).filter(ApifoxRun.id == run_id).first()
+
+
+def list_child_runs(db: Session, parent_run_id: int) -> List[ApifoxRun]:
+    return (
+        db.query(ApifoxRun)
+        .filter(ApifoxRun.parent_run_id == parent_run_id)
+        .order_by(ApifoxRun.id)
+        .all()
+    )
 
 
 def list_steps(db: Session, run_id: int) -> List[ApifoxRunStep]:
