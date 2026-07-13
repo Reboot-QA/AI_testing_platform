@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.repositories.apifox import global_param_repo, schema_repo, variable_repo
-from app.services.apifox import contract_service
+from app.services.apifox import contract_service, schema_ref
 from app.services.apifox import run_engine as engine
 
 
@@ -111,7 +111,8 @@ def debug_send(
     if response_schema_id:
         schema = schema_repo.get_schema(db, response_schema_id)
         if schema and schema.project_id == project_id:
-            contract = contract_service.validate_response(schema.json_schema or "", response)
+            resolved = schema_ref.resolve_schema_text(db, project_id, schema.json_schema)
+            contract = contract_service.validate_response(resolved, response)
             contract["schema_name"] = schema.name
             result["contract_result"] = contract
 

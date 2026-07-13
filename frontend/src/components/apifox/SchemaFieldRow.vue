@@ -10,7 +10,23 @@
     <span v-else class="f-item">数组元素</span>
 
     <el-select v-model="field.type" size="small" class="f-type" @change="onTypeChange">
-      <el-option v-for="t in SCHEMA_TYPES" :key="t" :label="t" :value="t" />
+      <el-option
+        v-for="t in FIELD_TYPES"
+        :key="t"
+        :label="t === 'ref' ? '引用模型' : t"
+        :value="t"
+      />
+    </el-select>
+
+    <el-select
+      v-if="field.type === 'ref'"
+      v-model="field.refName"
+      size="small"
+      filterable
+      placeholder="选择模型"
+      class="f-ref"
+    >
+      <el-option v-for="m in models" :key="m.id" :label="m.name" :value="m.name" />
     </el-select>
 
     <el-checkbox v-if="!isItem" v-model="field.required" size="small" class="f-req">必填</el-checkbox>
@@ -29,18 +45,20 @@
       :list="field.children"
       :index="i"
       :depth="depth + 1"
+      :models="models"
     />
   </template>
   <SchemaFieldRow
     v-else-if="field.type === 'array' && field.children[0]"
     :field="field.children[0]"
     :depth="depth + 1"
+    :models="models"
     is-item
   />
 </template>
 
 <script setup>
-import { SCHEMA_TYPES, newField } from '@/composables/useJsonSchema'
+import { FIELD_TYPES, newField } from '@/composables/useJsonSchema'
 
 const props = defineProps({
   field: { type: Object, required: true },
@@ -48,12 +66,13 @@ const props = defineProps({
   index: { type: Number, default: -1 },
   depth: { type: Number, default: 0 },
   isItem: { type: Boolean, default: false },
+  models: { type: Array, default: () => [] },
 })
 
 function onTypeChange(type) {
-  if (type === 'object') props.field.children = []
-  else if (type === 'array') props.field.children = [newField('string')]
+  if (type === 'array') props.field.children = [newField('string')]
   else props.field.children = []
+  if (type !== 'ref') props.field.refName = ''
 }
 
 function addChild() {
@@ -79,6 +98,10 @@ function remove() {
 
 .f-type {
   width: 110px;
+}
+
+.f-ref {
+  width: 150px;
 }
 
 .f-req {

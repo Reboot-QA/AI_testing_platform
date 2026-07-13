@@ -16,6 +16,9 @@
       >
         <el-icon><Document /></el-icon>
         <span class="schema-name">{{ s.name }}</span>
+        <el-tag v-if="s.ref_count" size="small" type="info" title="被引用数（接口契约 + 模型 $ref）">
+          {{ s.ref_count }}
+        </el-tag>
         <el-button link type="danger" size="small" @click.stop="delSchema(s)">删</el-button>
       </div>
       <el-empty v-if="schemas.length === 0" description="暂无数据模型" :image-size="60" />
@@ -49,6 +52,7 @@
             :field="f"
             :list="fields"
             :index="i"
+            :models="refModels"
           />
           <el-button link type="primary" size="small" class="add-field" @click="addRootField">
             + 添加字段
@@ -78,6 +82,9 @@ const saving = ref(false)
 const viewMode = ref('visual')
 const fields = ref([])
 const form = reactive({ id: null, name: '', description: '', json_schema: '{}' })
+
+// 可被引用的模型：排除当前模型自身（禁自引用）
+const refModels = computed(() => schemas.value.filter((s) => s.id !== form.id))
 
 function loadFieldsFromSource() {
   try {

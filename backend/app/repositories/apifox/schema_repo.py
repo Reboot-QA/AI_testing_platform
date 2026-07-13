@@ -26,6 +26,14 @@ def get_schema(db: Session, schema_id: int) -> Optional[ApifoxSchema]:
     return db.query(ApifoxSchema).filter(ApifoxSchema.id == schema_id).first()
 
 
+def get_schema_by_name(db: Session, project_id: int, name: str) -> Optional[ApifoxSchema]:
+    return (
+        db.query(ApifoxSchema)
+        .filter(ApifoxSchema.project_id == project_id, ApifoxSchema.name == name)
+        .first()
+    )
+
+
 def add(db: Session, obj: ApifoxSchema) -> ApifoxSchema:
     db.add(obj)
     db.flush()
