@@ -1,13 +1,16 @@
-"""Apifox 执行引擎 · 纯执行层（变量解析 / 请求构建 / 单用例执行）。
+"""Apifox 执行引擎 · facade + 单用例执行编排。
+
+纯函数按职责拆到同目录子模块：变量插值 variables / 操作符比较 operators /
+请求构建 request_builder / 流程控制 flow_control。本模块保留断言评估、结果提取、
+脚本执行、作用域落库与单用例编排 execute_case，并 re-export 上述子模块的对外符号，
+保持既有导入路径（debug_service / run_service / scenario_service / 测试依赖之）不变。
 
 复用旧模块纯函数：断言判定 _evaluate_assertion、提取取值 _extract_value_by_source、
 脚本执行 run_pre_script/run_post_script。生成器编排与 run 落库在 run_service。
 提取的 environment/global 作用域写当前用户本地值（不污染团队远程值）。
 """
 
-import base64
 import json
-import re
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -28,189 +31,37 @@ from app.services.api_response_extract import _extract_value_by_source
 from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.apifox import contract_service
+from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
+from app.services.apifox.operators import CONDITION_OPERATORS, _apply_operator
+from app.services.apifox.request_builder import build_request
+from app.services.apifox.variables import (
+    _loads,
+    apply_vars,
+    case_variable_rows,
+    data_drive_rows,
+    merge_vars,
+    resolve_env_vars,
+    resolve_global_vars,
+)
 
-VARIABLE_PATTERN = re.compile(r"\{\{([^}]+)\}\}")
+# 子模块对外符号经本 facade re-export，保持调用方既有导入路径不变
+__all__ = [
+    "apply_vars", "resolve_env_vars", "resolve_global_vars", "merge_vars",
+    "case_variable_rows", "data_drive_rows",
+    "CONDITION_OPERATORS", "MAX_LOOP_ITERATIONS", "evaluate_condition", "loop_iterations",
+    "build_request",
+    "evaluate_assertions", "run_extracts", "run_script_links",
+    "persist_scoped_extracts", "execute_case",
+    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT",
+]
+
 HTTP_TIMEOUT = 30.0
 MAX_BODY_SNAPSHOT = 20000
 
-
-def apply_vars(text: Optional[str], variables: Dict[str, str]) -> str:
-    if not text:
-        return ""
-    return VARIABLE_PATTERN.sub(
-        lambda m: variables.get(m.group(1).strip(), m.group(0)), str(text)
-    )
+_OP_WITH_OPERATOR = {"status_code", "json_path", "header"}
 
 
-def _loads(text: Optional[str], fallback):
-    if not text:
-        return fallback
-    try:
-        return json.loads(text)
-    except (ValueError, TypeError):
-        return fallback
-
-
-def _rows_to_dict(rows: List[Dict[str, Any]], variables: Dict[str, str]) -> Dict[str, str]:
-    result: Dict[str, str] = {}
-    for row in rows or []:
-        key = str(row.get("key") or "").strip()
-        if not key or row.get("enabled") is False:
-            continue
-        result[key] = apply_vars(str(row.get("value") or ""), variables)
-    return result
-
-
-# ---------- 变量解析（local ?? remote，enabled；user_id=None 为定时模式，只读远程值） ----------
-def resolve_env_vars(db: Session, environment_id: Optional[int], user_id: Optional[int]) -> Dict[str, str]:
-    if not environment_id:
-        return {}
-    result: Dict[str, str] = {}
-    for var in variable_repo.list_env_vars(db, environment_id):
-        if not var.enabled:
-            continue
-        local = variable_repo.get_env_local(db, var.id, user_id) if user_id is not None else None
-        value = local.local_value if local else var.remote_value
-        result[var.key] = value or ""
-    return result
-
-
-def resolve_global_vars(db: Session, project_id: int, user_id: Optional[int]) -> Dict[str, str]:
-    result: Dict[str, str] = {}
-    for var in variable_repo.list_global_vars(db, project_id):
-        if not var.enabled:
-            continue
-        local = variable_repo.get_global_local(db, var.id, user_id) if user_id is not None else None
-        value = local.local_value if local else var.remote_value
-        result[var.key] = value or ""
-    return result
-
-
-def merge_vars(*layers: Dict[str, str]) -> Dict[str, str]:
-    """后者覆盖前者：global < env < runtime < case/data_drive。"""
-    merged: Dict[str, str] = {}
-    for layer in layers:
-        merged.update(layer or {})
-    return merged
-
-
-def case_variable_rows(case: ApifoxEndpointCase) -> Dict[str, str]:
-    result: Dict[str, str] = {}
-    for row in _loads(case.variables, []):
-        key = str(row.get("key") or "").strip()
-        if key and row.get("enabled") is not False:
-            result[key] = str(row.get("value") or "")
-    return result
-
-
-def data_drive_rows(case: ApifoxEndpointCase) -> List[Optional[Dict[str, str]]]:
-    """返回执行迭代列表：未启用数据驱动 → [None]；启用 → 各 enabled 行的 values。"""
-    drive = _loads(case.data_drive, {})
-    result: List[Optional[Dict[str, str]]] = []
-    if drive.get("enabled"):
-        for row in drive.get("rows") or []:
-            if row.get("enabled") is not False:
-                result.append(
-                    {str(k): str(v or "") for k, v in (row.get("values") or {}).items()}
-                )
-    if not result:
-        result.append(None)
-    return result
-
-
-# ---------- 请求构建 ----------
-def _select_base_url(environment: Optional[ApifoxEnvironment], server_name: Optional[str]) -> str:
-    """按接口选定的命名前置 URL 取 base_url；未选/未命中 → 环境默认前置 URL(base_url)。"""
-    if environment is None:
-        return ""
-    if server_name:
-        for server in environment.servers or []:
-            if server.name == server_name:
-                return (server.base_url or "").rstrip("/")
-    return (environment.base_url or "").rstrip("/")
-
-
-def build_request(
-    endpoint: ApifoxEndpoint,
-    spec: Dict[str, Any],
-    environment: Optional[ApifoxEnvironment],
-    variables: Dict[str, str],
-    global_params: List,
-) -> Dict[str, Any]:
-    path = apply_vars(endpoint.path, variables)
-    for row in spec.get("path_params") or []:
-        key = str(row.get("key") or "").strip()
-        if key and row.get("enabled") is not False:
-            path = path.replace("{%s}" % key, apply_vars(str(row.get("value") or ""), variables))
-
-    if path.startswith("http://") or path.startswith("https://"):
-        url = path
-    else:
-        base = _select_base_url(environment, getattr(endpoint, "server_name", None))
-        if not base:
-            raise ValueError("未选择环境或环境未配置前置 URL，且接口路径不是绝对地址")
-        url = base + ("/" + path.lstrip("/") if path else "")
-
-    params = _rows_to_dict(spec.get("query") or [], variables)
-    headers = _rows_to_dict(spec.get("headers") or [], variables)
-    cookies = _rows_to_dict(spec.get("cookies") or [], variables)
-
-    # 全局参数附加（header/query/cookie；body 位置暂不支持）
-    for gp in global_params:
-        if not gp.enabled:
-            continue
-        value = apply_vars(gp.value or "", variables)
-        if gp.location == "header":
-            headers.setdefault(gp.key, value)
-        elif gp.location == "query":
-            params.setdefault(gp.key, value)
-        elif gp.location == "cookie":
-            cookies.setdefault(gp.key, value)
-
-    auth = spec.get("auth") or {}
-    auth_type = auth.get("type") or "none"
-    if auth_type == "bearer" and auth.get("token"):
-        headers["Authorization"] = "Bearer " + apply_vars(auth["token"], variables)
-    elif auth_type == "basic":
-        raw = f"{apply_vars(auth.get('username') or '', variables)}:{apply_vars(auth.get('password') or '', variables)}"
-        headers["Authorization"] = "Basic " + base64.b64encode(raw.encode("utf-8")).decode("ascii")
-
-    if cookies:
-        headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
-
-    body = spec.get("body") or {}
-    body_type = body.get("type") or "none"
-    request_kwargs: Dict[str, Any] = {}
-    body_snapshot = ""
-    if body_type in ("json", "raw"):
-        content = apply_vars(body.get("raw") or "", variables)
-        if content:
-            request_kwargs["content"] = content
-            body_snapshot = content
-        if body_type == "json":
-            headers.setdefault("Content-Type", "application/json")
-    elif body_type == "form-data":
-        form = _rows_to_dict(body.get("form") or [], variables)
-        if form:
-            request_kwargs["files"] = {k: (None, v) for k, v in form.items()}
-            body_snapshot = json.dumps(form, ensure_ascii=False)
-    elif body_type == "urlencoded":
-        form = _rows_to_dict(body.get("form") or [], variables)
-        if form:
-            request_kwargs["data"] = form
-            body_snapshot = json.dumps(form, ensure_ascii=False)
-
-    return {
-        "method": endpoint.method,
-        "url": url,
-        "params": params,
-        "headers": headers,
-        "request_kwargs": request_kwargs,
-        "body_snapshot": body_snapshot,
-    }
-
-
-# ---------- 断言/提取/脚本 ----------
+# ---------- 断言 ----------
 def _adapt_assertion(row) -> Dict[str, Any]:
     data: Dict[str, Any] = {"type": row.type, "expected": row.expected}
     if row.type == "response_time":
@@ -220,96 +71,6 @@ def _adapt_assertion(row) -> Dict[str, Any]:
     elif row.type == "json_path":
         data["path"] = row.path or ""
     return data
-
-
-_NUMERIC_OPS = {"gt", "gte", "lt", "lte"}
-_OP_WITH_OPERATOR = {"status_code", "json_path", "header"}
-
-
-def _apply_operator(actual: Any, expected: Optional[str], operator: str) -> Tuple[bool, str]:
-    """按操作符比较（actual 可为数字/布尔/None，expected 为字符串）。返回 (通过, 说明)。"""
-    op = operator or "eq"
-    a_str = "" if actual is None else str(actual)
-    e_str = "" if expected is None else str(expected)
-    if op == "exists":
-        return actual is not None, f"值{'存在' if actual is not None else '不存在'}"
-    if op in _NUMERIC_OPS:
-        try:
-            a_num, e_num = float(actual), float(e_str)
-        except (TypeError, ValueError):
-            return False, f"非数值无法比较：{a_str}"
-        passed = {"gt": a_num > e_num, "gte": a_num >= e_num, "lt": a_num < e_num, "lte": a_num <= e_num}[op]
-        sym = {"gt": ">", "gte": ">=", "lt": "<", "lte": "<="}[op]
-        return passed, f"{a_num} {sym if passed else '!' + sym} {e_num}"
-    if op == "regex":
-        try:
-            passed = re.search(e_str, a_str) is not None
-        except re.error:
-            return False, f"正则无效：{e_str}"
-        return passed, f"{'匹配' if passed else '不匹配'}正则 {e_str}"
-    if op == "contains":
-        return e_str in a_str, f"{'包含' if e_str in a_str else '不包含'} \"{e_str}\""
-    if op == "not_contains":
-        return e_str not in a_str, f"{'不包含' if e_str not in a_str else '包含'} \"{e_str}\""
-    if op == "neq":
-        return a_str != e_str, f"{a_str} {'!=' if a_str != e_str else '=='} {e_str}"
-    return a_str == e_str, f"{a_str} {'==' if a_str == e_str else '!='} {e_str}"  # eq（字符串宽松等价）
-
-
-# 场景条件步骤(if)可用操作符（复用断言操作符语义）
-CONDITION_OPERATORS = {"eq", "neq", "contains", "not_contains", "gt", "gte", "lt", "lte", "regex", "exists"}
-
-# 循环步骤(loop)硬上限：三种模式都兜底，防死循环/超大 count 拖垮执行
-MAX_LOOP_ITERATIONS = 1000
-
-
-def loop_iterations(config: Dict[str, Any], variables: Dict[str, str]) -> List[Dict[str, str]]:
-    """count/list 模式的每轮变量注入列表（while 由编排层逐轮求值，不走这里）。
-
-    count：注入 index_var（0 基）；list：解析 list_var（JSON 数组）注入 item_var+index_var，
-    非字符串元素 JSON 序列化。无效/缺失 → []；超硬上限 → 截断。
-    """
-    mode = config.get("mode")
-    index_var = str(config.get("index_var") or "index")
-    if mode == "count":
-        try:
-            n = int(config.get("count") or 0)
-        except (TypeError, ValueError):
-            n = 0
-        n = max(0, min(n, MAX_LOOP_ITERATIONS))
-        return [{index_var: str(i)} for i in range(n)]
-    if mode == "list":
-        item_var = str(config.get("item_var") or "item")
-        raw = variables.get(str(config.get("list_var") or ""), "")
-        try:
-            items = json.loads(raw) if raw else []
-        except (ValueError, TypeError):
-            items = []
-        if not isinstance(items, list):
-            items = []
-        result: List[Dict[str, str]] = []
-        for i, it in enumerate(items[:MAX_LOOP_ITERATIONS]):
-            val = it if isinstance(it, str) else json.dumps(it, ensure_ascii=False)
-            result.append({item_var: val, index_var: str(i)})
-        return result
-    return []
-
-
-def evaluate_condition(condition: Dict[str, Any], variables: Dict[str, str]) -> Tuple[bool, str]:
-    """求值场景条件 {left, operator, right}：left/right 先 {{var}} 插值再按操作符比较。
-
-    exists：left 插值后为非空且不含未解析 {{...}} 占位符时视为存在（即变量确有值）。
-    其余操作符复用 _apply_operator（left 作 actual、right 作 expected）。
-    """
-    raw_left = str(condition.get("left") or "")
-    left = apply_vars(raw_left, variables)
-    operator = str(condition.get("operator") or "eq")
-    if operator == "exists":
-        unresolved = bool(VARIABLE_PATTERN.search(left))
-        exists = bool(left) and not unresolved
-        return exists, f"{raw_left} {'存在' if exists else '不存在'}"
-    right = apply_vars(str(condition.get("right") or ""), variables)
-    return _apply_operator(left, right, operator)
 
 
 def _evaluate_with_operator(row, response: httpx.Response) -> Dict[str, Any]:
@@ -355,6 +116,7 @@ def evaluate_assertions(rows, response: httpx.Response, duration_ms: float) -> T
     return all_passed, results
 
 
+# ---------- 提取 ----------
 def run_extracts(
     rows, response: httpx.Response, request_snapshot: Dict[str, Any], duration_ms: float
 ) -> Tuple[Dict[str, str], List[Dict[str, str]], List[Dict[str, Any]]]:
@@ -379,6 +141,7 @@ def run_extracts(
     return extracted, scoped, results
 
 
+# ---------- 脚本 ----------
 def run_script_links(
     db: Session, links, is_pre: bool, variables: Dict[str, str],
     response: Optional[httpx.Response] = None, duration_ms: float = 0,
@@ -415,6 +178,7 @@ def _phase_links(links, phase: str):
     return [link for link in links if link.phase == phase]
 
 
+# ---------- 作用域提取落库 ----------
 def persist_scoped_extracts(
     db: Session, project_id: int, environment_id: Optional[int], user_id: Optional[int],
     scoped: List[Dict[str, str]],
