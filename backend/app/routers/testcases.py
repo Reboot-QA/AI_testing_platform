@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import SessionLocal, get_db
-from app.services.project_access_service import get_accessible_project
+from app.services.project_access_service import get_accessible_project, get_accessible_project_ids
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
@@ -119,9 +119,14 @@ def _testcase_out(case: TestCase, db: Session) -> TestCaseOut:
     if not creator_name and case.created_by_id:
         creator = db.query(User).filter(User.id == case.created_by_id).first()
         creator_name = creator.username if creator else ""
+    project_name = case.project.name if case.project else ""
+    if not project_name:
+        project = db.query(Project).filter(Project.id == case.project_id).first()
+        project_name = project.name if project else ""
     return TestCaseOut(
         id=case.id,
         project_id=case.project_id,
+        project_name=project_name,
         requirement_id=case.requirement_id,
         title=case.title,
         case_type=case.case_type,
@@ -218,7 +223,7 @@ def _build_generation_tasks(ctx: Dict[str, Any], total_count: int) -> List[Dict[
 
 @router.get("", response_model=Union[List[TestCaseOut], TestCasePageOut])
 def list_testcases(
-    project_id: int = Query(...),
+    project_id: Optional[int] = Query(None),
     requirement_id: Optional[int] = Query(None),
     review_status: Optional[str] = Query(None),
     page: Optional[int] = Query(None, ge=1),
@@ -226,12 +231,20 @@ def list_testcases(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user)
+    accessible_ids = get_accessible_project_ids(db, current_user)
+    if not accessible_ids:
+        if page is not None:
+            return TestCasePageOut(items=[], total=0, page=page, page_size=page_size)
+        return []
+
     query = (
         db.query(TestCase)
-        .options(joinedload(TestCase.creator))
-        .filter(TestCase.project_id == project_id)
+        .options(joinedload(TestCase.creator), joinedload(TestCase.project))
+        .filter(TestCase.project_id.in_(accessible_ids))
     )
+    if project_id is not None:
+        _check_project(db, project_id, current_user)
+        query = query.filter(TestCase.project_id == project_id)
     if requirement_id:
         query = query.filter(TestCase.requirement_id == requirement_id)
     if review_status:

@@ -2,9 +2,10 @@
   <div>
     <div class="toolbar">
       <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="loadData">
+        <el-option label="全部" :value="ALL_PROJECTS" />
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-button type="primary" :disabled="!projectId" data-assistant="requirements.create_btn" @click="openDialog()">
+      <el-button type="primary" :disabled="isAllProjects" data-assistant="requirements.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加需求
       </el-button>
       <el-select v-model="batchStatus" placeholder="批量改状态" clearable style="width: 140px">
@@ -39,6 +40,7 @@
     >
       <el-table-column type="selection" width="45" />
       <el-table-column prop="id" label="ID" width="70" />
+      <el-table-column v-if="isAllProjects" prop="project_name" label="项目" min-width="140" show-overflow-tooltip />
       <el-table-column prop="title" label="标题" min-width="200" />
       <el-table-column prop="req_type" label="类型" width="100">
         <template #default="{ row }">
@@ -214,12 +216,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
+const ALL_PROJECTS = '__all__'
+
 const projects = ref([])
 const requirements = ref([])
 const linkedTestcases = ref([])
 const selectedIds = ref([])
 const selectedRows = ref([])
-const projectId = ref(null)
+const projectId = ref(ALL_PROJECTS)
 const batchStatus = ref('')
 const loading = ref(false)
 const batchUpdating = ref(false)
@@ -252,6 +256,8 @@ const form = reactive({
 
 const rules = { title: [{ required: true, message: '请输入标题', trigger: 'blur' }] }
 
+const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
+
 const deletableSelectedCount = computed(
   () => selectedRows.value.filter((row) => !row.testcase_count).length
 )
@@ -261,17 +267,14 @@ const blockedSelectedCount = computed(
 
 async function loadProjects() {
   projects.value = await projectApi.list()
-  if (projects.value.length && !projectId.value) {
-    projectId.value = projects.value[0].id
-    loadData()
-  }
+  await loadData()
 }
 
 async function loadData() {
-  if (!projectId.value) return
   loading.value = true
   try {
-    requirements.value = await requirementApi.list(projectId.value)
+    const listProjectId = isAllProjects.value ? null : projectId.value
+    requirements.value = await requirementApi.list(listProjectId)
     selectedIds.value = []
     selectedRows.value = []
   } finally {
@@ -367,11 +370,11 @@ async function openTestcases(row) {
 }
 
 async function reloadLinkedTestcases() {
-  if (!currentRequirement.value || !projectId.value) return
+  if (!currentRequirement.value) return
   casesLoading.value = true
   try {
     linkedTestcases.value = await testcaseApi.list({
-      project_id: projectId.value,
+      project_id: currentRequirement.value.project_id,
       requirement_id: currentRequirement.value.id,
     })
   } finally {
@@ -396,6 +399,15 @@ function handleSelectionChange(rows) {
   selectedIds.value = rows.map((row) => row.id)
 }
 
+function groupRowsByProject(rows) {
+  const groups = new Map()
+  for (const row of rows) {
+    if (!groups.has(row.project_id)) groups.set(row.project_id, [])
+    groups.get(row.project_id).push(row)
+  }
+  return groups
+}
+
 async function handleBatchDelete() {
   if (!deletableSelectedCount.value) return
 
@@ -416,11 +428,18 @@ async function handleBatchDelete() {
 
   batchDeleting.value = true
   try {
-    const res = await requirementApi.batchDelete({
-      project_id: projectId.value,
-      requirement_ids: deletableIds,
-    })
-    ElMessage.success(res.message || '批量删除成功')
+    const groups = groupRowsByProject(
+      selectedRows.value.filter((row) => !row.testcase_count)
+    )
+    let message = ''
+    for (const [pid, rows] of groups) {
+      const res = await requirementApi.batchDelete({
+        project_id: Number(pid),
+        requirement_ids: rows.map((row) => row.id),
+      })
+      message = res.message || message
+    }
+    ElMessage.success(message || '批量删除成功')
     loadData()
   } finally {
     batchDeleting.value = false
@@ -431,12 +450,17 @@ async function handleBatchStatus() {
   if (!selectedIds.value.length || !batchStatus.value) return
   batchUpdating.value = true
   try {
-    const res = await requirementApi.batchUpdateStatus({
-      project_id: projectId.value,
-      requirement_ids: selectedIds.value,
-      status: batchStatus.value,
-    })
-    ElMessage.success(res.message || '批量更新成功')
+    const groups = groupRowsByProject(selectedRows.value)
+    let message = ''
+    for (const [pid, rows] of groups) {
+      const res = await requirementApi.batchUpdateStatus({
+        project_id: Number(pid),
+        requirement_ids: rows.map((row) => row.id),
+        status: batchStatus.value,
+      })
+      message = res.message || message
+    }
+    ElMessage.success(message || '批量更新成功')
     batchStatus.value = ''
     loadData()
   } finally {
@@ -449,9 +473,8 @@ onMounted(async () => {
     if (!projects.value.length) {
       await loadProjects()
     }
-    if (!projectId.value && projects.value.length) {
-      projectId.value = projects.value[0].id
-      await loadData()
+    if (isAllProjects.value) {
+      throw new Error('请先选择具体项目')
     }
     if (!projectId.value) {
       throw new Error('请先创建项目')
@@ -459,8 +482,8 @@ onMounted(async () => {
   })
 
   registerAssistantHandler('requirements.createDemo', async () => {
-    if (!projectId.value) {
-      throw new Error('请先选择项目')
+    if (isAllProjects.value) {
+      throw new Error('请先选择具体项目')
     }
     openDialog()
     form.title = 'AI演示需求'

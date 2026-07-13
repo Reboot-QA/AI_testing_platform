@@ -53,8 +53,11 @@ export const projectApi = {
 }
 
 export const requirementApi = {
-  list: (projectId, params = {}) =>
-    request.get('/requirements', { params: { project_id: projectId, ...params } }),
+  list: (projectId, params = {}) => {
+    const queryParams = { ...params }
+    if (projectId != null) queryParams.project_id = projectId
+    return request.get('/requirements', { params: queryParams })
+  },
   create: (data) => request.post('/requirements', data),
   update: (id, data) => request.put(`/requirements/${id}`, data),
   delete: (id) => request.delete(`/requirements/${id}`),
