@@ -29,6 +29,8 @@
           <el-option label="分组" value="group" />
           <el-option label="条件" value="if" />
           <el-option label="循环" value="loop" />
+          <el-option label="跳出循环" value="break" />
+          <el-option label="跳过本轮" value="continue" />
         </el-select>
         <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
           <el-option
@@ -43,6 +45,7 @@
           <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
         <el-input v-else-if="newType === 'group'" v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
+        <span v-else-if="newType === 'break' || newType === 'continue'" class="add-hint">添加后拖入循环体内</span>
         <span v-else class="add-hint">添加后在右侧配置</span>
         <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
       </div>
@@ -165,6 +168,8 @@ function addStep() {
       config: { condition: { left: '', operator: 'eq', right: '' } },
       children: [], elseEnabled: false, elseChildren: [],
     })
+  } else if (newType.value === 'break' || newType.value === 'continue') {
+    props.rows.push({ type: newType.value, enabled: true, _uid: ++_seq })
   } else {
     props.rows.push({
       type: 'loop', enabled: true, _uid: ++_seq, children: [],

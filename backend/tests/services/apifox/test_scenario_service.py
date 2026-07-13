@@ -326,3 +326,68 @@ def test_loop_while_maxiter_over_limit_is_rejected(db, make_case):
 
     with pytest.raises(ValueError, match="max_iterations"):
         svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[bad]))
+
+
+# ---------- break / continue 校验（只能在循环体内） ----------
+def _break() -> StepIn:
+    return StepIn(type="break")
+
+
+def _continue() -> StepIn:
+    return StepIn(type="continue")
+
+
+def test_break_directly_in_loop_is_saved(db, make_case):
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 2}, [_case_step(make_case().id), _break()])],
+        ),
+    )
+
+    assert out.steps[0].children[1].type == "break"
+
+
+def test_break_in_group_inside_loop_is_saved(db, make_case):
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 2}, [_group("g", [_break()])])],
+        ),
+    )
+
+    assert out.steps[0].children[0].children[0].type == "break"
+
+
+def test_continue_in_if_inside_loop_is_saved(db, make_case):
+    out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 2}, [_if([_continue()])])],
+        ),
+    )
+
+    assert out.steps[0].children[0].children[0].type == "continue"
+
+
+def test_break_outside_loop_is_rejected(db):
+    with pytest.raises(ValueError, match="循环"):
+        svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=[_break()]))
+
+
+def test_continue_in_group_without_loop_is_rejected(db):
+    with pytest.raises(ValueError, match="循环"):
+        svc.create_scenario(
+            db, project_id=1, data=ScenarioCreate(name="s", steps=[_group("g", [_continue()])]),
+        )
+
+
+def test_break_with_children_is_rejected(db, make_case):
+    bad = StepIn(type="break", children=[_case_step(make_case().id)])
+
+    with pytest.raises(ValueError, match="容器"):
+        svc.create_scenario(
+            db, project_id=1, data=ScenarioCreate(
+                name="s", steps=[_loop({"mode": "count", "count": 1}, [bad])]
+            ),
+        )

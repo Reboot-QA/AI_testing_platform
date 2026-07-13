@@ -358,3 +358,129 @@ def test_nested_loop_index_var_is_scoped_not_leaked(db, make_case, monkeypatch):
     _events, _steps = _run(db, scenario_out)
 
     assert seen == ["0", "1"]
+
+
+# ---------- break / continue 流程控制 ----------
+def _break():
+    return StepIn(type="break")
+
+
+def _continue():
+    return StepIn(type="continue")
+
+
+def test_break_in_count_loop_stops_after_first_iteration(db, make_case, stub_execute_case):
+    body = make_case(name="B")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 3}, [_case_step(body.id), _break()])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.step_type for s in steps] == ["case", "break"]
+
+
+def test_continue_skips_rest_of_body_but_runs_all_rounds(db, make_case, stub_execute_case):
+    a, b = make_case(name="A"), make_case(name="B")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 2},
+                         [_case_step(a.id), _continue(), _case_step(b.id)])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    # 每轮跑 A 后 continue，B 从不执行；跑满 2 轮
+    assert [s.case_name for s in steps] == ["A", "跳过本轮", "A", "跳过本轮"]
+
+
+def test_break_inside_if_triggers_only_on_matching_round(db, make_case, monkeypatch):
+    body = make_case(name="body")
+
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+        cur = int(variables.get("i", "0"))
+        return "passed", {"method": endpoint.method, "url": endpoint.path,
+                          "extracted": {"i": str(cur + 1)}, "scoped": []}
+
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 5}, [
+                _case_step(body.id),
+                _if({"left": "{{i}}", "operator": "eq", "right": "3"}, [_break()]),
+            ])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    # i 每轮 +1，第 3 轮 body 后 i=3，if 命中 break；body 只跑 3 次
+    assert len([s for s in steps if s.step_type == "case"]) == 3
+    assert any(s.step_type == "break" for s in steps)
+
+
+def test_nested_loop_inner_break_only_exits_inner(db, make_case, stub_execute_case):
+    inner, outer_mark = make_case(name="I"), make_case(name="O")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop({"mode": "count", "count": 2}, [
+                _loop({"mode": "count", "count": 3}, [_case_step(inner.id), _break()]),
+                _case_step(outer_mark.id),
+            ])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    # 内层每轮遇 break 只跑 I 一次即止；外层照常 2 轮，每轮内层 I + 外层 O
+    assert [s.case_name for s in steps if s.step_type == "case"] == ["I", "O", "I", "O"]
+
+
+def test_break_in_while_loop_stops(db, make_case, stub_execute_case):
+    body = make_case(name="B")
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[_loop(
+                {"mode": "while", "condition": {"left": "1", "operator": "eq", "right": "1"},
+                 "max_iterations": 5}, [_case_step(body.id), _break()])],
+        ),
+    )
+
+    _events, steps = _run(db, scenario_out)
+
+    assert [s.step_type for s in steps] == ["case", "break"]
+
+
+def test_loop_var_restored_after_break(db, make_case, monkeypatch):
+    """break 走异常路径终止循环，S3 的 try/finally 仍须恢复循环变量，不泄漏到循环后。"""
+    body, after = make_case(name="body"), make_case(name="after")
+    seen = []
+
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+        if case.name == "after":
+            seen.append(variables.get("index"))
+        return "passed", {"method": endpoint.method, "url": endpoint.path,
+                          "extracted": {}, "scoped": []}
+
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+    scenario_out = svc.create_scenario(
+        db, project_id=1, data=ScenarioCreate(
+            name="s",
+            steps=[
+                _loop({"mode": "count", "count": 3}, [_case_step(body.id), _break()]),
+                _case_step(after.id),
+            ],
+        ),
+    )
+
+    _events, _steps = _run(db, scenario_out)
+
+    assert seen == [None]

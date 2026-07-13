@@ -21,6 +21,14 @@ MAX_WAIT_MS = 60000
 _MAX_DEPTH = 50
 
 
+class _BreakLoop(Exception):
+    """break 步骤信号：向上穿透嵌套生成器，由最近的循环 _run_loop_block 捕获后终止该循环。"""
+
+
+class _ContinueLoop(Exception):
+    """continue 步骤信号：跳过循环体剩余步骤，进入最近循环的下一轮。"""
+
+
 def _dumps(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, default=str)
 
@@ -51,6 +59,8 @@ def _count_steps(
             if case:
                 total += _count_case_steps(case)
         elif step.type == "wait":
+            total += 1
+        elif step.type in ("break", "continue"):
             total += 1
         elif step.type == "scenario" and step.ref_scenario_id:
             total += _count_scenario_steps(db, step.ref_scenario_id, depth + 1)
@@ -202,6 +212,14 @@ def _run_steps(
             ctx.passed += 1
             _record_step(ctx, "wait", "passed", detail, case_name=f"等待 {wait_ms} ms", depth=depth)
             yield _step_event(ctx, total, "passed", detail, f"等待 {wait_ms} ms")
+        elif step.type in ("break", "continue"):
+            ctx.index += 1
+            label = step.name or ("跳出循环" if step.type == "break" else "跳过本轮")
+            detail = {"method": "", "url": "", "duration_ms": 0.0}
+            ctx.passed += 1
+            _record_step(ctx, step.type, "passed", detail, case_name=label, depth=depth)
+            yield _step_event(ctx, total, "passed", detail, label)
+            raise _BreakLoop() if step.type == "break" else _ContinueLoop()
         elif step.type == "scenario" and step.ref_scenario_id:
             yield from _run_scenario_block(
                 ctx, step.ref_scenario_id, total, env_vars, global_vars, depth + 1
@@ -238,7 +256,12 @@ def _run_loop_block(
             if not passed:
                 break
             n += 1
-            yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+            try:
+                yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+            except _ContinueLoop:
+                continue
+            except _BreakLoop:
+                break
         return
     # 循环变量(index/item)按 loop 层级作用域：进入前快照、退出后恢复，
     # 避免嵌套同名循环变量互相污染（内层跑完不该把 index 残留给外层后续步骤）
@@ -250,7 +273,12 @@ def _run_loop_block(
     try:
         for injection in engine.loop_iterations(config, entry_vars):
             ctx.runtime.update(injection)
-            yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+            try:
+                yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+            except _ContinueLoop:
+                continue
+            except _BreakLoop:
+                break
     finally:
         for k in scoped:
             if k in saved:
@@ -351,5 +379,8 @@ def iter_scenario_run(
     env_vars = engine.resolve_env_vars(db, environment.id if environment else None, user_id)
     global_vars = engine.resolve_global_vars(db, scenario.project_id, user_id)
     started = time.perf_counter()
-    yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
+    try:
+        yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
+    except (_BreakLoop, _ContinueLoop):
+        pass  # 循环外的 break/continue（保存校验应已拦截），防御性忽略以正常收尾
     yield _finalize(ctx, started)
