@@ -13,8 +13,15 @@ from sqlalchemy.orm import Session
 from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
+from app.models.apifox.suite import ApifoxSuite, ApifoxSuiteItem
 from app.models.apifox.variable import ApifoxEnvironment
-from app.repositories.apifox import case_repo, endpoint_repo, run_repo, scenario_repo
+from app.repositories.apifox import (
+    case_repo,
+    endpoint_repo,
+    run_repo,
+    scenario_repo,
+    suite_repo,
+)
 from app.services.apifox import run_engine as engine
 
 MAX_WAIT_MS = 60000
@@ -310,9 +317,10 @@ def _run_if_block(
 
 def _start_run(db: Session, project_id: int, target_type: str, target_id: int,
                target_name: str, environment: Optional[ApifoxEnvironment],
-               triggered_by: str, total: int) -> ApifoxRun:
+               triggered_by: str, total: int, parent_run_id: Optional[int] = None) -> ApifoxRun:
     run = ApifoxRun(
         project_id=project_id,
+        parent_run_id=parent_run_id,
         target_type=target_type,
         target_id=target_id,
         target_name=target_name,
@@ -351,10 +359,11 @@ def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
 
 def iter_case_run(
     db: Session, case: ApifoxEndpointCase, environment: Optional[ApifoxEnvironment],
-    triggered_by: str, user_id: Optional[int],
+    triggered_by: str, user_id: Optional[int], parent_run_id: Optional[int] = None,
 ) -> Generator[Dict[str, Any], None, None]:
     total = _count_case_steps(case)
-    run = _start_run(db, case.project_id, "case", case.id, case.name, environment, triggered_by, total)
+    run = _start_run(db, case.project_id, "case", case.id, case.name, environment, triggered_by,
+                     total, parent_run_id)
     yield {"type": "start", "run_id": run.id, "total": total, "message": f"开始执行用例「{case.name}」"}
 
     ctx = _RunContext(db, run, environment, user_id)
@@ -367,11 +376,12 @@ def iter_case_run(
 
 def iter_scenario_run(
     db: Session, scenario: ApifoxScenario, environment: Optional[ApifoxEnvironment],
-    triggered_by: str, user_id: Optional[int],
+    triggered_by: str, user_id: Optional[int], parent_run_id: Optional[int] = None,
 ) -> Generator[Dict[str, Any], None, None]:
     total = _count_scenario_steps(db, scenario.id)
     run = _start_run(
-        db, scenario.project_id, "scenario", scenario.id, scenario.name, environment, triggered_by, total
+        db, scenario.project_id, "scenario", scenario.id, scenario.name, environment, triggered_by,
+        total, parent_run_id,
     )
     yield {"type": "start", "run_id": run.id, "total": total, "message": f"开始执行场景「{scenario.name}」"}
 
@@ -384,3 +394,113 @@ def iter_scenario_run(
     except (_BreakLoop, _ContinueLoop):
         pass  # 循环外的 break/continue（保存校验应已拦截），防御性忽略以正常收尾
     yield _finalize(ctx, started)
+
+
+def _resolve_suite_item(
+    db: Session, item: ApifoxSuiteItem, environment: Optional[ApifoxEnvironment],
+    triggered_by: str, user_id: Optional[int], parent_run_id: int,
+):
+    """把套件项解析为 (展示名, 子运行生成器)；目标已删除时生成器为 None。"""
+    if item.target_type == "case":
+        case = case_repo.get_case(db, item.target_id)
+        if not case:
+            return "(用例已删除)", None
+        return case.name, iter_case_run(db, case, environment, triggered_by, user_id, parent_run_id)
+    scenario = scenario_repo.get_scenario(db, item.target_id)
+    if not scenario:
+        return "(场景已删除)", None
+    return scenario.name, iter_scenario_run(
+        db, scenario, environment, triggered_by, user_id, parent_run_id
+    )
+
+
+def _fail_orphan_run(db: Session, run_id: Optional[int]) -> None:
+    """子运行执行中途异常退出，未走到 finalize：兜底写失败态，避免永久卡 running。"""
+    if not run_id:
+        return
+    orphan = run_repo.get_run(db, run_id)
+    if orphan and orphan.status == "running":
+        orphan.status = "failed"
+        orphan.finished_at = datetime.utcnow()
+        db.commit()
+
+
+def _finalize_suite(db: Session, run: ApifoxRun, started: float,
+                    passed_items: int, failed_items: int) -> Dict[str, Any]:
+    run.passed_count = passed_items
+    run.failed_count = failed_items
+    run.status = "passed" if failed_items == 0 else "failed"
+    run.duration_ms = (time.perf_counter() - started) * 1000
+    done = passed_items + failed_items
+    run.pass_rate = round(passed_items / done * 100, 2) if done else 0.0
+    run.finished_at = datetime.utcnow()
+    db.commit()
+    return {
+        "type": "suite_done",
+        "run_id": run.id,
+        "status": run.status,
+        "passed_count": passed_items,
+        "failed_count": failed_items,
+        "pass_rate": run.pass_rate,
+        "duration_ms": run.duration_ms,
+        "message": "套件执行完成",
+    }
+
+
+def iter_suite_run(
+    db: Session, suite: ApifoxSuite, environment: Optional[ApifoxEnvironment],
+    triggered_by: str, user_id: Optional[int],
+) -> Generator[Dict[str, Any], None, None]:
+    """套件运行：父运行聚合 + 每项(用例/场景)各自独立子运行(fresh runtime，互不串变量)。
+
+    统计为 item 级（子运行 passed 即该项通过）；单项失败隔离，不中断后续项。
+    """
+    items = [it for it in suite_repo.list_items(db, suite.id) if it.enabled]
+    total = len(items)
+    run = _start_run(db, suite.project_id, "suite", suite.id, suite.name, environment, triggered_by, total)
+    yield {"type": "suite_start", "run_id": run.id, "total": total,
+           "message": f"开始执行套件「{suite.name}」"}
+
+    started = time.perf_counter()
+    passed_items = 0
+    failed_items = 0
+    for index, item in enumerate(items, start=1):
+        target_name, child_gen = _resolve_suite_item(
+            db, item, environment, triggered_by, user_id, run.id
+        )
+        yield {"type": "item_start", "index": index, "total": total,
+               "target_type": item.target_type, "target_id": item.target_id,
+               "target_name": target_name}
+        item_status = "failed"
+        child_run_id: Optional[int] = None
+        try:
+            if child_gen is None:
+                yield {"type": "item_done", "index": index, "total": total,
+                       "target_name": target_name, "status": "failed", "child_run_id": None,
+                       "error_message": "套件项引用的目标已不存在"}
+            else:
+                for ev in child_gen:
+                    etype = ev.get("type")
+                    if etype == "start":
+                        child_run_id = ev.get("run_id")
+                    elif etype == "step":
+                        yield {**ev, "item_index": index}  # 转发子步骤，附 item 上下文供前端归组
+                    elif etype == "done":
+                        item_status = ev.get("status") or "failed"
+                        yield {"type": "item_done", "index": index, "total": total,
+                               "target_name": target_name, "status": item_status,
+                               "child_run_id": ev.get("run_id"),
+                               "passed_count": ev.get("passed_count"),
+                               "failed_count": ev.get("failed_count"),
+                               "duration_ms": ev.get("duration_ms")}
+        except Exception as exc:  # noqa: BLE001 - 单项失败隔离，不中断后续项
+            _fail_orphan_run(db, child_run_id)
+            item_status = "failed"
+            yield {"type": "item_done", "index": index, "total": total,
+                   "target_name": target_name, "status": "failed", "child_run_id": child_run_id,
+                   "error_message": f"套件项执行失败: {exc}"}
+        if item_status == "passed":
+            passed_items += 1
+        else:
+            failed_items += 1
+    yield _finalize_suite(db, run, started, passed_items, failed_items)

@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 
 class RunBrief(BaseModel):
     id: int
+    parent_run_id: Optional[int] = None
     target_type: str
     target_id: int
     target_name: str
@@ -47,3 +48,5 @@ class RunStepOut(BaseModel):
 
 class RunOut(RunBrief):
     steps: List[RunStepOut] = Field(default_factory=list)
+    # 套件父运行的子运行汇总（各用例/场景一条）；非套件运行为空
+    children: List[RunBrief] = Field(default_factory=list)
