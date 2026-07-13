@@ -17,6 +17,7 @@ from app.repositories.apifox import (
     case_repo,
     scenario_repo,
     schedule_repo,
+    suite_repo,
     variable_repo,
 )
 from app.services.apifox import run_service
@@ -29,7 +30,7 @@ from app.utils.time_util import now_local
 
 logger = logging.getLogger(__name__)
 
-TARGET_TYPES = {"case", "scenario"}
+TARGET_TYPES = {"case", "scenario", "suite"}
 
 # 复用旧调度函数（鸭子类型：只读 schedule_type/run_time/week_day/interval_minutes/last_run_at）；
 # 薄封装并 cast，让类型系统接受 ApifoxSchedule，同时对路由屏蔽底层来源。
@@ -52,6 +53,9 @@ def resolve_target_name(db: Session, target_type: str, target_id: int) -> Option
     if target_type == "scenario":
         scenario = scenario_repo.get_scenario(db, target_id)
         return scenario.name if scenario else None
+    if target_type == "suite":
+        suite = suite_repo.get_suite(db, target_id)
+        return suite.name if suite else None
     return None
 
 
@@ -91,6 +95,12 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
                 run_service.iter_scenario_run(db, scenario, environment, triggered_by, None)
                 if scenario else None
             )
+        elif task.target_type == "suite":
+            suite = suite_repo.get_suite(db, task.target_id)
+            events = (
+                run_service.iter_suite_run(db, suite, environment, triggered_by, None)
+                if suite else None
+            )
         else:
             events = None
 
@@ -100,7 +110,8 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
             for event in events:
                 if event.get("run_id"):
                     run_id = event["run_id"]
-                if event.get("type") == "done":
+                # 套件终态事件为 suite_done（run_id 来自 suite_start 的父运行）
+                if event.get("type") in ("done", "suite_done"):
                     status = event.get("status") or "failed"
 
         task.last_run_at = now_local()

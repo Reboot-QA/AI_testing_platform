@@ -19,7 +19,7 @@ class ApifoxSchedule(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
-    # case | scenario
+    # case | scenario | suite
     target_type: Mapped[str] = mapped_column(String(20))
     target_id: Mapped[int] = mapped_column(Integer)
     environment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

@@ -3,10 +3,12 @@
     <el-radio-group v-model="section" size="small" class="section-switch">
       <el-radio-button value="cases">单接口用例</el-radio-button>
       <el-radio-button value="scenarios">场景用例</el-radio-button>
+      <el-radio-button value="suites">测试套件</el-radio-button>
       <el-radio-button value="schedules">定时任务</el-radio-button>
     </el-radio-group>
 
     <ScenarioPanel v-if="section === 'scenarios'" class="auto-tests" />
+    <SuitePanel v-else-if="section === 'suites'" class="auto-tests" />
     <SchedulePanel v-else-if="section === 'schedules'" />
     <div v-else class="auto-tests">
       <ApiTreePanel :project-id="pid" @select="onSelectEndpoint" @deleted="onDeleted" />
@@ -27,6 +29,7 @@ import { useRoute } from 'vue-router'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
 import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
+import SuitePanel from '@/views/apifox/sections/SuitePanel.vue'
 import SchedulePanel from '@/views/apifox/sections/SchedulePanel.vue'
 
 const route = useRoute()

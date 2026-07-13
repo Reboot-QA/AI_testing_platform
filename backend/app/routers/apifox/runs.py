@@ -15,7 +15,7 @@ from app.auth import get_current_user
 from app.database import SessionLocal, get_db
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.user import User
-from app.repositories.apifox import case_repo, run_repo, scenario_repo, variable_repo
+from app.repositories.apifox import case_repo, run_repo, scenario_repo, suite_repo, variable_repo
 from app.routers.apifox.run_schemas import RunBrief, RunOut, RunStepOut
 from app.services.apifox import run_service
 from app.services.project_access_service import get_accessible_project
@@ -126,6 +126,45 @@ def run_scenario_stream(
     return _sse_response(event_generator())
 
 
+@router.post("/suites/{sid}/run/stream")
+def run_suite_stream(
+    sid: int,
+    environment_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+):
+    db = SessionLocal()
+    try:
+        suite = suite_repo.get_suite(db, sid)
+        if not suite:
+            raise HTTPException(status_code=404, detail="套件不存在")
+        get_accessible_project(db, suite.project_id, current_user)
+        triggered_by = current_user.username
+        user_id = current_user.id
+    finally:
+        db.close()
+
+    def event_generator():
+        stream_db = SessionLocal()
+        try:
+            stream_suite = suite_repo.get_suite(stream_db, sid)
+            if not stream_suite:
+                yield _sse_event({"type": "error", "message": "套件不存在"})
+                return
+            environment = _resolve_environment(stream_db, environment_id, stream_suite.project_id)
+            for event in run_service.iter_suite_run(
+                stream_db, stream_suite, environment, triggered_by, user_id
+            ):
+                yield _sse_event(event)
+        except ValueError as exc:
+            yield _sse_event({"type": "error", "message": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            yield _sse_event({"type": "error", "message": f"执行失败: {exc}"})
+        finally:
+            stream_db.close()
+
+    return _sse_response(event_generator())
+
+
 # ---------- 运行记录查询 ----------
 def _loads(text: Optional[str], fallback):
     if not text:
@@ -139,6 +178,7 @@ def _loads(text: Optional[str], fallback):
 def _brief(run: ApifoxRun) -> RunBrief:
     return RunBrief(
         id=run.id,
+        parent_run_id=run.parent_run_id,
         target_type=run.target_type,
         target_id=run.target_id,
         target_name=run.target_name,
@@ -193,4 +233,6 @@ def get_run(rid: int, db: Session = Depends(get_db), user: User = Depends(get_cu
     get_accessible_project(db, run.project_id, user)
     data: Dict[str, Any] = _brief(run).model_dump()
     data["steps"] = [_step_out(s) for s in run_repo.list_steps(db, rid)]
+    # 套件父运行：附子运行汇总（各用例/场景一条）供两级报告
+    data["children"] = [_brief(c) for c in run_repo.list_child_runs(db, rid)]
     return RunOut(**data)
