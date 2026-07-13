@@ -50,7 +50,7 @@ def create_schema(
 @router.get("/schemas/{sid}", response_model=SchemaOut)
 def get_schema(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     schema = _schema_checked(db, sid, user)
-    return service.get_schema_out(schema)
+    return service.get_schema_out(db, schema)
 
 
 @router.put("/schemas/{sid}", response_model=SchemaOut)

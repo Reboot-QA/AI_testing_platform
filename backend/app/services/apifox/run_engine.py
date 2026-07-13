@@ -30,7 +30,7 @@ from app.repositories.apifox import (
 from app.services.api_response_extract import _extract_value_by_source
 from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.api_script_runner import run_post_script, run_pre_script
-from app.services.apifox import contract_service
+from app.services.apifox import contract_service, schema_ref
 from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
 from app.services.apifox.operators import CONDITION_OPERATORS, _apply_operator
 from app.services.apifox.request_builder import build_request
@@ -301,7 +301,8 @@ def execute_case(
     if endpoint.response_schema_id:
         schema = schema_repo.get_schema(db, endpoint.response_schema_id)
         if schema and schema.project_id == case.project_id:
-            contract = contract_service.validate_response(schema.json_schema or "", response)
+            resolved = schema_ref.resolve_schema_text(db, case.project_id, schema.json_schema)
+            contract = contract_service.validate_response(resolved, response)
             contract["schema_name"] = schema.name
             detail["contract_result"] = contract
             if endpoint.contract_strict and not contract["passed"]:
