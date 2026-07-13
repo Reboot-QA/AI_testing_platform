@@ -33,18 +33,11 @@ def _require_unique_name(db: Session, project_id: int, name: str, exclude_id: in
 
 
 def _count_model_refs(db: Session, project_id: int, schema_name: str) -> int:
-    """项目内其他模型的 json_schema 通过 $ref 引用本模型名的个数。"""
+    """项目内其他模型的 json_schema 通过 $ref 引用本模型名的个数（单模型查询用）。"""
     return sum(
         1
         for s in repo.list_schemas(db, project_id)
         if s.name != schema_name and schema_name in schema_ref.extract_model_refs(s.json_schema)
-    )
-
-
-def _ref_count(db: Session, schema: ApifoxSchema) -> int:
-    """被引用总数 = 接口响应契约(按 id) + 其他模型 $ref(按名)。"""
-    return repo.count_endpoint_refs(db, schema.id) + _count_model_refs(
-        db, schema.project_id, schema.name
     )
 
 
@@ -91,15 +84,22 @@ def _out(db: Session, schema: ApifoxSchema) -> SchemaOut:
 
 
 def list_schemas(db: Session, project_id: int) -> List[SchemaBrief]:
+    # 一次拉全量，O(n) 建 名→被其他模型引用次数 map（避免每模型再全表扫描的 O(n²)）
+    schemas = repo.list_schemas(db, project_id)
+    model_ref_counts: dict[str, int] = {s.name: 0 for s in schemas}
+    for s in schemas:
+        for ref_name in schema_ref.extract_model_refs(s.json_schema):
+            if ref_name != s.name and ref_name in model_ref_counts:
+                model_ref_counts[ref_name] += 1
     return [
         SchemaBrief(
             id=s.id,
             name=s.name,
             description=s.description,
             sort_order=s.sort_order,
-            ref_count=_ref_count(db, s),
+            ref_count=repo.count_endpoint_refs(db, s.id) + model_ref_counts[s.name],
         )
-        for s in repo.list_schemas(db, project_id)
+        for s in schemas
     ]
 
 

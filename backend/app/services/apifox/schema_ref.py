@@ -58,7 +58,10 @@ def _inline(db: Session, project_id: int, node: Any, depth: int, seen: frozenset
     if name:
         if name in seen:
             return {"type": "object"}  # 环引用降级
-        schema = schema_repo.get_schema_by_name(db, project_id, name)
+        try:
+            schema = schema_repo.get_schema_by_name(db, project_id, name)
+        except Exception:  # noqa: BLE001 - 校验类工具需健壮：DB 异常同样降级，绝不外抛
+            return {"type": "object"}  # 否则异常冒泡至无 try/finally 的单跑路径会卡 running
         if not schema or not schema.json_schema:
             return {"type": "object"}  # 未知引用降级
         try:

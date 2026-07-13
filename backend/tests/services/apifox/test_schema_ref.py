@@ -75,6 +75,21 @@ def test_resolve_no_ref_structurally_equal(db):
     assert _resolve(db, text) == json.loads(text)
 
 
+def test_resolve_db_error_degrades_not_raises(db, monkeypatch):
+    """回归(评审#1)：解析中途 DB 查询抛异常必须降级为 {type:object}，绝不外抛。
+
+    否则异常会冒泡到无 try/finally 兜底的单跑路径，让运行记录永久卡 running。
+    """
+    def _boom(*_args, **_kwargs):
+        raise RuntimeError("模拟 DB 连接抖动")
+
+    monkeypatch.setattr(schema_ref.schema_repo, "get_schema_by_name", _boom)
+
+    resolved = _resolve(db, '{"type":"object","properties":{"u":{"$ref":"#/models/User"}}}')
+
+    assert resolved["properties"]["u"] == {"type": "object"}
+
+
 def test_resolve_depth_guard_degrades(db, monkeypatch):
     monkeypatch.setattr(schema_ref, "_MAX_REF_DEPTH", 1)
     _add(db, "C", '{"type":"string"}')
