@@ -67,6 +67,8 @@ class CaseUpdate(BaseModel):
     pre_scripts: Optional[List[CaseScriptRef]] = None
     post_scripts: Optional[List[CaseScriptRef]] = None
     sort_order: Optional[int] = None
+    # 乐观锁：客户端读取时的版本；服务端不一致则 409（None=不校验，向后兼容）
+    expected_version: Optional[int] = None
 
 
 class CaseBrief(BaseModel):
@@ -99,5 +101,6 @@ class CaseOut(BaseModel):
     pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
     post_scripts: List[CaseScriptOut] = Field(default_factory=list)
     sort_order: int
+    version: int = 1
     created_at: datetime
     updated_at: datetime

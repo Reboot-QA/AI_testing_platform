@@ -20,6 +20,7 @@ from app.routers.apifox.scenario_schemas import (
     StepIn,
     StepOut,
 )
+from app.services.apifox.errors import ConflictError
 from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
 
 VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue", "db"}
@@ -194,6 +195,7 @@ def _out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
         description=scenario.description,
         steps=[_step_out(db, s, by_parent) for s in by_parent.get(None, [])],
         sort_order=scenario.sort_order,
+        version=scenario.version,
         created_at=scenario.created_at,
         updated_at=scenario.updated_at,
     )
@@ -226,6 +228,8 @@ def get_scenario_out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
 
 
 def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate) -> ScenarioOut:
+    if data.expected_version is not None and scenario.version != data.expected_version:
+        raise ConflictError(scenario.version)
     if data.name is not None:
         scenario.name = data.name
     if "description" in data.model_fields_set:
@@ -235,6 +239,7 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
     if data.steps is not None:
         repo.delete_steps(db, scenario.id)
         _write_steps(db, scenario, data.steps)
+    scenario.version += 1
     db.commit()
     db.refresh(scenario)
     return _out(db, scenario)

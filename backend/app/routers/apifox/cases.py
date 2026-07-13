@@ -22,6 +22,7 @@ from app.routers.apifox.case_schemas import (
     ProjectCaseBrief,
 )
 from app.services.apifox import case_service as service
+from app.services.apifox.errors import ConflictError
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·用例"])
@@ -84,6 +85,8 @@ def update_case(
     case = _case_checked(db, cid, user)
     try:
         return service.update_case(db, case, data)
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=exc.message)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

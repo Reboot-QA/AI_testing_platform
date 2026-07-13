@@ -30,6 +30,7 @@ from app.routers.apifox.case_schemas import (
     ProjectCaseBrief,
 )
 from app.routers.apifox.schemas import KvRow, RequestSpec
+from app.services.apifox.errors import ConflictError
 
 
 def _load_request_spec(text: str | None) -> RequestSpec:
@@ -140,6 +141,7 @@ def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
             for e in repo.list_extracts(db, case.id)
         ],
         sort_order=case.sort_order,
+        version=case.version,
         created_at=case.created_at,
         updated_at=case.updated_at,
     )
@@ -190,6 +192,8 @@ def get_case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
 
 
 def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> CaseOut:
+    if data.expected_version is not None and case.version != data.expected_version:
+        raise ConflictError(case.version)
     if data.name is not None:
         case.name = data.name
     if data.request_spec is not None:
@@ -212,6 +216,7 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
     if data.post_scripts is not None:
         script_repo.delete_case_scripts(db, case.id, "post")
         _write_case_scripts(db, case, "post", data.post_scripts)
+    case.version += 1
     db.commit()
     db.refresh(case)
     return _case_out(db, case)
