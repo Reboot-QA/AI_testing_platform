@@ -1,8 +1,8 @@
-"""S2/S3 执行引擎纯函数单元 · evaluate_condition（条件）+ loop_iterations（循环迭代序列）。"""
+"""flow_control 纯函数单元 · evaluate_condition（条件）+ loop_iterations（循环迭代序列）。"""
 
 import pytest
 
-from app.services.apifox.run_engine import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
+from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
 
 
 @pytest.mark.parametrize(
