@@ -163,10 +163,12 @@
 
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
+const route = useRoute()
 const projects = ref([])
 const testcases = ref([])
 const selectedRows = ref([])
@@ -395,7 +397,12 @@ async function handleExport() {
   URL.revokeObjectURL(url)
 }
 
-onMounted(loadProjects)
+onMounted(async () => {
+  if (route.query.review_status) {
+    filterStatus.value = String(route.query.review_status)
+  }
+  await loadProjects()
+})
 
 onUnmounted(() => {
   unregisterAssistantHandler('testcases.ensureProject')
