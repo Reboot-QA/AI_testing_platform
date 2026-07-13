@@ -53,6 +53,7 @@ def run_sql(conn: ApifoxEnvironmentDatabase, sql: str) -> Dict[str, Any]:
             return {"passed": True, "columns": [], "rows": [], "rowcount": result.rowcount,
                     "error": None}
     except Exception as exc:  # noqa: BLE001 - 执行类工具需健壮，任何驱动/网络异常转 error
+        logger.warning("数据库步骤 SQL 执行失败 [%s@%s]: %s", conn.database, conn.host, exc)
         return {"passed": False, "columns": [], "rows": [], "rowcount": 0, "error": str(exc)}
     finally:
         if engine is not None:

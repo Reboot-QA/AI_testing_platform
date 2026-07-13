@@ -68,6 +68,13 @@ def test_db_step_missing_sql_rejected(db):
             name="s", steps=[StepIn(type="db", config={"connection_id": conn.id, "sql": "  "})]))
 
 
+def test_db_step_non_int_connection_id_rejected(db):
+    """回归(评审#1)：非数字 connection_id 必须保存时拒绝，避免运行期 int() 抛异常卡 running。"""
+    with pytest.raises(ValueError, match="数据库连接"):
+        ss.create_scenario(db, 1, ScenarioCreate(
+            name="s", steps=[StepIn(type="db", config={"connection_id": "abc", "sql": "SELECT 1"})]))
+
+
 # ---------- 执行 ----------
 def test_db_step_records_passed(db, stub_ok):
     env, conn = _env_and_conn(db)

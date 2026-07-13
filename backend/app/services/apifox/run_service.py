@@ -231,9 +231,14 @@ def _run_db_step(
 
     conn = None
     if ctx.environment and config.get("connection_id"):
-        candidate = database_conn_repo.get(ctx.db, int(config["connection_id"]))
-        if candidate and candidate.environment_id == ctx.environment.id:
-            conn = candidate
+        try:  # 防旧脏数据/绕过保存校验的非法 connection_id 抛异常卡 running
+            conn_id = int(config["connection_id"])
+        except (TypeError, ValueError):
+            conn_id = None
+        if conn_id is not None:
+            candidate = database_conn_repo.get(ctx.db, conn_id)
+            if candidate and candidate.environment_id == ctx.environment.id:
+                conn = candidate
 
     if conn is None:
         detail = {"method": "SQL", "url": "", "request_body": sql, "duration_ms": 0.0,

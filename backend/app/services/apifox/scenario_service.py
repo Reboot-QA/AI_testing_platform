@@ -82,7 +82,8 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
         _validate_loop(step.config or {})
     elif step.type == "db":
         config = step.config or {}
-        if not config.get("connection_id"):
+        conn_id = config.get("connection_id")
+        if not isinstance(conn_id, int) or isinstance(conn_id, bool):
             raise ValueError("数据库步骤必须指定数据库连接")
         if not str(config.get("sql") or "").strip():
             raise ValueError("数据库步骤必须填写 SQL")
