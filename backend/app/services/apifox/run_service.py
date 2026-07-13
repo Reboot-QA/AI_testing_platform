@@ -464,43 +464,58 @@ def iter_suite_run(
     started = time.perf_counter()
     passed_items = 0
     failed_items = 0
-    for index, item in enumerate(items, start=1):
-        target_name, child_gen = _resolve_suite_item(
-            db, item, environment, triggered_by, user_id, run.id
-        )
-        yield {"type": "item_start", "index": index, "total": total,
-               "target_type": item.target_type, "target_id": item.target_id,
-               "target_name": target_name}
-        item_status = "failed"
-        child_run_id: Optional[int] = None
-        try:
-            if child_gen is None:
-                yield {"type": "item_done", "index": index, "total": total,
-                       "target_name": target_name, "status": "failed", "child_run_id": None,
-                       "error_message": "套件项引用的目标已不存在"}
-            else:
-                for ev in child_gen:
-                    etype = ev.get("type")
-                    if etype == "start":
-                        child_run_id = ev.get("run_id")
-                    elif etype == "step":
-                        yield {**ev, "item_index": index}  # 转发子步骤，附 item 上下文供前端归组
-                    elif etype == "done":
-                        item_status = ev.get("status") or "failed"
-                        yield {"type": "item_done", "index": index, "total": total,
-                               "target_name": target_name, "status": item_status,
-                               "child_run_id": ev.get("run_id"),
-                               "passed_count": ev.get("passed_count"),
-                               "failed_count": ev.get("failed_count"),
-                               "duration_ms": ev.get("duration_ms")}
-        except Exception as exc:  # noqa: BLE001 - 单项失败隔离，不中断后续项
-            _fail_orphan_run(db, child_run_id)
+    finalized = False
+    try:
+        for index, item in enumerate(items, start=1):
             item_status = "failed"
-            yield {"type": "item_done", "index": index, "total": total,
-                   "target_name": target_name, "status": "failed", "child_run_id": child_run_id,
-                   "error_message": f"套件项执行失败: {exc}"}
-        if item_status == "passed":
-            passed_items += 1
-        else:
-            failed_items += 1
-    yield _finalize_suite(db, run, started, passed_items, failed_items)
+            child_run_id: Optional[int] = None
+            target_name = ""
+            try:
+                target_name, child_gen = _resolve_suite_item(
+                    db, item, environment, triggered_by, user_id, run.id
+                )
+                yield {"type": "item_start", "index": index, "total": total,
+                       "target_type": item.target_type, "target_id": item.target_id,
+                       "target_name": target_name}
+                if child_gen is None:
+                    yield {"type": "item_done", "index": index, "total": total,
+                           "target_name": target_name, "status": "failed", "child_run_id": None,
+                           "error_message": "套件项引用的目标已不存在"}
+                else:
+                    for ev in child_gen:
+                        etype = ev.get("type")
+                        if etype == "start":
+                            child_run_id = ev.get("run_id")
+                        elif etype == "step":
+                            yield {**ev, "item_index": index}  # 转发子步骤，附 item 上下文供前端归组
+                        elif etype == "done":
+                            item_status = ev.get("status") or "failed"
+                            yield {"type": "item_done", "index": index, "total": total,
+                                   "target_name": target_name, "status": item_status,
+                                   "child_run_id": ev.get("run_id"),
+                                   "passed_count": ev.get("passed_count"),
+                                   "failed_count": ev.get("failed_count"),
+                                   "duration_ms": ev.get("duration_ms")}
+            except Exception as exc:  # noqa: BLE001 - 单项失败隔离，不中断后续项
+                # 子运行 commit 失败会让 session 进入需 rollback 才能续用的状态；
+                # 不先回滚，下一项及兜底的 commit 都会连锁 PendingRollbackError。
+                db.rollback()
+                _fail_orphan_run(db, child_run_id)
+                item_status = "failed"
+                yield {"type": "item_done", "index": index, "total": total,
+                       "target_name": target_name, "status": "failed", "child_run_id": child_run_id,
+                       "error_message": f"套件项执行失败: {exc}"}
+            if item_status == "passed":
+                passed_items += 1
+            else:
+                failed_items += 1
+        yield _finalize_suite(db, run, started, passed_items, failed_items)
+        finalized = True
+    finally:
+        # 兜底：任何中途异常逃逸（如 finalize 本身失败）都不让父运行永久卡 running
+        if not finalized:
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            _fail_orphan_run(db, run.id)

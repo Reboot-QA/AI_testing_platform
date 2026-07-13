@@ -41,7 +41,9 @@
               {{ it.target_type === 'scenario' ? '场景' : '用例' }}
             </el-tag>
             <MethodTag v-if="it.endpoint_method" :method="it.endpoint_method" />
-            <span class="si-name">{{ it.target_name }}</span>
+            <span class="si-name" :class="{ 'si-gone': !it.target_name }">
+              {{ it.target_name || '(目标已删除，建议移除)' }}
+            </span>
             <el-button link type="danger" size="small" @click="form.items.splice(i, 1)">移除</el-button>
           </div>
         </VueDraggable>
@@ -298,6 +300,10 @@ onMounted(async () => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.si-gone {
+  color: var(--ax-danger);
 }
 
 .add-row {

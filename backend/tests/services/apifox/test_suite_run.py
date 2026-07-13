@@ -140,6 +140,36 @@ def test_suite_run_deleted_target_isolated_as_failed(db, make_case, stub_execute
     assert item_done[0]["status"] == "failed"
 
 
+def test_suite_item_db_error_isolated_and_parent_finalized(db, make_case, monkeypatch):
+    """回归(评审#1/#3)：某项执行触发 DB 错误使 session 进入需 rollback 态，
+    须回滚后失败隔离、后续项照跑、父运行落终态不卡 running。
+
+    去掉 iter_suite_run except 里的 db.rollback()，本用例即失败（后续项连锁 PendingRollbackError）。
+    """
+    boom, alive = make_case(name="BOOM"), make_case(name="ALIVE")
+
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+        if case.name == "BOOM":
+            # 制造一次失败 flush（project_id NOT NULL 违规），令 session 进入 PendingRollback 态
+            db_.add(ApifoxRun(project_id=None, target_type="x", target_id=0))
+            db_.flush()
+        return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
+
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+    out = suite_service.create_suite(
+        db, project_id=1, data=SuiteCreate(name="s", items=[_case_item(boom.id), _case_item(alive.id)])
+    )
+
+    events, parent, _children = _run_suite(db, out)
+
+    assert parent.status == "failed"  # 落终态，未卡 running
+    assert parent.passed_count == 1  # 后续项 ALIVE 仍成功执行
+    assert any(
+        e["type"] == "item_done" and e.get("target_name") == "ALIVE" and e["status"] == "passed"
+        for e in events
+    )
+
+
 def test_suite_run_empty_yields_passed(db, stub_execute_case):
     out = suite_service.create_suite(db, project_id=1, data=SuiteCreate(name="空套件", items=[]))
 

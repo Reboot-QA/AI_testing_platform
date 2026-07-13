@@ -43,7 +43,10 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     def wipe(model, cond) -> None:
         db.query(model).filter(cond).delete(synchronize_session=False)
 
-    # 运行记录
+    # 运行记录（先断 parent_run_id 自引用再删，避免 InnoDB 逐行 FK 检查报错，同 ApifoxFolder 范式）
+    db.query(ApifoxRun).filter(ApifoxRun.project_id == project_id).update(
+        {ApifoxRun.parent_run_id: None}, synchronize_session=False
+    )
     wipe(ApifoxRunStep, ApifoxRunStep.run_id.in_(run_ids))
     wipe(ApifoxRun, ApifoxRun.project_id == project_id)
     # 测试套件
