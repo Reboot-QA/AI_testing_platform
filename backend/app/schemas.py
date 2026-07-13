@@ -176,6 +176,7 @@ class RequirementUpdate(BaseModel):
 class RequirementOut(RequirementBase):
     id: int
     project_id: int
+    project_name: str = ""
     status: str
     source: str
     created_by_id: Optional[int] = None
@@ -268,6 +269,7 @@ class TestCaseUpdate(BaseModel):
 class TestCaseOut(TestCaseBase):
     id: int
     project_id: int
+    project_name: str = ""
     source: str
     review_status: str
     created_by_id: Optional[int] = None

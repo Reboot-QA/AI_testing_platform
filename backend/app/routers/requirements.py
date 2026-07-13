@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
-from app.services.project_access_service import get_accessible_project
+from app.services.project_access_service import get_accessible_project, get_accessible_project_ids
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
@@ -43,9 +43,14 @@ def _requirement_out(req: Requirement, db: Session) -> RequirementOut:
     if not creator_name and req.created_by_id:
         creator = db.query(User).filter(User.id == req.created_by_id).first()
         creator_name = creator.username if creator else ""
+    project_name = req.project.name if req.project else ""
+    if not project_name:
+        project = db.query(Project).filter(Project.id == req.project_id).first()
+        project_name = project.name if project else ""
     return RequirementOut(
         id=req.id,
         project_id=req.project_id,
+        project_name=project_name,
         title=req.title,
         description=req.description,
         req_type=req.req_type,
@@ -74,13 +79,23 @@ def _clear_requirement_testcases(db: Session, req_id: int) -> int:
 
 @router.get("", response_model=List[RequirementOut])
 def list_requirements(
-    project_id: int = Query(...),
+    project_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    _check_project(db, project_id, current_user)
-    query = db.query(Requirement).options(joinedload(Requirement.creator)).filter(Requirement.project_id == project_id)
+    accessible_ids = get_accessible_project_ids(db, current_user)
+    if not accessible_ids:
+        return []
+
+    query = (
+        db.query(Requirement)
+        .options(joinedload(Requirement.creator), joinedload(Requirement.project))
+        .filter(Requirement.project_id.in_(accessible_ids))
+    )
+    if project_id is not None:
+        _check_project(db, project_id, current_user)
+        query = query.filter(Requirement.project_id == project_id)
     if status:
         if status not in ALLOWED_REQUIREMENT_STATUSES:
             raise HTTPException(status_code=400, detail="无效的需求状态")

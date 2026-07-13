@@ -2,6 +2,7 @@
   <div>
     <div class="toolbar">
       <el-select v-model="projectId" placeholder="选择项目" style="width: 200px" @change="handleFilterChange">
+        <el-option label="全部" :value="ALL_PROJECTS" />
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
       <el-select v-model="filterStatus" placeholder="评审状态" clearable style="width: 140px" @change="handleFilterChange">
@@ -10,10 +11,10 @@
         <el-option label="已通过" value="approved" />
         <el-option label="已驳回" value="rejected" />
       </el-select>
-      <el-button type="primary" :disabled="!projectId" @click="openDialog()">
+      <el-button type="primary" :disabled="isAllProjects" @click="openDialog()">
         <el-icon><Plus /></el-icon> 手动添加
       </el-button>
-      <el-button :disabled="!projectId" @click="handleExport">
+      <el-button :disabled="isAllProjects" @click="handleExport">
         <el-icon><Download /></el-icon> 导出 Excel
       </el-button>
       <el-button
@@ -61,6 +62,7 @@
     >
       <el-table-column type="selection" width="45" />
       <el-table-column prop="id" label="ID" width="70" />
+      <el-table-column v-if="isAllProjects" prop="project_name" label="项目" min-width="140" show-overflow-tooltip />
       <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
       <el-table-column prop="priority" label="优先级" width="80" align="center" />
       <el-table-column prop="case_type" label="类型" width="90" />
@@ -168,12 +170,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
+const ALL_PROJECTS = '__all__'
+
 const route = useRoute()
 const projects = ref([])
 const testcases = ref([])
 const selectedRows = ref([])
 const selectedIds = ref([])
-const projectId = ref(null)
+const projectId = ref(ALL_PROJECTS)
 const filterStatus = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -200,6 +204,8 @@ const form = reactive({
 })
 
 const rules = { title: [{ required: true, message: '请输入标题', trigger: 'blur' }] }
+
+const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
 const batchSubmitCount = computed(() =>
   selectedRows.value.filter((row) => ['draft', 'rejected'].includes(row.review_status)).length
@@ -234,19 +240,15 @@ const batchReviewConfig = {
 
 async function loadProjects() {
   projects.value = await projectApi.list()
-  if (projects.value.length && !projectId.value) {
-    projectId.value = projects.value[0].id
-    loadData()
-  }
+  await loadData()
 }
 
 registerAssistantHandler('testcases.ensureProject', async () => {
   if (!projects.value.length) {
     await loadProjects()
   }
-  if (!projectId.value && projects.value.length) {
-    projectId.value = projects.value[0].id
-    await loadData()
+  if (isAllProjects.value) {
+    throw new Error('请先选择具体项目')
   }
   if (!projectId.value) {
     throw new Error('请先创建项目')
@@ -254,13 +256,14 @@ registerAssistantHandler('testcases.ensureProject', async () => {
 })
 
 async function loadData() {
-  if (!projectId.value) return
   loading.value = true
   try {
     const params = {
-      project_id: projectId.value,
       page: currentPage.value,
       page_size: pageSize.value,
+    }
+    if (!isAllProjects.value) {
+      params.project_id = projectId.value
     }
     if (filterStatus.value) params.review_status = filterStatus.value
     const data = await testcaseApi.list(params)
@@ -342,6 +345,15 @@ function handleSelectionChange(rows) {
   selectedIds.value = rows.map((row) => row.id)
 }
 
+function groupRowsByProject(rows) {
+  const groups = new Map()
+  for (const row of rows) {
+    if (!groups.has(row.project_id)) groups.set(row.project_id, [])
+    groups.get(row.project_id).push(row)
+  }
+  return groups
+}
+
 async function handleBatchReview(status) {
   const countMap = {
     pending: batchSubmitCount.value,
@@ -360,12 +372,17 @@ async function handleBatchReview(status) {
 
   batchReviewing.value = true
   try {
-    const res = await testcaseApi.batchReview({
-      project_id: projectId.value,
-      case_ids: selectedIds.value,
-      review_status: status,
-    })
-    ElMessage.success(res.message || config.success)
+    const groups = groupRowsByProject(selectedRows.value)
+    let message = ''
+    for (const [pid, rows] of groups) {
+      const res = await testcaseApi.batchReview({
+        project_id: Number(pid),
+        case_ids: rows.map((row) => row.id),
+        review_status: status,
+      })
+      message = res.message || message
+    }
+    ElMessage.success(message || config.success)
     loadData()
   } finally {
     batchReviewing.value = false
@@ -379,11 +396,16 @@ async function handleBatchDelete() {
     '批量删除',
     { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
   )
-  const res = await testcaseApi.batchDelete({
-    project_id: projectId.value,
-    case_ids: selectedIds.value,
-  })
-  ElMessage.success(res.message || '批量删除成功')
+  const groups = groupRowsByProject(selectedRows.value)
+  let message = ''
+  for (const [pid, rows] of groups) {
+    const res = await testcaseApi.batchDelete({
+      project_id: Number(pid),
+      case_ids: rows.map((row) => row.id),
+    })
+    message = res.message || message
+  }
+  ElMessage.success(message || '批量删除成功')
   loadData()
 }
 
