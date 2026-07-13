@@ -24,7 +24,7 @@
           <el-button size="small" type="success" :loading="running" @click="runCase">运行</el-button>
           <span class="run-hint">环境在顶部选择</span>
         </div>
-        <CaseEditor :form="form" :saving="saving" :scripts="scripts" @save="saveCase" />
+        <CaseEditor :form="form" :saving="saving" :scripts="scripts" :datasets="datasets" @save="saveCase" />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
       <el-empty v-else description="选择或新建一个用例" :image-size="60" />
@@ -50,6 +50,7 @@ const props = defineProps({
 const store = useWorkspaceStore()
 const cases = ref([])
 const scripts = ref([])
+const datasets = ref([])
 const saving = ref(false)
 const running = ref(false)
 const runEvents = ref([])
@@ -65,6 +66,10 @@ async function loadCases() {
 
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(props.projectId)
+}
+
+async function loadDatasets() {
+  datasets.value = await apifoxApi.listDatasets(props.projectId)
 }
 
 function emptyCasePayload(name) {
@@ -142,6 +147,7 @@ watch(
 )
 
 loadScripts()
+loadDatasets()
 </script>
 
 <style scoped>
