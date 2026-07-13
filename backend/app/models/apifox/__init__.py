@@ -4,6 +4,7 @@ from app.models.apifox.case import (
     ApifoxEndpointCase,
 )
 from app.models.apifox.data_model import ApifoxSchema
+from app.models.apifox.database_conn import ApifoxEnvironmentDatabase
 from app.models.apifox.dataset import ApifoxDataset, ApifoxDatasetRow
 from app.models.apifox.endpoint import (
     ApifoxEndpoint,
@@ -44,6 +45,7 @@ __all__ = [
     "ApifoxSchema",
     "ApifoxDataset",
     "ApifoxDatasetRow",
+    "ApifoxEnvironmentDatabase",
     "ApifoxScript",
     "ApifoxCaseScript",
     "ApifoxEndpointScript",

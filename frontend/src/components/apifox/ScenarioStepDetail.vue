@@ -70,6 +70,53 @@
       <span class="sd-label">说明</span>
       <span class="sd-hint">{{ step.type === 'break' ? '立即跳出所在循环，不再执行后续轮次' : '跳过循环体剩余步骤，直接进入下一轮' }}</span>
     </div>
+
+    <template v-else-if="step.type === 'db'">
+      <div class="sd-field">
+        <span class="sd-label">数据库连接</span>
+        <el-select
+          v-model="step.config.connection_id"
+          size="small"
+          filterable
+          placeholder="选择连接（当前环境内）"
+          style="flex: 1"
+        >
+          <el-option
+            v-for="d in databases"
+            :key="d.id"
+            :label="`${d.name}（${d.host}/${d.database}）`"
+            :value="d.id"
+          />
+        </el-select>
+      </div>
+      <div v-if="databases.length === 0" class="sd-hint db-hint">
+        当前环境无数据库连接，请先到「环境」页添加，并在顶部选中该环境后运行。
+      </div>
+      <div class="sd-field sd-field-top">
+        <span class="sd-label">SQL</span>
+        <div class="db-sql">
+          <CodeEditor v-model="step.config.sql" language="sql" height="140px" />
+          <span class="sd-hint">{{ sqlHint }}</span>
+        </div>
+      </div>
+      <div class="sd-field sd-field-top">
+        <span class="sd-label">提取变量</span>
+        <div class="db-extracts">
+          <div v-for="(ex, i) in dbExtracts" :key="i" class="db-ex">
+            <el-input v-model="ex.var_name" size="small" placeholder="变量名" style="width: 120px" />
+            <span class="db-ex-arrow">← 列</span>
+            <el-input v-model="ex.column" size="small" placeholder="结果列名" style="width: 120px" />
+            <el-select v-model="ex.scope" size="small" style="width: 96px">
+              <el-option label="临时" value="temporary" />
+              <el-option label="环境" value="environment" />
+              <el-option label="全局" value="global" />
+            </el-select>
+            <el-button link type="danger" size="small" @click="dbExtracts.splice(i, 1)">删</el-button>
+          </div>
+          <el-button link type="primary" size="small" @click="addDbExtract">+ 提取（取查询结果首行的列）</el-button>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -82,6 +129,7 @@ import { normalizeSpec } from '@/utils/apifoxSpec'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
 import LoopEditor from '@/components/apifox/LoopEditor.vue'
+import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -89,7 +137,22 @@ const props = defineProps({
   scenarios: { type: Array, default: () => [] },
   currentScenarioId: { type: Number, default: null },
   scripts: { type: Array, default: () => [] },
+  databases: { type: Array, default: () => [] },
 })
+
+const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
+
+// db 步骤 config 由 addStep 初始化；防御性保证 extracts 为数组
+const dbExtracts = computed(() => {
+  if (props.step.type !== 'db') return []
+  if (!props.step.config) props.step.config = { connection_id: null, sql: '', extracts: [] }
+  if (!Array.isArray(props.step.config.extracts)) props.step.config.extracts = []
+  return props.step.config.extracts
+})
+
+function addDbExtract() {
+  dbExtracts.value.push({ var_name: '', column: '', scope: 'temporary' })
+}
 
 // config.condition 由 normalizeStep(加载)/addStep(新建) 保证存在；此处纯读取，不在 computed 里改 props
 const ifCondition = computed(() => props.step.config?.condition ?? { left: '', operator: 'eq', right: '' })
@@ -197,5 +260,27 @@ async function saveCase() {
 
 .sd-field-top {
   align-items: flex-start;
+}
+
+.db-sql,
+.db-extracts {
+  flex: 1;
+}
+
+.db-hint {
+  margin: -4px 0 8px 0;
+  color: var(--ax-danger);
+}
+
+.db-ex {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.db-ex-arrow {
+  font-size: 12px;
+  color: var(--ax-text-secondary);
 }
 </style>

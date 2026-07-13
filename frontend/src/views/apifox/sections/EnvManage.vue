@@ -79,6 +79,7 @@
         @delete="onDelete"
         @set-local="onSetLocal"
       />
+      <EnvDatabasesPanel v-if="selected.type === 'env'" :environment-id="selected.id" />
       </template>
     </div>
   </div>
@@ -91,6 +92,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import VariableTable from '@/components/apifox/VariableTable.vue'
 import GlobalParamsPanel from '@/components/apifox/GlobalParamsPanel.vue'
+import EnvDatabasesPanel from '@/components/apifox/EnvDatabasesPanel.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
