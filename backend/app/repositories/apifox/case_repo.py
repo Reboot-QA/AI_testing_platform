@@ -30,6 +30,15 @@ def list_project_cases(
     )
 
 
+def list_cases_by_project(db: Session, project_id: int) -> List[ApifoxEndpointCase]:
+    """项目全量用例（不 JOIN 接口）——供只需用例自身字段(如 data_drive)的扫描用。"""
+    return (
+        db.query(ApifoxEndpointCase)
+        .filter(ApifoxEndpointCase.project_id == project_id)
+        .all()
+    )
+
+
 def list_cases(db: Session, endpoint_id: int) -> List[ApifoxEndpointCase]:
     return (
         db.query(ApifoxEndpointCase)

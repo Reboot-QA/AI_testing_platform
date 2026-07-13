@@ -25,7 +25,7 @@
         <ExtractsEditor :rows="form.extracts" />
       </el-tab-pane>
       <el-tab-pane label="数据驱动" name="data_drive">
-        <DataDriveEditor :model="form.data_drive" :var-rows="form.variables" />
+        <DataDriveEditor :model="form.data_drive" :var-rows="form.variables" :datasets="datasets" />
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -44,6 +44,7 @@ defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
   scripts: { type: Array, default: () => [] },
+  datasets: { type: Array, default: () => [] },
 })
 defineEmits(['save'])
 
