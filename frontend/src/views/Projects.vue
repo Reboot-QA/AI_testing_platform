@@ -29,11 +29,14 @@
       <el-table-column label="操作" width="160" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-popconfirm title="确认删除该项目？" @confirm="handleDelete(row.id)">
-            <template #reference>
-              <el-button link type="danger">删除</el-button>
-            </template>
-          </el-popconfirm>
+          <el-button
+            link
+            type="danger"
+            :disabled="row.requirement_count > 0 || row.testcase_count > 0"
+            @click="handleDelete(row)"
+          >
+            删除
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -65,7 +68,7 @@
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
 
 const projects = ref([])
@@ -116,8 +119,20 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(id) {
-  await projectApi.delete(id)
+async function handleDelete(row) {
+  if (row.requirement_count > 0 || row.testcase_count > 0) {
+    ElMessage.warning(
+      `该项目下存在 ${row.requirement_count} 条需求、${row.testcase_count} 条用例，请先清理全部关联需求和用例后再删除`
+    )
+    return
+  }
+
+  await ElMessageBox.confirm('确认删除该项目？', '确认删除', {
+    type: 'warning',
+    confirmButtonText: '删除',
+    cancelButtonText: '取消',
+  })
+  await projectApi.delete(row.id)
   ElMessage.success('删除成功')
   loadData()
 }
