@@ -10,12 +10,13 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
-from app.repositories.apifox import case_repo, endpoint_repo
+from app.repositories.apifox import case_repo, dataset_repo, endpoint_repo
 from app.repositories.apifox import scenario_repo as repo
 from app.routers.apifox.scenario_schemas import (
     ScenarioBrief,
     ScenarioCreate,
     ScenarioOut,
+    ScenarioRunConfig,
     ScenarioUpdate,
     StepIn,
     StepOut,
@@ -201,6 +202,7 @@ def _out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
         description=scenario.description,
         steps=[_step_out(db, s, by_parent) for s in by_parent.get(None, [])],
         sort_order=scenario.sort_order,
+        run_config=ScenarioRunConfig(**(json.loads(scenario.run_config) if scenario.run_config else {})),
         version=scenario.version,
         created_at=scenario.created_at,
         updated_at=scenario.updated_at,
@@ -242,6 +244,12 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
         scenario.description = data.description
     if data.sort_order is not None:
         scenario.sort_order = data.sort_order
+    if data.run_config is not None:
+        if data.run_config.dataset_id is not None:
+            ds = dataset_repo.get_dataset(db, data.run_config.dataset_id)
+            if not ds or ds.project_id != scenario.project_id:
+                raise ValueError("绑定的数据集不存在或不属于本项目")
+        scenario.run_config = json.dumps(data.run_config.model_dump(), ensure_ascii=False)
     if data.steps is not None:
         repo.delete_steps(db, scenario.id)
         _write_steps(db, scenario, data.steps)
