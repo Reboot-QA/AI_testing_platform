@@ -84,6 +84,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -91,7 +92,7 @@ const pid = computed(() => route.params.projectId)
 const datasets = ref([])
 const saving = ref(false)
 const newCol = ref('')
-const form = reactive({ id: null, name: '', description: '', columns: [], rows: [] })
+const form = reactive({ id: null, name: '', description: '', columns: [], rows: [], version: 1 })
 
 async function loadDatasets() {
   datasets.value = await apifoxApi.listDatasets(pid.value)
@@ -104,6 +105,7 @@ async function selectDataset(did) {
   form.description = d.description || ''
   form.columns = d.columns || []
   form.rows = (d.rows || []).map((r) => ({ values: { ...r.values }, enabled: r.enabled !== false }))
+  form.version = d.version ?? 1
 }
 
 async function addDataset() {
@@ -142,17 +144,35 @@ function addRow() {
   form.rows.push({ values, enabled: true })
 }
 
+async function doSaveDataset() {
+  const updated = await apifoxApi.updateDataset(form.id, {
+    name: form.name,
+    description: form.description || null,
+    columns: form.columns,
+    rows: form.rows.map((r) => ({ values: r.values, enabled: r.enabled })),
+    expected_version: form.version,
+  })
+  form.version = updated.version
+  await loadDatasets()
+}
+
 async function saveDataset() {
   saving.value = true
   try {
-    await apifoxApi.updateDataset(form.id, {
-      name: form.name,
-      description: form.description || null,
-      columns: form.columns,
-      rows: form.rows.map((r) => ({ values: r.values, enabled: r.enabled })),
-    })
+    await doSaveDataset()
     ElMessage.success('已保存')
-    await loadDatasets()
+  } catch (e) {
+    if (!isConflict(e)) return // 非冲突错误已由 api 拦截器提示
+    await resolveSaveConflict({
+      reload: async () => {
+        await selectDataset(form.id)
+      },
+      overwrite: async () => {
+        const latest = await apifoxApi.getDataset(form.id)
+        form.version = latest.version
+        await doSaveDataset()
+      },
+    })
   } finally {
     saving.value = false
   }

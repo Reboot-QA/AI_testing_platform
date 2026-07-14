@@ -73,6 +73,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { fieldsToSchema, newField, schemaToFields } from '@/composables/useJsonSchema'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import SchemaFieldRow from '@/components/apifox/SchemaFieldRow.vue'
@@ -84,7 +85,7 @@ const schemas = ref([])
 const saving = ref(false)
 const viewMode = ref('visual')
 const fields = ref([])
-const form = reactive({ id: null, name: '', description: '', json_schema: '{}' })
+const form = reactive({ id: null, name: '', description: '', json_schema: '{}', version: 1 })
 
 // 可被引用的模型：排除当前模型自身（禁自引用）
 const refModels = computed(() => schemas.value.filter((s) => s.id !== form.id))
@@ -110,6 +111,7 @@ async function selectSchema(sid) {
   form.name = s.name
   form.description = s.description || ''
   form.json_schema = s.json_schema
+  form.version = s.version ?? 1
   viewMode.value = 'visual'
   loadFieldsFromSource()
 }
@@ -172,16 +174,34 @@ async function saveSchema() {
   }
   saving.value = true
   try {
-    await apifoxApi.updateSchema(form.id, {
-      name: form.name,
-      description: form.description || null,
-      json_schema: form.json_schema,
-    })
+    await doSaveSchema()
     ElMessage.success('已保存')
-    await loadSchemas()
+  } catch (e) {
+    if (!isConflict(e)) return // 非冲突错误已由 api 拦截器提示
+    await resolveSaveConflict({
+      reload: async () => {
+        await selectSchema(form.id)
+      },
+      overwrite: async () => {
+        const latest = await apifoxApi.getSchema(form.id)
+        form.version = latest.version
+        await doSaveSchema()
+      },
+    })
   } finally {
     saving.value = false
   }
+}
+
+async function doSaveSchema() {
+  const updated = await apifoxApi.updateSchema(form.id, {
+    name: form.name,
+    description: form.description || null,
+    json_schema: form.json_schema,
+    expected_version: form.version,
+  })
+  form.version = updated.version
+  await loadSchemas()
 }
 
 onMounted(async () => {
