@@ -8,6 +8,7 @@ import time
 from datetime import datetime
 from typing import Any, Dict, Generator, List, Optional
 
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.models.apifox.case import ApifoxEndpointCase
@@ -292,8 +293,16 @@ def _run_http_step(
     config = engine._loads(step.config, {}) or {}
     label = step.name or config.get("name") or f"{config.get('method') or 'GET'} {config.get('path') or ''}".strip()
     merged = engine.merge_vars(global_vars, env_vars, ctx.runtime)
-    assertions = [AssertionRow(**a) for a in config.get("assertions") or []]
-    extracts = [ExtractRow(**e) for e in config.get("extracts") or []]
+    try:  # 脏数据/绕过校验的非法断言/提取行不得抛异常冒泡卡 run 于 running
+        assertions = [AssertionRow(**a) for a in config.get("assertions") or []]
+        extracts = [ExtractRow(**e) for e in config.get("extracts") or []]
+    except (ValidationError, TypeError) as exc:
+        detail = {"method": config.get("method") or "", "url": config.get("path") or "",
+                  "duration_ms": 0.0, "error_message": f"HTTP 步骤断言/提取配置无效: {exc}"}
+        ctx.failed += 1
+        _record_step(ctx, "http", "failed", detail, case_name=label, depth=depth)
+        yield _step_event(ctx, total, "failed", detail, label)
+        return
     status, detail = engine.execute_http_request(
         ctx.db, ctx.run.project_id, config.get("method") or "GET", config.get("path") or "",
         config.get("server_name"), config.get("request_spec") or {}, assertions, extracts,

@@ -100,6 +100,85 @@ def test_http_step_failed_result_marks_failed(db, monkeypatch):
     assert "timeout" in (steps[0].error_message or "")
 
 
+def test_http_step_non_int_assertion_config_marks_failed_not_running(db):
+    """回归(评审#1)：脏断言/提取配置须转失败态，不得抛异常让 run 卡 running。"""
+    out = ss.create_scenario(db, 1, ScenarioCreate(name="s", steps=[
+        StepIn(type="http", name="bad", config={
+            "method": "GET", "path": "/x",
+            "extracts": [{"source": "response_json"}],  # 缺必填 var_name → pydantic 会拒
+        }),
+    ]))
+
+    events, steps = _run(db, out)
+
+    assert steps[0].status == "failed"
+    assert "配置无效" in (steps[0].error_message or "")
+    from app.models.apifox.run import ApifoxRun
+    run = db.query(ApifoxRun).filter(ApifoxRun.id == events[0]["run_id"]).first()
+    assert run.status == "failed"  # run 落终态，未卡 running
+
+
+# ---------- execute_http_request 本体（mock httpx，不打桩被测函数） ----------
+def test_execute_http_request_success(db, monkeypatch):
+    """评审#3：不打桩本体，mock httpx.Client.request 验证请求成功 + 断言/提取写入 detail。"""
+    import httpx
+
+    from app.routers.apifox.case_schemas import AssertionRow as AR
+    from app.routers.apifox.case_schemas import ExtractRow as ER
+    from app.services.apifox import run_engine
+
+    class _Resp:
+        status_code = 200
+        headers = {"Content-Type": "application/json"}
+        text = '{"token": "abc"}'
+
+        def json(self):
+            return json.loads(self.text)
+
+    monkeypatch.setattr(httpx.Client, "request", lambda self, *a, **k: _Resp())
+
+    status, detail = run_engine.execute_http_request(
+        db, 1, "GET", "https://api.example.com/x", None, {},
+        [AR(type="status_code", operator="eq", expected="200")],
+        [ER(var_name="tok", source="response_json", path="token", scope="temporary")],
+        None, {},
+    )
+
+    assert status == "passed"
+    assert detail["response_status"] == 200
+    assert detail["extracted"].get("tok") == "abc"
+
+
+def test_execute_http_request_build_error_returns_failed(db):
+    """build_request 抛 ValueError（相对路径 + 无环境）→ failed，不外抛。"""
+    from app.services.apifox import run_engine
+
+    status, detail = run_engine.execute_http_request(
+        db, 1, "GET", "/relative/path", None, {}, [], [], None, {},
+    )
+
+    assert status == "failed"
+    assert detail["error_message"]
+
+
+def test_execute_http_request_network_error_returns_failed(db, monkeypatch):
+    import httpx
+
+    from app.services.apifox import run_engine
+
+    def _boom(self, *a, **k):
+        raise httpx.ConnectError("connection refused")
+
+    monkeypatch.setattr(httpx.Client, "request", _boom)
+
+    status, detail = run_engine.execute_http_request(
+        db, 1, "GET", "https://api.example.com/x", None, {}, [], [], None, {},
+    )
+
+    assert status == "failed"
+    assert "请求失败" in (detail["error_message"] or "")
+
+
 def test_http_step_assertion_results_recorded(db, monkeypatch):
     monkeypatch.setattr(
         run_engine, "execute_http_request",

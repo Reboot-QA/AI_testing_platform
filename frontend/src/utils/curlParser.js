@@ -42,6 +42,11 @@ function kvRow(key, value) {
   return { key, value, enabled: true }
 }
 
+// URL 判定：含协议、或形如 host.tld[/:?]、或 localhost——避免把未识别 flag 的值(如 --max-time 30 的 30)误当 URL
+function looksLikeUrl(t) {
+  return /:\/\//.test(t) || /^[\w.-]+\.[a-z]{2,}([:/?]|$)/i.test(t) || /^localhost([:/]|$)/i.test(t)
+}
+
 export function parseCurl(raw) {
   if (!raw || !/^\s*curl\b/i.test(raw)) return null
   const toks = tokenize(raw)
@@ -68,7 +73,7 @@ export function parseCurl(raw) {
       auth = { type: 'basic', username: ci >= 0 ? cred.slice(0, ci) : cred, password: ci >= 0 ? cred.slice(ci + 1) : '' }
     } else if (t === '--url') {
       url = toks[++i] || ''
-    } else if (!t.startsWith('-') && !url) {
+    } else if (!t.startsWith('-') && !url && looksLikeUrl(t)) {
       url = t
     }
     // 其它 flag（-i/-s/-k/--compressed 等）忽略

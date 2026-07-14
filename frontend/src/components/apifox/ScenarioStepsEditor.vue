@@ -193,7 +193,8 @@ function newHttpStep(over = {}) {
     config: {
       name: over.name || '', method: over.method || 'GET', path: over.path || '',
       server_name: over.server_name || null,
-      request_spec: over.request_spec || emptySpec(),
+      // 统一归一化请求结构，两个导入路径与空步骤保持一致的形状
+      request_spec: normalizeSpec(over.request_spec || emptySpec()),
       assertions: over.assertions || [], extracts: over.extracts || [],
     },
   }
@@ -204,7 +205,7 @@ async function importFromEndpoint() {
     const e = await apifoxApi.getEndpoint(pickedEndpointId.value)
     props.rows.push(newHttpStep({
       name: e.name, method: e.method, path: e.path, server_name: e.server_name,
-      request_spec: normalizeSpec(e.request_spec),
+      request_spec: e.request_spec,
       assertions: e.assertions || [], extracts: e.extracts || [],
     }))
     pickedEndpointId.value = null
