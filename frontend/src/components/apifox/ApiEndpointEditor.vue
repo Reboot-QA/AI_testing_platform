@@ -24,14 +24,17 @@
       <el-tab-pane label="Headers" name="headers">
         <KvRowsEditor :rows="form.request_spec.headers" />
       </el-tab-pane>
+      <el-tab-pane label="Cookies" name="cookies">
+        <KvRowsEditor :rows="form.request_spec.cookies" />
+      </el-tab-pane>
       <el-tab-pane label="Body" name="body">
         <el-radio-group v-model="form.request_spec.body.type" size="small">
           <el-radio-button v-for="t in BODY_TYPES" :key="t" :value="t">{{ t }}</el-radio-button>
         </el-radio-group>
         <CodeEditor
-          v-if="['json', 'raw'].includes(form.request_spec.body.type)"
+          v-if="['json', 'xml', 'raw'].includes(form.request_spec.body.type)"
           v-model="form.request_spec.body.raw"
-          :language="form.request_spec.body.type === 'json' ? 'json' : 'plaintext'"
+          :language="bodyLang"
           height="220px"
           class="body-raw"
         />
@@ -39,6 +42,12 @@
           v-else-if="['form-data', 'urlencoded'].includes(form.request_spec.body.type)"
           :rows="form.request_spec.body.form"
         />
+        <template v-else-if="form.request_spec.body.type === 'graphql'">
+          <div class="sub-title">Query</div>
+          <CodeEditor v-model="form.request_spec.body.graphql_query" language="graphql" height="180px" />
+          <div class="sub-title">Variables（JSON）</div>
+          <CodeEditor v-model="form.request_spec.body.graphql_variables" language="json" height="120px" />
+        </template>
         <div v-else class="none-tip">无 Body</div>
       </el-tab-pane>
       <el-tab-pane label="Auth" name="auth">
@@ -90,14 +99,14 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
 import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
 import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 
-defineProps({
+const props = defineProps({
   form: { type: Object, required: true },
   saving: { type: Boolean, default: false },
   showMeta: { type: Boolean, default: true },
@@ -109,8 +118,13 @@ defineProps({
 defineEmits(['save'])
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
-const BODY_TYPES = ['none', 'json', 'form-data', 'urlencoded', 'raw']
+const BODY_TYPES = ['none', 'json', 'xml', 'form-data', 'urlencoded', 'raw', 'graphql']
 const activeTab = ref('params')
+
+const bodyLang = computed(() => {
+  const t = props.form.request_spec.body.type
+  return t === 'json' ? 'json' : t === 'xml' ? 'xml' : 'plaintext'
+})
 </script>
 
 <style scoped>

@@ -6,7 +6,8 @@ export function emptySpec() {
     query: [],
     path_params: [],
     headers: [],
-    body: { type: 'none', raw: '', form: [] },
+    cookies: [],
+    body: { type: 'none', raw: '', form: [], graphql_query: '', graphql_variables: '' },
     auth: { type: 'none', token: '', username: '', password: '' },
   }
 }
@@ -18,7 +19,14 @@ export function normalizeSpec(spec) {
     query: ensureKvRows(s.query || []),
     path_params: ensureKvRows(s.path_params || []),
     headers: ensureKvRows(s.headers || []),
-    body: { type: b.type || 'none', raw: b.raw || '', form: ensureKvRows(b.form || []) },
+    cookies: ensureKvRows(s.cookies || []),
+    body: {
+      type: b.type || 'none',
+      raw: b.raw || '',
+      form: ensureKvRows(b.form || []),
+      graphql_query: b.graphql_query || '',
+      graphql_variables: b.graphql_variables || '',
+    },
     auth: {
       type: s.auth?.type || 'none',
       token: s.auth?.token || '',

@@ -18,9 +18,11 @@ class KvRow(BaseModel):
 
 
 class BodySpec(BaseModel):
-    type: str = "none"  # none|json|form-data|urlencoded|raw
-    raw: str = ""
+    type: str = "none"  # none|json|xml|form-data|urlencoded|raw|graphql
+    raw: str = ""  # json/xml/raw 共用
     form: List[KvRow] = Field(default_factory=list)
+    graphql_query: str = ""
+    graphql_variables: str = ""  # JSON 文本
 
 
 class AuthSpec(BaseModel):
@@ -34,6 +36,7 @@ class RequestSpec(BaseModel):
     query: List[KvRow] = Field(default_factory=list)
     path_params: List[KvRow] = Field(default_factory=list)
     headers: List[KvRow] = Field(default_factory=list)
+    cookies: List[KvRow] = Field(default_factory=list)
     body: BodySpec = Field(default_factory=BodySpec)
     auth: AuthSpec = Field(default_factory=AuthSpec)
 

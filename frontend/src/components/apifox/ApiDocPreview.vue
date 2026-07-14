@@ -22,8 +22,16 @@
     <section v-if="spec.body && spec.body.type !== 'none'">
       <h4>Body（{{ spec.body.type }}）</h4>
       <JsonView v-if="spec.body.type === 'json'" :data="spec.body.raw" :deep="3" />
-      <pre v-else-if="spec.body.type === 'raw'" class="raw">{{ spec.body.raw }}</pre>
+      <pre v-else-if="['raw', 'xml'].includes(spec.body.type)" class="raw">{{ spec.body.raw }}</pre>
+      <template v-else-if="spec.body.type === 'graphql'">
+        <pre class="raw">{{ spec.body.graphql_query }}</pre>
+        <pre v-if="spec.body.graphql_variables" class="raw">{{ spec.body.graphql_variables }}</pre>
+      </template>
       <ParamTable v-else :rows="rows(spec.body.form)" />
+    </section>
+    <section v-if="spec.cookies && rows(spec.cookies).length">
+      <h4>Cookies</h4>
+      <ParamTable :rows="rows(spec.cookies)" />
     </section>
     <section v-if="spec.auth && spec.auth.type !== 'none'">
       <h4>Auth</h4>

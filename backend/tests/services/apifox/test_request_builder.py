@@ -1,10 +1,12 @@
 """request_builder 单元 · URL 拼接 / path_params / 认证 / 各 body 类型 / 全局参数 / 命名 server。"""
 
 import base64
+import json
 from types import SimpleNamespace
 
 import pytest
 
+from app.routers.apifox.schemas import RequestSpec
 from app.services.apifox.request_builder import _select_base_url, build_request
 
 
@@ -153,3 +155,39 @@ def test_form_data_body_goes_to_files():
     plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
 
     assert plan["request_kwargs"]["files"] == {"a": (None, "1")}
+
+
+def test_xml_body_sets_xml_content_type_and_interpolates():
+    spec = {"body": {"type": "xml", "raw": "<a>{{v}}</a>"}}
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"), variables={"v": "1"})
+
+    assert plan["request_kwargs"]["content"] == "<a>1</a>"
+    assert plan["headers"]["Content-Type"] == "application/xml"
+
+
+def test_graphql_body_wraps_query_and_variables_as_json():
+    spec = {"body": {"type": "graphql", "graphql_query": "query{u(id:{{id}}){name}}", "graphql_variables": '{"id": {{id}}}'}}
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"), variables={"id": "5"})
+
+    assert json.loads(plan["request_kwargs"]["content"]) == {"query": "query{u(id:5){name}}", "variables": {"id": 5}}
+    assert plan["headers"]["Content-Type"] == "application/json"
+
+
+def test_graphql_invalid_variables_fall_back_to_empty_object():
+    spec = {"body": {"type": "graphql", "graphql_query": "{ping}", "graphql_variables": "not json"}}
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert json.loads(plan["request_kwargs"]["content"]) == {"query": "{ping}", "variables": {}}
+
+
+# ---------- request_spec 契约保真（防 pydantic 静默丢字段，回归评审阻塞项） ----------
+def test_request_spec_preserves_cookies_and_graphql_fields():
+    spec = RequestSpec(**{
+        "cookies": [{"key": "sid", "value": "s1"}],
+        "body": {"type": "graphql", "graphql_query": "{ping}", "graphql_variables": '{"a":1}'},
+    })
+    dumped = spec.model_dump()
+
+    assert [c["key"] for c in dumped["cookies"]] == ["sid"]
+    assert dumped["body"]["graphql_query"] == "{ping}"
+    assert dumped["body"]["graphql_variables"] == '{"a":1}'
