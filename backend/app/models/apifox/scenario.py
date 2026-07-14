@@ -21,6 +21,8 @@ class ApifoxScenario(Base):
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # 运行配置 JSON：{"loop_count": N, "dataset_id": id}——整场景循环 N 遍 / 绑数据集按行数据驱动
+    run_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # 乐观锁版本：每次保存 +1，多人并发编辑冲突检测
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

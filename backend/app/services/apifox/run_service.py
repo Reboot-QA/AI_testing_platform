@@ -19,6 +19,7 @@ from app.models.apifox.variable import ApifoxEnvironment
 from app.repositories.apifox import (
     case_repo,
     database_conn_repo,
+    dataset_repo,
     endpoint_repo,
     run_repo,
     scenario_repo,
@@ -512,11 +513,44 @@ def iter_case_run(
     yield _finalize(ctx, started)
 
 
+def _resolve_scenario_iterations(db: Session, scenario: ApifoxScenario) -> List[Dict[str, str]]:
+    """场景运行配置 → 外层迭代列表。
+
+    绑数据集：每个 enabled 行一组注入变量（整场景各跑一遍）；数据集缺失/空/异常降级为单次空注入。
+    未绑数据集：按 loop_count 跑 N 遍（无注入，MAX_LOOP_ITERATIONS 硬上限防误配爆量）。
+    """
+    config = engine._loads(scenario.run_config, {}) or {}
+    dataset_id = config.get("dataset_id")
+    if dataset_id:
+        try:
+            dsid = int(dataset_id)
+        except (TypeError, ValueError):
+            return [{}]
+        dataset = dataset_repo.get_dataset(db, dsid)
+        if dataset and dataset.project_id == scenario.project_id:
+            injections: List[Dict[str, str]] = []
+            for row in dataset_repo.list_rows(db, dataset.id):
+                if row.enabled is False:
+                    continue
+                values = engine._loads(row.values, {}) or {}
+                injections.append({str(k): "" if v is None else str(v) for k, v in values.items()})
+            if injections:
+                return injections
+        return [{}]
+    try:
+        n = int(config.get("loop_count") or 1)
+    except (TypeError, ValueError):
+        n = 1
+    n = max(1, min(n, engine.MAX_LOOP_ITERATIONS))
+    return [{} for _ in range(n)]
+
+
 def iter_scenario_run(
     db: Session, scenario: ApifoxScenario, environment: Optional[ApifoxEnvironment],
     triggered_by: str, user_id: Optional[int], parent_run_id: Optional[int] = None,
 ) -> Generator[Dict[str, Any], None, None]:
-    total = _count_scenario_steps(db, scenario.id)
+    iterations = _resolve_scenario_iterations(db, scenario)
+    total = _count_scenario_steps(db, scenario.id) * len(iterations)
     run = _start_run(
         db, scenario.project_id, "scenario", scenario.id, scenario.name, environment, triggered_by,
         total, parent_run_id,
@@ -528,9 +562,16 @@ def iter_scenario_run(
     global_vars = engine.resolve_global_vars(db, scenario.project_id, user_id)
     started = time.perf_counter()
     try:
-        yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
-    except (_BreakLoop, _ContinueLoop):
-        pass  # 循环外的 break/continue（保存校验应已拦截），防御性忽略以正常收尾
+        for injection in iterations:
+            # 每组数据独立 runtime：数据集行/循环各轮变量互不串（对齐用例数据驱动语义）
+            ctx.runtime = dict(injection)
+            try:
+                yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
+            except (_BreakLoop, _ContinueLoop):
+                pass  # 循环外的 break/continue（保存校验应已拦截），防御性忽略以正常收尾
+    except Exception:
+        _fail_orphan_run(db, run.id)  # 迭代中途未预期异常：兜底写失败态，避免永久卡 running
+        raise
     yield _finalize(ctx, started)
 
 

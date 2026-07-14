@@ -10,7 +10,7 @@ from typing import Dict, List
 from sqlalchemy.orm import Session
 
 from app.models.apifox.dataset import ApifoxDataset, ApifoxDatasetRow
-from app.repositories.apifox import case_repo
+from app.repositories.apifox import case_repo, scenario_repo
 from app.repositories.apifox import dataset_repo as repo
 from app.routers.apifox.dataset_schemas import (
     DatasetBrief,
@@ -37,12 +37,17 @@ def _require_unique_name(db: Session, project_id: int, name: str, exclude_id: in
 
 
 def _dataset_ref_counts(db: Session, project_id: int) -> Dict[int, int]:
-    """项目内各数据集被多少用例数据驱动引用（一次扫描全量用例的 data_drive）。"""
+    """项目内各数据集被引用次数：用例数据驱动(source=dataset) + 场景运行配置(run_config.dataset_id)。"""
     counts: Dict[int, int] = {}
     for case in case_repo.list_cases_by_project(db, project_id):
         drive = _loads(case.data_drive, {})
         if drive.get("source") == "dataset" and drive.get("dataset_id"):
             did = int(drive["dataset_id"])
+            counts[did] = counts.get(did, 0) + 1
+    for scenario in scenario_repo.list_scenarios(db, project_id):
+        cfg = _loads(scenario.run_config, {})
+        if cfg.get("dataset_id"):
+            did = int(cfg["dataset_id"])
             counts[did] = counts.get(did, 0) + 1
     return counts
 
@@ -133,7 +138,7 @@ def update_dataset(db: Session, dataset: ApifoxDataset, data: DatasetUpdate) -> 
 def delete_dataset(db: Session, dataset: ApifoxDataset) -> None:
     refs = _dataset_ref_counts(db, dataset.project_id).get(dataset.id, 0)
     if refs:
-        raise ValueError(f"数据集被 {refs} 个用例数据驱动引用，请先解除引用再删除")
+        raise ValueError(f"数据集被 {refs} 处引用（用例数据驱动 / 场景运行配置），请先解除引用再删除")
     repo.delete_rows(db, dataset.id)
     repo.delete(db, dataset)
     db.commit()

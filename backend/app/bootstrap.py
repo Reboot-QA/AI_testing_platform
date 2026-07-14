@@ -17,6 +17,7 @@ from app.services.apifox.migration import (
     migrate_apifox_run_parent,
     migrate_apifox_run_step_contract,
     migrate_apifox_run_step_depth,
+    migrate_apifox_scenario_run_config,
     migrate_apifox_scenario_step_tree,
 )
 from app.services.permission_service import migrate_all_user_permissions
@@ -48,6 +49,7 @@ def run_bootstrap() -> None:
         ("迁移运行步骤深度列", migrate_apifox_run_step_depth),
         ("迁移运行父运行列", migrate_apifox_run_parent),
         ("迁移乐观锁版本列", migrate_apifox_optimistic_version),
+        ("迁移场景运行配置列", migrate_apifox_scenario_run_config),
         ("写入演示数据", seed_demo_data),
         ("加载 LLM 配置", init_llm_settings_from_env),
         ("迁移菜单权限", migrate_all_user_permissions),
