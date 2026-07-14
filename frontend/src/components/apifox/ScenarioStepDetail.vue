@@ -119,7 +119,7 @@
     </template>
 
     <template v-else-if="step.type === 'http'">
-      <ApiEndpointEditor :form="step.config" show-meta :server-names="serverNames" />
+      <ApiEndpointEditor :form="step.config" show-meta :server-names="serverNames" :project-id="route.params.projectId" />
       <div class="sd-field sd-field-top">
         <span class="sd-label">断言</span>
         <div class="http-proc"><AssertionsEditor :rows="step.config.assertions" /></div>
@@ -134,6 +134,7 @@
 
 <script setup>
 import { computed, reactive, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
@@ -157,6 +158,7 @@ const props = defineProps({
   serverNames: { type: Array, default: () => [] },
 })
 
+const route = useRoute()
 const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
 
 // db 步骤 config 由 addStep 初始化；防御性保证 extracts 为数组

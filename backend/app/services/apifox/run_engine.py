@@ -31,7 +31,7 @@ from app.repositories.apifox import (
 from app.services.api_response_extract import _extract_value_by_source
 from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.api_script_runner import run_post_script, run_pre_script
-from app.services.apifox import contract_service, schema_ref
+from app.services.apifox import contract_service, schema_ref, upload_service
 from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
 from app.services.apifox.operators import CONDITION_OPERATORS, _apply_operator
 from app.services.apifox.request_builder import build_request
@@ -263,6 +263,7 @@ def execute_case(
         plan = build_request(
             endpoint, spec, environment, variables,
             global_param_repo.list_params(db, case.project_id),
+            binary_loader=upload_service.make_binary_loader(db, case.project_id),
         )
     except ValueError as exc:
         detail["error_message"] = str(exc)
@@ -353,6 +354,7 @@ def execute_http_request(
         plan = build_request(
             fake_endpoint, request_spec, environment, variables,  # type: ignore[arg-type]
             global_param_repo.list_params(db, project_id),
+            binary_loader=upload_service.make_binary_loader(db, project_id),
         )
     except ValueError as exc:
         detail["error_message"] = str(exc)

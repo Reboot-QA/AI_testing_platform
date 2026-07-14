@@ -355,6 +355,14 @@ export const apifoxApi = {
   updateSuite: (sid, data) => request.put(`/apifox/suites/${sid}`, data),
   deleteSuite: (sid) => request.delete(`/apifox/suites/${sid}`),
 
+  uploadFile: (pid, file) => {
+    const form = new FormData()
+    form.append('file', file)
+    return request.post(`/apifox/projects/${pid}/uploads`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    })
+  },
+
   listDatasets: (pid) => request.get(`/apifox/projects/${pid}/datasets`),
   getDataset: (did) => request.get(`/apifox/datasets/${did}`),
   createDataset: (pid, data) => request.post(`/apifox/projects/${pid}/datasets`, data),

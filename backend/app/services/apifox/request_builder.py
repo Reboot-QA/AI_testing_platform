@@ -6,7 +6,7 @@
 
 import base64
 import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.apifox.variable import ApifoxEnvironment
@@ -30,6 +30,7 @@ def build_request(
     environment: Optional[ApifoxEnvironment],
     variables: Dict[str, str],
     global_params: List,
+    binary_loader: Optional[Callable[[int], Optional[Tuple[bytes, str]]]] = None,
 ) -> Dict[str, Any]:
     path = apply_vars(endpoint.path, variables)
     for row in spec.get("path_params") or []:
@@ -97,6 +98,15 @@ def build_request(
         request_kwargs["content"] = content
         body_snapshot = content
         headers.setdefault("Content-Type", "application/json")
+    elif body_type == "binary":
+        file_id = body.get("file_id")
+        loaded = binary_loader(int(file_id)) if (file_id and binary_loader) else None
+        if loaded:
+            data, ctype = loaded
+            request_kwargs["content"] = data
+            if ctype:
+                headers.setdefault("Content-Type", ctype)
+            body_snapshot = f"<binary {len(data)} bytes>"
     elif body_type == "form-data":
         form = _rows_to_dict(body.get("form") or [], variables)
         if form:
