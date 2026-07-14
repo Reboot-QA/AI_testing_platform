@@ -8,6 +8,23 @@
       <el-button type="primary" :disabled="isAllProjects" data-assistant="requirements.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加需求
       </el-button>
+      <el-select v-model="filterStatus" placeholder="状态筛选" clearable style="width: 120px">
+        <el-option label="草稿" value="draft" />
+        <el-option label="已评审" value="approved" />
+        <el-option label="已关闭" value="closed" />
+      </el-select>
+      <el-input
+        v-model="keyword"
+        clearable
+        placeholder="搜索标题/描述"
+        style="width: 220px"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+      />
+      <el-button type="primary" plain @click="handleSearch">
+        <el-icon><Search /></el-icon>
+        搜索
+      </el-button>
       <el-select v-model="batchStatus" placeholder="批量改状态" clearable style="width: 140px">
         <el-option label="草稿" value="draft" />
         <el-option label="已评审" value="approved" />
@@ -272,7 +289,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
@@ -284,6 +301,8 @@ const linkedTestcases = ref([])
 const selectedIds = ref([])
 const selectedRows = ref([])
 const projectId = ref(ALL_PROJECTS)
+const filterStatus = ref('')
+const keyword = ref('')
 const batchStatus = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
@@ -348,6 +367,12 @@ async function loadData() {
     if (!isAllProjects.value) {
       params.project_id = projectId.value
     }
+    if (filterStatus.value) {
+      params.status = filterStatus.value
+    }
+    if (keyword.value.trim()) {
+      params.keyword = keyword.value.trim()
+    }
     const data = await requirementApi.list(null, params)
     requirements.value = data.items || []
     total.value = data.total || 0
@@ -366,6 +391,11 @@ async function loadData() {
 }
 
 function handleProjectChange() {
+  currentPage.value = 1
+  loadData()
+}
+
+function handleSearch() {
   currentPage.value = 1
   loadData()
 }

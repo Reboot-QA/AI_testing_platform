@@ -3,6 +3,7 @@ from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
@@ -91,6 +92,7 @@ def _clear_requirement_testcases(db: Session, req_id: int) -> int:
 def list_requirements(
     project_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, max_length=200),
     page: Optional[int] = Query(None, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -114,6 +116,14 @@ def list_requirements(
         if status not in ALLOWED_REQUIREMENT_STATUSES:
             raise HTTPException(status_code=400, detail="无效的需求状态")
         query = query.filter(Requirement.status == status)
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        query = query.filter(
+            or_(
+                Requirement.title.like(like),
+                Requirement.description.like(like),
+            )
+        )
     query = query.order_by(Requirement.id.desc())
 
     if page is not None:
