@@ -149,13 +149,35 @@ def _topic_id() -> str:
     return uuid.uuid4().hex
 
 
-def _build_xmind_topic(title: str, children: Optional[List[Dict]] = None, notes: Optional[str] = None) -> Dict:
-    topic: Dict[str, Any] = {"id": _topic_id(), "title": title}
+def _build_xmind_topic(
+    title: str,
+    children: Optional[List[Dict]] = None,
+    notes: Optional[str] = None,
+    *,
+    structure_class: Optional[str] = None,
+) -> Dict:
+    topic: Dict[str, Any] = {
+        "id": _topic_id(),
+        "class": "topic",
+        "title": title,
+    }
+    if structure_class:
+        topic["structureClass"] = structure_class
     if notes:
-        topic["notes"] = {"plain": {"content": notes}}
+        topic["notes"] = {
+            "plain": {"content": notes},
+            "realHTML": {"content": f"<div>{notes}</div>"},
+        }
     if children:
         topic["children"] = {"attached": children}
     return topic
+
+
+# 1x1 PNG，XMind 缩略图占位
+_XMIND_THUMBNAIL_PNG = bytes.fromhex(
+    "89504e470d0a1a0a0000000d4948445200000001000000010802000000907753de"
+    "0000000c49444154789c63f80f00000101000518d4630000000049454e44ae426082"
+)
 
 
 def _group_requirements(requirements: List[Requirement]) -> Dict[str, Dict[str, List[Requirement]]]:
@@ -235,17 +257,49 @@ def export_requirements_xmind(project: Project, requirements: List[Requirement])
             _build_xmind_topic(f"{type_label}（{total}）", children=priority_nodes)
         )
 
-    root = _build_xmind_topic(f"{project.name}（{len(requirements)}）", children=type_nodes or None)
-    sheet = [{"id": _topic_id(), "title": "需求点", "rootTopic": root}]
-    content = json.dumps(sheet, ensure_ascii=False)
-    manifest = [{"file-entry": {"full-path": "content.json", "media-type": "application/json"}}]
-    metadata = {"creator": {"name": "AI质量平台", "version": "1.0.0"}}
+    root = _build_xmind_topic(
+        f"{project.name}（{len(requirements)}）",
+        children=type_nodes or None,
+        structure_class="org.xmind.ui.logic.right",
+    )
+    sheet_id = _topic_id()
+    sheet = {
+        "id": sheet_id,
+        "class": "sheet",
+        "title": "需求点",
+        "rootTopic": root,
+        "theme": {
+            "map": {
+                "id": _topic_id(),
+                "properties": {
+                    "svg:fill": "#ffffff",
+                    "multi-line-colors": "",
+                    "color-list": "",
+                },
+            }
+        },
+    }
+    metadata = {
+        "dataStructureVersion": "2",
+        "layoutEngineVersion": "3",
+        "creator": {"name": "AI质量平台", "version": "1.0.0"},
+        "activeSheetId": sheet_id,
+        "modifier": "",
+    }
+    manifest = {
+        "file-entries": {
+            "content.json": {},
+            "metadata.json": {},
+            "Thumbnails/thumbnail.png": {},
+        }
+    }
 
     buffer = BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("content.json", content)
-        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False))
+        archive.writestr("content.json", json.dumps([sheet], ensure_ascii=False))
         archive.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False))
+        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False))
+        archive.writestr("Thumbnails/thumbnail.png", _XMIND_THUMBNAIL_PNG)
     buffer.seek(0)
     filename = f"{project.name}_requirements.xmind"
     return buffer, filename
