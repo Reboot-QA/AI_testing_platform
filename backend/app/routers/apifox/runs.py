@@ -200,6 +200,7 @@ def _step_out(step: ApifoxRunStep) -> RunStepOut:
         id=step.id,
         step_type=step.step_type,
         depth=step.depth,
+        iteration=step.iteration,
         case_id=step.case_id,
         case_name=step.case_name,
         method=step.method,
@@ -235,4 +236,5 @@ def get_run(rid: int, db: Session = Depends(get_db), user: User = Depends(get_cu
     data["steps"] = [_step_out(s) for s in run_repo.list_steps(db, rid)]
     # 套件父运行：附子运行汇总（各用例/场景一条）供两级报告
     data["children"] = [_brief(c) for c in run_repo.list_child_runs(db, rid)]
+    data["iterations"] = _loads(run.iterations_meta, [])
     return RunOut(**data)

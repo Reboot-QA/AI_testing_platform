@@ -100,6 +100,22 @@ def migrate_apifox_scenario_run_config(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_run_iteration(db: Session) -> None:
+    """apifox_run_steps 加 iteration（步骤所属轮次）、apifox_runs 加 iterations_meta（每组注入数据）。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        if "apifox_run_steps" in tables:
+            cols = {c["name"] for c in inspector.get_columns("apifox_run_steps")}
+            if "iteration" not in cols:
+                conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN iteration INTEGER NOT NULL DEFAULT 0"))
+        if "apifox_runs" in tables:
+            cols = {c["name"] for c in inspector.get_columns("apifox_runs")}
+            if "iterations_meta" not in cols:
+                conn.execute(text("ALTER TABLE apifox_runs ADD COLUMN iterations_meta TEXT"))
+    db.expire_all()
+
+
 def migrate_apifox_run_parent(db: Session) -> None:
     """apifox_runs 加 parent_run_id（套件运行的父运行 id，供父+子两级报告）。"""
     inspector = inspect(engine)
