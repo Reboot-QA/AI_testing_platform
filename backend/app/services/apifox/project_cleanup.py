@@ -19,6 +19,7 @@ from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.schedule import ApifoxSchedule
 from app.models.apifox.script import ApifoxCaseScript, ApifoxEndpointScript, ApifoxScript
 from app.models.apifox.suite import ApifoxSuite, ApifoxSuiteItem
+from app.models.apifox.upload_file import ApifoxUploadFile
 from app.models.apifox.variable import (
     ApifoxEnvironment,
     ApifoxEnvironmentServer,
@@ -91,3 +92,5 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     # 脚本库、调度
     wipe(ApifoxScript, ApifoxScript.project_id == project_id)
     wipe(ApifoxSchedule, ApifoxSchedule.project_id == project_id)
+    # 上传文件（Binary body）
+    wipe(ApifoxUploadFile, ApifoxUploadFile.project_id == project_id)

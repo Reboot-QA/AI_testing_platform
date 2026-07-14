@@ -11,6 +11,7 @@ from app.routers.apifox.scenarios import router as scenarios_router
 from app.routers.apifox.schedules import router as schedules_router
 from app.routers.apifox.scripts import router as scripts_router
 from app.routers.apifox.suites import router as suites_router
+from app.routers.apifox.uploads import router as uploads_router
 from app.routers.apifox.variables import router as variables_router
 from app.routers.apifox.workbench import router as workbench_router
 
@@ -30,4 +31,5 @@ __all__ = [
     "suites_router",
     "datasets_router",
     "databases_router",
+    "uploads_router",
 ]
