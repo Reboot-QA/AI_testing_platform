@@ -45,3 +45,23 @@ export async function resolveSaveConflict({ reload, overwrite }) {
 export function isConflict(err) {
   return err?.response?.status === 409
 }
+
+// 关闭有未保存改动的编辑 tab：保存并关闭 / 不保存关闭 / 取消。
+// 返回 'save' | 'discard' | 'cancel'（close/ESC 视为 cancel，避免误关丢改动）。
+export async function confirmCloseDirty(tabName) {
+  try {
+    await ElMessageBox.confirm(
+      `「${tabName}」有未保存的改动，关闭前要保存吗？`,
+      '未保存的改动',
+      {
+        confirmButtonText: '保存并关闭',
+        cancelButtonText: '不保存关闭',
+        distinguishCancelAndClose: true,
+        type: 'warning',
+      },
+    )
+    return 'save'
+  } catch (signal) {
+    return signal === 'cancel' ? 'discard' : 'cancel'
+  }
+}

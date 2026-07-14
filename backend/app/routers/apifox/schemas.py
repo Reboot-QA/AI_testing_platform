@@ -119,6 +119,8 @@ class EndpointUpdate(BaseModel):
     extracts: Optional[List[ExtractRow]] = None
     pre_scripts: Optional[List[CaseScriptRef]] = None
     post_scripts: Optional[List[CaseScriptRef]] = None
+    # 乐观锁：客户端读取时的版本；不一致则 409（None=不校验，向后兼容）
+    expected_version: Optional[int] = None
 
 
 class EndpointBrief(BaseModel):
@@ -149,6 +151,7 @@ class EndpointOut(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
     post_scripts: List[CaseScriptOut] = Field(default_factory=list)
+    version: int = 1
     created_at: datetime
     updated_at: datetime
 

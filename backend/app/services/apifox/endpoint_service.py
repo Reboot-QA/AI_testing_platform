@@ -32,6 +32,7 @@ from app.routers.apifox.schemas import (
     RequestSpec,
     TreeReorderRequest,
 )
+from app.services.apifox import versioning
 
 
 def _load_spec(text: str | None) -> RequestSpec:
@@ -120,6 +121,7 @@ def _endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
         request_spec=_load_spec(endpoint.request_spec),
         description=endpoint.description,
         sort_order=endpoint.sort_order,
+        version=endpoint.version,
         response_schema_id=endpoint.response_schema_id,
         contract_strict=endpoint.contract_strict,
         assertions=[
@@ -268,6 +270,8 @@ def get_endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
 
 
 def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate) -> EndpointOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxEndpoint, endpoint, data.expected_version)
     if "folder_id" in data.model_fields_set:
         _require_folder_in_project(db, data.folder_id, endpoint.project_id)
         endpoint.folder_id = data.folder_id
