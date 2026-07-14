@@ -21,7 +21,7 @@ from app.routers.apifox.scenario_schemas import (
     StepIn,
     StepOut,
 )
-from app.services.apifox import versioning
+from app.services.apifox import upload_service, versioning
 from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
 
 VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue", "db", "http"}
@@ -265,6 +265,8 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
         _write_steps(db, scenario, data.steps)
     db.commit()
     db.refresh(scenario)
+    if data.steps is not None:  # http 步骤 body 可能移除/替换 binary 文件，清孤儿上传
+        upload_service.purge_unreferenced_uploads(db, scenario.project_id)
     return _out(db, scenario)
 
 

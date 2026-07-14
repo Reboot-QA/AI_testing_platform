@@ -272,6 +272,39 @@ def test_iteration_tagging_correct_when_branch_varies_step_count(db, make_case, 
     assert [s.iteration for s in steps] == [0, 0, 1]
 
 
+def test_step_tree_not_requeried_per_iteration(db, make_case, monkeypatch):
+    # 评审#4 性能：直接数 apifox_scenario_steps 表的真实查询数（非某个 shim 的调用次数）。
+    # 步骤树快照按 run 缓存 + 脱离 ORM(不受 commit 后 expire 逐行补查影响)，
+    # 多步多轮下查询数应是小常量、不随「步骤数×轮数」增长。
+    from sqlalchemy import event
+
+    from app.database import engine
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"u": "a"}), DatasetRowIn(values={"u": "b"}),
+                            DatasetRowIn(values={"u": "c"})])
+    scenario = _scenario(db, steps=[  # 2 叶子步骤 × 3 轮：若逐行补查会明显放大
+        StepIn(type="case", ref_case_id=case.id),
+        StepIn(type="wait", wait_ms=1),
+    ])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    queries = []
+
+    def _spy(conn, cursor, statement, params, context, executemany):
+        if "apifox_scenario_steps" in statement.lower():
+            queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _spy)
+    try:
+        list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+    finally:
+        event.remove(engine, "before_cursor_execute", _spy)
+
+    # 计数路径 1 次 + 快照 1 次（3 轮共用）= 2；远小于 步骤×轮=6，且不随轮数增长
+    assert len(queries) == 2
+
+
 def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):
     # 第一行注入的变量不得残留到第二行（每行独立 runtime）
     seen_vars = []

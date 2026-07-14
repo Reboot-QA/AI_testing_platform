@@ -30,7 +30,7 @@ from app.routers.apifox.case_schemas import (
     ProjectCaseBrief,
 )
 from app.routers.apifox.schemas import KvRow, RequestSpec
-from app.services.apifox import versioning
+from app.services.apifox import upload_service, versioning
 
 
 def _load_request_spec(text: str | None) -> RequestSpec:
@@ -218,6 +218,8 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
         _write_case_scripts(db, case, "post", data.post_scripts)
     db.commit()
     db.refresh(case)
+    if data.request_spec is not None:  # body 可能移除/替换 binary 文件，清孤儿上传
+        upload_service.purge_unreferenced_uploads(db, case.project_id)
     return _case_out(db, case)
 
 
