@@ -29,81 +29,77 @@
       >
         批量删除{{ deletableSelectedCount ? ` (${deletableSelectedCount})` : '' }}
       </el-button>
+      <el-switch
+        v-model="selectMode"
+        inline-prompt
+        active-text="批量选择"
+        inactive-text="查看模式"
+        @change="handleSelectModeChange"
+      />
+      <span v-if="requirements.length" class="total-tip">共 {{ requirements.length }} 条需求</span>
     </div>
 
-    <el-table
-      :data="requirements"
-      v-loading="loading"
-      stripe
-      border
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column v-if="isAllProjects" prop="project_name" label="项目" min-width="140" show-overflow-tooltip />
-      <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="req_type" label="类型" width="100">
-        <template #default="{ row }">
-          <el-tag size="small">{{ typeMap[row.req_type] || row.req_type }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="priority" label="优先级" width="90" align="center" />
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.source === 'ai_document' ? 'warning' : ''" size="small">
-            {{ sourceMap[row.source] || row.source }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] || row.status }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="creator_name" label="创建人" width="100">
-        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="testcase_count" label="关联用例" width="100" align="center">
-        <template #default="{ row }">
+    <div v-loading="loading" class="mindmap-panel">
+      <RequirementMindMap
+        v-if="mindTree"
+        :tree="mindTree"
+        :selected-ids="selectedIds"
+        :select-mode="selectMode"
+        @node-click="openRequirementDetail"
+        @toggle-select="toggleRequirementSelect"
+      />
+      <el-empty v-else-if="!loading" description="暂无需求点" />
+    </div>
+
+    <el-drawer v-model="detailDrawerVisible" title="需求详情" size="480px">
+      <template v-if="activeRequirement">
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="ID">{{ activeRequirement.id }}</el-descriptions-item>
+          <el-descriptions-item v-if="isAllProjects" label="项目">
+            {{ activeRequirement.project_name || '-' }}
+          </el-descriptions-item>
+          <el-descriptions-item label="标题">{{ activeRequirement.title }}</el-descriptions-item>
+          <el-descriptions-item label="类型">
+            {{ typeMap[activeRequirement.req_type] || activeRequirement.req_type }}
+          </el-descriptions-item>
+          <el-descriptions-item label="优先级">{{ activeRequirement.priority }}</el-descriptions-item>
+          <el-descriptions-item label="来源">
+            {{ sourceMap[activeRequirement.source] || activeRequirement.source }}
+          </el-descriptions-item>
+          <el-descriptions-item label="状态">
+            <el-tag :type="statusType[activeRequirement.status]" size="small">
+              {{ statusMap[activeRequirement.status] || activeRequirement.status }}
+            </el-tag>
+          </el-descriptions-item>
+          <el-descriptions-item label="创建人">{{ activeRequirement.creator_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="关联用例">
+            <el-button
+              v-if="activeRequirement.testcase_count > 0"
+              link
+              type="primary"
+              @click="openTestcases(activeRequirement)"
+            >
+              {{ activeRequirement.testcase_count }} 条
+            </el-button>
+            <span v-else>0</span>
+          </el-descriptions-item>
+          <el-descriptions-item label="描述">
+            <pre class="pre-text">{{ activeRequirement.description || '-' }}</pre>
+          </el-descriptions-item>
+        </el-descriptions>
+        <div class="detail-actions">
+          <el-button type="primary" @click="openDialog(activeRequirement)">编辑</el-button>
           <el-button
-            v-if="row.testcase_count > 0"
-            link
-            type="primary"
-            @click="openTestcases(row)"
-          >
-            {{ row.testcase_count }}
-          </el-button>
-          <span v-else class="empty-count">0</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button
-            link
             type="danger"
-            :disabled="row.testcase_count > 0"
-            @click="handleDelete(row)"
+            plain
+            :disabled="activeRequirement.testcase_count > 0"
+            @click="handleDelete(activeRequirement)"
           >
             删除
           </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <div class="pagination-bar">
-      <el-pagination
-        v-model:current-page="currentPage"
-        v-model:page-size="pageSize"
-        :total="total"
-        :page-sizes="[10, 20, 50, 100]"
-        layout="total, sizes, prev, pager, next, jumper"
-        background
-        @current-change="loadData"
-        @size-change="handlePageSizeChange"
-      />
-    </div>
+        </div>
+      </template>
+    </el-drawer>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑需求' : '添加需求'" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
@@ -228,6 +224,8 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
+import RequirementMindMap from '@/components/RequirementMindMap.vue'
+import { buildRequirementMindTree } from '@/utils/requirementMindMap'
 
 const ALL_PROJECTS = '__all__'
 
@@ -238,19 +236,19 @@ const selectedIds = ref([])
 const selectedRows = ref([])
 const projectId = ref(ALL_PROJECTS)
 const batchStatus = ref('')
-const currentPage = ref(1)
-const pageSize = ref(10)
-const total = ref(0)
+const selectMode = ref(false)
 const loading = ref(false)
 const batchUpdating = ref(false)
 const batchDeleting = ref(false)
 const casesLoading = ref(false)
 const clearingCases = ref(false)
 const dialogVisible = ref(false)
+const detailDrawerVisible = ref(false)
 const casesDialogVisible = ref(false)
 const caseDrawerVisible = ref(false)
 const submitting = ref(false)
 const editing = ref(null)
+const activeRequirement = ref(null)
 const currentRequirement = ref(null)
 const caseDetail = ref(null)
 const formRef = ref()
@@ -274,6 +272,18 @@ const rules = { title: [{ required: true, message: '请输入标题', trigger: '
 
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
+const currentProjectName = computed(() => {
+  if (isAllProjects.value) return '需求全景'
+  return projects.value.find((item) => item.id === projectId.value)?.name || '项目需求'
+})
+
+const mindTree = computed(() =>
+  buildRequirementMindTree(requirements.value, {
+    projectName: currentProjectName.value,
+    isAllProjects: isAllProjects.value,
+  })
+)
+
 const deletableSelectedCount = computed(
   () => selectedRows.value.filter((row) => !row.testcase_count).length
 )
@@ -289,38 +299,51 @@ async function loadProjects() {
 async function loadData() {
   loading.value = true
   try {
-    const params = {
-      page: currentPage.value,
-      page_size: pageSize.value,
-    }
+    const params = {}
     if (!isAllProjects.value) {
       params.project_id = projectId.value
     }
-    const data = await requirementApi.list(null, params)
-    requirements.value = data.items || []
-    total.value = data.total || 0
-    const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
-    if (currentPage.value > maxPage) {
-      currentPage.value = maxPage
-      if (maxPage !== params.page) {
-        return loadData()
-      }
+    requirements.value = await requirementApi.list(null, params)
+    if (!selectMode.value) {
+      selectedIds.value = []
+      selectedRows.value = []
+    } else {
+      const idSet = new Set(requirements.value.map((item) => item.id))
+      selectedRows.value = selectedRows.value.filter((row) => idSet.has(row.id))
+      selectedIds.value = selectedRows.value.map((row) => row.id)
     }
-    selectedIds.value = []
-    selectedRows.value = []
   } finally {
     loading.value = false
   }
 }
 
 function handleProjectChange() {
-  currentPage.value = 1
+  selectedIds.value = []
+  selectedRows.value = []
   loadData()
 }
 
-function handlePageSizeChange() {
-  currentPage.value = 1
-  loadData()
+function handleSelectModeChange(enabled) {
+  if (!enabled) {
+    selectedIds.value = []
+    selectedRows.value = []
+  }
+}
+
+function openRequirementDetail(row) {
+  activeRequirement.value = row
+  detailDrawerVisible.value = true
+}
+
+function toggleRequirementSelect(row) {
+  const index = selectedIds.value.indexOf(row.id)
+  if (index >= 0) {
+    selectedIds.value.splice(index, 1)
+    selectedRows.value = selectedRows.value.filter((item) => item.id !== row.id)
+  } else {
+    selectedIds.value.push(row.id)
+    selectedRows.value.push(row)
+  }
 }
 
 function openDialog(row = null) {
@@ -331,6 +354,7 @@ function openDialog(row = null) {
   form.priority = row?.priority || 'P1'
   form.status = row?.status || 'draft'
   dialogVisible.value = true
+  if (row) detailDrawerVisible.value = false
 }
 
 async function handleSubmit() {
@@ -378,6 +402,10 @@ async function handleDelete(row) {
   })
   const res = await requirementApi.delete(row.id)
   ElMessage.success(res.message || '删除成功')
+  if (activeRequirement.value?.id === row.id) {
+    detailDrawerVisible.value = false
+    activeRequirement.value = null
+  }
   loadData()
 }
 
@@ -433,11 +461,6 @@ async function handleDeleteCase(caseId) {
 function openCaseDetail(row) {
   caseDetail.value = row
   caseDrawerVisible.value = true
-}
-
-function handleSelectionChange(rows) {
-  selectedRows.value = rows
-  selectedIds.value = rows.map((row) => row.id)
 }
 
 function groupRowsByProject(rows) {
@@ -554,14 +577,19 @@ onUnmounted(() => {
   align-items: center;
 }
 
-.empty-count {
-  color: #909399;
+.mindmap-panel {
+  min-height: 620px;
 }
 
-.pagination-bar {
+.total-tip {
+  color: #909399;
+  font-size: 13px;
+}
+
+.detail-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
+  gap: 12px;
+  margin-top: 20px;
 }
 
 .pre-text {
