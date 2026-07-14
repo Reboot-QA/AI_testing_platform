@@ -74,11 +74,11 @@ def migrate_apifox_scenario_step_tree(db: Session) -> None:
 
 
 def migrate_apifox_optimistic_version(db: Session) -> None:
-    """apifox_endpoint_cases / apifox_scenarios 加 version 列（乐观锁，默认 1）。"""
+    """apifox_endpoint_cases / apifox_scenarios / apifox_endpoints 加 version 列（乐观锁，默认 1）。"""
     inspector = inspect(engine)
     tables = set(inspector.get_table_names())
     with engine.begin() as conn:
-        for table in ("apifox_endpoint_cases", "apifox_scenarios"):
+        for table in ("apifox_endpoint_cases", "apifox_scenarios", "apifox_endpoints"):
             if table not in tables:
                 continue
             cols = {c["name"] for c in inspector.get_columns(table)}
