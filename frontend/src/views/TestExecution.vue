@@ -4,7 +4,7 @@
       <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="handleProjectChange">
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-button type="primary" :disabled="!projectId" @click="openCreateDialog">
+      <el-button type="primary" @click="openCreateDialog">
         <el-icon><Plus /></el-icon> 新建测试单
       </el-button>
       <el-button v-if="executingRun" @click="backToList">返回列表</el-button>
@@ -193,6 +193,16 @@
     <!-- 新建测试单 -->
     <el-dialog v-model="createDialogVisible" title="新建测试单" width="760px" destroy-on-close>
       <el-form ref="createFormRef" :model="createForm" :rules="createRules" label-width="90px">
+        <el-form-item label="项目" prop="project_id">
+          <el-select
+            v-model="createForm.project_id"
+            placeholder="请选择项目"
+            style="width: 100%"
+            @change="handleCreateProjectChange"
+          >
+            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="名称" prop="name">
           <el-input v-model="createForm.name" placeholder="例如：V1.2 回归测试" />
         </el-form-item>
@@ -202,27 +212,33 @@
         <el-form-item label="说明">
           <el-input v-model="createForm.description" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="需求筛选">
+        <el-form-item label="需求点" prop="requirement_id">
           <el-select
             v-model="createForm.requirement_id"
-            clearable
-            placeholder="全部已通过用例"
+            :disabled="!createForm.project_id"
+            :placeholder="createForm.project_id ? '请选择需求点' : '请先选择项目'"
             style="width: 100%"
             @change="loadAvailableCases"
           >
-            <el-option v-for="r in requirements" :key="r.id" :label="r.title" :value="r.id" />
+            <el-option v-for="r in createRequirements" :key="r.id" :label="r.title" :value="r.id" />
           </el-select>
         </el-form-item>
       </el-form>
 
       <div class="select-cases-toolbar">
         <span>选用例（仅已通过评审）</span>
-        <el-button link type="primary" @click="toggleSelectAll">
+        <el-button
+          link
+          type="primary"
+          :disabled="!createForm.requirement_id || !availableCases.length"
+          @click="toggleSelectAll"
+        >
           {{ allSelected ? '取消全选' : '全选' }}
         </el-button>
         <span class="selected-count">已选 {{ selectedCaseIds.length }} 条</span>
       </div>
       <el-table
+        v-if="createForm.requirement_id"
         ref="caseTableRef"
         v-loading="casesLoading"
         :data="availableCases"
@@ -237,6 +253,7 @@
         <el-table-column prop="priority" label="优先级" width="80" />
         <el-table-column prop="case_type" label="类型" width="90" />
       </el-table>
+      <el-empty v-else description="请先选择项目与需求点，系统将自动加载关联用例" />
 
       <template #footer>
         <el-button @click="createDialogVisible = false">取消</el-button>
@@ -284,7 +301,7 @@ import { projectApi, requirementApi, testExecutionApi } from '@/api'
 
 const projects = ref([])
 const projectId = ref(null)
-const requirements = ref([])
+const createRequirements = ref([])
 const runs = ref([])
 const runsLoading = ref(false)
 
@@ -297,13 +314,16 @@ const resultForm = reactive({ actual_result: '', remark: '' })
 const createDialogVisible = ref(false)
 const createFormRef = ref()
 const createForm = reactive({
+  project_id: null,
   name: '',
   build_name: '',
   description: '',
   requirement_id: null,
 })
 const createRules = {
+  project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   name: [{ required: true, message: '请输入测试单名称', trigger: 'blur' }],
+  requirement_id: [{ required: true, message: '请选择需求点', trigger: 'change' }],
 }
 const availableCases = ref([])
 const casesLoading = ref(false)
@@ -369,7 +389,6 @@ async function handleProjectChange() {
   executingRun.value = null
   currentCase.value = null
   if (!projectId.value) return
-  requirements.value = await requirementApi.list(projectId.value)
   await loadRuns()
 }
 
@@ -449,22 +468,50 @@ async function submitResult(result) {
 }
 
 function openCreateDialog() {
+  createForm.project_id = projectId.value || null
   createForm.name = ''
   createForm.build_name = ''
   createForm.description = ''
   createForm.requirement_id = null
+  createRequirements.value = []
+  availableCases.value = []
   selectedCaseIds.value = []
   caseTableSelection.value = []
   createDialogVisible.value = true
-  loadAvailableCases()
+  if (createForm.project_id) {
+    loadCreateRequirements()
+  }
+}
+
+async function loadCreateRequirements() {
+  if (!createForm.project_id) {
+    createRequirements.value = []
+    return
+  }
+  const data = await requirementApi.list(createForm.project_id, { status: 'approved' })
+  createRequirements.value = Array.isArray(data) ? data : data.items || []
+}
+
+function handleCreateProjectChange() {
+  createForm.requirement_id = null
+  createRequirements.value = []
+  availableCases.value = []
+  selectedCaseIds.value = []
+  caseTableSelection.value = []
+  loadCreateRequirements()
 }
 
 async function loadAvailableCases() {
-  if (!projectId.value) return
+  if (!createForm.project_id || !createForm.requirement_id) {
+    availableCases.value = []
+    selectedCaseIds.value = []
+    caseTableSelection.value = []
+    return
+  }
   casesLoading.value = true
   try {
-    availableCases.value = await testExecutionApi.listAvailableCases(projectId.value, {
-      requirement_id: createForm.requirement_id || undefined,
+    availableCases.value = await testExecutionApi.listAvailableCases(createForm.project_id, {
+      requirement_id: createForm.requirement_id,
     })
     selectedCaseIds.value = availableCases.value.map((item) => item.id)
     await nextTick()
@@ -502,14 +549,15 @@ async function createRun() {
   creating.value = true
   try {
     const run = await testExecutionApi.createRun({
-      project_id: projectId.value,
+      project_id: createForm.project_id,
       name: createForm.name,
       build_name: createForm.build_name || undefined,
       description: createForm.description || undefined,
-      requirement_id: createForm.requirement_id || undefined,
+      requirement_id: createForm.requirement_id,
       case_ids: selectedCaseIds.value,
     })
     createDialogVisible.value = false
+    projectId.value = createForm.project_id
     ElMessage.success('测试单已创建')
     executingRun.value = run
     caseFilter.value = 'pending'
