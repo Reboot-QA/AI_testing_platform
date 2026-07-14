@@ -132,4 +132,4 @@ def get_executor_name(db: Session, user_id: Optional[int]) -> str:
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         return ""
-    return user.full_name or user.username
+    return user.username
