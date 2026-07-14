@@ -92,6 +92,7 @@ def build_request(
             parsed_vars = json.loads(raw_vars) if raw_vars else {}
         except (ValueError, TypeError):
             parsed_vars = {}
+        # graphql 选定即发（query 可为空），与其余类型的 if content 判空刻意不同
         content = json.dumps({"query": query, "variables": parsed_vars}, ensure_ascii=False)
         request_kwargs["content"] = content
         body_snapshot = content

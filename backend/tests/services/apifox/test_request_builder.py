@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.routers.apifox.schemas import RequestSpec
 from app.services.apifox.request_builder import _select_base_url, build_request
 
 
@@ -177,3 +178,16 @@ def test_graphql_invalid_variables_fall_back_to_empty_object():
     plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
 
     assert json.loads(plan["request_kwargs"]["content"]) == {"query": "{ping}", "variables": {}}
+
+
+# ---------- request_spec 契约保真（防 pydantic 静默丢字段，回归评审阻塞项） ----------
+def test_request_spec_preserves_cookies_and_graphql_fields():
+    spec = RequestSpec(**{
+        "cookies": [{"key": "sid", "value": "s1"}],
+        "body": {"type": "graphql", "graphql_query": "{ping}", "graphql_variables": '{"a":1}'},
+    })
+    dumped = spec.model_dump()
+
+    assert [c["key"] for c in dumped["cookies"]] == ["sid"]
+    assert dumped["body"]["graphql_query"] == "{ping}"
+    assert dumped["body"]["graphql_variables"] == '{"a":1}'
