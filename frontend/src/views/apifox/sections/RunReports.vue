@@ -79,8 +79,11 @@
           </el-table-column>
         </el-table>
 
-        <el-collapse v-else>
-          <el-collapse-item v-for="s in detail.steps" :key="s.id" :name="s.id">
+        <template v-else>
+          <div v-for="(g, gi) in stepGroups" :key="gi" class="step-group">
+            <div v-if="g.label" class="group-title">{{ g.label }}</div>
+            <el-collapse>
+              <el-collapse-item v-for="s in g.steps" :key="s.id" :name="s.id">
             <template #title>
               <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
               <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
@@ -131,8 +134,10 @@
                 <JsonView :data="s.response_body" :deep="3" />
               </div>
             </template>
-          </el-collapse-item>
-        </el-collapse>
+              </el-collapse-item>
+            </el-collapse>
+          </div>
+        </template>
       </template>
     </el-drawer>
   </div>
@@ -145,6 +150,7 @@ import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
+import { iterationLabel } from '@/utils/iterationLabel'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -158,6 +164,17 @@ const parentDetail = ref(null)
 const drawerVisible = ref(false)
 
 const isSuite = computed(() => detail.value?.target_type === 'suite')
+
+// 数据驱动/循环多轮：按轮次分组展示步骤；单轮为一组无标题（零视觉变化）
+const stepGroups = computed(() => {
+  const steps = detail.value?.steps || []
+  const iters = detail.value?.iterations || []
+  if (iters.length <= 1) return [{ label: '', steps }]
+  return iters.map((data, i) => ({
+    label: iterationLabel(i, data),
+    steps: steps.filter((s) => s.iteration === i),
+  }))
+})
 
 const statusLabel = (s) => ({ running: '执行中', passed: '通过', failed: '失败' }[s] || s)
 const statusTag = (s) => ({ running: 'warning', passed: 'success', failed: 'danger' }[s] || 'info')
@@ -220,6 +237,20 @@ onMounted(loadRuns)
 
 .step-title {
   margin-left: 6px;
+}
+
+.step-group {
+  margin-bottom: 10px;
+}
+
+.group-title {
+  font-weight: 600;
+  color: var(--ax-brand);
+  font-size: 13px;
+  margin: 6px 0 4px;
+  padding: 4px 8px;
+  background: var(--ax-bg-subtle);
+  border-radius: 4px;
 }
 
 .sec-title {

@@ -115,6 +115,7 @@ class _RunContext:
         self.index = 0
         self.passed = 0
         self.failed = 0
+        self.iteration = 0  # 数据驱动/循环当前轮次（0 基），落到每个步骤供报告分组
 
 
 def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str, Any],
@@ -124,6 +125,7 @@ def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str
         run_id=ctx.run.id,
         step_type=step_type,
         depth=depth,
+        iteration=ctx.iteration,
         case_id=case.id if case else None,
         case_name=case_name or (case.name if case else ""),
         method=detail.get("method") or "",
@@ -151,6 +153,7 @@ def _step_event(ctx: _RunContext, total: int, status: str, detail: Dict[str, Any
         "type": "step",
         "index": ctx.index,
         "total": total,
+        "iteration": ctx.iteration,
         "case_name": case_name,
         "method": detail.get("method") or "",
         "status": status,
@@ -555,14 +558,24 @@ def iter_scenario_run(
         db, scenario.project_id, "scenario", scenario.id, scenario.name, environment, triggered_by,
         total, parent_run_id,
     )
-    yield {"type": "start", "run_id": run.id, "total": total, "message": f"开始执行场景「{scenario.name}」"}
+    # 多轮（数据驱动/循环）才落 meta：单轮运行报告不分组，零视觉变化
+    multi = len(iterations) > 1
+    if multi:
+        run.iterations_meta = _dumps(iterations)
+        db.commit()
+    start_event = {"type": "start", "run_id": run.id, "total": total,
+                   "message": f"开始执行场景「{scenario.name}」"}
+    if multi:
+        start_event["iterations"] = iterations
+    yield start_event
 
     ctx = _RunContext(db, run, environment, user_id)
     env_vars = engine.resolve_env_vars(db, environment.id if environment else None, user_id)
     global_vars = engine.resolve_global_vars(db, scenario.project_id, user_id)
     started = time.perf_counter()
     try:
-        for injection in iterations:
+        for i, injection in enumerate(iterations):
+            ctx.iteration = i
             # 每组数据独立 runtime：数据集行/循环各轮变量互不串（对齐用例数据驱动语义）
             ctx.runtime = dict(injection)
             try:

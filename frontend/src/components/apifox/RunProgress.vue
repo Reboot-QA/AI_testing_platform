@@ -11,14 +11,17 @@
       <el-button link size="small" @click="$emit('clear')">收起</el-button>
     </div>
 
-    <div v-for="(s, i) in stepEvents" :key="i" class="rp-step">
-      <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
-      <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
-      <span class="rp-name">{{ s.index }}/{{ s.total }} {{ s.case_name }}</span>
-      <span v-if="s.response_status" class="rp-meta">{{ s.response_status }}</span>
-      <span v-if="s.duration_ms != null" class="rp-meta">{{ Math.round(s.duration_ms) }}ms</span>
-      <span v-if="s.error_message" class="rp-err">{{ s.error_message }}</span>
-    </div>
+    <template v-for="(g, gi) in stepGroups" :key="gi">
+      <div v-if="g.label" class="rp-group">{{ g.label }}</div>
+      <div v-for="(s, i) in g.steps" :key="gi + '-' + i" class="rp-step">
+        <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
+        <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
+        <span class="rp-name">{{ s.index }}/{{ s.total }} {{ s.case_name }}</span>
+        <span v-if="s.response_status" class="rp-meta">{{ s.response_status }}</span>
+        <span v-if="s.duration_ms != null" class="rp-meta">{{ Math.round(s.duration_ms) }}ms</span>
+        <span v-if="s.error_message" class="rp-err">{{ s.error_message }}</span>
+      </div>
+    </template>
 
     <div v-if="errorEvent" class="rp-err-line">{{ errorEvent.message }}</div>
   </div>
@@ -26,6 +29,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { iterationLabel } from '@/utils/iterationLabel'
 
 const props = defineProps({
   events: { type: Array, default: () => [] },
@@ -36,6 +40,16 @@ defineEmits(['clear'])
 const stepEvents = computed(() => props.events.filter((e) => e.type === 'step'))
 const doneEvent = computed(() => props.events.find((e) => e.type === 'done'))
 const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
+
+// 数据驱动/循环多轮：start 事件带 iterations 时按轮次分组展示；单轮为一组无标题（零视觉变化）
+const iterations = computed(() => props.events.find((e) => e.type === 'start')?.iterations || [])
+const stepGroups = computed(() => {
+  if (iterations.value.length <= 1) return [{ label: '', steps: stepEvents.value }]
+  return iterations.value.map((data, i) => ({
+    label: iterationLabel(i, data),
+    steps: stepEvents.value.filter((s) => s.iteration === i),
+  }))
+})
 </script>
 
 <style scoped>
@@ -54,6 +68,15 @@ const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
   font-weight: 600;
   color: var(--ax-brand);
   margin-bottom: 8px;
+}
+
+.rp-group {
+  font-weight: 600;
+  color: var(--ax-brand);
+  font-size: 12px;
+  margin: 8px 0 2px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--ax-border);
 }
 
 .rp-step {
