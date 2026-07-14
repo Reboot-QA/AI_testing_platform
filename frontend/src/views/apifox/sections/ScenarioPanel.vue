@@ -52,6 +52,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useWorkspaceStore } from '@/stores/workspace'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
@@ -67,7 +68,7 @@ const databases = ref([])
 const saving = ref(false)
 const running = ref(false)
 const runEvents = ref([])
-const form = reactive({ id: null, name: '', description: '', steps: [] })
+const form = reactive({ id: null, name: '', description: '', steps: [], version: 1 })
 
 async function loadScenarios() {
   scenarios.value = await apifoxApi.listScenarios(pid.value)
@@ -126,6 +127,7 @@ async function selectScenario(sid) {
   form.name = s.name
   form.description = s.description || ''
   form.steps = normalizeSteps(s.steps || [])
+  form.version = s.version ?? 1
 }
 
 async function addScenario() {
@@ -170,16 +172,32 @@ function serializeStep(s, depth = 0) {
   return leafStep({ ...s, children })
 }
 
+async function doSaveScenario() {
+  const updated = await apifoxApi.updateScenario(form.id, {
+    name: form.name,
+    description: form.description || null,
+    steps: form.steps.map(serializeStep),
+    expected_version: form.version,
+  })
+  form.version = updated.version
+  await loadScenarios()
+}
+
 async function saveScenario() {
   saving.value = true
   try {
-    await apifoxApi.updateScenario(form.id, {
-      name: form.name,
-      description: form.description || null,
-      steps: form.steps.map(serializeStep),
-    })
+    await doSaveScenario()
     ElMessage.success('已保存')
-    await loadScenarios()
+  } catch (e) {
+    if (!isConflict(e)) throw e
+    await resolveSaveConflict({
+      reload: () => selectScenario(form.id),
+      overwrite: async () => {
+        const latest = await apifoxApi.getScenario(form.id)
+        form.version = latest.version
+        await doSaveScenario()
+      },
+    })
   } finally {
     saving.value = false
   }

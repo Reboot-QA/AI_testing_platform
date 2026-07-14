@@ -17,6 +17,11 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (response) => response.data,
   (error) => {
+    // apifox 保存冲突(409 乐观锁)：交由调用方自定义处理，不弹通用错误。
+    // 收窄到 /apifox/，避免吞掉其他模块用 409 表达的别的语义。
+    if (error.response?.status === 409 && (error.config?.url || '').includes('/apifox/')) {
+      return Promise.reject(error)
+    }
     const msg = error.response?.data?.detail || error.message || '请求失败'
     if (error.response?.status === 401) {
       localStorage.removeItem('token')

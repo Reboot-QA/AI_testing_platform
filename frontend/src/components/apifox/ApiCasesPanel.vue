@@ -39,6 +39,7 @@ import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { emptySpec, normalizeSpec as normSpec } from '@/utils/apifoxSpec'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 
@@ -57,7 +58,7 @@ const runEvents = ref([])
 
 const form = reactive({
   id: null, name: '', request_spec: emptySpec(), variables: [], assertions: [], extracts: [],
-  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] },
+  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] }, version: 1,
 })
 
 async function loadCases() {
@@ -90,6 +91,7 @@ function applyCase(c) {
   form.pre_scripts = c.pre_scripts || []
   form.post_scripts = c.post_scripts || []
   form.data_drive = c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+  form.version = c.version ?? 1
 }
 
 async function addCase() {
@@ -112,17 +114,36 @@ async function delCase(c) {
   await loadCases()
 }
 
+function casePayload() {
+  return {
+    name: form.name, request_spec: form.request_spec, variables: form.variables,
+    data_drive: form.data_drive, assertions: form.assertions, extracts: form.extracts,
+    pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+    post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+  }
+}
+
+async function doSaveCase() {
+  const updated = await apifoxApi.updateCase(form.id, { ...casePayload(), expected_version: form.version })
+  form.version = updated.version
+  await loadCases()
+}
+
 async function saveCase() {
   saving.value = true
   try {
-    await apifoxApi.updateCase(form.id, {
-      name: form.name, request_spec: form.request_spec, variables: form.variables,
-      data_drive: form.data_drive, assertions: form.assertions, extracts: form.extracts,
-      pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-      post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    })
+    await doSaveCase()
     ElMessage.success('已保存')
-    await loadCases()
+  } catch (e) {
+    if (!isConflict(e)) throw e
+    await resolveSaveConflict({
+      reload: () => selectCase(form.id),
+      overwrite: async () => {
+        const latest = await apifoxApi.getCase(form.id)
+        form.version = latest.version
+        await doSaveCase()
+      },
+    })
   } finally {
     saving.value = false
   }
