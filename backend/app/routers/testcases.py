@@ -4,6 +4,7 @@ from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
@@ -124,6 +125,7 @@ def _testcase_out(case: TestCase, db: Session) -> TestCaseOut:
         project_id=case.project_id,
         project_name=project_name,
         requirement_id=case.requirement_id,
+        requirement_title=case.requirement.title if case.requirement else "",
         title=case.title,
         case_type=case.case_type,
         priority=case.priority,
@@ -222,6 +224,7 @@ def list_testcases(
     project_id: Optional[int] = Query(None),
     requirement_id: Optional[int] = Query(None),
     review_status: Optional[str] = Query(None),
+    keyword: Optional[str] = Query(None, max_length=200),
     page: Optional[int] = Query(None, ge=1),
     page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -235,7 +238,11 @@ def list_testcases(
 
     query = (
         db.query(TestCase)
-        .options(joinedload(TestCase.creator), joinedload(TestCase.project))
+        .options(
+            joinedload(TestCase.creator),
+            joinedload(TestCase.project),
+            joinedload(TestCase.requirement),
+        )
         .filter(TestCase.project_id.in_(accessible_ids))
     )
     if project_id is not None:
@@ -245,6 +252,22 @@ def list_testcases(
         query = query.filter(TestCase.requirement_id == requirement_id)
     if review_status:
         query = query.filter(TestCase.review_status == review_status)
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        query = (
+            query.outerjoin(Requirement, TestCase.requirement_id == Requirement.id)
+            .filter(
+                or_(
+                    TestCase.title.like(like),
+                    TestCase.preconditions.like(like),
+                    TestCase.steps.like(like),
+                    TestCase.expected_results.like(like),
+                    TestCase.tags.like(like),
+                    Requirement.title.like(like),
+                )
+            )
+            .distinct()
+        )
     query = query.order_by(TestCase.id.desc())
 
     if page is not None:

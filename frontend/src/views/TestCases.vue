@@ -11,6 +11,18 @@
         <el-option label="已通过" value="approved" />
         <el-option label="已驳回" value="rejected" />
       </el-select>
+      <el-input
+        v-model="keyword"
+        clearable
+        placeholder="搜索标题/需求点/步骤"
+        style="width: 220px"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+      />
+      <el-button type="primary" plain @click="handleSearch">
+        <el-icon><Search /></el-icon>
+        搜索
+      </el-button>
       <el-button type="primary" :disabled="isAllProjects" @click="openDialog()">
         <el-icon><Plus /></el-icon> 手动添加
       </el-button>
@@ -75,6 +87,9 @@
       <el-table-column type="selection" width="45" />
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column v-if="isAllProjects" prop="project_name" label="项目" min-width="140" show-overflow-tooltip />
+      <el-table-column prop="requirement_title" label="需求点" min-width="160" show-overflow-tooltip>
+        <template #default="{ row }">{{ row.requirement_title || '-' }}</template>
+      </el-table-column>
       <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
       <el-table-column prop="priority" label="优先级" width="80" align="center" />
       <el-table-column prop="case_type" label="类型" width="90" />
@@ -157,6 +172,7 @@
       <template v-if="detail">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="标题">{{ detail.title }}</el-descriptions-item>
+          <el-descriptions-item label="需求点">{{ detail.requirement_title || '-' }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ detail.priority }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ detail.case_type }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{ detail.source === 'ai_generated' ? 'AI生成' : '手动' }}</el-descriptions-item>
@@ -210,7 +226,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowDown, UploadFilled } from '@element-plus/icons-vue'
+import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
@@ -223,6 +239,7 @@ const selectedRows = ref([])
 const selectedIds = ref([])
 const projectId = ref(ALL_PROJECTS)
 const filterStatus = ref('')
+const keyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
@@ -315,6 +332,7 @@ async function loadData() {
       params.project_id = projectId.value
     }
     if (filterStatus.value) params.review_status = filterStatus.value
+    if (keyword.value.trim()) params.keyword = keyword.value.trim()
     const data = await testcaseApi.list(params)
     testcases.value = data.items || []
     total.value = data.total || 0
@@ -333,6 +351,11 @@ async function loadData() {
 }
 
 function handleFilterChange() {
+  currentPage.value = 1
+  loadData()
+}
+
+function handleSearch() {
   currentPage.value = 1
   loadData()
 }

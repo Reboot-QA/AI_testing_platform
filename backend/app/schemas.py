@@ -289,6 +289,7 @@ class TestCaseOut(TestCaseBase):
     id: int
     project_id: int
     project_name: str = ""
+    requirement_title: str = ""
     source: str
     review_status: str
     created_by_id: Optional[int] = None
