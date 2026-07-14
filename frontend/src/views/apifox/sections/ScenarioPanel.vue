@@ -148,6 +148,8 @@ const guard = useUnsavedGuard({
   save: () => saveScenario(),
   name: () => form.name,
 })
+// 暴露给父组件 AutoTests：v-if 切子页(非路由)时先过守卫，避免未保存改动被静默卸载丢弃
+defineExpose({ confirmLeave: guard.confirmLeave })
 
 async function selectScenario(sid) {
   const s = await apifoxApi.getScenario(sid)
@@ -167,6 +169,7 @@ async function onSelectScenario(id) {
 }
 
 async function addScenario() {
+  if (!(await guard.confirmLeave())) return // 当前有未保存改动时先确认
   const { value } = await ElMessageBox.prompt('场景名称', '新建场景', {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
@@ -227,7 +230,7 @@ async function saveScenario() {
     ElMessage.success('已保存')
     return true
   } catch (e) {
-    if (!isConflict(e)) throw e
+    if (!isConflict(e)) return false // 非冲突错误已由 api 拦截器提示，不外抛(避免穿透 confirmLeave)
     let resolved = false
     await resolveSaveConflict({
       reload: async () => {
@@ -253,7 +256,15 @@ async function delScenario(s) {
     type: 'warning',
   })
   await apifoxApi.deleteScenario(s.id)
-  if (form.id === s.id) form.id = null
+  if (form.id === s.id) {
+    // 删的是当前编辑项：清空表单 + 校正未保存基线，避免后续误报 dirty/对已删项发保存
+    form.id = null
+    form.name = ''
+    form.description = ''
+    form.steps = []
+    form.version = 1
+    guard.markSaved()
+  }
   ElMessage.success('已删除')
   await loadScenarios()
 }

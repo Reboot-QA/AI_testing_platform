@@ -46,42 +46,27 @@ export function isConflict(err) {
   return err?.response?.status === 409
 }
 
-// 关闭有未保存改动的编辑 tab：保存并关闭 / 不保存关闭 / 取消。
-// 返回 'save' | 'discard' | 'cancel'（close/ESC 视为 cancel，避免误关丢改动）。
-export async function confirmCloseDirty(tabName) {
+// 未保存改动确认弹窗底座：返回 'save' | 'discard' | 'cancel'（close/ESC 视为 cancel，避免误操作丢改动）。
+async function _confirmDirty(question, confirmText, cancelText) {
   try {
-    await ElMessageBox.confirm(
-      `「${tabName}」有未保存的改动，关闭前要保存吗？`,
-      '未保存的改动',
-      {
-        confirmButtonText: '保存并关闭',
-        cancelButtonText: '不保存关闭',
-        distinguishCancelAndClose: true,
-        type: 'warning',
-      },
-    )
+    await ElMessageBox.confirm(question, '未保存的改动', {
+      confirmButtonText: confirmText,
+      cancelButtonText: cancelText,
+      distinguishCancelAndClose: true,
+      type: 'warning',
+    })
     return 'save'
   } catch (signal) {
     return signal === 'cancel' ? 'discard' : 'cancel'
   }
 }
 
-// 离开有未保存改动的编辑对象（切换/离开）：保存 / 不保存 / 取消。
-// 返回 'save' | 'discard' | 'cancel'（close/ESC 视为 cancel，避免误离开丢改动）。
-export async function confirmUnsaved(name) {
-  try {
-    await ElMessageBox.confirm(
-      `「${name}」有未保存的改动，是否保存？`,
-      '未保存的改动',
-      {
-        confirmButtonText: '保存',
-        cancelButtonText: '不保存',
-        distinguishCancelAndClose: true,
-        type: 'warning',
-      },
-    )
-    return 'save'
-  } catch (signal) {
-    return signal === 'cancel' ? 'discard' : 'cancel'
-  }
+// 关闭有未保存改动的编辑 tab
+export function confirmCloseDirty(tabName) {
+  return _confirmDirty(`「${tabName}」有未保存的改动，关闭前要保存吗？`, '保存并关闭', '不保存关闭')
+}
+
+// 离开有未保存改动的编辑对象（切换/离开）
+export function confirmUnsaved(name) {
+  return _confirmDirty(`「${name}」有未保存的改动，是否保存？`, '保存', '不保存')
 }

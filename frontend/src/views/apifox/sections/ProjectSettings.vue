@@ -178,6 +178,7 @@ async function onSelectScript(id) {
 }
 
 async function addScript() {
+  if (!(await scriptGuard.confirmLeave())) return // 当前脚本有未保存改动时先确认
   const { value } = await ElMessageBox.prompt('脚本名称', '新建脚本', {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
@@ -211,7 +212,13 @@ async function saveScript() {
 async function delScript(s) {
   await ElMessageBox.confirm(`确认删除脚本「${s.name}」？被用例引用时会被拦截。`, '提示', { type: 'warning' })
   await apifoxApi.deleteScript(s.id)
-  if (scriptForm.id === s.id) scriptForm.id = null
+  if (scriptForm.id === s.id) {
+    scriptForm.id = null
+    scriptForm.name = ''
+    scriptForm.content = ''
+    scriptForm.description = ''
+    scriptGuard.markSaved()
+  }
   ElMessage.success('已删除')
   await loadScripts()
 }
