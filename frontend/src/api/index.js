@@ -198,6 +198,20 @@ export const testcaseApi = {
       params: { project_id: projectId },
       responseType: 'blob',
     }),
+  exportXmind: (projectId) =>
+    request.get('/testcases/export/xmind', {
+      params: { project_id: projectId },
+      responseType: 'blob',
+    }),
+  importFile: (projectId, file) => {
+    const form = new FormData()
+    form.append('project_id', projectId)
+    form.append('file', file)
+    return request.post('/testcases/import/file', form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+      timeout: 120000,
+    })
+  },
 }
 
 export const settingsApi = {

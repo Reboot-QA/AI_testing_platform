@@ -1,15 +1,9 @@
 import asyncio
 import json
-import re
-from io import BytesIO
-from urllib.parse import quote
-
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
-from openpyxl import Workbook
-from openpyxl.styles import Alignment
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
@@ -27,6 +21,7 @@ from app.schemas import (
     TestCaseBatchReviewResponse,
     TestCaseBatchReviewUpdate,
     TestCaseCreate,
+    TestCaseFileImportResponse,
     TestCaseOut,
     TestCasePageOut,
     TestCaseUpdate,
@@ -39,6 +34,14 @@ from app.services.ai_service import (
     stream_generate_batches,
 )
 from app.services.settings_service import get_effective_llm_config
+from app.services.testcase_io_service import (
+    build_content_disposition,
+    export_testcases_excel,
+    export_testcases_xmind,
+    import_testcases_from_rows,
+    list_project_testcases,
+    parse_testcase_import_file,
+)
 
 router = APIRouter(prefix="/testcases", tags=["用例"])
 
@@ -52,13 +55,6 @@ REVIEW_TRANSITIONS = {
 
 def _check_project(db: Session, project_id: int, user: User) -> Project:
     return get_accessible_project(db, project_id, user)
-
-
-def _build_content_disposition(filename: str) -> str:
-    """Build RFC 5987 Content-Disposition header for non-ASCII filenames."""
-    ascii_fallback = "testcases.xlsx"
-    encoded = quote(filename, safe="")
-    return f"attachment; filename=\"{ascii_fallback}\"; filename*=UTF-8''{encoded}"
 
 
 def _prepare_ai_generate(
@@ -481,101 +477,6 @@ async def ai_generate_stream(
     )
 
 
-def _format_numbered_lines(text: Optional[str]) -> Optional[str]:
-    """将「1. …；2. …」或同一行多个编号项转为换行显示。"""
-    if not text:
-        return text
-    value = str(text).strip()
-    if not value:
-        return value
-    if "\n" in value:
-        lines = [line.strip() for line in value.splitlines() if line.strip()]
-        return "\n".join(lines)
-
-    value = re.sub(r"[；;]\s*(?=\d+\.)", "\n", value)
-    value = re.sub(r"(?<=[^\n])\s+(?=\d+\.)", "\n", value)
-    return value.strip()
-
-
-def _text_line_count(text: Optional[str], column_width: int) -> int:
-    content = _format_numbered_lines(text) or ""
-    if not content:
-        return 1
-    total = 0
-    for paragraph in content.split("\n"):
-        display_width = sum(2 if ord(char) > 127 else 1 for char in paragraph)
-        total += max(1, (display_width + column_width - 1) // column_width)
-    return max(1, total)
-
-
-def _autosize_excel_row(ws, row: int) -> None:
-    line_counts = [
-        _text_line_count(ws.cell(row, 6).value, 28),
-        _text_line_count(ws.cell(row, 7).value, 36),
-        _text_line_count(ws.cell(row, 8).value, 36),
-    ]
-    ws.row_dimensions[row].height = 15 * max(line_counts) + 4
-
-
-def _apply_multiline_cell_style(ws, row: int, column: int, value: Optional[str]) -> None:
-    cell = ws.cell(row, column, _format_numbered_lines(value))
-    cell.alignment = Alignment(vertical="top", wrap_text=True)
-
-
-def _configure_excel_sheet(ws) -> None:
-    column_widths = {
-        "A": 8,
-        "B": 14,
-        "C": 24,
-        "D": 10,
-        "E": 8,
-        "F": 28,
-        "G": 36,
-        "H": 36,
-        "I": 16,
-        "J": 12,
-        "K": 10,
-    }
-    for column, width in column_widths.items():
-        ws.column_dimensions[column].width = width
-    ws.row_dimensions[1].height = 18
-
-
-def _merge_requirement_column(ws, row_keys: List[Optional[int]], *, column: int = 2) -> None:
-    """合并需求点列中连续相同 requirement_id 的单元格。"""
-    if not row_keys:
-        return
-
-    merge_start = 0
-    current_key = row_keys[0]
-    for index in range(1, len(row_keys)):
-        key = row_keys[index]
-        if key != current_key or key is None:
-            if current_key is not None and index - merge_start > 1:
-                start_row = merge_start + 2
-                end_row = index + 1
-                ws.merge_cells(
-                    start_row=start_row,
-                    start_column=column,
-                    end_row=end_row,
-                    end_column=column,
-                )
-                ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=False)
-            merge_start = index
-            current_key = key
-
-    if current_key is not None and len(row_keys) - merge_start > 1:
-        start_row = merge_start + 2
-        end_row = len(row_keys) + 1
-        ws.merge_cells(
-            start_row=start_row,
-            start_column=column,
-            end_row=end_row,
-            end_column=column,
-        )
-        ws.cell(start_row, column).alignment = Alignment(vertical="center", wrap_text=False)
-
-
 @router.get("/export/excel")
 def export_excel(
     project_id: int = Query(...),
@@ -583,55 +484,57 @@ def export_excel(
     current_user: User = Depends(get_current_user),
 ):
     project = _check_project(db, project_id, current_user)
-    cases = (
-        db.query(TestCase)
-        .options(joinedload(TestCase.requirement))
-        .filter(TestCase.project_id == project_id)
-        .all()
-    )
-    cases.sort(
-        key=lambda item: (
-            item.requirement.title if item.requirement else "",
-            item.requirement_id or 0,
-            item.id,
-        )
-    )
-
-    wb = Workbook()
-    ws = wb.active
-    ws.title = "测试用例"
-    headers = ["ID", "需求点", "标题", "类型", "优先级", "前置条件", "步骤", "预期结果", "标签", "来源", "评审状态"]
-    ws.append(headers)
-    _configure_excel_sheet(ws)
-
-    merge_keys: List[Optional[int]] = []
-    for case in cases:
-        requirement_title = case.requirement.title if case.requirement else ""
-        merge_keys.append(case.requirement_id)
-        row_num = ws.max_row + 1
-        ws.cell(row_num, 1, case.id)
-        ws.cell(row_num, 2, requirement_title)
-        ws.cell(row_num, 3, case.title)
-        ws.cell(row_num, 4, case.case_type)
-        ws.cell(row_num, 5, case.priority)
-        _apply_multiline_cell_style(ws, row_num, 6, case.preconditions)
-        _apply_multiline_cell_style(ws, row_num, 7, case.steps)
-        _apply_multiline_cell_style(ws, row_num, 8, case.expected_results)
-        ws.cell(row_num, 9, case.tags)
-        ws.cell(row_num, 10, case.source)
-        ws.cell(row_num, 11, case.review_status)
-        _autosize_excel_row(ws, row_num)
-
-    _merge_requirement_column(ws, merge_keys, column=2)
-
-    buffer = BytesIO()
-    wb.save(buffer)
-    buffer.seek(0)
-    filename = f"{project.name}_testcases.xlsx"
+    cases = list_project_testcases(db, project_id)
+    buffer, filename = export_testcases_excel(project, cases)
     return StreamingResponse(
         buffer,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": _build_content_disposition(filename)},
+        headers={"Content-Disposition": build_content_disposition(filename, "testcases.xlsx")},
+    )
+
+
+@router.get("/export/xmind")
+def export_xmind(
+    project_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _check_project(db, project_id, current_user)
+    cases = list_project_testcases(db, project_id)
+    buffer, filename = export_testcases_xmind(project, cases)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.xmind.workbook",
+        headers={"Content-Disposition": build_content_disposition(filename, "testcases.xmind")},
+    )
+
+
+@router.post("/import/file", response_model=TestCaseFileImportResponse)
+async def import_testcases_file(
+    project_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _check_project(db, project_id, current_user)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+    try:
+        rows = parse_testcase_import_file(file.filename or "", file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    imported, skipped = import_testcases_from_rows(db, project, rows, current_user)
+    if imported == 0:
+        raise HTTPException(status_code=400, detail="没有成功导入任何用例，请检查文件内容")
+    message = f"成功导入 {imported} 条用例"
+    if skipped:
+        message += f"，跳过 {skipped} 条无效数据"
+    return TestCaseFileImportResponse(
+        imported_count=imported,
+        skipped_count=skipped,
+        message=message,
     )
 
 
