@@ -114,9 +114,13 @@ async function selectSchema(sid) {
   loadFieldsFromSource()
 }
 
+function syncSourceFromFields() {
+  form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+}
+
 function onViewChange(mode) {
   if (mode === 'source') {
-    form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+    syncSourceFromFields()
   } else if (!loadFieldsFromSource()) {
     ElMessage.error('源码 JSON 格式有误，请修正后再切换到可视化')
     viewMode.value = 'source'
@@ -158,7 +162,7 @@ async function delSchema(s) {
 
 async function saveSchema() {
   if (viewMode.value === 'visual') {
-    form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+    syncSourceFromFields()
   }
   try {
     JSON.parse(form.json_schema)

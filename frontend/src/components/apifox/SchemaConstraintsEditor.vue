@@ -54,11 +54,11 @@
 
     <div class="sc-row">
       <span class="sc-label">默认值</span>
-      <el-input v-model="field.extra.default" size="small" placeholder="default" />
+      <el-input v-model="defaultVal" size="small" placeholder="default" />
     </div>
     <div class="sc-row">
       <span class="sc-label">示例</span>
-      <el-input v-model="field.extra.example" size="small" placeholder="example" />
+      <el-input v-model="exampleVal" size="small" placeholder="example" />
     </div>
     <div class="sc-row">
       <el-checkbox v-model="nullable" size="small">可为 null(nullable)</el-checkbox>
@@ -88,13 +88,42 @@ function boolFlag(key) {
 const nullable = boolFlag('nullable')
 const uniqueItems = boolFlag('uniqueItems')
 
+// 按字段类型把文本值转回正确 JSON 类型（integer/number→数字、boolean→布尔、其余→字符串）
+function coerce(s) {
+  const t = props.field.type
+  if (t === 'integer' || t === 'number') {
+    const n = Number(s)
+    return Number.isNaN(n) ? s : n
+  }
+  if (t === 'boolean') return s === 'true' ? true : s === 'false' ? false : s
+  return s
+}
+
+// default/example：文本输入但按类型回写，避免 integer 的 5 被存成 "5"
+function typedField(key) {
+  return computed({
+    get: () => {
+      const v = props.field.extra[key]
+      return v === undefined || v === null ? '' : String(v)
+    },
+    set: (raw) => {
+      const s = String(raw)
+      if (s === '') delete props.field.extra[key]
+      else props.field.extra[key] = coerce(s)
+    },
+  })
+}
+
+const defaultVal = typedField('default')
+const exampleVal = typedField('example')
+
 const enumText = computed({
   get: () => {
     const e = props.field.extra.enum
     return Array.isArray(e) ? e.join('\n') : e || ''
   },
   set: (v) => {
-    const arr = String(v).split('\n').map((s) => s.trim()).filter(Boolean)
+    const arr = String(v).split('\n').map((s) => s.trim()).filter(Boolean).map(coerce)
     if (arr.length) props.field.extra.enum = arr
     else delete props.field.extra.enum
   },

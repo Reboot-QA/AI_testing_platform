@@ -71,14 +71,16 @@ const NUMERIC_KEYS = new Set([
 function cleanExtra(extra) {
   const out = {}
   for (const [k, v] of Object.entries(extra || {})) {
-    if (v === null || v === undefined || v === '') continue
-    if (Array.isArray(v) && v.length === 0) continue
+    if (v === null || v === undefined) continue
+    if (Array.isArray(v) && v.length === 0) continue // 空数组(如 enum:[])无意义
     if (NUMERIC_KEYS.has(k)) {
+      if (typeof v === 'boolean') { out[k] = v; continue } // draft-4 exclusiveMin/Max 布尔标志原样保留
+      if (v === '') continue // 数字约束清空=删除
       const n = Number(v)
       if (!Number.isNaN(n)) out[k] = n
       continue
     }
-    out[k] = v
+    out[k] = v // 字符串/数字/对象等原样保留（含空串，保证 default:"" 等往返无损）
   }
   return out
 }
