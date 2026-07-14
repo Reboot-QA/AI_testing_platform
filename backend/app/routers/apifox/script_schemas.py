@@ -19,6 +19,8 @@ class ScriptUpdate(BaseModel):
     content: Optional[str] = None
     description: Optional[str] = None
     sort_order: Optional[int] = None
+    # 乐观锁：客户端读取时的版本；不一致则 409（None=不校验，向后兼容）
+    expected_version: Optional[int] = None
 
 
 class ScriptBrief(BaseModel):
@@ -37,5 +39,6 @@ class ScriptOut(BaseModel):
     content: str
     description: Optional[str] = None
     sort_order: int
+    version: int = 1
     created_at: datetime
     updated_at: datetime

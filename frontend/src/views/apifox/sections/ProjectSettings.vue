@@ -88,6 +88,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi, projectApi } from '@/api'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
@@ -103,7 +104,7 @@ const SECTIONS = [
 const section = ref('basic')
 const scripts = ref([])
 const saving = ref(false)
-const scriptForm = reactive({ id: null, name: '', lang: 'javascript', content: '', description: '' })
+const scriptForm = reactive({ id: null, name: '', lang: 'javascript', content: '', description: '', version: 1 })
 
 const savingBasic = ref(false)
 const basicForm = reactive({ name: '', description: '' })
@@ -168,6 +169,7 @@ async function selectScript(sid) {
   scriptForm.lang = s.lang
   scriptForm.content = s.content
   scriptForm.description = s.description || ''
+  scriptForm.version = s.version ?? 1
   scriptGuard.markSaved()
 }
 
@@ -189,21 +191,42 @@ async function addScript() {
   await selectScript(created.id)
 }
 
+async function doSaveScript() {
+  const updated = await apifoxApi.updateScript(scriptForm.id, {
+    name: scriptForm.name,
+    lang: scriptForm.lang,
+    content: scriptForm.content,
+    description: scriptForm.description || null,
+    expected_version: scriptForm.version,
+  })
+  scriptForm.version = updated.version
+  await loadScripts()
+}
+
 async function saveScript() {
   saving.value = true
   try {
-    await apifoxApi.updateScript(scriptForm.id, {
-      name: scriptForm.name,
-      lang: scriptForm.lang,
-      content: scriptForm.content,
-      description: scriptForm.description || null,
-    })
+    await doSaveScript()
     scriptGuard.markSaved()
     ElMessage.success('已保存')
-    await loadScripts()
     return true
-  } catch {
-    return false // 后端错误已由 api 拦截器提示
+  } catch (e) {
+    if (!isConflict(e)) return false // 非冲突错误已由 api 拦截器提示
+    let resolved = false
+    await resolveSaveConflict({
+      reload: async () => {
+        await selectScript(scriptForm.id)
+        resolved = true
+      },
+      overwrite: async () => {
+        const latest = await apifoxApi.getScript(scriptForm.id)
+        scriptForm.version = latest.version
+        await doSaveScript()
+        scriptGuard.markSaved()
+        resolved = true
+      },
+    })
+    return resolved
   } finally {
     saving.value = false
   }
@@ -217,6 +240,7 @@ async function delScript(s) {
     scriptForm.name = ''
     scriptForm.content = ''
     scriptForm.description = ''
+    scriptForm.version = 1
     scriptGuard.markSaved()
   }
   ElMessage.success('已删除')

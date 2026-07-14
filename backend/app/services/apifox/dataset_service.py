@@ -19,6 +19,7 @@ from app.routers.apifox.dataset_schemas import (
     DatasetRowIn,
     DatasetUpdate,
 )
+from app.services.apifox import versioning
 
 
 def _loads(text, fallback):
@@ -77,6 +78,7 @@ def _out(db: Session, dataset: ApifoxDataset) -> DatasetOut:
             for r in repo.list_rows(db, dataset.id)
         ],
         sort_order=dataset.sort_order,
+        version=dataset.version,
         created_at=dataset.created_at,
         updated_at=dataset.updated_at,
     )
@@ -118,6 +120,8 @@ def get_dataset_out(db: Session, dataset: ApifoxDataset) -> DatasetOut:
 
 
 def update_dataset(db: Session, dataset: ApifoxDataset, data: DatasetUpdate) -> DatasetOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxDataset, dataset, data.expected_version)
     if data.name is not None and data.name != dataset.name:
         _require_unique_name(db, dataset.project_id, data.name, exclude_id=dataset.id)
         dataset.name = data.name

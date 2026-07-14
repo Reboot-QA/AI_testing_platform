@@ -17,6 +17,7 @@ from app.routers.apifox.script_schemas import (
     ScriptUpdate,
 )
 from app.services.apifox import script_service as service
+from app.services.apifox.errors import ConflictError
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·脚本库"])
@@ -60,6 +61,8 @@ def update_script(
     script = _script_checked(db, sid, user)
     try:
         return service.update_script(db, script, data)
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=exc.message)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
