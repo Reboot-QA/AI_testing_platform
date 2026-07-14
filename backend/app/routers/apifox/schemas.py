@@ -18,11 +18,13 @@ class KvRow(BaseModel):
 
 
 class BodySpec(BaseModel):
-    type: str = "none"  # none|json|xml|form-data|urlencoded|raw|graphql
+    type: str = "none"  # none|json|xml|form-data|urlencoded|raw|graphql|binary
     raw: str = ""  # json/xml/raw 共用
     form: List[KvRow] = Field(default_factory=list)
     graphql_query: str = ""
     graphql_variables: str = ""  # JSON 文本
+    file_id: Optional[int] = None  # binary：引用 apifox_upload_files.id
+    file_name: str = ""  # binary：展示用文件名（发送时按 file_id 取字节）
 
 
 class AuthSpec(BaseModel):

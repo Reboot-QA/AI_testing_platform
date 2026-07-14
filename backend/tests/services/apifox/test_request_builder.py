@@ -180,14 +180,41 @@ def test_graphql_invalid_variables_fall_back_to_empty_object():
     assert json.loads(plan["request_kwargs"]["content"]) == {"query": "{ping}", "variables": {}}
 
 
+def test_binary_body_uses_loader_bytes_and_content_type():
+    spec = {"body": {"type": "binary", "file_id": 7}}
+    loader = lambda fid: (b"\x89PNG", "image/png") if fid == 7 else None  # noqa: E731
+    plan = build_request(_endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [], binary_loader=loader)
+
+    assert plan["request_kwargs"]["content"] == b"\x89PNG"
+    assert plan["headers"]["Content-Type"] == "image/png"
+    assert plan["body_snapshot"] == "<binary 4 bytes>"
+
+
+def test_binary_body_without_loader_sends_no_content():
+    spec = {"body": {"type": "binary", "file_id": 7}}
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert "content" not in plan["request_kwargs"]
+
+
+def test_binary_body_loader_miss_sends_no_content():
+    spec = {"body": {"type": "binary", "file_id": 7}}
+    plan = build_request(_endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [], binary_loader=lambda fid: None)
+
+    assert "content" not in plan["request_kwargs"]
+
+
 # ---------- request_spec 契约保真（防 pydantic 静默丢字段，回归评审阻塞项） ----------
 def test_request_spec_preserves_cookies_and_graphql_fields():
     spec = RequestSpec(**{
         "cookies": [{"key": "sid", "value": "s1"}],
-        "body": {"type": "graphql", "graphql_query": "{ping}", "graphql_variables": '{"a":1}'},
+        "body": {"type": "graphql", "graphql_query": "{ping}", "graphql_variables": '{"a":1}',
+                 "file_id": 9, "file_name": "a.bin"},
     })
     dumped = spec.model_dump()
 
     assert [c["key"] for c in dumped["cookies"]] == ["sid"]
     assert dumped["body"]["graphql_query"] == "{ping}"
     assert dumped["body"]["graphql_variables"] == '{"a":1}'
+    assert dumped["body"]["file_id"] == 9
+    assert dumped["body"]["file_name"] == "a.bin"

@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.repositories.apifox import global_param_repo, schema_repo, variable_repo
-from app.services.apifox import contract_service, schema_ref
+from app.services.apifox import contract_service, schema_ref, upload_service
 from app.services.apifox import run_engine as engine
 
 
@@ -55,6 +55,7 @@ def debug_send(
     plan = engine.build_request(
         endpoint, request_spec or {}, environment, variables,
         global_param_repo.list_params(db, project_id),
+        binary_loader=upload_service.make_binary_loader(db, project_id),
     )  # 无环境且相对路径时 raise ValueError（router 转 400）
 
     result: Dict[str, Any] = {
