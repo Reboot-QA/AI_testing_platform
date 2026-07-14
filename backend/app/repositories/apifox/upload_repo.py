@@ -22,13 +22,12 @@ def get_file(db: Session, file_id: int) -> Optional[ApifoxUploadFile]:
 
 def list_id_created_by_project(db: Session, project_id: int) -> List[Tuple[int, datetime]]:
     """列本项目所有上传文件 (id, created_at)（GC 用，不取 data 字节）。"""
-    return list(
-        db.execute(
-            select(ApifoxUploadFile.id, ApifoxUploadFile.created_at).where(
-                ApifoxUploadFile.project_id == project_id
-            )
-        ).all()
-    )
+    rows = db.execute(
+        select(ApifoxUploadFile.id, ApifoxUploadFile.created_at).where(
+            ApifoxUploadFile.project_id == project_id
+        )
+    ).all()
+    return [(r.id, r.created_at) for r in rows]
 
 
 def delete_by_ids(db: Session, ids: List[int]) -> None:

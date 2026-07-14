@@ -69,6 +69,33 @@ def test_purge_removes_when_body_no_longer_binary(db):
     assert upload_repo.get_file(db, orphan.id) is None
 
 
+def test_update_endpoint_triggers_gc_removing_replaced_file(db, monkeypatch):
+    # 集成路径：保存接口后真的触发 GC，把被替换掉的旧文件清掉（接线回归）
+    from datetime import datetime, timedelta
+
+    from app.models.apifox.upload_file import ApifoxUploadFile
+    from app.routers.apifox.schemas import EndpointUpdate, RequestSpec
+    from app.services.apifox import endpoint_service
+
+    old = _upload(db, name="old")
+    new = _upload(db, name="new")
+    # 让两文件「够老」以越过默认宽限期（模拟并非刚上传）
+    db.query(ApifoxUploadFile).update({ApifoxUploadFile.created_at: datetime.utcnow() - timedelta(days=1)})
+    ep = ApifoxEndpoint(project_id=1, name="ep", method="POST", path="/x",
+                        request_spec=_binary_spec(old.id))
+    db.add(ep)
+    db.commit()
+
+    # 保存接口：body 换绑到 new，旧文件 old 应被 GC 清掉
+    endpoint_service.update_endpoint(
+        db, ep,
+        EndpointUpdate(request_spec=RequestSpec(body={"type": "binary", "file_id": new.id})),
+    )
+
+    assert upload_repo.get_file(db, new.id) is not None
+    assert upload_repo.get_file(db, old.id) is None
+
+
 def test_grace_period_protects_recent_uploads(db):
     # 刚上传未保存的在途文件（默认 1h 宽限内）不被并发保存的 GC 误删
     fresh = _upload(db, name="in-flight")
