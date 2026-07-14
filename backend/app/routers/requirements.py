@@ -1,5 +1,5 @@
 import json
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
@@ -22,6 +22,7 @@ from app.schemas import (
     RequirementCreate,
     RequirementExtractResponse,
     RequirementOut,
+    RequirementPageOut,
     RequirementUpdate,
 )
 from app.services.ai_service import extract_requirements_from_document, stream_extract_requirements
@@ -77,15 +78,19 @@ def _clear_requirement_testcases(db: Session, req_id: int) -> int:
     return len(cases)
 
 
-@router.get("", response_model=List[RequirementOut])
+@router.get("", response_model=Union[List[RequirementOut], RequirementPageOut])
 def list_requirements(
     project_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     accessible_ids = get_accessible_project_ids(db, current_user)
     if not accessible_ids:
+        if page is not None:
+            return RequirementPageOut(items=[], total=0, page=page, page_size=page_size)
         return []
 
     query = (
@@ -100,7 +105,19 @@ def list_requirements(
         if status not in ALLOWED_REQUIREMENT_STATUSES:
             raise HTTPException(status_code=400, detail="无效的需求状态")
         query = query.filter(Requirement.status == status)
-    reqs = query.order_by(Requirement.id.desc()).all()
+    query = query.order_by(Requirement.id.desc())
+
+    if page is not None:
+        total = query.count()
+        reqs = query.offset((page - 1) * page_size).limit(page_size).all()
+        return RequirementPageOut(
+            items=[_requirement_out(r, db) for r in reqs],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    reqs = query.all()
     return [_requirement_out(r, db) for r in reqs]
 
 

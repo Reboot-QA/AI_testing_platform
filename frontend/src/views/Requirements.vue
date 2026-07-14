@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="loadData">
+      <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="handleProjectChange">
         <el-option label="全部" :value="ALL_PROJECTS" />
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
@@ -91,6 +91,19 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pagination-bar">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="loadData"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑需求' : '添加需求'" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
@@ -225,6 +238,9 @@ const selectedIds = ref([])
 const selectedRows = ref([])
 const projectId = ref(ALL_PROJECTS)
 const batchStatus = ref('')
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
 const loading = ref(false)
 const batchUpdating = ref(false)
 const batchDeleting = ref(false)
@@ -273,13 +289,38 @@ async function loadProjects() {
 async function loadData() {
   loading.value = true
   try {
-    const listProjectId = isAllProjects.value ? null : projectId.value
-    requirements.value = await requirementApi.list(listProjectId)
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize.value,
+    }
+    if (!isAllProjects.value) {
+      params.project_id = projectId.value
+    }
+    const data = await requirementApi.list(null, params)
+    requirements.value = data.items || []
+    total.value = data.total || 0
+    const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage
+      if (maxPage !== params.page) {
+        return loadData()
+      }
+    }
     selectedIds.value = []
     selectedRows.value = []
   } finally {
     loading.value = false
   }
+}
+
+function handleProjectChange() {
+  currentPage.value = 1
+  loadData()
+}
+
+function handlePageSizeChange() {
+  currentPage.value = 1
+  loadData()
 }
 
 function openDialog(row = null) {
@@ -515,6 +556,12 @@ onUnmounted(() => {
 
 .empty-count {
   color: #909399;
+}
+
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 
 .pre-text {

@@ -188,6 +188,13 @@ class RequirementOut(RequirementBase):
         from_attributes = True
 
 
+class RequirementPageOut(BaseModel):
+    items: List[RequirementOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class RequirementBatchStatusUpdate(BaseModel):
     project_id: int
     requirement_ids: List[int] = Field(min_length=1)
