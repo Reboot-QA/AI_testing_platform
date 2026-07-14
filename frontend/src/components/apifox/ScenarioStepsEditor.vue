@@ -32,6 +32,25 @@
           <el-option label="跳出循环" value="break" />
           <el-option label="跳过本轮" value="continue" />
           <el-option label="数据库操作" value="db" />
+          <el-option label="HTTP 请求" value="http" />
+          <el-option label="从接口导入" value="import-endpoint" />
+          <el-option label="从 cURL 导入" value="import-curl" />
+        </el-select>
+
+        <el-select
+          v-if="newType === 'import-endpoint'"
+          v-model="pickedEndpointId"
+          size="small"
+          placeholder="选择接口"
+          style="flex: 1"
+          filterable
+        >
+          <el-option
+            v-for="ep in endpoints"
+            :key="ep.id"
+            :label="`[${ep.method}] ${ep.name}`"
+            :value="ep.id"
+          />
         </el-select>
         <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
           <el-option
@@ -62,15 +81,33 @@
         :current-scenario-id="currentScenarioId"
         :scripts="scripts"
         :databases="databases"
+        :server-names="serverNames"
       />
       <el-empty v-else description="点击左侧步骤编辑详情" :image-size="60" />
     </div>
+
+    <el-dialog v-model="curlVisible" title="从 cURL 导入" width="560px">
+      <el-input
+        v-model="curlText"
+        type="textarea"
+        :rows="8"
+        placeholder="粘贴 curl 命令，如 curl 'https://...' -X POST -H '...' --data-raw '...'"
+      />
+      <template #footer>
+        <el-button @click="curlVisible = false">取消</el-button>
+        <el-button type="primary" @click="importFromCurl">解析并添加</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
+import { apifoxApi } from '@/api'
+import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
+import { parseCurl } from '@/utils/curlParser'
 import ScenarioStepRow from '@/components/apifox/ScenarioStepRow.vue'
 import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
 
@@ -81,6 +118,8 @@ const props = defineProps({
   currentScenarioId: { type: Number, default: null },
   scripts: { type: Array, default: () => [] },
   databases: { type: Array, default: () => [] },
+  endpoints: { type: Array, default: () => [] },
+  serverNames: { type: Array, default: () => [] },
 })
 
 let _seq = 0
@@ -130,8 +169,11 @@ function removeTop(i) {
 const newType = ref('case')
 const pickedCaseId = ref(null)
 const pickedScenarioId = ref(null)
+const pickedEndpointId = ref(null)
 const waitMs = ref(500)
 const groupName = ref('')
+const curlVisible = ref(false)
+const curlText = ref('')
 
 const availableScenarios = computed(() =>
   props.scenarios.filter((s) => s.id !== props.currentScenarioId)
@@ -141,8 +183,48 @@ const canAdd = computed(() => {
   if (newType.value === 'case') return !!pickedCaseId.value
   if (newType.value === 'wait') return waitMs.value > 0
   if (newType.value === 'scenario') return !!pickedScenarioId.value
+  if (newType.value === 'import-endpoint') return !!pickedEndpointId.value
   return true
 })
+
+function newHttpStep(over = {}) {
+  return {
+    type: 'http', enabled: true, name: over.name || 'HTTP 请求', _uid: ++_seq,
+    config: {
+      name: over.name || '', method: over.method || 'GET', path: over.path || '',
+      server_name: over.server_name || null,
+      request_spec: over.request_spec || emptySpec(),
+      assertions: over.assertions || [], extracts: over.extracts || [],
+    },
+  }
+}
+
+async function importFromEndpoint() {
+  try {
+    const e = await apifoxApi.getEndpoint(pickedEndpointId.value)
+    props.rows.push(newHttpStep({
+      name: e.name, method: e.method, path: e.path, server_name: e.server_name,
+      request_spec: normalizeSpec(e.request_spec),
+      assertions: e.assertions || [], extracts: e.extracts || [],
+    }))
+    pickedEndpointId.value = null
+    newType.value = 'http'
+  } catch {
+    ElMessage.error('接口加载失败')
+  }
+}
+
+function importFromCurl() {
+  const parsed = parseCurl(curlText.value)
+  if (!parsed) {
+    ElMessage.error('无法解析，请粘贴以 curl 开头的完整命令')
+    return
+  }
+  props.rows.push(newHttpStep(parsed))
+  curlVisible.value = false
+  curlText.value = ''
+  newType.value = 'http'
+}
 
 function addStep() {
   if (newType.value === 'case') {
@@ -178,6 +260,12 @@ function addStep() {
       type: 'db', enabled: true, name: '数据库操作', _uid: ++_seq,
       config: { connection_id: null, sql: '', extracts: [] },
     })
+  } else if (newType.value === 'http') {
+    props.rows.push(newHttpStep())
+  } else if (newType.value === 'import-endpoint') {
+    importFromEndpoint()
+  } else if (newType.value === 'import-curl') {
+    curlVisible.value = true
   } else {
     props.rows.push({
       type: 'loop', enabled: true, _uid: ++_seq, children: [],
