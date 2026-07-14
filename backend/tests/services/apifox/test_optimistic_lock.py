@@ -82,3 +82,25 @@ def test_scenario_update_without_version_backward_compat(db):
     updated = scenario_service.update_scenario(db, scenario, ScenarioUpdate(name="s2"))
 
     assert updated.version == 2
+
+
+def test_concurrent_two_sessions_second_save_conflicts(db):
+    """评审#1 回归：两 session 各加载 v1，A 先存(→v2)，B 用它加载时的 v1 存必须 409。
+
+    这测的是 DB 级原子 CAS——B 的 ORM 对象缓存仍是 v1，应用层比较(1==1)会漏判，
+    只有 UPDATE...WHERE version=1 命中 DB 的 v2 才能拦住。去掉 CAS 改回应用层比较即失败。
+    """
+    from app.database import SessionLocal
+
+    out = _scenario(db)  # v1，已提交
+    session_b = SessionLocal()
+    try:
+        sc_b = scenario_service.repo.get_scenario(session_b, out.id)  # B 加载 v1（缓存 1）
+        sc_a = scenario_service.repo.get_scenario(db, out.id)         # A 加载 v1
+        scenario_service.update_scenario(db, sc_a, ScenarioUpdate(name="by-a", expected_version=1))  # → v2
+
+        with pytest.raises(ConflictError) as ei:
+            scenario_service.update_scenario(session_b, sc_b, ScenarioUpdate(name="by-b", expected_version=1))
+        assert ei.value.current_version == 2
+    finally:
+        session_b.close()

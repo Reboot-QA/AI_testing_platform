@@ -17,8 +17,9 @@ request.interceptors.request.use((config) => {
 request.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    // 409 乐观锁冲突：交由调用方自定义处理（提示放弃本地改动/重载），不弹通用错误
-    if (error.response?.status === 409) {
+    // apifox 保存冲突(409 乐观锁)：交由调用方自定义处理，不弹通用错误。
+    // 收窄到 /apifox/，避免吞掉其他模块用 409 表达的别的语义。
+    if (error.response?.status === 409 && (error.config?.url || '').includes('/apifox/')) {
       return Promise.reject(error)
     }
     const msg = error.response?.data?.detail || error.message || '请求失败'

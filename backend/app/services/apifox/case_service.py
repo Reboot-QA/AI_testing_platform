@@ -30,7 +30,7 @@ from app.routers.apifox.case_schemas import (
     ProjectCaseBrief,
 )
 from app.routers.apifox.schemas import KvRow, RequestSpec
-from app.services.apifox.errors import ConflictError
+from app.services.apifox import versioning
 
 
 def _load_request_spec(text: str | None) -> RequestSpec:
@@ -192,8 +192,8 @@ def get_case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
 
 
 def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> CaseOut:
-    if data.expected_version is not None and case.version != data.expected_version:
-        raise ConflictError(case.version)
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxEndpointCase, case, data.expected_version)
     if data.name is not None:
         case.name = data.name
     if data.request_spec is not None:
@@ -216,7 +216,6 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
     if data.post_scripts is not None:
         script_repo.delete_case_scripts(db, case.id, "post")
         _write_case_scripts(db, case, "post", data.post_scripts)
-    case.version += 1
     db.commit()
     db.refresh(case)
     return _case_out(db, case)
