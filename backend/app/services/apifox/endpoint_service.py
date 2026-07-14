@@ -32,7 +32,7 @@ from app.routers.apifox.schemas import (
     RequestSpec,
     TreeReorderRequest,
 )
-from app.services.apifox import versioning
+from app.services.apifox import upload_service, versioning
 
 
 def _load_spec(text: str | None) -> RequestSpec:
@@ -309,6 +309,8 @@ def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate)
         _write_endpoint_scripts(db, endpoint, "post", data.post_scripts)
     db.commit()
     db.refresh(endpoint)
+    if data.request_spec is not None:  # body 可能移除/替换 binary 文件，清孤儿上传
+        upload_service.purge_unreferenced_uploads(db, endpoint.project_id)
     return _endpoint_out(db, endpoint)
 
 
