@@ -33,6 +33,15 @@
 
     <el-input v-model="field.description" size="small" placeholder="说明" class="f-desc" />
 
+    <el-popover v-if="showConstraints" trigger="click" :width="300" placement="bottom-end">
+      <template #reference>
+        <el-button link size="small" :type="hasConstraints ? 'primary' : ''" title="高级约束（枚举/正则/范围/示例等）">
+          约束<span v-if="hasConstraints" class="c-dot">●</span>
+        </el-button>
+      </template>
+      <SchemaConstraintsEditor :field="field" />
+    </el-popover>
+
     <el-button v-if="field.type === 'object'" link size="small" @click="addChild">+ 字段</el-button>
     <el-button v-if="!isItem" link type="danger" size="small" @click="remove">删</el-button>
   </div>
@@ -58,7 +67,9 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import { FIELD_TYPES, newField } from '@/composables/useJsonSchema'
+import SchemaConstraintsEditor from '@/components/apifox/SchemaConstraintsEditor.vue'
 
 const props = defineProps({
   field: { type: Object, required: true },
@@ -69,10 +80,15 @@ const props = defineProps({
   models: { type: Array, default: () => [] },
 })
 
+const CONSTRAINABLE = ['string', 'integer', 'number', 'array']
+const showConstraints = computed(() => CONSTRAINABLE.includes(props.field.type))
+const hasConstraints = computed(() => Object.keys(props.field.extra || {}).length > 0)
+
 function onTypeChange(type) {
   if (type === 'array') props.field.children = [newField('string')]
   else props.field.children = []
   if (type !== 'ref') props.field.refName = ''
+  props.field.extra = {} // 换类型清空旧类型的约束，避免残留非法约束（如 integer 上残留 minLength）
 }
 
 function addChild() {
@@ -117,5 +133,10 @@ function remove() {
   width: 180px;
   font-size: 13px;
   color: var(--ax-text-secondary);
+}
+
+.c-dot {
+  font-size: 9px;
+  vertical-align: super;
 }
 </style>
