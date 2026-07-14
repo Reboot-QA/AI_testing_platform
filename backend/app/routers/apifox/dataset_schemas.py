@@ -24,6 +24,8 @@ class DatasetUpdate(BaseModel):
     columns: Optional[List[str]] = None
     rows: Optional[List[DatasetRowIn]] = None
     sort_order: Optional[int] = None
+    # 乐观锁：客户端读取时的版本；不一致则 409（None=不校验，向后兼容）
+    expected_version: Optional[int] = None
 
 
 class DatasetBrief(BaseModel):
@@ -45,5 +47,6 @@ class DatasetOut(BaseModel):
     columns: List[str]
     rows: List[DatasetRowIn]
     sort_order: int
+    version: int = 1
     created_at: datetime
     updated_at: datetime
