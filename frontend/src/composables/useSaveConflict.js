@@ -65,3 +65,23 @@ export async function confirmCloseDirty(tabName) {
     return signal === 'cancel' ? 'discard' : 'cancel'
   }
 }
+
+// 离开有未保存改动的编辑对象（切换/离开）：保存 / 不保存 / 取消。
+// 返回 'save' | 'discard' | 'cancel'（close/ESC 视为 cancel，避免误离开丢改动）。
+export async function confirmUnsaved(name) {
+  try {
+    await ElMessageBox.confirm(
+      `「${name}」有未保存的改动，是否保存？`,
+      '未保存的改动',
+      {
+        confirmButtonText: '保存',
+        cancelButtonText: '不保存',
+        distinguishCancelAndClose: true,
+        type: 'warning',
+      },
+    )
+    return 'save'
+  } catch (signal) {
+    return signal === 'cancel' ? 'discard' : 'cancel'
+  }
+}

@@ -12,7 +12,7 @@
         :key="s.id"
         class="item"
         :class="{ active: form.id === s.id }"
-        @click="selectScenario(s.id)"
+        @click="onSelectScenario(s.id)"
       >
         <el-icon><Share /></el-icon>
         <span class="item-name">{{ s.name }}</span>
@@ -56,6 +56,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { normalizeSpec } from '@/utils/apifoxSpec'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
@@ -141,6 +142,13 @@ function normalizeStep(s) {
   return node
 }
 
+// 未保存保护：切换场景/切主 tab/关浏览器前，dirty 则提示
+const guard = useUnsavedGuard({
+  serialize: () => JSON.stringify({ name: form.name, description: form.description, steps: form.steps }),
+  save: () => saveScenario(),
+  name: () => form.name,
+})
+
 async function selectScenario(sid) {
   const s = await apifoxApi.getScenario(sid)
   form.id = s.id
@@ -148,6 +156,14 @@ async function selectScenario(sid) {
   form.description = s.description || ''
   form.steps = normalizeSteps(s.steps || [])
   form.version = s.version ?? 1
+  guard.markSaved() // 加载后重置未保存基线
+}
+
+// 列表点选（用户主动切换）：先过未保存守卫
+async function onSelectScenario(id) {
+  if (id === form.id) return
+  if (!(await guard.confirmLeave())) return
+  await selectScenario(id)
 }
 
 async function addScenario() {
@@ -207,17 +223,26 @@ async function saveScenario() {
   saving.value = true
   try {
     await doSaveScenario()
+    guard.markSaved()
     ElMessage.success('已保存')
+    return true
   } catch (e) {
     if (!isConflict(e)) throw e
+    let resolved = false
     await resolveSaveConflict({
-      reload: () => selectScenario(form.id),
+      reload: async () => {
+        await selectScenario(form.id)
+        resolved = true
+      },
       overwrite: async () => {
         const latest = await apifoxApi.getScenario(form.id)
         form.version = latest.version
         await doSaveScenario()
+        guard.markSaved()
+        resolved = true
       },
     })
+    return resolved
   } finally {
     saving.value = false
   }
