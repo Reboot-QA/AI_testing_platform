@@ -46,8 +46,12 @@ class DataDrive(BaseModel):
     rows: List[DataDriveRow] = Field(default_factory=list)
 
 
+CASE_CATEGORIES = {"positive", "negative", "boundary", "security", "other"}
+
+
 class CaseCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
+    category: str = "other"  # positive|negative|boundary|security|other
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     variables: List[KvRow] = Field(default_factory=list)
     data_drive: DataDrive = Field(default_factory=DataDrive)
@@ -59,6 +63,7 @@ class CaseCreate(BaseModel):
 
 class CaseUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
+    category: Optional[str] = None
     request_spec: Optional[RequestSpec] = None
     variables: Optional[List[KvRow]] = None
     data_drive: Optional[DataDrive] = None
@@ -75,6 +80,7 @@ class CaseBrief(BaseModel):
     id: int
     endpoint_id: int
     name: str
+    category: str = "other"
     sort_order: int
 
 
@@ -93,6 +99,7 @@ class CaseOut(BaseModel):
     project_id: int
     endpoint_id: int
     name: str
+    category: str = "other"
     request_spec: RequestSpec
     variables: List[KvRow]
     data_drive: DataDrive
