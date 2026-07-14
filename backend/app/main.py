@@ -35,6 +35,7 @@ from app.routers.apifox import scenarios_router as apifox_scenarios_router
 from app.routers.apifox import schedules_router as apifox_schedules_router
 from app.routers.apifox import scripts_router as apifox_scripts_router
 from app.routers.apifox import suites_router as apifox_suites_router
+from app.routers.apifox import uploads_router as apifox_uploads_router
 from app.routers.apifox import variables_router as apifox_variables_router
 from app.routers.apifox import workbench_router as apifox_workbench_router
 from app.services.schedule_service import start_scheduler, stop_scheduler
@@ -131,6 +132,7 @@ app.include_router(apifox_schedules_router, prefix="/api/v1")
 app.include_router(apifox_debug_router, prefix="/api/v1")
 app.include_router(apifox_workbench_router, prefix="/api/v1")
 app.include_router(apifox_suites_router, prefix="/api/v1")
+app.include_router(apifox_uploads_router, prefix="/api/v1")
 app.include_router(apifox_datasets_router, prefix="/api/v1")
 app.include_router(apifox_databases_router, prefix="/api/v1")
 

@@ -48,6 +48,16 @@
           <div class="sub-title">Variables（JSON）</div>
           <CodeEditor v-model="form.request_spec.body.graphql_variables" language="json" height="120px" />
         </template>
+        <div v-else-if="form.request_spec.body.type === 'binary'" class="binary-body">
+          <el-upload :show-file-list="false" :before-upload="onPickFile" :disabled="uploading">
+            <el-button size="small" :loading="uploading">选择文件</el-button>
+          </el-upload>
+          <span v-if="form.request_spec.body.file_name" class="binary-file">
+            {{ form.request_spec.body.file_name }}
+            <el-button link type="danger" size="small" @click="clearFile">移除</el-button>
+          </span>
+          <span v-else class="none-tip">未选择文件（发送时以二进制原样作为 body）</span>
+        </div>
         <div v-else class="none-tip">无 Body</div>
       </el-tab-pane>
       <el-tab-pane label="Auth" name="auth">
@@ -100,6 +110,8 @@
 
 <script setup>
 import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
@@ -114,17 +126,39 @@ const props = defineProps({
   showProcessors: { type: Boolean, default: false },
   scripts: { type: Array, default: () => [] },
   schemas: { type: Array, default: () => [] },
+  projectId: { type: [String, Number], default: '' },
 })
 defineEmits(['save'])
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
-const BODY_TYPES = ['none', 'json', 'xml', 'form-data', 'urlencoded', 'raw', 'graphql']
+const BODY_TYPES = ['none', 'json', 'xml', 'form-data', 'urlencoded', 'raw', 'graphql', 'binary']
 const activeTab = ref('params')
 
 const bodyLang = computed(() => {
   const t = props.form.request_spec.body.type
   return t === 'json' ? 'json' : t === 'xml' ? 'xml' : 'plaintext'
 })
+
+// binary body：上传文件到项目，spec 只存 file_id + 展示名（发送时后端按 id 取字节）
+const uploading = ref(false)
+async function onPickFile(file) {
+  uploading.value = true
+  try {
+    const res = await apifoxApi.uploadFile(props.projectId, file)
+    props.form.request_spec.body.file_id = res.id
+    props.form.request_spec.body.file_name = res.filename
+    ElMessage.success('已上传')
+  } catch (e) {
+    ElMessage.error(e.message || '上传失败')
+  } finally {
+    uploading.value = false
+  }
+  return false // 阻止 el-upload 默认自动上传（已手动走 api client）
+}
+function clearFile() {
+  props.form.request_spec.body.file_id = null
+  props.form.request_spec.body.file_name = ''
+}
 </script>
 
 <style scoped>
@@ -147,6 +181,18 @@ const bodyLang = computed(() => {
 .body-raw,
 .auth-input {
   margin-top: 10px;
+}
+
+.binary-body {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+.binary-file {
+  font-size: 13px;
+  color: var(--ax-text-secondary);
 }
 
 .none-tip {

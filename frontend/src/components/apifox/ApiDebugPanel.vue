@@ -9,6 +9,7 @@
       :form="form"
       :saving="saving"
       :server-names="serverNames"
+      :project-id="projectId"
       show-processors
       :scripts="scripts"
       :schemas="schemas"

@@ -27,6 +27,7 @@
         <pre class="raw">{{ spec.body.graphql_query }}</pre>
         <pre v-if="spec.body.graphql_variables" class="raw">{{ spec.body.graphql_variables }}</pre>
       </template>
+      <div v-else-if="spec.body.type === 'binary'" class="raw">{{ spec.body.file_name || '（未选择文件）' }}</div>
       <ParamTable v-else :rows="rows(spec.body.form)" />
     </section>
     <section v-if="spec.cookies && rows(spec.cookies).length">
