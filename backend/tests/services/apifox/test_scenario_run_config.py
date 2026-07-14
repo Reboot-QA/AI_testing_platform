@@ -175,6 +175,41 @@ def test_data_driven_scenario_runs_steps_times_rows(db, make_case, monkeypatch):
     assert [v.get("user") for v in seen_vars] == ["a", "b"]
 
 
+def test_scenario_binding_counts_toward_dataset_ref_and_blocks_delete(db):
+    # 回归：场景 run_config 绑定数据集应计入引用计数，删除被拦截（评审 #1）
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"})])
+    scenario = _scenario(db)
+    svc.update_scenario(db, scenario, ScenarioUpdate(run_config=ScenarioRunConfig(dataset_id=ds.id)))
+
+    briefs = {b.id: b for b in dataset_service.list_datasets(db, project_id=1)}
+    assert briefs[ds.id].ref_count == 1
+
+    with pytest.raises(ValueError, match="引用"):
+        dataset_service.delete_dataset(db, dataset_service.repo.get_dataset(db, ds.id))
+
+
+def test_iteration_failure_writes_failed_terminal_state(db, make_case, monkeypatch):
+    # 回归：迭代中途未预期异常不得让运行永久卡 running（评审 #2，并发硬规则）
+    def _boom(db, case, endpoint, environment, variables, assertions, extracts):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(run_engine, "execute_case", _boom)
+
+    case = make_case(name="c")
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+    _set_run_config(db, scenario, loop_count=3)
+
+    gen = run_service.iter_scenario_run(db, scenario, None, "test", user_id=1)
+    start = next(gen)
+    with pytest.raises(RuntimeError):
+        list(gen)
+
+    from app.repositories.apifox import run_repo
+    run = run_repo.get_run(db, start["run_id"])
+    assert run.status == "failed"
+    assert run.finished_at is not None
+
+
 def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):
     # 第一行注入的变量不得残留到第二行（每行独立 runtime）
     seen_vars = []

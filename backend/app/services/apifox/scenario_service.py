@@ -32,6 +32,16 @@ LOOP_ONLY_STEP_TYPES = {"break", "continue"}
 _MAX_NEST_DEPTH = 50
 
 
+def _loads(text: str | None, fallback: dict) -> dict:
+    """防御式 JSON 反序列化：脏数据降级为 fallback，不让读接口 500。"""
+    if not text:
+        return fallback
+    try:
+        return json.loads(text)
+    except (ValueError, TypeError):
+        return fallback
+
+
 def _would_cycle(db: Session, root_id: int, ref_scenario_id: int) -> bool:
     """从 ref 场景沿子场景引用深度遍历，能回到 root 即成环。"""
     stack = [(ref_scenario_id, 0)]
@@ -202,7 +212,7 @@ def _out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
         description=scenario.description,
         steps=[_step_out(db, s, by_parent) for s in by_parent.get(None, [])],
         sort_order=scenario.sort_order,
-        run_config=ScenarioRunConfig(**(json.loads(scenario.run_config) if scenario.run_config else {})),
+        run_config=ScenarioRunConfig(**_loads(scenario.run_config, {})),
         version=scenario.version,
         created_at=scenario.created_at,
         updated_at=scenario.updated_at,

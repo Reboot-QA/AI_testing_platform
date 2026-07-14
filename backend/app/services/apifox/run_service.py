@@ -561,13 +561,17 @@ def iter_scenario_run(
     env_vars = engine.resolve_env_vars(db, environment.id if environment else None, user_id)
     global_vars = engine.resolve_global_vars(db, scenario.project_id, user_id)
     started = time.perf_counter()
-    for injection in iterations:
-        # 每组数据独立 runtime：数据集行/循环各轮变量互不串（对齐用例数据驱动语义）
-        ctx.runtime = dict(injection)
-        try:
-            yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
-        except (_BreakLoop, _ContinueLoop):
-            pass  # 循环外的 break/continue（保存校验应已拦截），防御性忽略以正常收尾
+    try:
+        for injection in iterations:
+            # 每组数据独立 runtime：数据集行/循环各轮变量互不串（对齐用例数据驱动语义）
+            ctx.runtime = dict(injection)
+            try:
+                yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
+            except (_BreakLoop, _ContinueLoop):
+                pass  # 循环外的 break/continue（保存校验应已拦截），防御性忽略以正常收尾
+    except Exception:
+        _fail_orphan_run(db, run.id)  # 迭代中途未预期异常：兜底写失败态，避免永久卡 running
+        raise
     yield _finalize(ctx, started)
 
 
