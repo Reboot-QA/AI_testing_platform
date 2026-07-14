@@ -333,6 +333,7 @@ def _parse_excel_rows(file_bytes: bytes) -> List[Dict[str, str]]:
         title = record.get("标题", "").strip()
         if not title:
             continue
+        record["状态"] = "草稿"
         items.append(record)
     if not items:
         raise ValueError("Excel 中没有可导入的需求行")

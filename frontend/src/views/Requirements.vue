@@ -157,7 +157,7 @@
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
-          <div class="el-upload__tip">Excel 需包含「标题」列；XMind 导入末级节点作为需求点</div>
+          <div class="el-upload__tip">Excel 需包含「标题」列，导入后状态均为「草稿」；XMind 导入末级节点作为需求点</div>
         </template>
       </el-upload>
       <template #footer>
