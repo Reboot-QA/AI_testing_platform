@@ -246,6 +246,32 @@ def test_single_iteration_run_leaves_meta_empty(db, make_case, monkeypatch):
     assert "iterations" not in events[0]
 
 
+def test_iteration_tagging_correct_when_branch_varies_step_count(db, make_case, monkeypatch):
+    # 各轮步骤数不同（if 分支随数据变化）时，iteration 打标仍正确（钉死分组不变量）
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"flag": "yes"}), DatasetRowIn(values={"flag": "no"})])
+    if_step = StepIn(
+        type="if",
+        config={"condition": {"left": "{{flag}}", "operator": "eq", "right": "yes"}},
+        children=[StepIn(type="case", ref_case_id=case.id)],
+    )
+    always = StepIn(type="case", ref_case_id=case.id)
+    scenario = _scenario(db, steps=[if_step, always])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    steps = (
+        db.query(ApifoxRunStep)
+        .filter(ApifoxRunStep.run_id == events[0]["run_id"])
+        .order_by(ApifoxRunStep.id)
+        .all()
+    )
+    # 第一组(flag=yes)：if 命中 + always = 2 步(iter 0)；第二组(flag=no)：仅 always = 1 步(iter 1)
+    assert [s.iteration for s in steps] == [0, 0, 1]
+
+
 def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):
     # 第一行注入的变量不得残留到第二行（每行独立 runtime）
     seen_vars = []
