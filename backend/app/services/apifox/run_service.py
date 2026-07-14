@@ -23,6 +23,7 @@ from app.repositories.apifox import (
     scenario_repo,
     suite_repo,
 )
+from app.routers.apifox.case_schemas import AssertionRow, ExtractRow
 from app.services.apifox import db_executor
 from app.services.apifox import run_engine as engine
 
@@ -72,6 +73,8 @@ def _count_steps(
         elif step.type in ("break", "continue"):
             total += 1
         elif step.type == "db":
+            total += 1
+        elif step.type == "http":
             total += 1
         elif step.type == "scenario" and step.ref_scenario_id:
             total += _count_scenario_steps(db, step.ref_scenario_id, depth + 1)
@@ -280,6 +283,36 @@ def _run_db_step(
     yield _step_event(ctx, total, status, detail, label)
 
 
+def _run_http_step(
+    ctx: _RunContext, step: ApifoxScenarioStep, total: int,
+    env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
+) -> Generator[Dict[str, Any], None, None]:
+    """裸 HTTP 请求步骤：config 自带 method/path/request_spec/断言/提取，{{var}}插值后发送并落库。"""
+    ctx.index += 1
+    config = engine._loads(step.config, {}) or {}
+    label = step.name or config.get("name") or f"{config.get('method') or 'GET'} {config.get('path') or ''}".strip()
+    merged = engine.merge_vars(global_vars, env_vars, ctx.runtime)
+    assertions = [AssertionRow(**a) for a in config.get("assertions") or []]
+    extracts = [ExtractRow(**e) for e in config.get("extracts") or []]
+    status, detail = engine.execute_http_request(
+        ctx.db, ctx.run.project_id, config.get("method") or "GET", config.get("path") or "",
+        config.get("server_name"), config.get("request_spec") or {}, assertions, extracts,
+        ctx.environment, merged,
+    )
+    ctx.runtime.update(detail.get("extracted") or {})
+    if detail.get("scoped"):
+        engine.persist_scoped_extracts(
+            ctx.db, ctx.run.project_id,
+            ctx.environment.id if ctx.environment else None, ctx.user_id, detail["scoped"],
+        )
+    if status == "passed":
+        ctx.passed += 1
+    else:
+        ctx.failed += 1
+    _record_step(ctx, "http", status, detail, case_name=label, depth=depth)
+    yield _step_event(ctx, total, status, detail, label)
+
+
 def _run_scenario_block(
     ctx: _RunContext, scenario_id: int, total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int = 0,
@@ -333,6 +366,8 @@ def _run_steps(
             yield from _run_loop_block(ctx, by_parent, step, total, env_vars, global_vars, depth)
         elif step.type == "db":
             yield from _run_db_step(ctx, step, total, env_vars, global_vars, depth)
+        elif step.type == "http":
+            yield from _run_http_step(ctx, step, total, env_vars, global_vars, depth)
 
 
 def _run_loop_block(
