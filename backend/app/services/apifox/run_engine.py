@@ -12,6 +12,7 @@
 
 import json
 import time
+from types import SimpleNamespace
 from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
@@ -326,5 +327,67 @@ def execute_case(
     detail["script_logs"].extend(post_logs)
     if post_error:
         detail["script_logs"].append(f"后置脚本错误: {post_error}")
+
+    return ("passed" if passed else "failed"), detail
+
+
+def execute_http_request(
+    db: Session, project_id: int, method: str, path: str, server_name: Optional[str],
+    request_spec: Dict[str, Any], assertions, extracts,
+    environment: Optional[ApifoxEnvironment], variables: Dict[str, str],
+) -> Tuple[str, Dict[str, Any]]:
+    """执行一个内联 HTTP 请求（场景裸步骤）：假 endpoint(鸭子类型) 复用 build_request + 断言 + 提取。
+
+    不含接口级处理器/脚本/契约（裸步骤自带 method/path/request_spec/assertions/extracts）。不落库。
+    """
+    detail: Dict[str, Any] = {
+        "method": method, "url": "", "request_headers": {}, "request_body": "",
+        "response_status": None, "response_headers": {}, "response_body": "",
+        "duration_ms": 0.0, "assertion_results": [], "extract_results": [],
+        "script_logs": [], "extracted": {}, "scoped": [], "contract_result": None,
+        "error_message": None,
+    }
+    # 鸭子类型：build_request 只读 .path/.method/.server_name，裸步骤无真实 endpoint 行
+    fake_endpoint = SimpleNamespace(path=path, method=method, server_name=server_name)
+    try:
+        plan = build_request(
+            fake_endpoint, request_spec, environment, variables,  # type: ignore[arg-type]
+            global_param_repo.list_params(db, project_id),
+        )
+    except ValueError as exc:
+        detail["error_message"] = str(exc)
+        return "failed", detail
+
+    detail["url"] = plan["url"]
+    detail["request_headers"] = plan["headers"]
+    detail["request_body"] = plan["body_snapshot"]
+
+    started = time.perf_counter()
+    try:
+        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+            response = client.request(
+                plan["method"], plan["url"],
+                params=plan["params"] or None, headers=plan["headers"] or None,
+                **plan["request_kwargs"],
+            )
+    except httpx.RequestError as exc:
+        detail["duration_ms"] = (time.perf_counter() - started) * 1000
+        detail["error_message"] = f"请求失败: {exc}"
+        return "failed", detail
+    duration_ms = (time.perf_counter() - started) * 1000
+
+    detail["duration_ms"] = duration_ms
+    detail["response_status"] = response.status_code
+    detail["response_headers"] = dict(response.headers)
+    detail["response_body"] = _truncate(response.text)
+
+    passed, assertion_results = evaluate_assertions(assertions, response, duration_ms)
+    detail["assertion_results"] = assertion_results
+
+    request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
+    extracted, scoped, extract_results = run_extracts(extracts, response, request_snapshot, duration_ms)
+    detail["extracted"] = extracted
+    detail["scoped"] = scoped
+    detail["extract_results"] = extract_results
 
     return ("passed" if passed else "failed"), detail

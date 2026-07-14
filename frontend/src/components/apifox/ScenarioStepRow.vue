@@ -128,10 +128,10 @@ const props = defineProps({
 defineEmits(['remove'])
 
 const typeLabel = computed(
-  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组', if: '条件', loop: '循环', break: '跳出循环', continue: '跳过本轮', db: '数据库' }[props.row.type] || props.row.type)
+  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组', if: '条件', loop: '循环', break: '跳出循环', continue: '跳过本轮', db: '数据库', http: 'HTTP' }[props.row.type] || props.row.type)
 )
 const typeTag = computed(
-  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary', if: 'danger', loop: 'warning', break: 'danger', continue: 'info', db: 'primary' }[props.row.type] || 'info')
+  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary', if: 'danger', loop: 'warning', break: 'danger', continue: 'info', db: 'primary', http: 'success' }[props.row.type] || 'info')
 )
 
 const displayName = computed(() => {
@@ -148,6 +148,10 @@ const displayName = computed(() => {
   }
   if (row.type === 'break') return '跳出循环'
   if (row.type === 'continue') return '跳过本轮'
+  if (row.type === 'http') {
+    const c = row.config || {}
+    return `[${c.method || 'GET'}] ${c.path || row.name || 'HTTP'}`.trim()
+  }
   if (row.name) return row.name
   if (row.type === 'case') {
     const prefix = row.endpoint_method ? `[${row.endpoint_method}] ` : ''
