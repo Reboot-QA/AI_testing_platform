@@ -5,6 +5,8 @@
 
 import json
 import time
+from collections import defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Generator, List, Optional
 
@@ -102,6 +104,38 @@ def _count_steps(
     return total
 
 
+@dataclass(frozen=True)
+class _StepNode:
+    """场景步骤的轻量快照（脱离 ORM/session）。
+
+    执行期 `_record_step` 每步 commit 会因 expire_on_commit 让 ORM 步骤对象过期、
+    下次访问属性时逐行补查——缓存 ORM 对象等于没缓存。故运行态只用本快照，
+    一次 run 内步骤树查一次即冻结（运行中被并发编辑不热更新，语义更一致）。
+    """
+
+    id: int
+    parent_step_id: Optional[int]
+    type: str
+    enabled: bool
+    ref_case_id: Optional[int]
+    ref_scenario_id: Optional[int]
+    wait_ms: Optional[int]
+    config: Optional[str]
+    name: Optional[str]
+
+
+def _snapshot_step_tree(db: Session, scenario_id: int) -> Dict[Optional[int], List[_StepNode]]:
+    """一次查询取全部步骤，按 parent 分桶为快照（属性即取即存，不受后续 commit 过期影响）。"""
+    by_parent: Dict[Optional[int], List[_StepNode]] = defaultdict(list)
+    for s in scenario_repo.list_steps(db, scenario_id):
+        by_parent[s.parent_step_id].append(_StepNode(
+            id=s.id, parent_step_id=s.parent_step_id, type=s.type, enabled=s.enabled,
+            ref_case_id=s.ref_case_id, ref_scenario_id=s.ref_scenario_id,
+            wait_ms=s.wait_ms, config=s.config, name=s.name,
+        ))
+    return by_parent
+
+
 class _RunContext:
     """一次运行的共享状态（run 行、计数、runtime 变量、当前 step 序号）。"""
 
@@ -116,6 +150,8 @@ class _RunContext:
         self.passed = 0
         self.failed = 0
         self.iteration = 0  # 数据驱动/循环当前轮次（0 基），落到每个步骤供报告分组
+        # 步骤树按 scenario_id 记忆化为快照：数据驱动/循环多轮不再每轮重查步骤表（评审 #4）
+        self.step_tree_cache: Dict[int, Dict[Optional[int], List[_StepNode]]] = {}
 
 
 def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str, Any],
@@ -227,7 +263,7 @@ def _extract_db_row(
 
 
 def _run_db_step(
-    ctx: _RunContext, step: ApifoxScenarioStep, total: int,
+    ctx: _RunContext, step: _StepNode, total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
 ) -> Generator[Dict[str, Any], None, None]:
     """数据库操作步骤：解析连接(须属当前环境)→{{var}}插值 SQL→执行→首行提取变量→落库。"""
@@ -289,7 +325,7 @@ def _run_db_step(
 
 
 def _run_http_step(
-    ctx: _RunContext, step: ApifoxScenarioStep, total: int,
+    ctx: _RunContext, step: _StepNode, total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
 ) -> Generator[Dict[str, Any], None, None]:
     """裸 HTTP 请求步骤：config 自带 method/path/request_spec/断言/提取，{{var}}插值后发送并落库。"""
@@ -332,13 +368,16 @@ def _run_scenario_block(
 ) -> Generator[Dict[str, Any], None, None]:
     if depth > _MAX_DEPTH:
         return
-    by_parent = scenario_repo.group_steps_by_parent(ctx.db, scenario_id)
+    by_parent = ctx.step_tree_cache.get(scenario_id)
+    if by_parent is None:
+        by_parent = _snapshot_step_tree(ctx.db, scenario_id)
+        ctx.step_tree_cache[scenario_id] = by_parent
     yield from _run_steps(ctx, by_parent, by_parent.get(None, []), total, env_vars, global_vars, depth)
 
 
 def _run_steps(
-    ctx: _RunContext, by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
-    steps: List[ApifoxScenarioStep], total: int,
+    ctx: _RunContext, by_parent: Dict[Optional[int], List[_StepNode]],
+    steps: List[_StepNode], total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
 ) -> Generator[Dict[str, Any], None, None]:
     """按序执行一层步骤；控制步骤(group)递归其子步骤，深度 +1（供报告缩进）。"""
@@ -384,8 +423,8 @@ def _run_steps(
 
 
 def _run_loop_block(
-    ctx: _RunContext, by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
-    step: ApifoxScenarioStep, total: int,
+    ctx: _RunContext, by_parent: Dict[Optional[int], List[_StepNode]],
+    step: _StepNode, total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
 ) -> Generator[Dict[str, Any], None, None]:
     """循环步骤：按模式跑循环体（depth+1）。count/list 预算迭代序列并逐轮注入循环变量；
@@ -437,8 +476,8 @@ def _run_loop_block(
 
 
 def _run_if_block(
-    ctx: _RunContext, by_parent: Dict[Optional[int], List[ApifoxScenarioStep]],
-    step: ApifoxScenarioStep, total: int,
+    ctx: _RunContext, by_parent: Dict[Optional[int], List[_StepNode]],
+    step: _StepNode, total: int,
     env_vars: Dict[str, str], global_vars: Dict[str, str], depth: int,
 ) -> Generator[Dict[str, Any], None, None]:
     """条件步骤：对当前变量求值，命中 then 分支或 else 分支（未命中分支不执行不落库）。
