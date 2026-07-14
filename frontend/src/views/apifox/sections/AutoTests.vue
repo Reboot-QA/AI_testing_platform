@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-radio-group v-model="section" size="small" class="section-switch">
+    <el-radio-group :model-value="section" size="small" class="section-switch" @change="switchSection">
       <el-radio-button value="cases">单接口用例</el-radio-button>
       <el-radio-button value="scenarios">场景用例</el-radio-button>
       <el-radio-button value="suites">测试套件</el-radio-button>
@@ -8,7 +8,7 @@
       <el-radio-button value="schedules">定时任务</el-radio-button>
     </el-radio-group>
 
-    <ScenarioPanel v-if="section === 'scenarios'" class="auto-tests" />
+    <ScenarioPanel v-if="section === 'scenarios'" ref="scenarioPanelRef" class="auto-tests" />
     <SuitePanel v-else-if="section === 'suites'" class="auto-tests" />
     <DatasetPanel v-else-if="section === 'datasets'" class="auto-tests" />
     <SchedulePanel v-else-if="section === 'schedules'" />
@@ -40,6 +40,16 @@ const pid = computed(() => route.params.projectId)
 
 const section = ref('cases')
 const selectedEndpointId = ref(null)
+const scenarioPanelRef = ref(null)
+
+// 切子页(v-if 卸载组件、非路由)前，若场景面板有未保存改动则先过守卫
+async function switchSection(next) {
+  if (next === section.value) return
+  if (section.value === 'scenarios' && scenarioPanelRef.value) {
+    if (!(await scenarioPanelRef.value.confirmLeave())) return
+  }
+  section.value = next
+}
 
 function onSelectEndpoint(id) {
   selectedEndpointId.value = id
