@@ -7,7 +7,7 @@ export function emptySpec() {
     path_params: [],
     headers: [],
     cookies: [],
-    body: { type: 'none', raw: '', form: [], graphql_query: '', graphql_variables: '' },
+    body: { type: 'none', raw: '', form: [], graphql_query: '', graphql_variables: '', file_id: null, file_name: '' },
     auth: { type: 'none', token: '', username: '', password: '' },
   }
 }
@@ -26,6 +26,8 @@ export function normalizeSpec(spec) {
       form: ensureKvRows(b.form || []),
       graphql_query: b.graphql_query || '',
       graphql_variables: b.graphql_variables || '',
+      file_id: b.file_id ?? null,
+      file_name: b.file_name || '',
     },
     auth: {
       type: s.auth?.type || 'none',
