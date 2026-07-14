@@ -53,7 +53,7 @@
           :key="s.id"
           class="item"
           :class="{ active: scriptForm.id === s.id }"
-          @click="selectScript(s.id)"
+          @click="onSelectScript(s.id)"
         >
           <el-tag size="small" :type="s.lang === 'python' ? 'warning' : 'success'">
             {{ s.lang === 'python' ? 'Py' : 'JS' }}
@@ -88,6 +88,7 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi, projectApi } from '@/api'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 
 const route = useRoute()
@@ -150,6 +151,16 @@ async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
 }
 
+// 脚本未保存保护：切脚本/切主 tab/关浏览器前，dirty 则提示
+const scriptGuard = useUnsavedGuard({
+  serialize: () => JSON.stringify({
+    id: scriptForm.id, name: scriptForm.name, lang: scriptForm.lang,
+    content: scriptForm.content, description: scriptForm.description,
+  }),
+  save: () => saveScript(),
+  name: () => scriptForm.name,
+})
+
 async function selectScript(sid) {
   const s = await apifoxApi.getScript(sid)
   scriptForm.id = s.id
@@ -157,9 +168,17 @@ async function selectScript(sid) {
   scriptForm.lang = s.lang
   scriptForm.content = s.content
   scriptForm.description = s.description || ''
+  scriptGuard.markSaved()
+}
+
+async function onSelectScript(id) {
+  if (id === scriptForm.id) return
+  if (!(await scriptGuard.confirmLeave())) return
+  await selectScript(id)
 }
 
 async function addScript() {
+  if (!(await scriptGuard.confirmLeave())) return // 当前脚本有未保存改动时先确认
   const { value } = await ElMessageBox.prompt('脚本名称', '新建脚本', {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
@@ -179,8 +198,12 @@ async function saveScript() {
       content: scriptForm.content,
       description: scriptForm.description || null,
     })
+    scriptGuard.markSaved()
     ElMessage.success('已保存')
     await loadScripts()
+    return true
+  } catch {
+    return false // 后端错误已由 api 拦截器提示
   } finally {
     saving.value = false
   }
@@ -189,7 +212,13 @@ async function saveScript() {
 async function delScript(s) {
   await ElMessageBox.confirm(`确认删除脚本「${s.name}」？被用例引用时会被拦截。`, '提示', { type: 'warning' })
   await apifoxApi.deleteScript(s.id)
-  if (scriptForm.id === s.id) scriptForm.id = null
+  if (scriptForm.id === s.id) {
+    scriptForm.id = null
+    scriptForm.name = ''
+    scriptForm.content = ''
+    scriptForm.description = ''
+    scriptGuard.markSaved()
+  }
   ElMessage.success('已删除')
   await loadScripts()
 }
