@@ -32,6 +32,13 @@ class StepOut(StepIn):
     children: List["StepOut"] = Field(default_factory=list)  # type: ignore[assignment]
 
 
+class ScenarioRunConfig(BaseModel):
+    # 整场景循环次数（绑数据集时以数据集行数为准，此值忽略）；1000 硬上限防误配爆量
+    loop_count: int = Field(default=1, ge=1, le=1000)
+    # 绑定的项目数据集 id：设置后按数据集每行数据驱动整条场景各跑一遍
+    dataset_id: Optional[int] = None
+
+
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
@@ -43,6 +50,7 @@ class ScenarioUpdate(BaseModel):
     description: Optional[str] = None
     steps: Optional[List[StepIn]] = None
     sort_order: Optional[int] = None
+    run_config: Optional[ScenarioRunConfig] = None
     # 乐观锁：客户端读取时的版本；服务端不一致则 409（None=不校验，向后兼容）
     expected_version: Optional[int] = None
 
@@ -62,6 +70,7 @@ class ScenarioOut(BaseModel):
     description: Optional[str] = None
     steps: List[StepOut]
     sort_order: int
+    run_config: ScenarioRunConfig = Field(default_factory=ScenarioRunConfig)
     version: int = 1
     created_at: datetime
     updated_at: datetime

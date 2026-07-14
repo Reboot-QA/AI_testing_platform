@@ -31,6 +31,11 @@
           <span class="run-hint">环境在顶部选择</span>
         </div>
         <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
+        <ScenarioRunConfigBar
+          :datasets="datasets"
+          v-model:loop-count="form.run_config.loop_count"
+          v-model:dataset-id="form.run_config.dataset_id"
+        />
         <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
         <ScenarioStepsEditor
           :rows="form.steps"
@@ -58,6 +63,7 @@ import { normalizeSpec } from '@/utils/apifoxSpec'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
+import ScenarioRunConfigBar from '@/components/apifox/ScenarioRunConfigBar.vue'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 
@@ -69,6 +75,7 @@ const scenarios = ref([])
 const projectCases = ref([])
 const scripts = ref([])
 const databases = ref([])
+const datasets = ref([])
 const endpoints = ref([])
 const saving = ref(false)
 
@@ -80,7 +87,10 @@ const serverNames = computed(() => {
 })
 const running = ref(false)
 const runEvents = ref([])
-const form = reactive({ id: null, name: '', description: '', steps: [], version: 1 })
+const form = reactive({
+  id: null, name: '', description: '', steps: [], version: 1,
+  run_config: { loop_count: 1, dataset_id: null },
+})
 
 async function loadScenarios() {
   scenarios.value = await apifoxApi.listScenarios(pid.value)
@@ -92,6 +102,10 @@ async function loadProjectCases() {
 
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
+}
+
+async function loadDatasets() {
+  datasets.value = await apifoxApi.listDatasets(pid.value)
 }
 
 async function loadDatabases() {
@@ -144,7 +158,9 @@ function normalizeStep(s) {
 
 // 未保存保护：切换场景/切主 tab/关浏览器前，dirty 则提示
 const guard = useUnsavedGuard({
-  serialize: () => JSON.stringify({ name: form.name, description: form.description, steps: form.steps }),
+  serialize: () => JSON.stringify({
+    name: form.name, description: form.description, steps: form.steps, run_config: form.run_config,
+  }),
   save: () => saveScenario(),
   name: () => form.name,
 })
@@ -158,6 +174,10 @@ async function selectScenario(sid) {
   form.description = s.description || ''
   form.steps = normalizeSteps(s.steps || [])
   form.version = s.version ?? 1
+  form.run_config = {
+    loop_count: s.run_config?.loop_count ?? 1,
+    dataset_id: s.run_config?.dataset_id ?? null,
+  }
   guard.markSaved() // 加载后重置未保存基线
 }
 
@@ -216,6 +236,10 @@ async function doSaveScenario() {
     name: form.name,
     description: form.description || null,
     steps: form.steps.map(serializeStep),
+    run_config: {
+      loop_count: form.run_config.loop_count || 1,
+      dataset_id: form.run_config.dataset_id || null, // el-select 清空可能给 ''，统一收敛为 null
+    },
     expected_version: form.version,
   })
   form.version = updated.version
@@ -263,6 +287,7 @@ async function delScenario(s) {
     form.description = ''
     form.steps = []
     form.version = 1
+    form.run_config = { loop_count: 1, dataset_id: null }
     guard.markSaved()
   }
   ElMessage.success('已删除')
@@ -274,6 +299,7 @@ onMounted(async () => {
   await loadProjectCases()
   await loadScripts()
   await loadDatabases()
+  await loadDatasets()
   endpoints.value = await apifoxApi.listEndpoints(pid.value)
 })
 </script>

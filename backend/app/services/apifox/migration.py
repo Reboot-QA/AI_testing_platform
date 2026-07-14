@@ -87,6 +87,19 @@ def migrate_apifox_optimistic_version(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_scenario_run_config(db: Session) -> None:
+    """apifox_scenarios 加 run_config（场景运行配置 JSON：循环次数 / 绑数据集驱动）。"""
+    inspector = inspect(engine)
+    if "apifox_scenarios" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_scenarios")}
+    if "run_config" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN run_config TEXT"))
+    db.expire_all()
+
+
 def migrate_apifox_run_parent(db: Session) -> None:
     """apifox_runs 加 parent_run_id（套件运行的父运行 id，供父+子两级报告）。"""
     inspector = inspect(engine)
