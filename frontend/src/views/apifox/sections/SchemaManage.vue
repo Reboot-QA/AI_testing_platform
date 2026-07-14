@@ -28,6 +28,9 @@
       <template v-if="form.id">
         <div class="row1">
           <el-input v-model="form.name" placeholder="模型名称" style="width: 220px" />
+          <el-tag v-if="currentRefCount" size="small" type="warning" title="被引用，改名会被后端拦截">
+            被 {{ currentRefCount }} 处引用
+          </el-tag>
           <el-radio-group v-model="viewMode" size="small" @change="onViewChange">
             <el-radio-button value="visual">可视化</el-radio-button>
             <el-radio-button value="source">源码</el-radio-button>
@@ -85,6 +88,8 @@ const form = reactive({ id: null, name: '', description: '', json_schema: '{}' }
 
 // 可被引用的模型：排除当前模型自身（禁自引用）
 const refModels = computed(() => schemas.value.filter((s) => s.id !== form.id))
+// 当前模型被引用数（接口契约 + 其他模型 $ref），改名/删除保护提示
+const currentRefCount = computed(() => schemas.value.find((s) => s.id === form.id)?.ref_count || 0)
 
 function loadFieldsFromSource() {
   try {
@@ -109,9 +114,13 @@ async function selectSchema(sid) {
   loadFieldsFromSource()
 }
 
+function syncSourceFromFields() {
+  form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+}
+
 function onViewChange(mode) {
   if (mode === 'source') {
-    form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+    syncSourceFromFields()
   } else if (!loadFieldsFromSource()) {
     ElMessage.error('源码 JSON 格式有误，请修正后再切换到可视化')
     viewMode.value = 'source'
@@ -137,8 +146,15 @@ async function addSchema() {
 }
 
 async function delSchema(s) {
-  await ElMessageBox.confirm(`确认删除数据模型「${s.name}」？`, '提示', { type: 'warning' })
-  await apifoxApi.deleteSchema(s.id)
+  const warn = s.ref_count
+    ? `「${s.name}」被 ${s.ref_count} 处引用（接口契约/其他模型）。需先解除引用才能删除。`
+    : `确认删除数据模型「${s.name}」？`
+  await ElMessageBox.confirm(warn, '提示', { type: 'warning' })
+  try {
+    await apifoxApi.deleteSchema(s.id)
+  } catch {
+    return // 后端拦截(400)已由 api 拦截器提示具体原因，不再显示"已删除"
+  }
   if (form.id === s.id) form.id = null
   ElMessage.success('已删除')
   await loadSchemas()
@@ -146,7 +162,7 @@ async function delSchema(s) {
 
 async function saveSchema() {
   if (viewMode.value === 'visual') {
-    form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
+    syncSourceFromFields()
   }
   try {
     JSON.parse(form.json_schema)
