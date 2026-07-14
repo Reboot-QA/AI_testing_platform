@@ -204,7 +204,7 @@
           </el-select>
         </el-form-item>
         <el-form-item label="名称" prop="name">
-          <el-input v-model="createForm.name" placeholder="例如：V1.2 回归测试" />
+          <el-input v-model="createForm.name" placeholder="第一轮测试" />
         </el-form-item>
         <el-form-item label="版本/构建">
           <el-input v-model="createForm.build_name" placeholder="例如：V1.2.0" />
@@ -494,7 +494,7 @@ async function submitResult(result) {
 
 function openCreateDialog() {
   createForm.project_id = projectId.value || null
-  createForm.name = ''
+  createForm.name = '第一轮测试'
   createForm.build_name = ''
   createForm.description = ''
   createForm.requirement_ids = []
