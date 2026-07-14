@@ -76,13 +76,26 @@ def build_request(
     body_type = body.get("type") or "none"
     request_kwargs: Dict[str, Any] = {}
     body_snapshot = ""
-    if body_type in ("json", "raw"):
+    if body_type in ("json", "raw", "xml"):
         content = apply_vars(body.get("raw") or "", variables)
         if content:
             request_kwargs["content"] = content
             body_snapshot = content
         if body_type == "json":
             headers.setdefault("Content-Type", "application/json")
+        elif body_type == "xml":
+            headers.setdefault("Content-Type", "application/xml")
+    elif body_type == "graphql":
+        query = apply_vars(body.get("graphql_query") or "", variables)
+        raw_vars = apply_vars(body.get("graphql_variables") or "", variables).strip()
+        try:  # variables 为 JSON 文本；非法则按空对象发送，不因脏输入抛异常
+            parsed_vars = json.loads(raw_vars) if raw_vars else {}
+        except (ValueError, TypeError):
+            parsed_vars = {}
+        content = json.dumps({"query": query, "variables": parsed_vars}, ensure_ascii=False)
+        request_kwargs["content"] = content
+        body_snapshot = content
+        headers.setdefault("Content-Type", "application/json")
     elif body_type == "form-data":
         form = _rows_to_dict(body.get("form") or [], variables)
         if form:
