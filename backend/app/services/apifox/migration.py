@@ -73,6 +73,20 @@ def migrate_apifox_scenario_step_tree(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_optimistic_version(db: Session) -> None:
+    """apifox_endpoint_cases / apifox_scenarios 加 version 列（乐观锁，默认 1）。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        for table in ("apifox_endpoint_cases", "apifox_scenarios"):
+            if table not in tables:
+                continue
+            cols = {c["name"] for c in inspector.get_columns(table)}
+            if "version" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN version INTEGER NOT NULL DEFAULT 1"))
+    db.expire_all()
+
+
 def migrate_apifox_run_parent(db: Session) -> None:
     """apifox_runs 加 parent_run_id（套件运行的父运行 id，供父+子两级报告）。"""
     inspector = inspect(engine)

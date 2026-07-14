@@ -30,6 +30,7 @@ from app.routers.apifox.case_schemas import (
     ProjectCaseBrief,
 )
 from app.routers.apifox.schemas import KvRow, RequestSpec
+from app.services.apifox import versioning
 
 
 def _load_request_spec(text: str | None) -> RequestSpec:
@@ -140,6 +141,7 @@ def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
             for e in repo.list_extracts(db, case.id)
         ],
         sort_order=case.sort_order,
+        version=case.version,
         created_at=case.created_at,
         updated_at=case.updated_at,
     )
@@ -190,6 +192,8 @@ def get_case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
 
 
 def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> CaseOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxEndpointCase, case, data.expected_version)
     if data.name is not None:
         case.name = data.name
     if data.request_spec is not None:
