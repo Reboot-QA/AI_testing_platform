@@ -305,16 +305,28 @@ def _infer_requirement_priority(ancestors: List[str]) -> Tuple[str, str]:
     return requirement_title, priority
 
 
-def _find_requirement_id(db: Session, project_id: int, title: str) -> Optional[int]:
+def _find_requirement_id(
+    db: Session,
+    project_id: int,
+    title: str,
+    requirement_map: Optional[Dict[str, int]] = None,
+) -> Optional[int]:
     clean = (title or "").strip()
     if not clean or clean in {"未关联需求", "-"}:
         return None
+    if requirement_map is not None:
+        return requirement_map.get(clean)
     requirement = (
         db.query(Requirement)
         .filter(Requirement.project_id == project_id, Requirement.title == clean)
         .first()
     )
     return requirement.id if requirement else None
+
+
+def _build_requirement_map(db: Session, project_id: int) -> Dict[str, int]:
+    requirements = db.query(Requirement).filter(Requirement.project_id == project_id).all()
+    return {req.title.strip(): req.id for req in requirements if req.title}
 
 
 def list_project_testcases(db: Session, project_id: int) -> List[TestCase]:
@@ -446,7 +458,7 @@ def export_testcases_xmind(project: Project, cases: List[TestCase]) -> Tuple[Byt
 
 
 def _parse_excel_rows(file_bytes: bytes) -> List[Dict[str, str]]:
-    wb = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+    wb = load_workbook(BytesIO(file_bytes), data_only=True)
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
     if not rows:
@@ -463,6 +475,7 @@ def _parse_excel_rows(file_bytes: bytes) -> List[Dict[str, str]]:
         raise ValueError("Excel 缺少「标题」列")
 
     items: List[Dict[str, str]] = []
+    last_requirement = ""
     for row in rows[1:]:
         if not row:
             continue
@@ -473,6 +486,11 @@ def _parse_excel_rows(file_bytes: bytes) -> List[Dict[str, str]]:
         title = record.get("标题", "").strip()
         if not title:
             continue
+        requirement = record.get("需求点", "").strip()
+        if requirement:
+            last_requirement = requirement
+        elif last_requirement:
+            record["需求点"] = last_requirement
         record["评审状态"] = "草稿"
         items.append(record)
     if not items:
@@ -542,13 +560,19 @@ def import_testcases_from_rows(
 ) -> Tuple[int, int]:
     imported = 0
     skipped = 0
+    requirement_map = _build_requirement_map(db, project.id)
     for row in rows:
         title = row.get("标题", "").strip()
         if not title:
             skipped += 1
             continue
         try:
-            requirement_id = _find_requirement_id(db, project.id, row.get("需求点", ""))
+            requirement_id = _find_requirement_id(
+                db,
+                project.id,
+                row.get("需求点", ""),
+                requirement_map=requirement_map,
+            )
             testcase = TestCase(
                 project_id=project.id,
                 requirement_id=requirement_id,
