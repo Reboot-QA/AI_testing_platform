@@ -26,6 +26,9 @@ function endpointToForm(e) {
 
 const snap = (form) => JSON.stringify(form)
 
+// 打开中的接口去重锁（key=`pid:id`）——纯并发锁不需响应式，防连点产生重复 tab
+const _pending = new Set()
+
 function newTab(e) {
   const form = endpointToForm(e)
   return {
@@ -36,6 +39,7 @@ function newTab(e) {
     snapshot: snap(form),
     version: e.version ?? 1,
     endpointTab: 'debug', // 接口内子 tab（调试/文档/用例）各 tab 独立
+    saving: false, // 保存中态按 tab 隔离，避免多 tab 互相污染保存按钮
   }
 }
 
@@ -73,9 +77,16 @@ export const useApiTabsStore = defineStore('apiTabs', {
         this.activate(pid, id)
         return
       }
-      const e = await apifoxApi.getEndpoint(id)
-      p.tabs.push(newTab(e))
-      this.activate(pid, id)
+      const key = `${pid}:${id}`
+      if (_pending.has(key)) return // 同一接口正在打开中，忽略连点，避免重复 tab
+      _pending.add(key)
+      try {
+        const e = await apifoxApi.getEndpoint(id)
+        if (!p.tabs.some((t) => t.id === id)) p.tabs.push(newTab(e)) // 双检：await 期间可能已被打开
+        this.activate(pid, id)
+      } finally {
+        _pending.delete(key)
+      }
     },
     async reloadEndpoint(pid, id) {
       const t = this.findTab(pid, id)

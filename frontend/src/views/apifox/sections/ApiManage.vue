@@ -33,7 +33,7 @@
             <el-tab-pane label="调试" name="debug">
               <ApiDebugPanel
                 :form="activeTab.form"
-                :saving="saving"
+                :saving="activeTab.saving"
                 :server-names="serverNames"
                 :project-id="pid"
                 :scripts="scripts"
@@ -91,7 +91,6 @@ const store = useWorkspaceStore()
 const tabsStore = useApiTabsStore()
 
 const treePanel = ref(null)
-const saving = ref(false)
 const { scripts, loadScripts } = useProjectScripts(pid)
 const schemas = ref([])
 
@@ -135,7 +134,7 @@ function endpointPayload(form) {
 async function saveEndpoint(id) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return false
-  saving.value = true
+  tab.saving = true
   try {
     const updated = await apifoxApi.updateEndpoint(tab.id, {
       ...endpointPayload(tab.form), expected_version: tab.version,
@@ -168,7 +167,7 @@ async function saveEndpoint(id) {
     })
     return resolved
   } finally {
-    saving.value = false
+    tab.saving = false
   }
 }
 
