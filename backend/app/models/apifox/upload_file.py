@@ -20,6 +20,6 @@ class ApifoxUploadFile(Base):
     filename: Mapped[str] = mapped_column(String(500), default="")
     content_type: Mapped[str] = mapped_column(String(200), default="application/octet-stream")
     size: Mapped[int] = mapped_column(Integer, default=0)
-    # MEDIUMBLOB（16MB 容量上限）承载文件字节；service 限 10MB
-    data: Mapped[bytes] = mapped_column(LargeBinary(16 * 1024 * 1024))
+    # MEDIUMBLOB（2^24-1 容量上限）承载文件字节；service 限 10MB
+    data: Mapped[bytes] = mapped_column(LargeBinary(16 * 1024 * 1024 - 1))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

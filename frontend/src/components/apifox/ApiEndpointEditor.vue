@@ -110,7 +110,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
@@ -127,6 +126,7 @@ const props = defineProps({
   showProcessors: { type: Boolean, default: false },
   scripts: { type: Array, default: () => [] },
   schemas: { type: Array, default: () => [] },
+  projectId: { type: [String, Number], default: '' },
 })
 defineEmits(['save'])
 
@@ -140,12 +140,11 @@ const bodyLang = computed(() => {
 })
 
 // binary body：上传文件到项目，spec 只存 file_id + 展示名（发送时后端按 id 取字节）
-const route = useRoute()
 const uploading = ref(false)
 async function onPickFile(file) {
   uploading.value = true
   try {
-    const res = await apifoxApi.uploadFile(route.params.projectId, file)
+    const res = await apifoxApi.uploadFile(props.projectId, file)
     props.form.request_spec.body.file_id = res.id
     props.form.request_spec.body.file_name = res.filename
     ElMessage.success('已上传')
