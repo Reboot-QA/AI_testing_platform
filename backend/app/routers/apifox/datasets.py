@@ -17,6 +17,7 @@ from app.routers.apifox.dataset_schemas import (
     DatasetUpdate,
 )
 from app.services.apifox import dataset_service as service
+from app.services.apifox.errors import ConflictError
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·数据集"])
@@ -60,6 +61,8 @@ def update_dataset(
     dataset = _dataset_checked(db, did, user)
     try:
         return service.update_dataset(db, dataset, data)
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=exc.message)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

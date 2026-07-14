@@ -15,6 +15,7 @@ from app.routers.apifox.script_schemas import (
     ScriptOut,
     ScriptUpdate,
 )
+from app.services.apifox import versioning
 
 VALID_LANGS = {"javascript", "python"}
 
@@ -39,6 +40,7 @@ def _out(script: ApifoxScript) -> ScriptOut:
         content=script.content or "",
         description=script.description,
         sort_order=script.sort_order,
+        version=script.version,
         created_at=script.created_at,
         updated_at=script.updated_at,
     )
@@ -72,6 +74,8 @@ def get_script_out(script: ApifoxScript) -> ScriptOut:
 
 
 def update_script(db: Session, script: ApifoxScript, data: ScriptUpdate) -> ScriptOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxScript, script, data.expected_version)
     if data.lang is not None:
         _validate_lang(data.lang)
         script.lang = data.lang

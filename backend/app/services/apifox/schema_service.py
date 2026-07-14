@@ -16,7 +16,7 @@ from app.routers.apifox.data_model_schemas import (
     SchemaOut,
     SchemaUpdate,
 )
-from app.services.apifox import schema_ref
+from app.services.apifox import schema_ref, versioning
 
 
 def _validate_json(text: str) -> None:
@@ -77,6 +77,7 @@ def _out(db: Session, schema: ApifoxSchema) -> SchemaOut:
         json_schema=schema.json_schema or "{}",
         description=schema.description,
         sort_order=schema.sort_order,
+        version=schema.version,
         created_at=schema.created_at,
         updated_at=schema.updated_at,
         resolved_schema=schema_ref.resolve_schema_text(db, schema.project_id, schema.json_schema),
@@ -124,6 +125,8 @@ def get_schema_out(db: Session, schema: ApifoxSchema) -> SchemaOut:
 
 
 def update_schema(db: Session, schema: ApifoxSchema, data: SchemaUpdate) -> SchemaOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxSchema, schema, data.expected_version)
     if data.name is not None and data.name != schema.name:
         # 模型间按名引用，被引用时改名会断链——禁止（接口按 id 引用不受影响）
         model_refs = _count_model_refs(db, schema.project_id, schema.name)
