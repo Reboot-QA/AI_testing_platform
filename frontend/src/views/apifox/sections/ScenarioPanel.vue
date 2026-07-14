@@ -39,6 +39,8 @@
           :current-scenario-id="form.id"
           :scripts="scripts"
           :databases="databases"
+          :endpoints="endpoints"
+          :server-names="serverNames"
         />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
@@ -52,6 +54,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { normalizeSpec } from '@/utils/apifoxSpec'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useWorkspaceStore } from '@/stores/workspace'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
@@ -65,7 +68,15 @@ const scenarios = ref([])
 const projectCases = ref([])
 const scripts = ref([])
 const databases = ref([])
+const endpoints = ref([])
 const saving = ref(false)
+
+// 场景 HTTP 步骤的服务名选择（取自工作区环境的命名前置 URL）
+const serverNames = computed(() => {
+  const names = new Set()
+  store.environments.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
+  return [...names]
+})
 const running = ref(false)
 const runEvents = ref([])
 const form = reactive({ id: null, name: '', description: '', steps: [], version: 1 })
@@ -115,6 +126,15 @@ function normalizeStep(s) {
     node.elseEnabled = !!elseStep
     node.elseChildren = elseStep ? elseStep.children || [] : []
     if (!node.config?.condition) node.config = { condition: { left: '', operator: 'eq', right: '' } }
+  } else if (s.type === 'http') {
+    // http 步骤：补全 request_spec 结构供编辑器绑定，保证 assertions/extracts 为数组
+    const c = s.config || {}
+    node.config = {
+      ...c,
+      request_spec: normalizeSpec(c.request_spec),
+      assertions: c.assertions || [],
+      extracts: c.extracts || [],
+    }
   } else {
     node.children = normalizeSteps(s.children)
   }
@@ -218,6 +238,7 @@ onMounted(async () => {
   await loadProjectCases()
   await loadScripts()
   await loadDatabases()
+  endpoints.value = await apifoxApi.listEndpoints(pid.value)
 })
 </script>
 

@@ -117,6 +117,18 @@
         </div>
       </div>
     </template>
+
+    <template v-else-if="step.type === 'http'">
+      <ApiEndpointEditor :form="step.config" show-meta :server-names="serverNames" />
+      <div class="sd-field sd-field-top">
+        <span class="sd-label">断言</span>
+        <div class="http-proc"><AssertionsEditor :rows="step.config.assertions" /></div>
+      </div>
+      <div class="sd-field sd-field-top">
+        <span class="sd-label">提取</span>
+        <div class="http-proc"><ExtractsEditor :rows="step.config.extracts" /></div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -131,6 +143,9 @@ import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
 import LoopEditor from '@/components/apifox/LoopEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
+import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
+import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
+import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 
 const props = defineProps({
   step: { type: Object, required: true },
@@ -139,6 +154,7 @@ const props = defineProps({
   currentScenarioId: { type: Number, default: null },
   scripts: { type: Array, default: () => [] },
   databases: { type: Array, default: () => [] },
+  serverNames: { type: Array, default: () => [] },
 })
 
 const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
@@ -283,6 +299,11 @@ async function saveCase() {
 
 .sd-field-top {
   align-items: flex-start;
+}
+
+.http-proc {
+  flex: 1;
+  min-width: 0;
 }
 
 .db-sql,

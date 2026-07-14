@@ -23,7 +23,7 @@ from app.routers.apifox.scenario_schemas import (
 from app.services.apifox import versioning
 from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
 
-VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue", "db"}
+VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue", "db", "http"}
 # 可嵌套子步骤的容器型步骤
 CONTAINER_STEP_TYPES = {"group", "if", "else", "loop"}
 # 仅在循环体内（loop 祖先）合法的流程控制步骤
@@ -88,6 +88,12 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
             raise ValueError("数据库步骤必须指定数据库连接")
         if not str(config.get("sql") or "").strip():
             raise ValueError("数据库步骤必须填写 SQL")
+    elif step.type == "http":
+        config = step.config or {}
+        if not str(config.get("method") or "").strip():
+            raise ValueError("HTTP 步骤必须指定请求方法")
+        if not str(config.get("path") or "").strip():
+            raise ValueError("HTTP 步骤必须填写请求路径/URL")
 
 
 def _validate_loop(config: dict) -> None:
