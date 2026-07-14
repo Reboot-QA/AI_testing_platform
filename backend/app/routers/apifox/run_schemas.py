@@ -28,6 +28,7 @@ class RunStepOut(BaseModel):
     id: int
     step_type: str
     depth: int = 0
+    iteration: int = 0
     case_id: Optional[int] = None
     case_name: str
     method: str
@@ -50,3 +51,5 @@ class RunOut(RunBrief):
     steps: List[RunStepOut] = Field(default_factory=list)
     # 套件父运行的子运行汇总（各用例/场景一条）；非套件运行为空
     children: List[RunBrief] = Field(default_factory=list)
+    # 数据驱动/循环多轮的每组注入数据（[{...}, ...]）；单轮运行为空=报告不分组
+    iterations: List[Dict[str, Any]] = Field(default_factory=list)

@@ -12,6 +12,7 @@ import pytest
 
 from app.models.apifox.dataset import ApifoxDatasetRow
 from app.models.apifox.run import ApifoxRunStep
+from app.repositories.apifox import run_repo
 from app.routers.apifox.dataset_schemas import DatasetCreate, DatasetRowIn
 from app.routers.apifox.scenario_schemas import (
     ScenarioCreate,
@@ -204,10 +205,45 @@ def test_iteration_failure_writes_failed_terminal_state(db, make_case, monkeypat
     with pytest.raises(RuntimeError):
         list(gen)
 
-    from app.repositories.apifox import run_repo
     run = run_repo.get_run(db, start["run_id"])
     assert run.status == "failed"
     assert run.finished_at is not None
+
+
+def _stub_pass(monkeypatch):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts):
+        return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+
+
+def test_steps_tagged_with_iteration_and_meta_persisted(db, make_case, monkeypatch):
+    # 数据驱动分组展示：每步落所属轮次，run.iterations_meta 存每组注入数据
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"}), DatasetRowIn(values={"user": "b"})])
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    run = run_repo.get_run(db, events[0]["run_id"])
+    steps = db.query(ApifoxRunStep).filter(ApifoxRunStep.run_id == run.id).order_by(ApifoxRunStep.id).all()
+    assert [s.iteration for s in steps] == [0, 1]  # 两组各一步
+    assert json.loads(run.iterations_meta) == [{"user": "a"}, {"user": "b"}]
+    assert events[0]["iterations"] == [{"user": "a"}, {"user": "b"}]
+
+
+def test_single_iteration_run_leaves_meta_empty(db, make_case, monkeypatch):
+    # 单轮运行：不落 meta、start 事件无 iterations，报告不分组（零视觉变化）
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    run = run_repo.get_run(db, events[0]["run_id"])
+    assert run.iterations_meta is None
+    assert "iterations" not in events[0]
 
 
 def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):

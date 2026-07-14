@@ -32,6 +32,8 @@ class ApifoxRun(Base):
     duration_ms: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     pass_rate: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     triggered_by: Mapped[str] = mapped_column(String(100), default="manual")
+    # 数据驱动/循环多轮运行的每组注入数据 JSON（[{...}, ...]，单轮运行为空），供报告按组展示
+    iterations_meta: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
 
@@ -45,6 +47,8 @@ class ApifoxRunStep(Base):
     step_type: Mapped[str] = mapped_column(String(20), default="case")
     # 步骤在场景树中的嵌套深度（顶层 0），供报告缩进展示
     depth: Mapped[int] = mapped_column(Integer, default=0)
+    # 数据驱动/循环运行时步骤所属的轮次（0 基），供报告按组展示
+    iteration: Mapped[int] = mapped_column(Integer, default=0)
     case_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     case_name: Mapped[str] = mapped_column(String(200), default="")
     method: Mapped[str] = mapped_column(String(10), default="")
