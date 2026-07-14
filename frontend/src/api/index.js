@@ -440,6 +440,7 @@ export const testExecutionApi = {
   listAvailableCases: (projectId, params = {}) =>
     request.get('/test-executions/available-cases/list', {
       params: { project_id: projectId, ...params },
+      paramsSerializer: { indexes: null },
     }),
 }
 

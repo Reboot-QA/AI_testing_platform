@@ -212,16 +212,29 @@
         <el-form-item label="说明">
           <el-input v-model="createForm.description" type="textarea" :rows="2" />
         </el-form-item>
-        <el-form-item label="需求点" prop="requirement_id">
-          <el-select
-            v-model="createForm.requirement_id"
-            :disabled="!createForm.project_id"
-            :placeholder="createForm.project_id ? '请选择需求点' : '请先选择项目'"
-            style="width: 100%"
-            @change="loadAvailableCases"
-          >
-            <el-option v-for="r in createRequirements" :key="r.id" :label="r.title" :value="r.id" />
-          </el-select>
+        <el-form-item label="需求点" prop="requirement_ids">
+          <div class="requirement-select-row">
+            <el-select
+              v-model="createForm.requirement_ids"
+              multiple
+              collapse-tags
+              collapse-tags-tooltip
+              :disabled="!createForm.project_id"
+              :placeholder="createForm.project_id ? '请选择需求点' : '请先选择项目'"
+              style="flex: 1"
+              @change="loadAvailableCases"
+            >
+              <el-option v-for="r in createRequirements" :key="r.id" :label="r.title" :value="r.id" />
+            </el-select>
+            <el-button
+              link
+              type="primary"
+              :disabled="!createRequirements.length"
+              @click="toggleSelectAllRequirements"
+            >
+              {{ allRequirementsSelected ? '取消全选' : '全选' }}
+            </el-button>
+          </div>
         </el-form-item>
       </el-form>
 
@@ -230,7 +243,7 @@
         <el-button
           link
           type="primary"
-          :disabled="!createForm.requirement_id || !availableCases.length"
+          :disabled="!createForm.requirement_ids.length || !availableCases.length"
           @click="toggleSelectAll"
         >
           {{ allSelected ? '取消全选' : '全选' }}
@@ -238,7 +251,7 @@
         <span class="selected-count">已选 {{ selectedCaseIds.length }} 条</span>
       </div>
       <el-table
-        v-if="createForm.requirement_id"
+        v-if="createForm.requirement_ids.length"
         ref="caseTableRef"
         v-loading="casesLoading"
         :data="availableCases"
@@ -318,12 +331,18 @@ const createForm = reactive({
   name: '',
   build_name: '',
   description: '',
-  requirement_id: null,
+  requirement_ids: [],
 })
 const createRules = {
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   name: [{ required: true, message: '请输入测试单名称', trigger: 'blur' }],
-  requirement_id: [{ required: true, message: '请选择需求点', trigger: 'change' }],
+  requirement_ids: [{
+    type: 'array',
+    required: true,
+    min: 1,
+    message: '请至少选择一个需求点',
+    trigger: 'change',
+  }],
 }
 const availableCases = ref([])
 const casesLoading = ref(false)
@@ -365,6 +384,12 @@ const nextCase = computed(() => {
 
 const allSelected = computed(
   () => availableCases.value.length > 0 && selectedCaseIds.value.length === availableCases.value.length
+)
+
+const allRequirementsSelected = computed(
+  () =>
+    createRequirements.value.length > 0 &&
+    createForm.requirement_ids.length === createRequirements.value.length
 )
 
 function formatTime(value) {
@@ -472,7 +497,7 @@ function openCreateDialog() {
   createForm.name = ''
   createForm.build_name = ''
   createForm.description = ''
-  createForm.requirement_id = null
+  createForm.requirement_ids = []
   createRequirements.value = []
   availableCases.value = []
   selectedCaseIds.value = []
@@ -493,7 +518,7 @@ async function loadCreateRequirements() {
 }
 
 function handleCreateProjectChange() {
-  createForm.requirement_id = null
+  createForm.requirement_ids = []
   createRequirements.value = []
   availableCases.value = []
   selectedCaseIds.value = []
@@ -502,7 +527,7 @@ function handleCreateProjectChange() {
 }
 
 async function loadAvailableCases() {
-  if (!createForm.project_id || !createForm.requirement_id) {
+  if (!createForm.project_id || !createForm.requirement_ids.length) {
     availableCases.value = []
     selectedCaseIds.value = []
     caseTableSelection.value = []
@@ -511,7 +536,7 @@ async function loadAvailableCases() {
   casesLoading.value = true
   try {
     availableCases.value = await testExecutionApi.listAvailableCases(createForm.project_id, {
-      requirement_id: createForm.requirement_id,
+      requirement_ids: createForm.requirement_ids,
     })
     selectedCaseIds.value = availableCases.value.map((item) => item.id)
     await nextTick()
@@ -527,6 +552,15 @@ async function loadAvailableCases() {
 function handleCaseSelection(rows) {
   caseTableSelection.value = rows
   selectedCaseIds.value = rows.map((item) => item.id)
+}
+
+function toggleSelectAllRequirements() {
+  if (allRequirementsSelected.value) {
+    createForm.requirement_ids = []
+  } else {
+    createForm.requirement_ids = createRequirements.value.map((item) => item.id)
+  }
+  loadAvailableCases()
 }
 
 function toggleSelectAll() {
@@ -553,7 +587,7 @@ async function createRun() {
       name: createForm.name,
       build_name: createForm.build_name || undefined,
       description: createForm.description || undefined,
-      requirement_id: createForm.requirement_id,
+      requirement_ids: createForm.requirement_ids,
       case_ids: selectedCaseIds.value,
     })
     createDialogVisible.value = false
@@ -723,6 +757,13 @@ onMounted(loadProjects)
 .selected-count {
   margin-left: auto;
   color: #64748b;
+}
+
+.requirement-select-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
 }
 
 .detail-table {

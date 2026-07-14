@@ -119,12 +119,15 @@ def create_run(
     _check_project(db, data.project_id, current_user)
 
     case_ids = list(data.case_ids)
-    if data.requirement_id is not None:
+    requirement_ids = list(dict.fromkeys(data.requirement_ids or []))
+    if data.requirement_id is not None and data.requirement_id not in requirement_ids:
+        requirement_ids.insert(0, data.requirement_id)
+    if requirement_ids:
         req_cases = (
             db.query(TestCase.id)
             .filter(
                 TestCase.project_id == data.project_id,
-                TestCase.requirement_id == data.requirement_id,
+                TestCase.requirement_id.in_(requirement_ids),
                 TestCase.review_status == "approved",
             )
             .all()
@@ -154,6 +157,7 @@ def create_run(
 def list_available_cases(
     project_id: int,
     requirement_id: Optional[int] = Query(None),
+    requirement_ids: Optional[List[int]] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -162,8 +166,11 @@ def list_available_cases(
         TestCase.project_id == project_id,
         TestCase.review_status == "approved",
     )
-    if requirement_id is not None:
-        query = query.filter(TestCase.requirement_id == requirement_id)
+    req_ids = list(dict.fromkeys(requirement_ids or []))
+    if requirement_id is not None and requirement_id not in req_ids:
+        req_ids.append(requirement_id)
+    if req_ids:
+        query = query.filter(TestCase.requirement_id.in_(req_ids))
     cases = query.order_by(TestCase.id.desc()).all()
     return [
         {

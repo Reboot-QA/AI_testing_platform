@@ -894,6 +894,7 @@ class ManualTestRunCreate(BaseModel):
     description: Optional[str] = None
     case_ids: List[int] = Field(min_length=1)
     requirement_id: Optional[int] = None
+    requirement_ids: Optional[List[int]] = None
 
 
 class ManualTestRunUpdate(BaseModel):
