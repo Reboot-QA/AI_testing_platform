@@ -246,6 +246,12 @@ class RequirementBatchImportResponse(BaseModel):
     message: str
 
 
+class RequirementFileImportResponse(BaseModel):
+    imported_count: int
+    skipped_count: int = 0
+    message: str
+
+
 class TestCaseBase(BaseModel):
     title: str
     case_type: str = "functional"

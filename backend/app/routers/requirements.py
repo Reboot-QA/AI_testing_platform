@@ -21,12 +21,21 @@ from app.schemas import (
     RequirementBatchStatusUpdate,
     RequirementCreate,
     RequirementExtractResponse,
+    RequirementFileImportResponse,
     RequirementOut,
     RequirementPageOut,
     RequirementUpdate,
 )
 from app.services.ai_service import extract_requirements_from_document, stream_extract_requirements
 from app.services.document_service import extract_text_from_document
+from app.services.requirement_io_service import (
+    build_content_disposition,
+    export_requirements_excel as build_requirements_excel,
+    export_requirements_xmind as build_requirements_xmind,
+    import_requirements_from_rows,
+    list_project_requirements,
+    parse_requirement_import_file,
+)
 from app.services.settings_service import get_effective_llm_config
 
 ALLOWED_REQUIREMENT_STATUSES = {"draft", "approved", "closed"}
@@ -381,6 +390,68 @@ def batch_import_requirements(
         imported_count=len(saved),
         requirements=[_requirement_out(req, db) for req in saved],
         message=f"成功导入 {len(saved)} 条需求到需求点",
+    )
+
+
+@router.get("/export/excel")
+def export_requirements_excel(
+    project_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _check_project(db, project_id, current_user)
+    requirements = list_project_requirements(db, project_id)
+    buffer, filename = build_requirements_excel(project, requirements)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": build_content_disposition(filename, "requirements.xlsx")},
+    )
+
+
+@router.get("/export/xmind")
+def export_requirements_xmind(
+    project_id: int = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _check_project(db, project_id, current_user)
+    requirements = list_project_requirements(db, project_id)
+    buffer, filename = build_requirements_xmind(project, requirements)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.xmind.workbook",
+        headers={"Content-Disposition": build_content_disposition(filename, "requirements.xmind")},
+    )
+
+
+@router.post("/import/file", response_model=RequirementFileImportResponse)
+async def import_requirements_file(
+    project_id: int = Form(...),
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    project = _check_project(db, project_id, current_user)
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="上传文件为空")
+    try:
+        rows = parse_requirement_import_file(file.filename or "", file_bytes)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    imported, skipped = import_requirements_from_rows(db, project, rows, current_user)
+    if imported == 0:
+        raise HTTPException(status_code=400, detail="没有成功导入任何需求，请检查文件格式与内容")
+
+    message = f"成功导入 {imported} 条需求"
+    if skipped:
+        message += f"，跳过 {skipped} 条"
+    return RequirementFileImportResponse(
+        imported_count=imported,
+        skipped_count=skipped,
+        message=message,
     )
 
 

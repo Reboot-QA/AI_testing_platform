@@ -29,6 +29,21 @@
       >
         批量删除{{ deletableSelectedCount ? ` (${deletableSelectedCount})` : '' }}
       </el-button>
+      <el-dropdown :disabled="isAllProjects" @command="handleExport">
+        <el-button :disabled="isAllProjects" :loading="exporting">
+          导出
+          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="excel">导出 Excel</el-dropdown-item>
+            <el-dropdown-item command="xmind">导出 XMind</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+      <el-button :disabled="isAllProjects" :loading="importing" @click="openImportDialog">
+        导入
+      </el-button>
     </div>
 
     <el-table
@@ -104,6 +119,37 @@
         @size-change="handlePageSizeChange"
       />
     </div>
+
+    <el-dialog v-model="importDialogVisible" title="导入需求" width="520px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="支持 Excel (.xlsx) 与 XMind (.xmind) 格式。请先选择具体项目后再导入。"
+        style="margin-bottom: 16px"
+      />
+      <el-upload
+        ref="uploadRef"
+        drag
+        :auto-upload="false"
+        :limit="1"
+        accept=".xlsx,.xmind"
+        :on-change="handleImportFileChange"
+        :on-remove="handleImportFileRemove"
+      >
+        <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
+        <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+        <template #tip>
+          <div class="el-upload__tip">Excel 需包含「标题」列；XMind 导入末级节点作为需求点</div>
+        </template>
+      </el-upload>
+      <template #footer>
+        <el-button @click="importDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="handleImport">
+          开始导入
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑需求' : '添加需求'" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
@@ -226,6 +272,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { ArrowDown, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
 import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
 
@@ -242,11 +289,14 @@ const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 const loading = ref(false)
+const exporting = ref(false)
+const importing = ref(false)
 const batchUpdating = ref(false)
 const batchDeleting = ref(false)
 const casesLoading = ref(false)
 const clearingCases = ref(false)
 const dialogVisible = ref(false)
+const importDialogVisible = ref(false)
 const casesDialogVisible = ref(false)
 const caseDrawerVisible = ref(false)
 const submitting = ref(false)
@@ -254,6 +304,8 @@ const editing = ref(null)
 const currentRequirement = ref(null)
 const caseDetail = ref(null)
 const formRef = ref()
+const uploadRef = ref()
+const importFile = ref(null)
 
 const typeMap = { functional: '功能', api: '接口', performance: '性能', security: '安全' }
 const sourceMap = { manual: '手动', ai_document: '文档解析' }
@@ -321,6 +373,77 @@ function handleProjectChange() {
 function handlePageSizeChange() {
   currentPage.value = 1
   loadData()
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function currentProjectName() {
+  return projects.value.find((item) => item.id === projectId.value)?.name || 'requirements'
+}
+
+async function handleExport(format) {
+  if (isAllProjects.value) {
+    ElMessage.warning('请先选择具体项目')
+    return
+  }
+  exporting.value = true
+  try {
+    const name = currentProjectName()
+    if (format === 'xmind') {
+      const blob = await requirementApi.exportXmind(projectId.value)
+      downloadBlob(blob, `${name}_requirements.xmind`)
+    } else {
+      const blob = await requirementApi.exportExcel(projectId.value)
+      downloadBlob(blob, `${name}_requirements.xlsx`)
+    }
+    ElMessage.success('导出成功')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function openImportDialog() {
+  if (isAllProjects.value) {
+    ElMessage.warning('请先选择具体项目')
+    return
+  }
+  importFile.value = null
+  uploadRef.value?.clearFiles()
+  importDialogVisible.value = true
+}
+
+function handleImportFileChange(uploadFile) {
+  importFile.value = uploadFile.raw || null
+}
+
+function handleImportFileRemove() {
+  importFile.value = null
+}
+
+async function handleImport() {
+  if (!importFile.value) {
+    ElMessage.warning('请先选择文件')
+    return
+  }
+  importing.value = true
+  try {
+    const res = await requirementApi.importFile(projectId.value, importFile.value)
+    ElMessage.success(res.message || '导入成功')
+    importDialogVisible.value = false
+    importFile.value = null
+    uploadRef.value?.clearFiles()
+    currentPage.value = 1
+    loadData()
+  } finally {
+    importing.value = false
+  }
 }
 
 function openDialog(row = null) {
