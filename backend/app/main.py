@@ -37,7 +37,7 @@ from app.routers.apifox import suites_router as apifox_suites_router
 from app.routers.apifox import uploads_router as apifox_uploads_router
 from app.routers.apifox import variables_router as apifox_variables_router
 from app.routers.apifox import workbench_router as apifox_workbench_router
-from app.services.schedule_service import start_scheduler, stop_scheduler
+from app.services.apifox.scheduler import start_scheduler, stop_scheduler
 
 
 def setup_logging() -> None:
