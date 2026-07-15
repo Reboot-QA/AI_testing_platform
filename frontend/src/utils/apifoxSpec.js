@@ -9,6 +9,7 @@ export function emptySpec() {
     cookies: [],
     body: { type: 'none', raw: '', form: [], graphql_query: '', graphql_variables: '', file_id: null, file_name: '' },
     auth: { type: 'none', token: '', username: '', password: '' },
+    settings: { timeout_ms: null, verify_ssl: true, follow_redirects: true },
   }
 }
 
@@ -34,6 +35,11 @@ export function normalizeSpec(spec) {
       token: s.auth?.token || '',
       username: s.auth?.username || '',
       password: s.auth?.password || '',
+    },
+    settings: {
+      timeout_ms: s.settings?.timeout_ms ?? null,
+      verify_ssl: s.settings?.verify_ssl !== false,
+      follow_redirects: s.settings?.follow_redirects !== false,
     },
   }
 }
