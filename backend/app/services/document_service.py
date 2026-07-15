@@ -2,7 +2,7 @@ from io import BytesIO
 from typing import List, Tuple
 
 ALLOWED_EXTENSIONS = {".txt", ".md", ".docx", ".doc"}
-MAX_FILE_SIZE = 5 * 1024 * 1024
+MAX_FILE_SIZE = 50 * 1024 * 1024
 MAX_TEXT_LENGTH = 15000
 
 
@@ -13,7 +13,7 @@ def validate_upload(filename: str, content: bytes) -> None:
     if ext not in ALLOWED_EXTENSIONS:
         raise ValueError("仅支持 .txt、.md、.docx 格式文档")
     if len(content) > MAX_FILE_SIZE:
-        raise ValueError("文件大小不能超过 5MB")
+        raise ValueError("文件大小不能超过 50MB")
     if not content:
         raise ValueError("文件内容为空")
 
