@@ -94,6 +94,16 @@ class UserPermissionsUpdate(BaseModel):
     menu_permissions: List[str] = Field(default_factory=list)
 
 
+class DepartmentPermissionsOut(BaseModel):
+    department_id: int
+    department_name: str
+    menu_permissions: List[str]
+
+
+class DepartmentPermissionsUpdate(BaseModel):
+    menu_permissions: List[str] = Field(default_factory=list)
+
+
 class Token(BaseModel):
     access_token: str
     token_type: str = "bearer"

@@ -1,4 +1,5 @@
 from app.models.department import Department
+from app.models.department_permission import DepartmentMenuPermission
 from app.models.user import User
 from app.models.user_permission import UserMenuPermission
 from app.models.project import Project
@@ -45,6 +46,7 @@ from app.models.apifox import (
 __all__ = [
     "User",
     "UserMenuPermission",
+    "DepartmentMenuPermission",
     "Department",
     "Project",
     "Requirement",

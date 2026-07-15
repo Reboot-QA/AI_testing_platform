@@ -6,34 +6,33 @@
       </template>
 
       <el-form label-width="90px" class="permission-form">
-        <el-form-item label="选择用户">
+        <el-form-item label="选择部门">
           <el-select
-            v-model="selectedUserId"
-            placeholder="请选择用户"
+            v-model="selectedDepartmentId"
+            placeholder="请选择部门"
             style="width: 320px"
             filterable
-            @change="loadUserPermissions"
+            @change="loadDepartmentPermissions"
           >
             <el-option
-              v-for="user in users"
-              :key="user.id"
-              :label="`${user.username}${user.full_name ? `（${user.full_name}）` : ''}`"
-              :value="user.id"
+              v-for="dept in departments"
+              :key="dept.id"
+              :label="dept.name"
+              :value="dept.id"
             />
           </el-select>
         </el-form-item>
       </el-form>
 
       <el-alert
-        v-if="selectedUser?.role === 'admin'"
-        title="管理员默认拥有全部菜单权限，无需单独授权"
+        title="同部门用户共享以下菜单权限，保存后该部门下所有用户立即生效"
         type="info"
         :closable="false"
         show-icon
         class="admin-alert"
       />
 
-      <div v-else-if="selectedUserId" v-loading="permissionLoading">
+      <div v-if="selectedDepartmentId" v-loading="permissionLoading">
         <div class="menu-group">
           <div class="group-title">业务菜单</div>
           <el-checkbox-group v-model="selectedMenus">
@@ -53,13 +52,6 @@
 
         <div class="menu-group">
           <div class="group-title">系统管理</div>
-          <el-alert
-            title="系统管理菜单仅管理员账号可访问，分配给测试员不会生效"
-            type="warning"
-            :closable="false"
-            show-icon
-            class="system-tip"
-          />
           <el-checkbox-group v-model="selectedMenus">
             <el-checkbox v-for="item in systemMenus" :key="item.key" :value="item.key">
               {{ item.label }}
@@ -69,13 +61,6 @@
 
         <div class="menu-group">
           <div class="group-title">日志管理</div>
-          <el-alert
-            title="日志管理菜单仅管理员账号可访问，分配给测试员不会生效"
-            type="warning"
-            :closable="false"
-            show-icon
-            class="system-tip"
-          />
           <div v-for="group in logMenuGroups" :key="group.key" class="menu-subgroup">
             <el-checkbox-group v-model="selectedMenus">
               <el-checkbox v-for="item in group.items" :key="item.key" :value="item.key">
@@ -91,15 +76,15 @@
         </div>
       </div>
 
-      <el-empty v-else description="请选择用户后进行菜单授权" />
+      <el-empty v-else description="请选择部门后进行菜单授权" />
     </el-card>
   </div>
 </template>
 
 <script setup>
-import { computed, ref, onMounted } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { userApi } from '@/api'
+import { departmentApi } from '@/api'
 import {
   BUSINESS_MENUS,
   BUSINESS_MENU_GROUPS,
@@ -108,8 +93,8 @@ import {
   SYSTEM_MENUS,
 } from '@/config/menus'
 
-const users = ref([])
-const selectedUserId = ref(null)
+const departments = ref([])
+const selectedDepartmentId = ref(null)
 const selectedMenus = ref([])
 const permissionLoading = ref(false)
 const saving = ref(false)
@@ -120,17 +105,15 @@ const systemMenus = SYSTEM_MENUS
 const logMenuGroups = LOG_MENU_GROUPS
 const defaultMenus = BUSINESS_MENUS.map((item) => item.key)
 
-const selectedUser = computed(() => users.value.find((item) => item.id === selectedUserId.value))
-
-async function loadUsers() {
-  users.value = await userApi.list()
+async function loadDepartments() {
+  departments.value = await departmentApi.list()
 }
 
-async function loadUserPermissions() {
-  if (!selectedUserId.value) return
+async function loadDepartmentPermissions() {
+  if (!selectedDepartmentId.value) return
   permissionLoading.value = true
   try {
-    const data = await userApi.getPermissions(selectedUserId.value)
+    const data = await departmentApi.getPermissions(selectedDepartmentId.value)
     selectedMenus.value = [...data.menu_permissions]
   } finally {
     permissionLoading.value = false
@@ -142,18 +125,18 @@ function resetMenus() {
 }
 
 async function handleSave() {
-  if (!selectedUserId.value || selectedUser.value?.role === 'admin') return
+  if (!selectedDepartmentId.value) return
   saving.value = true
   try {
-    const data = await userApi.updatePermissions(selectedUserId.value, selectedMenus.value)
+    const data = await departmentApi.updatePermissions(selectedDepartmentId.value, selectedMenus.value)
     selectedMenus.value = [...data.menu_permissions]
-    ElMessage.success('菜单授权已保存')
+    ElMessage.success('部门菜单授权已保存')
   } finally {
     saving.value = false
   }
 }
 
-onMounted(loadUsers)
+onMounted(loadDepartments)
 </script>
 
 <style scoped>
@@ -163,6 +146,7 @@ onMounted(loadUsers)
 
 .admin-alert {
   margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .menu-group {
@@ -185,10 +169,6 @@ onMounted(loadUsers)
   font-weight: 600;
   color: #4a5568;
   margin-bottom: 8px;
-}
-
-.system-tip {
-  margin-bottom: 12px;
 }
 
 .el-checkbox-group {

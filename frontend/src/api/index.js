@@ -273,6 +273,9 @@ export const departmentApi = {
   create: (data) => request.post('/departments', data),
   update: (id, data) => request.put(`/departments/${id}`, data),
   delete: (id) => request.delete(`/departments/${id}`),
+  getPermissions: (id) => request.get(`/departments/${id}/permissions`),
+  updatePermissions: (id, menu_permissions) =>
+    request.put(`/departments/${id}/permissions`, { menu_permissions }),
 }
 
 export const userApi = {
