@@ -2,9 +2,6 @@ import logging
 
 from app.database import Base, SessionLocal, engine
 from app.services.api_automation_migration import (
-    migrate_api_scheduled_task_suites,
-    migrate_api_test_suite_tree,
-    migrate_api_variable_stores,
     migrate_department_permissions,
     migrate_requirement_created_by,
     migrate_testcase_created_by,
@@ -42,9 +39,6 @@ def run_bootstrap() -> None:
         ("初始化数据库表", lambda db: Base.metadata.create_all(bind=engine)),
         ("迁移用户邮箱", lambda db: migrate_user_optional_email()),
         ("迁移用户强制改密标记", migrate_user_must_change_password),
-        ("迁移接口套件树", migrate_api_test_suite_tree),
-        ("迁移接口变量", migrate_api_variable_stores),
-        ("迁移定时任务套件", migrate_api_scheduled_task_suites),
         ("迁移部门权限", migrate_department_permissions),
         ("迁移需求创建人", migrate_requirement_created_by),
         ("迁移用例创建人", migrate_testcase_created_by),
