@@ -16,6 +16,15 @@ def list_suites(db: Session, project_id: int) -> List[ApifoxSuite]:
     )
 
 
+def name_exists(db: Session, project_id: int, name: str) -> bool:
+    return (
+        db.query(ApifoxSuite.id)
+        .filter(ApifoxSuite.project_id == project_id, ApifoxSuite.name == name)
+        .first()
+        is not None
+    )
+
+
 def get_suite(db: Session, suite_id: int) -> Optional[ApifoxSuite]:
     return db.query(ApifoxSuite).filter(ApifoxSuite.id == suite_id).first()
 
