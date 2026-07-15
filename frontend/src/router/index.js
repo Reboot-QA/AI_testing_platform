@@ -62,34 +62,6 @@ const routes = [
         meta: { permission: 'test_execution' },
       },
       {
-        path: 'api-automation',
-        redirect: '/api-automation/suites',
-      },
-      {
-        path: 'api-automation/env',
-        name: 'ApiAutomationEnv',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_env', apiTab: 'env' },
-      },
-      {
-        path: 'api-automation/suites',
-        name: 'ApiAutomationSuites',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_suites', apiTab: 'suite' },
-      },
-      {
-        path: 'api-automation/reports',
-        name: 'ApiAutomationReports',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_reports', apiTab: 'report' },
-      },
-      {
-        path: 'api-automation/schedule',
-        name: 'ApiAutomationSchedule',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_schedule', apiTab: 'schedule' },
-      },
-      {
         path: 'apifox',
         name: 'ApifoxWorkbench',
         component: () => import('@/views/apifox/Workbench.vue'),
