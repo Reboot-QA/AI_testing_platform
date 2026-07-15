@@ -24,10 +24,20 @@
         <span v-if="resp.error" class="err">{{ resp.error }}</span>
       </div>
       <el-tabs v-model="respTab" class="resp-tabs">
-        <el-tab-pane label="Body" name="body">
+        <el-tab-pane label="实际请求" name="request">
+          <div class="resp-box">
+            <ActualRequestView
+              :method="resp.method"
+              :url="resp.url"
+              :headers="resp.request_headers"
+              :body="resp.request_body"
+            />
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="响应 Body" name="body">
           <div class="resp-box"><JsonView :data="resp.response_body" :deep="3" /></div>
         </el-tab-pane>
-        <el-tab-pane label="Headers" name="headers">
+        <el-tab-pane label="响应 Headers" name="headers">
           <div class="resp-box"><JsonView :data="resp.response_headers" :deep="2" /></div>
         </el-tab-pane>
         <el-tab-pane v-if="resp.assertion_results?.length" label="断言" name="assertions">
@@ -66,6 +76,7 @@ import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
+import ActualRequestView from '@/components/apifox/ActualRequestView.vue'
 
 const props = defineProps({
   form: { type: Object, required: true },
