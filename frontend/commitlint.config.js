@@ -2,8 +2,9 @@
 export default {
   extends: ['@commitlint/config-conventional'],
   rules: {
-    // 中文 subject 不做大小写限制；header 长度放宽到 100
+    // 中文 subject 不做大小写限制；header 长度放宽到 100；body 行长不限（中文要点常超限）
     'subject-case': [0],
     'header-max-length': [2, 'always', 100],
+    'body-max-line-length': [0],
   },
 }

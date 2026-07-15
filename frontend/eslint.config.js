@@ -2,6 +2,7 @@
 // 原则：新代码严格；存量不可自动修复项降为 warn，保证基线 0 error。
 import pluginVue from 'eslint-plugin-vue'
 import eslintConfigPrettier from 'eslint-config-prettier'
+import tsParser from '@typescript-eslint/parser'
 import globals from 'globals'
 
 export default [
@@ -9,6 +10,15 @@ export default [
     ignores: ['node_modules/**', 'dist/**', '**/*.d.ts'],
   },
   ...pluginVue.configs['flat/recommended'],
+  // TS 文件与 <script lang="ts"> 的解析支持（渐进式 TS 迁移）
+  {
+    files: ['**/*.ts'],
+    languageOptions: { parser: tsParser },
+  },
+  {
+    files: ['**/*.vue'],
+    languageOptions: { parserOptions: { parser: { ts: tsParser } } },
+  },
   {
     files: ['**/*.{js,ts,vue}'],
     languageOptions: {
