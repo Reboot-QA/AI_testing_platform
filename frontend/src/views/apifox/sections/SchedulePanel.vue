@@ -85,6 +85,7 @@
             <el-option label="每天" value="daily" />
             <el-option label="每周" value="weekly" />
             <el-option label="固定间隔" value="interval" />
+            <el-option label="Cron 表达式" value="cron" />
           </el-select>
         </el-form-item>
         <el-form-item v-if="form.schedule_type === 'weekly'" label="星期">
@@ -92,7 +93,7 @@
             <el-option v-for="(d, i) in weekdays" :key="i" :label="d" :value="i" />
           </el-select>
         </el-form-item>
-        <el-form-item v-if="form.schedule_type !== 'interval'" label="执行时间">
+        <el-form-item v-if="['daily', 'weekly'].includes(form.schedule_type)" label="执行时间">
           <el-time-picker
             v-model="runTime"
             format="HH:mm"
@@ -102,6 +103,15 @@
         </el-form-item>
         <el-form-item v-if="form.schedule_type === 'interval'" label="间隔(分钟)">
           <el-input-number v-model="form.interval_minutes" :min="5" :max="10080" />
+        </el-form-item>
+        <el-form-item v-if="form.schedule_type === 'cron'" label="Cron 表达式">
+          <div style="width: 100%">
+            <el-input v-model="form.cron_expr" placeholder="分 时 日 月 周，如 0 9 * * 1" />
+            <div class="cron-hint">
+              标准 5 段：分(0-59) 时(0-23) 日(1-31) 月(1-12) 周(0-6，0=周日)。
+              示例：每小时 <code>0 * * * *</code> · 每天 8:30 <code>30 8 * * *</code> · 工作日 9 点 <code>0 9 * * 1-5</code>
+            </div>
+          </div>
         </el-form-item>
         <el-form-item label="启用">
           <el-switch v-model="form.enabled" />
@@ -140,7 +150,7 @@ const runTime = ref('09:00')
 
 const form = reactive({
   name: '', target_type: 'case', target_id: null, environment_id: null,
-  schedule_type: 'daily', week_day: 0, interval_minutes: 60, enabled: true,
+  schedule_type: 'daily', week_day: 0, interval_minutes: 60, cron_expr: '', enabled: true,
 })
 
 const targetOptions = computed(() => {
@@ -183,13 +193,13 @@ function openDialog(row) {
       name: row.name, target_type: row.target_type, target_id: row.target_id,
       environment_id: row.environment_id, schedule_type: row.schedule_type,
       week_day: row.week_day ?? 0, interval_minutes: row.interval_minutes ?? 60,
-      enabled: row.enabled,
+      cron_expr: row.cron_expr || '', enabled: row.enabled,
     })
     runTime.value = row.run_time || '09:00'
   } else {
     Object.assign(form, {
       name: '', target_type: 'case', target_id: null, environment_id: null,
-      schedule_type: 'daily', week_day: 0, interval_minutes: 60, enabled: true,
+      schedule_type: 'daily', week_day: 0, interval_minutes: 60, cron_expr: '', enabled: true,
     })
     runTime.value = '09:00'
   }
@@ -203,6 +213,8 @@ function buildPayload() {
   }
   if (form.schedule_type === 'interval') {
     p.interval_minutes = form.interval_minutes
+  } else if (form.schedule_type === 'cron') {
+    p.cron_expr = form.cron_expr.trim()
   } else {
     p.run_time = runTime.value
     if (form.schedule_type === 'weekly') p.week_day = form.week_day
@@ -283,5 +295,19 @@ onMounted(loadAll)
 
 .muted {
   color: var(--ax-text-disabled);
+}
+
+.cron-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ax-text-placeholder);
+}
+
+.cron-hint code {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text-secondary);
 }
 </style>

@@ -23,11 +23,12 @@ class ApifoxSchedule(Base):
     target_type: Mapped[str] = mapped_column(String(20))
     target_id: Mapped[int] = mapped_column(Integer)
     environment_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    # daily | weekly | interval
+    # daily | weekly | interval | cron
     schedule_type: Mapped[str] = mapped_column(String(20), default="daily")
     run_time: Mapped[str] = mapped_column(String(5), default="09:00")
     week_day: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     interval_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    cron_expr: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)  # schedule_type=cron
     enabled: Mapped[bool] = mapped_column(Boolean, default=True)
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_run_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

@@ -21,6 +21,7 @@ from app.services.apifox.migration import (
     migrate_apifox_run_step_depth,
     migrate_apifox_scenario_run_config,
     migrate_apifox_scenario_step_tree,
+    migrate_apifox_schedule_cron,
 )
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.schedule_service import init_schedules_on_startup
@@ -54,6 +55,7 @@ def run_bootstrap() -> None:
         ("迁移场景运行配置列", migrate_apifox_scenario_run_config),
         ("迁移用例分类列", migrate_apifox_case_category),
         ("迁移运行轮次列", migrate_apifox_run_iteration),
+        ("迁移定时任务cron列", migrate_apifox_schedule_cron),
         ("写入演示数据", seed_demo_data),
         ("加载 LLM 配置", init_llm_settings_from_env),
         ("迁移菜单权限", migrate_all_user_permissions),
