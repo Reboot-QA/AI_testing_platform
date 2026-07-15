@@ -6,9 +6,11 @@ StepOut 带展示字段（用例名/接口方法路径/子场景名）。
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+ScenarioPriority = Literal["high", "medium", "low"]
 
 
 class StepIn(BaseModel):
@@ -42,12 +44,14 @@ class ScenarioRunConfig(BaseModel):
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
+    priority: ScenarioPriority = "medium"
     steps: List[StepIn] = Field(default_factory=list)
 
 
 class ScenarioUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
+    priority: Optional[ScenarioPriority] = None
     steps: Optional[List[StepIn]] = None
     sort_order: Optional[int] = None
     run_config: Optional[ScenarioRunConfig] = None
@@ -59,6 +63,7 @@ class ScenarioBrief(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    priority: ScenarioPriority = "medium"
     step_count: int = 0
     sort_order: int
 
@@ -68,6 +73,7 @@ class ScenarioOut(BaseModel):
     project_id: int
     name: str
     description: Optional[str] = None
+    priority: ScenarioPriority = "medium"
     steps: List[StepOut]
     sort_order: int
     run_config: ScenarioRunConfig = Field(default_factory=ScenarioRunConfig)
