@@ -37,6 +37,7 @@ class DebugResponse(BaseModel):
     url: str
     request_headers: Dict[str, Any]
     request_body: str
+    warnings: List[str] = Field(default_factory=list)
     status_code: Optional[int] = None
     response_headers: Dict[str, Any]
     response_body: str

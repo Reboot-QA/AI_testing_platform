@@ -157,6 +157,60 @@ def test_form_data_body_goes_to_files():
     assert plan["request_kwargs"]["files"] == {"a": (None, "1")}
 
 
+def test_form_data_conflicting_content_type_kept_and_warned():
+    # 测试工具「所配即所发」：form-data 带 Content-Type: application/json 时**不改动**用户配置，
+    # 原样发送（服务端会因类型不符报错，这是有效测试结果），仅给出诊断警告
+    spec = {
+        "headers": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"type": "form-data", "form": [{"key": "username", "value": "admin"}]},
+    }
+    plan = _build(_endpoint(path="/login", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["headers"]["Content-Type"] == "application/json"  # 不被删/改，原样保留
+    assert plan["request_kwargs"]["files"] == {"username": (None, "admin")}
+    assert plan["warnings"] and "form-data" in plan["warnings"][0] and "application/json" in plan["warnings"][0]
+
+
+def test_form_data_multipart_without_boundary_warns():
+    # multipart/form-data 但缺 boundary 也是坏配置（httpx 不回填 boundary 到用户显式头）→ 诊断警告
+    spec = {
+        "headers": [{"key": "Content-Type", "value": "multipart/form-data"}],
+        "body": {"type": "form-data", "form": [{"key": "a", "value": "1"}]},
+    }
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["warnings"] and "boundary" in plan["warnings"][0]
+
+
+def test_form_data_multipart_with_boundary_no_warning():
+    spec = {
+        "headers": [{"key": "Content-Type", "value": "multipart/form-data; boundary=xyz"}],
+        "body": {"type": "form-data", "form": [{"key": "a", "value": "1"}]},
+    }
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["warnings"] == []  # 类型对且有 boundary，不打扰
+
+
+def test_form_data_without_content_type_no_warning():
+    spec = {"body": {"type": "form-data", "form": [{"key": "a", "value": "1"}]}}
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["warnings"] == []  # 无显式 Content-Type，httpx 自动生成正确 multipart，不打扰
+
+
+def test_urlencoded_conflicting_content_type_kept_and_warned():
+    spec = {
+        "headers": [{"key": "content-type", "value": "application/json"}],
+        "body": {"type": "urlencoded", "form": [{"key": "username", "value": "admin"}]},
+    }
+    plan = _build(_endpoint(path="/login", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    cts = [v for k, v in plan["headers"].items() if k.lower() == "content-type"]
+    assert cts == ["application/json"]  # 用户配置原样保留，不被覆盖
+    assert plan["warnings"] and "x-www-form-urlencoded" in plan["warnings"][0]
+
+
 def test_xml_body_sets_xml_content_type_and_interpolates():
     spec = {"body": {"type": "xml", "raw": "<a>{{v}}</a>"}}
     plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"), variables={"v": "1"})
