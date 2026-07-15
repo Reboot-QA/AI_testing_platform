@@ -155,6 +155,16 @@ def _param_value(doc: Dict[str, Any], param: Dict[str, Any]) -> str:
     return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
 
 
+# OpenAPI3 类型在 param.schema.type，Swagger2 直接在 param.type；映射到 KvRow.type 支持的集合
+_PARAM_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
+
+
+def _param_type(param: Dict[str, Any]) -> str:
+    schema = param.get("schema")
+    raw = (schema.get("type") if isinstance(schema, dict) else None) or param.get("type")
+    return raw if raw in _PARAM_TYPES else "string"
+
+
 def _rows_from_params(doc: Dict[str, Any], params: List[Dict[str, Any]], location: str) -> List[KvRow]:
     rows: List[KvRow] = []
     for param in params or []:
@@ -165,6 +175,7 @@ def _rows_from_params(doc: Dict[str, Any], params: List[Dict[str, Any]], locatio
             value=_param_value(doc, param),
             enabled=True,
             desc=str(param.get("description") or ""),
+            type=_param_type(param),
         ))
     return rows
 
