@@ -10,11 +10,12 @@ from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
 from app.schemas import DashboardStats, ProjectCreate, ProjectOut, ProjectUpdate
-from app.services.apifox.project_cleanup import purge_project_apifox
+from app.services.apifox.project_cleanup import purge_project_all
 from app.services.project_access_service import (
     accessible_projects_query,
     get_accessible_project,
     get_accessible_project_ids,
+    is_admin,
 )
 
 router = APIRouter(prefix="/projects", tags=["项目"])
@@ -108,7 +109,15 @@ def update_project(
     current_user: User = Depends(get_current_user),
 ):
     project = get_accessible_project(db, project_id, current_user)
-    for key, value in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    new_owner_id = payload.pop("owner_id", None)
+    if new_owner_id is not None and new_owner_id != project.owner_id:
+        if not is_admin(current_user):
+            raise HTTPException(status_code=403, detail="仅系统管理员可变更项目负责人")
+        if not db.query(User).filter(User.id == new_owner_id).first():
+            raise HTTPException(status_code=404, detail="指定的负责人用户不存在")
+        project.owner_id = new_owner_id
+    for key, value in payload.items():
         setattr(project, key, value)
     db.commit()
     db.refresh(project)
@@ -118,14 +127,10 @@ def update_project(
 @router.delete("/{project_id}")
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = get_accessible_project(db, project_id, current_user)
-    req_count = db.query(Requirement).filter(Requirement.project_id == project_id).count()
-    case_count = db.query(TestCase).filter(TestCase.project_id == project_id).count()
-    if req_count > 0 or case_count > 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"该项目下存在 {req_count} 条需求、{case_count} 条用例，请先清理全部关联需求和用例后再删除",
-        )
-    purge_project_apifox(db, project.id)  # 先清空该项目的全部 apifox 数据（避免 FK 阻塞/孤儿）
+    # 硬删除不可逆且清空整个项目：仅项目负责人或系统管理员可执行
+    if not (is_admin(current_user) or project.owner_id == current_user.id):
+        raise HTTPException(status_code=403, detail="仅项目负责人或系统管理员可删除项目")
+    purge_project_all(db, project.id)  # 级联清空该项目全部数据（老平台 + apifox），避免 FK 阻塞/孤儿
     db.delete(project)
     db.commit()
     return {"message": "删除成功"}
