@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.project import Project
 from app.models.user import User
 from app.repositories.apifox import workbench_repo
+from app.services import user_project_pref_service
 from app.services.project_access_service import accessible_projects_query, is_admin
 
 _RECENT_REPORTS_LIMIT = 10
@@ -58,6 +59,7 @@ def get_overview(db: Session, user: User) -> dict:
         }
         for p in projects
     ]
+    project_cards = user_project_pref_service.order_cards(db, user.id, project_cards)
 
     running_out = [
         {

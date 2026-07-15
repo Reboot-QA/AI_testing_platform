@@ -21,6 +21,7 @@ class WorkbenchProject(BaseModel):
     scenario_count: int
     case_count: int
     role: str  # 管理员 / 负责人 / 成员（派生自全局角色与 owner，无项目内角色）
+    pinned: bool = False  # 当前用户是否置顶
 
 
 class WorkbenchRunning(BaseModel):
