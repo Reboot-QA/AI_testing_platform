@@ -397,6 +397,8 @@ export const apifoxApi = {
   listRuns: (pid) => request.get(`/apifox/projects/${pid}/runs`),
   listEndpointRuns: (eid) => request.get(`/apifox/endpoints/${eid}/runs`),
   getRun: (rid) => request.get(`/apifox/runs/${rid}`),
+  exportRun: (rid, format = 'excel') =>
+    request.get(`/apifox/runs/${rid}/export`, { params: { format }, responseType: 'blob' }),
   runCaseStream: (cid, environmentId, onEvent, options = {}) =>
     apifoxRunStream(`/api/v1/apifox/cases/${cid}/run/stream`, environmentId, onEvent, options),
   runScenarioStream: (sid, environmentId, onEvent, options = {}) =>

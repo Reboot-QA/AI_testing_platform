@@ -7,7 +7,7 @@ SSE 端点对齐旧模块范式：不用 Depends(get_db)（避免长流占用请
 import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -24,7 +24,7 @@ from app.repositories.apifox import (
     variable_repo,
 )
 from app.routers.apifox.run_schemas import RunBrief, RunOut, RunStepOut
-from app.services.apifox import run_service
+from app.services.apifox import run_export_service, run_service
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·执行"])
@@ -243,15 +243,49 @@ def list_endpoint_runs(eid: int, db: Session = Depends(get_db), user: User = Dep
     return [_brief(r) for r in run_repo.list_case_runs_by_endpoint(db, eid)]
 
 
+def _full_run_out(db: Session, run: ApifoxRun) -> RunOut:
+    data: Dict[str, Any] = _brief(run).model_dump()
+    data["steps"] = [_step_out(s) for s in run_repo.list_steps(db, run.id)]
+    # 套件父运行：附子运行汇总（各用例/场景一条）供两级报告
+    data["children"] = [_brief(c) for c in run_repo.list_child_runs(db, run.id)]
+    data["iterations"] = _loads(run.iterations_meta, [])
+    return RunOut(**data)
+
+
 @router.get("/runs/{rid}", response_model=RunOut)
 def get_run(rid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     run = run_repo.get_run(db, rid)
     if not run:
         raise HTTPException(status_code=404, detail="运行记录不存在")
     get_accessible_project(db, run.project_id, user)
-    data: Dict[str, Any] = _brief(run).model_dump()
-    data["steps"] = [_step_out(s) for s in run_repo.list_steps(db, rid)]
-    # 套件父运行：附子运行汇总（各用例/场景一条）供两级报告
-    data["children"] = [_brief(c) for c in run_repo.list_child_runs(db, rid)]
-    data["iterations"] = _loads(run.iterations_meta, [])
-    return RunOut(**data)
+    return _full_run_out(db, run)
+
+
+@router.get("/runs/{rid}/export")
+def export_run(
+    rid: int,
+    format: str = "excel",
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """导出单个运行报告为 Excel / Word / PDF / JSON。"""
+    run = run_repo.get_run(db, rid)
+    if not run:
+        raise HTTPException(status_code=404, detail="运行记录不存在")
+    get_accessible_project(db, run.project_id, user)
+    report = _full_run_out(db, run)
+    try:
+        content, media_type, ext = run_export_service.build_run_export([report], format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # PDF 依赖缺失等
+        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception as exc:  # noqa: BLE001 - docx/openpyxl 等未预期异常兜底成 500 带 detail
+        raise HTTPException(status_code=500, detail=f"导出失败: {exc}")
+    body = content.getvalue() if hasattr(content, "getvalue") else content
+    filename = run_export_service.build_export_filename([report], ext)
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": run_export_service.build_content_disposition(filename, f"report.{ext}")},
+    )

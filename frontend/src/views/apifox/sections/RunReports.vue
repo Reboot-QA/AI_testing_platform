@@ -45,9 +45,22 @@
 
     <el-drawer v-model="drawerVisible" :title="`运行 #${detail?.id} · ${detail?.target_name || ''}`" size="60%">
       <template v-if="detail">
-        <el-button v-if="parentDetail" link type="primary" class="back-btn" @click="backToParent">
-          ← 返回套件报告
-        </el-button>
+        <div class="drawer-actions">
+          <el-button v-if="parentDetail" link type="primary" class="back-btn" @click="backToParent">
+            ← 返回套件报告
+          </el-button>
+          <el-dropdown split-button size="small" type="primary" :button-props="{ loading: exporting }" @click="doExport('excel')" @command="doExport">
+            导出 Excel
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="excel">Excel (.xlsx)</el-dropdown-item>
+                <el-dropdown-item command="word">Word (.docx)</el-dropdown-item>
+                <el-dropdown-item command="pdf">PDF (.pdf)</el-dropdown-item>
+                <el-dropdown-item command="json">JSON (.json)</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
 
         <el-descriptions :column="4" size="small" border class="summary">
           <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
@@ -184,8 +197,31 @@ const runs = ref([])
 const detail = ref(null)
 const parentDetail = ref(null)
 const drawerVisible = ref(false)
+const exporting = ref(false)
 
 const isSuite = computed(() => detail.value?.target_type === 'suite')
+
+const EXPORT_EXT = { excel: 'xlsx', word: 'docx', pdf: 'pdf', json: 'json' }
+
+async function doExport(format) {
+  if (!detail.value) return
+  exporting.value = true
+  try {
+    // 拦截器返回 blob；文件名前端拼（响应头拿不到），交由浏览器下载
+    const blob = await apifoxApi.exportRun(detail.value.id, format)
+    const name = `测试报告_${detail.value.target_name || 'report'}_${detail.value.id}.${EXPORT_EXT[format] || 'bin'}`
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = name
+    a.click()
+    URL.revokeObjectURL(url)
+  } catch {
+    // 全局响应拦截器已提示错误，这里仅避免未捕获 rejection
+  } finally {
+    exporting.value = false
+  }
+}
 
 // 数据驱动/循环多轮：按轮次分组展示步骤；单轮为一组无标题（零视觉变化）
 const stepGroups = computed(() => {
@@ -244,6 +280,14 @@ onMounted(loadRuns)
 }
 
 .back-btn {
+  margin-bottom: 10px;
+}
+
+.drawer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
