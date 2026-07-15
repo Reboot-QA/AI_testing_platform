@@ -70,6 +70,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 
 const projects = ref([])
 const loading = ref(false)
@@ -82,7 +83,7 @@ const form = reactive({ name: '', description: '' })
 const rules = { name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }] }
 
 function formatDate(d) {
-  return d ? new Date(d).toLocaleString('zh-CN') : ''
+  return formatBeijingTime(d, '')
 }
 
 async function loadData() {

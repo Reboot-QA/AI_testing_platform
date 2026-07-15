@@ -311,6 +311,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 
 const projects = ref([])
 const projectId = ref(null)
@@ -393,8 +394,7 @@ const allRequirementsSelected = computed(
 )
 
 function formatTime(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString()
+  return formatBeijingTime(value)
 }
 
 function runProgress(run) {

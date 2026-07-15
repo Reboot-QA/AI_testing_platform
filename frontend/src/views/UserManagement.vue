@@ -112,6 +112,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi, departmentApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 import { useUserStore } from '@/stores/user'
 
 const userStore = useUserStore()
@@ -188,7 +189,7 @@ const passwordRules = {
 }
 
 function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN') : '-'
+  return formatBeijingTime(value)
 }
 
 async function loadDepartments() {

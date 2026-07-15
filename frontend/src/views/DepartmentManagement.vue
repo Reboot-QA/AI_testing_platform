@@ -54,6 +54,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { departmentApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 
 const departments = ref([])
 const loading = ref(false)
@@ -72,7 +73,7 @@ const rules = {
 }
 
 function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN') : '-'
+  return formatBeijingTime(value)
 }
 
 async function loadData() {
