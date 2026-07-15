@@ -96,6 +96,16 @@
 
             <div v-if="s.error_message" class="err">{{ s.error_message }}</div>
 
+            <template v-if="s.url">
+              <div class="sec-title">实际请求</div>
+              <ActualRequestView
+                :method="s.method"
+                :url="s.url"
+                :headers="s.request_headers"
+                :body="s.request_body"
+              />
+            </template>
+
             <template v-if="s.assertion_results.length">
               <div class="sec-title">断言</div>
               <div v-for="(a, i) in s.assertion_results" :key="'a' + i" class="line">
@@ -150,6 +160,7 @@ import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
+import ActualRequestView from '@/components/apifox/ActualRequestView.vue'
 import { iterationLabel } from '@/utils/iterationLabel'
 import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 
