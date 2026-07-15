@@ -15,6 +15,7 @@ class ScheduleCreate(BaseModel):
     run_time: Optional[str] = "09:00"
     week_day: Optional[int] = None
     interval_minutes: Optional[int] = None
+    cron_expr: Optional[str] = None
     enabled: bool = True
 
 
@@ -27,6 +28,7 @@ class ScheduleUpdate(BaseModel):
     run_time: Optional[str] = None
     week_day: Optional[int] = None
     interval_minutes: Optional[int] = None
+    cron_expr: Optional[str] = None
     enabled: Optional[bool] = None
 
 
@@ -42,6 +44,7 @@ class ScheduleOut(BaseModel):
     run_time: str
     week_day: Optional[int] = None
     interval_minutes: Optional[int] = None
+    cron_expr: Optional[str] = None
     enabled: bool
     schedule_desc: str = ""
     last_run_at: Optional[datetime] = None

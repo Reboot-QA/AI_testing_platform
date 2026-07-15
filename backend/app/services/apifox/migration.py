@@ -156,3 +156,16 @@ def migrate_apifox_run_step_depth(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN depth INTEGER NOT NULL DEFAULT 0"))
     db.expire_all()
+
+
+def migrate_apifox_schedule_cron(db: Session) -> None:
+    """apifox_schedules 加 cron_expr（schedule_type=cron 时的表达式）。"""
+    inspector = inspect(engine)
+    if "apifox_schedules" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_schedules")}
+    if "cron_expr" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_schedules ADD COLUMN cron_expr VARCHAR(120)"))
+    db.expire_all()

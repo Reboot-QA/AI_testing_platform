@@ -58,6 +58,16 @@ def _owned_schedule(db: Session, sid: int, user: User) -> ApifoxSchedule:
     return task
 
 
+def _clear_irrelevant_schedule_fields(task: ApifoxSchedule) -> None:
+    """按当前 schedule_type 清空其它类型专属字段，避免切换后残留僵尸值。"""
+    if task.schedule_type != "weekly":
+        task.week_day = None
+    if task.schedule_type != "interval":
+        task.interval_minutes = None
+    if task.schedule_type != "cron":
+        task.cron_expr = None
+
+
 def _out(db: Session, task: ApifoxSchedule) -> ScheduleOut:
     target_name = schedule_service.resolve_target_name(db, task.target_type, task.target_id) or ""
     return ScheduleOut(
@@ -72,6 +82,7 @@ def _out(db: Session, task: ApifoxSchedule) -> ScheduleOut:
         run_time=task.run_time,
         week_day=task.week_day,
         interval_minutes=task.interval_minutes,
+        cron_expr=task.cron_expr,
         enabled=task.enabled,
         schedule_desc=schedule_service.describe(task),
         last_run_at=task.last_run_at,
@@ -103,6 +114,7 @@ def create_schedule(
             run_time=data.run_time,
             week_day=data.week_day,
             interval_minutes=data.interval_minutes,
+            cron_expr=data.cron_expr,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -117,8 +129,10 @@ def create_schedule(
         run_time=data.run_time or "09:00",
         week_day=data.week_day,
         interval_minutes=data.interval_minutes,
+        cron_expr=data.cron_expr,
         enabled=data.enabled,
     )
+    _clear_irrelevant_schedule_fields(task)
     schedule_repo.add(db, task)
     schedule_service.refresh_schedule(db, task, force_from_now=True)
     return _out(db, task)
@@ -147,12 +161,14 @@ def update_schedule(
             run_time=payload.get("run_time", task.run_time),
             week_day=payload.get("week_day", task.week_day),
             interval_minutes=payload.get("interval_minutes", task.interval_minutes),
+            cron_expr=payload.get("cron_expr", task.cron_expr),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
     for field, value in payload.items():
         setattr(task, field, value)
+    _clear_irrelevant_schedule_fields(task)  # 切换调度类型后清理不相关字段，避免僵尸值
     schedule_service.refresh_schedule(db, task, force_from_now=True)
     return _out(db, task)
 
