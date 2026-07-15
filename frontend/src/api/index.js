@@ -342,6 +342,7 @@ export const apifoxApi = {
   createScript: (pid, data) => request.post(`/apifox/projects/${pid}/scripts`, data),
   updateScript: (sid, data) => request.put(`/apifox/scripts/${sid}`, data),
   deleteScript: (sid) => request.delete(`/apifox/scripts/${sid}`),
+  debugScript: (data) => request.post('/apifox/scripts/debug', data),
 
   listGlobalParams: (pid) => request.get(`/apifox/projects/${pid}/global-params`),
   createGlobalParam: (pid, data) => request.post(`/apifox/projects/${pid}/global-params`, data),
