@@ -114,7 +114,13 @@ async function addCase() {
   const { value } = await ElMessageBox.prompt('用例名称', '新建用例', { inputPattern: /\S/, inputErrorMessage: '不能为空' })
   // 当前过滤了某分类时，新建默认归入该分类；「全部」时归「其他」
   const category = filter.value === 'all' ? 'other' : filter.value
-  const created = await apifoxApi.createCase(props.endpointId, emptyCasePayload(value, category))
+  const payload = emptyCasePayload(value, category)
+  // 带入接口默认参数：新用例继承接口已配置的 params/headers/body/auth，不从空白开始
+  try {
+    const ep = await apifoxApi.getEndpoint(props.endpointId)
+    if (ep?.request_spec) payload.request_spec = ep.request_spec
+  } catch { /* 拉取接口失败则用空 spec，不阻塞建用例 */ }
+  const created = await apifoxApi.createCase(props.endpointId, payload)
   ElMessage.success('已创建')
   await loadCases()
   applyCase(created)
