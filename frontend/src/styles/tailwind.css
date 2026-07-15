@@ -1,0 +1,58 @@
+/* Tailwind v4 接入 —— 与 Element Plus 共存的关键：
+   只引入 theme + utilities 层，**跳过 base(preflight)**，
+   避免 Tailwind 的全局 reset（margin/box-sizing/heading 等）破坏 EP 组件样式。
+   shadcn-vue 组件为纯 Tailwind、不依赖 preflight，工作正常。 */
+@layer theme, base, components, utilities;
+@import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tw-animate-css';
+
+/* shadcn-vue 设计令牌，全部对齐 tokens.css 的 --ax-*（双轨观感一致） */
+:root {
+  --background: var(--ax-bg);
+  --foreground: var(--ax-text);
+  --card: var(--ax-bg);
+  --card-foreground: var(--ax-text);
+  --popover: var(--ax-bg);
+  --popover-foreground: var(--ax-text);
+  --primary: var(--ax-brand);
+  --primary-foreground: #ffffff;
+  --secondary: var(--ax-bg-subtle);
+  --secondary-foreground: var(--ax-text);
+  --muted: var(--ax-bg-subtle);
+  --muted-foreground: var(--ax-text-secondary);
+  --accent: var(--ax-bg-hover);
+  --accent-foreground: var(--ax-text);
+  --destructive: var(--ax-danger);
+  --destructive-foreground: #ffffff;
+  --border: var(--ax-border);
+  --input: var(--ax-border);
+  --ring: var(--ax-brand);
+  --radius: var(--ax-radius);
+}
+
+/* 把设计令牌暴露成 Tailwind 颜色/圆角工具类（bg-primary、text-muted-foreground、rounded-lg 等） */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-sm: calc(var(--radius) - 4px);
+}

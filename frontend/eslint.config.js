@@ -49,6 +49,14 @@ export default [
       'vue/no-side-effects-in-computed-properties': 'warn',
     },
   },
+  // shadcn-vue 组件为厂商代码（自带约定，源码落在 ui/），放宽风格类规则
+  {
+    files: ['src/components/ui/**/*.{vue,ts}'],
+    rules: {
+      'vue/require-default-prop': 'off',
+      'vue/multi-word-component-names': 'off',
+    },
+  },
   // 关闭与 Prettier 冲突的格式类规则（必须放最后）
   eslintConfigPrettier,
 ]
