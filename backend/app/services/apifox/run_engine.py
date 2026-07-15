@@ -5,8 +5,9 @@
 脚本执行、作用域落库与单用例编排 execute_case，并 re-export 上述子模块的对外符号，
 保持既有导入路径（debug_service / run_service / scenario_service / 测试依赖之）不变。
 
-复用旧模块纯函数：断言判定 _evaluate_assertion、提取取值 _extract_value_by_source、
-脚本执行 run_pre_script/run_post_script。生成器编排与 run 落库在 run_service。
+复用同目录 apifox 纯函数（D1 已从老模块搬入）：断言判定 assertions._evaluate_assertion、
+提取取值 response_extract._extract_value_by_source、脚本执行 script_runner.run_pre/post_script。
+生成器编排与 run 落库在 run_service。
 提取的 environment/global 作用域写当前用户本地值（不污染团队远程值）。
 """
 
@@ -28,12 +29,12 @@ from app.repositories.apifox import (
     script_repo,
     variable_repo,
 )
-from app.services.api_response_extract import _extract_value_by_source
-from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
 from app.services.apifox import contract_service, schema_ref, upload_service
+from app.services.apifox.assertions import _evaluate_assertion, _extract_json_path
 from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
 from app.services.apifox.operators import CONDITION_OPERATORS, _apply_operator
 from app.services.apifox.request_builder import build_request
+from app.services.apifox.response_extract import _extract_value_by_source
 from app.services.apifox.script_runner import run_post_script, run_pre_script
 from app.services.apifox.variables import (
     _loads,
