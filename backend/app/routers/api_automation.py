@@ -1,31 +1,19 @@
 import json
+from datetime import datetime
 from io import BytesIO
 from typing import Any, Dict, List, Optional, Union
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
-from datetime import datetime
-
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.auth import get_current_user
 from app.database import SessionLocal, get_db
-from app.services.api_run_maintenance import after_api_test_runs_deleted
-from app.services.api_run_export_service import (
-    build_content_disposition,
-    build_export_filename,
-    build_run_export,
-)
-from app.services.project_access_service import (
-    filter_joined_project,
-    get_accessible_project,
-)
 from app.models.api_automation import (
     ApiEnvironment,
     ApiScheduledTask,
-    ApiScheduledTaskSuite,
     ApiTestCase,
     ApiTestRun,
     ApiTestStepResult,
@@ -35,31 +23,34 @@ from app.models.project import Project
 from app.models.user import User
 from app.schemas import (
     ApiAssertionResultOut,
-    ApiPreScriptDebugOut,
-    ApiPreScriptDebugRequest,
-    ApiPostScriptDebugRequest,
+    ApiCaseBatchDeleteRequest,
+    ApiCaseBatchDeleteResponse,
     ApiCaseDebugIterationOut,
     ApiCaseDebugOut,
     ApiCaseDebugRequest,
-    ApiDataGenerateOut,
-    ApiDataGenerateRequest,
+    ApiDataBatchGenerateItemOut,
     ApiDataBatchGenerateOut,
     ApiDataBatchGenerateRequest,
-    ApiDataBatchGenerateItemOut,
+    ApiDataGenerateOut,
+    ApiDataGenerateRequest,
     ApiDataParamItem,
     ApiEnvironmentCreate,
     ApiEnvironmentOut,
     ApiEnvironmentUpdate,
     ApiGlobalVariablesOut,
     ApiGlobalVariablesUpdate,
-    ApiRunTriggerOut,
-    ApiTestCaseCreate,
-    ApiTestCaseCopyRequest,
-    ApiCaseBatchDeleteRequest,
-    ApiCaseBatchDeleteResponse,
+    ApiPostScriptDebugRequest,
+    ApiPreScriptDebugOut,
+    ApiPreScriptDebugRequest,
     ApiRunBatchDeleteRequest,
     ApiRunBatchDeleteResponse,
     ApiRunBatchExportRequest,
+    ApiRunTriggerOut,
+    ApiScheduledTaskCreate,
+    ApiScheduledTaskOut,
+    ApiScheduledTaskUpdate,
+    ApiTestCaseCopyRequest,
+    ApiTestCaseCreate,
     ApiTestCaseOut,
     ApiTestCaseUpdate,
     ApiTestRunDetailOut,
@@ -75,34 +66,43 @@ from app.schemas import (
     CaptureParsedItemOut,
     SwaggerImportOut,
     SwaggerImportRequest,
-    SwaggerPreviewGenerateOut,
     SwaggerPreviewGenerateItemOut,
+    SwaggerPreviewGenerateOut,
     SwaggerPreviewGenerateRequest,
-    ApiScheduledTaskCreate,
-    ApiScheduledTaskOut,
-    ApiScheduledTaskUpdate,
 )
-from app.services.api_capture_service import parse_capture_text, parse_multiple_captures
+from app.services.api_capture_service import parse_multiple_captures
+from app.services.api_case_config_helper import apply_generated_data_to_case, parse_case_generation_context
+from app.services.api_data_ai_service import _mock_generate_api_data, _normalize_body_type, generate_api_request_data
+from app.services.api_request_builder import (
+    extract_meta_from_headers,
+    iter_data_drive_variable_sets,
+)
+from app.services.api_run_export_service import (
+    build_content_disposition,
+    build_export_filename,
+    build_run_export,
+)
+from app.services.api_run_maintenance import after_api_test_runs_deleted
+from app.services.api_runner_service import _dumps_json, _execute_case, iter_api_suite_run, run_api_suite
 from app.services.api_swagger_service import (
     apply_generated_to_swagger_item,
     parse_swagger_source,
     prepare_swagger_item_for_generate,
     swagger_item_has_generatable_params,
 )
-from app.services.api_data_ai_service import _mock_generate_api_data, _normalize_body_type, generate_api_request_data
-from app.services.api_case_config_helper import apply_generated_data_to_case, parse_case_generation_context
-from app.services.api_script_runner import run_post_script, run_pre_script
-from app.services.settings_service import get_effective_llm_config
-from app.services.api_request_builder import extract_meta_from_headers, iter_data_drive_variable_sets, prepare_case_request
-from app.services.api_runner_service import iter_api_suite_run, run_api_suite, _execute_case, _dumps_json
 from app.services.api_variable_service import (
     apply_scoped_extractions,
+    dump_variables_json,
     load_environment_variables,
     load_global_variables,
+    load_variables_json,
     merge_variable_context,
     persist_variable_context,
-    dump_variables_json,
-    load_variables_json,
+)
+from app.services.apifox.script_runner import run_post_script, run_pre_script
+from app.services.project_access_service import (
+    filter_joined_project,
+    get_accessible_project,
 )
 from app.services.schedule_service import (
     execute_scheduled_task,
@@ -113,6 +113,7 @@ from app.services.schedule_service import (
     replace_scheduled_task_suites,
     validate_schedule_fields,
 )
+from app.services.settings_service import get_effective_llm_config
 
 router = APIRouter(prefix="/api-automation", tags=["接口自动化"])
 
@@ -1791,7 +1792,7 @@ async def swagger_preview_generate_data(
                 mock_mode=llm_config["mock_mode"],
             )
             mode = item_mode
-        except ValueError as exc:
+        except ValueError:
             generated = _mock_generate_api_data(
                 method=item.method,
                 path=item.path,

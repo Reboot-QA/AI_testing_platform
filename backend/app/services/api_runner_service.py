@@ -1,6 +1,5 @@
 import json
 import time
-from app.utils.time_util import now_local
 from typing import Any, Dict, Generator, List, Optional, Tuple
 from urllib.parse import urljoin
 
@@ -14,13 +13,12 @@ from app.models.api_automation import (
     ApiTestStepResult,
     ApiTestSuite,
 )
-from app.services.api_script_runner import resolve_pre_script, run_pre_script
-from app.services.api_response_extract import apply_response_extractors
 from app.services.api_request_builder import (
     extract_meta_from_headers,
     iter_data_drive_variable_sets,
     prepare_case_request,
 )
+from app.services.api_response_extract import apply_response_extractors
 from app.services.api_variable_service import (
     apply_scoped_extractions,
     load_environment_variables,
@@ -28,6 +26,8 @@ from app.services.api_variable_service import (
     merge_variable_context,
     persist_variable_context,
 )
+from app.services.apifox.script_runner import resolve_pre_script, run_pre_script
+from app.utils.time_util import now_local
 
 
 def _loads_json(text: Optional[str], default: Any = None) -> Any:
