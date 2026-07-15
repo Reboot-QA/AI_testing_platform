@@ -169,3 +169,16 @@ def migrate_apifox_schedule_cron(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_schedules ADD COLUMN cron_expr VARCHAR(120)"))
     db.expire_all()
+
+
+def migrate_apifox_scenario_priority(db: Session) -> None:
+    """apifox_scenarios 加 priority（场景优先级：high/medium/low）。"""
+    inspector = inspect(engine)
+    if "apifox_scenarios" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_scenarios")}
+    if "priority" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN priority VARCHAR(10) NOT NULL DEFAULT 'medium'"))
+    db.expire_all()

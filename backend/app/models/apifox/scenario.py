@@ -20,6 +20,8 @@ class ApifoxScenario(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # high | medium | low
+    priority: Mapped[str] = mapped_column(String(10), default="medium", server_default="medium")
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     # 运行配置 JSON：{"loop_count": N, "dataset_id": id}——整场景循环 N 遍 / 绑数据集按行数据驱动
     run_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

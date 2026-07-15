@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -210,6 +210,7 @@ def _out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
         project_id=scenario.project_id,
         name=scenario.name,
         description=scenario.description,
+        priority=cast(Any, scenario.priority),
         steps=[_step_out(db, s, by_parent) for s in by_parent.get(None, [])],
         sort_order=scenario.sort_order,
         run_config=ScenarioRunConfig(**_loads(scenario.run_config, {})),
@@ -225,6 +226,7 @@ def list_scenarios(db: Session, project_id: int) -> List[ScenarioBrief]:
             id=s.id,
             name=s.name,
             description=s.description,
+            priority=cast(Any, s.priority),
             step_count=len(repo.list_steps(db, s.id)),
             sort_order=s.sort_order,
         )
@@ -233,7 +235,9 @@ def list_scenarios(db: Session, project_id: int) -> List[ScenarioBrief]:
 
 
 def create_scenario(db: Session, project_id: int, data: ScenarioCreate) -> ScenarioOut:
-    scenario = ApifoxScenario(project_id=project_id, name=data.name, description=data.description)
+    scenario = ApifoxScenario(
+        project_id=project_id, name=data.name, description=data.description, priority=data.priority
+    )
     repo.add(db, scenario)
     _write_steps(db, scenario, data.steps)
     db.commit()
@@ -252,6 +256,8 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
         scenario.name = data.name
     if "description" in data.model_fields_set:
         scenario.description = data.description
+    if data.priority is not None:
+        scenario.priority = data.priority
     if data.sort_order is not None:
         scenario.sort_order = data.sort_order
     if data.run_config is not None:
