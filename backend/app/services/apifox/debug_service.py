@@ -63,6 +63,7 @@ def debug_send(
         "url": plan["url"],
         "request_headers": plan["headers"],
         "request_body": plan["body_snapshot"],
+        "warnings": plan.get("warnings", []),
         "status_code": None,
         "response_headers": {},
         "response_body": "",

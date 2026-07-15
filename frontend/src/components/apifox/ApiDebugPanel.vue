@@ -23,6 +23,15 @@
         <span class="meta">{{ Math.round(resp.duration_ms) }} ms</span>
         <span v-if="resp.error" class="err">{{ resp.error }}</span>
       </div>
+      <el-alert
+        v-for="(w, i) in resp.warnings || []"
+        :key="'w' + i"
+        :title="w"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="warn"
+      />
       <el-tabs v-model="respTab" class="resp-tabs">
         <el-tab-pane label="实际请求" name="request">
           <div class="resp-box">
@@ -180,5 +189,9 @@ async function send() {
 .mono {
   font-family: Consolas, Monaco, monospace;
   color: var(--ax-text-secondary);
+}
+
+.warn {
+  margin-bottom: 8px;
 }
 </style>

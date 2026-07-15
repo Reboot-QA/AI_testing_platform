@@ -13,6 +13,14 @@ from app.models.apifox.variable import ApifoxEnvironment
 from app.services.apifox.variables import _rows_to_dict, apply_vars
 
 
+def _get_header(headers: Dict[str, str], name: str) -> Optional[str]:
+    """按名（大小写不敏感）取请求头值；无则 None。"""
+    for k, v in headers.items():
+        if k.lower() == name.lower():
+            return v
+    return None
+
+
 def _select_base_url(environment: Optional[ApifoxEnvironment], server_name: Optional[str]) -> str:
     """按接口选定的命名前置 URL 取 base_url；未选/未命中 → 环境默认前置 URL(base_url)。"""
     if environment is None:
@@ -77,6 +85,7 @@ def build_request(
     body_type = body.get("type") or "none"
     request_kwargs: Dict[str, Any] = {}
     body_snapshot = ""
+    warnings: List[str] = []
     if body_type in ("json", "raw", "xml"):
         content = apply_vars(body.get("raw") or "", variables)
         if content:
@@ -112,11 +121,31 @@ def build_request(
         if form:
             request_kwargs["files"] = {k: (None, v) for k, v in form.items()}
             body_snapshot = json.dumps(form, ensure_ascii=False)
+            # 测试工具「所配即所发」：不改动用户的 Content-Type。仅在与 form-data 明显冲突时给诊断警告
+            ct = _get_header(headers, "content-type")
+            ctl = (ct or "").lower()
+            if ct and "multipart/form-data" not in ctl:
+                warnings.append(
+                    f"Content-Type 为「{ct}」，但请求体类型是 form-data（multipart/form-data）。二者不一致，"
+                    "服务端很可能无法解析表单字段（常见表现：字段缺失/422）。"
+                    "已按你的配置原样发送；如非有意，请移除该 Content-Type 头（留空会自动生成正确的 multipart 头）或改为匹配值。"
+                )
+            elif ct and "boundary=" not in ctl:
+                warnings.append(
+                    f"Content-Type 为「{ct}」缺少 boundary 参数：multipart/form-data 需要 boundary 才能切分表单字段，"
+                    "服务端很可能无法解析。已按你的配置原样发送；建议移除该 Content-Type 头（留空会自动生成带 boundary 的正确头）。"
+                )
     elif body_type == "urlencoded":
         form = _rows_to_dict(body.get("form") or [], variables)
         if form:
             request_kwargs["data"] = form
             body_snapshot = json.dumps(form, ensure_ascii=False)
+            ct = _get_header(headers, "content-type")
+            if ct and "x-www-form-urlencoded" not in ct.lower():
+                warnings.append(
+                    f"Content-Type 为「{ct}」，但请求体类型是 x-www-form-urlencoded。二者不一致，"
+                    "服务端很可能无法解析表单字段。已按你的配置原样发送；如非有意，请移除该 Content-Type 头或改为 application/x-www-form-urlencoded。"
+                )
 
     return {
         "method": endpoint.method,
@@ -125,4 +154,5 @@ def build_request(
         "headers": headers,
         "request_kwargs": request_kwargs,
         "body_snapshot": body_snapshot,
+        "warnings": warnings,
     }
