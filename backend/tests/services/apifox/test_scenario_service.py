@@ -391,3 +391,42 @@ def test_break_with_children_is_rejected(db, make_case):
                 name="s", steps=[_loop({"mode": "count", "count": 1}, [bad])]
             ),
         )
+
+
+# ---------- 场景优先级（高/中/低） ----------
+def test_create_scenario_defaults_priority_medium(db):
+    out = svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="S"))
+
+    assert out.priority == "medium"
+
+
+def test_create_scenario_with_priority(db):
+    out = svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="S", priority="high"))
+
+    assert out.priority == "high"
+
+
+def test_update_scenario_changes_priority(db):
+    from app.repositories.apifox import scenario_repo
+
+    created = svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="S", priority="high"))
+    scenario = scenario_repo.get_scenario(db, created.id)
+
+    out = svc.update_scenario(db, scenario, ScenarioUpdate(priority="low"))
+
+    assert out.priority == "low"
+
+
+def test_list_scenarios_returns_priority(db):
+    svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="S", priority="high"))
+
+    briefs = svc.list_scenarios(db, project_id=1)
+
+    assert briefs[0].priority == "high"
+
+
+def test_scenario_create_rejects_invalid_priority():
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        ScenarioCreate(name="S", priority="urgent")
