@@ -7,13 +7,6 @@ from app.models.department_permission import DepartmentMenuPermission
 from app.models.user import User
 from app.models.user_permission import UserMenuPermission
 
-API_AUTOMATION_MENU_KEYS = [
-    "api_automation_env",
-    "api_automation_suites",
-    "api_automation_reports",
-    "api_automation_schedule",
-]
-
 SYSTEM_MENU_KEYS = {
     "system_settings",
     "system_users",
@@ -22,29 +15,6 @@ SYSTEM_MENU_KEYS = {
     "system_logs",
     "system_error_logs",
 }
-
-
-def _migrate_legacy_api_automation_menu(db: Session) -> None:
-    rows = (
-        db.query(UserMenuPermission)
-        .filter(UserMenuPermission.menu_key == "api_automation")
-        .all()
-    )
-    if not rows:
-        return
-    for row in rows:
-        user_id = row.user_id
-        db.delete(row)
-        existing = {
-            item[0]
-            for item in db.query(UserMenuPermission.menu_key)
-            .filter(UserMenuPermission.user_id == user_id)
-            .all()
-        }
-        for key in API_AUTOMATION_MENU_KEYS:
-            if key not in existing:
-                db.add(UserMenuPermission(user_id=user_id, menu_key=key))
-    db.commit()
 
 
 def get_department_menu_keys(db: Session, department_id: int) -> List[str]:
@@ -183,7 +153,6 @@ def migrate_user_permissions_to_departments(db: Session) -> None:
 def migrate_all_user_permissions(db: Session) -> None:
     from app.models.department import Department
 
-    _migrate_legacy_api_automation_menu(db)
     migrate_user_permissions_to_departments(db)
     departments = db.query(Department).all()
     for department in departments:
