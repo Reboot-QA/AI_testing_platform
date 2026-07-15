@@ -208,3 +208,16 @@ def migrate_apifox_scenario_folder(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN folder_id INTEGER"))
     db.expire_all()
+
+
+def migrate_apifox_run_step_warnings(db: Session) -> None:
+    """apifox_run_steps 加 warnings（诊断告警 JSON 列表，如 Binary 孤儿文件）。"""
+    inspector = inspect(engine)
+    if "apifox_run_steps" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_run_steps")}
+    if "warnings" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN warnings TEXT"))
+    db.expire_all()

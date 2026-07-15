@@ -96,6 +96,16 @@
 
             <div v-if="s.error_message" class="err">{{ s.error_message }}</div>
 
+            <el-alert
+              v-for="(w, i) in s.warnings || []"
+              :key="'w' + i"
+              :title="w"
+              type="warning"
+              :closable="false"
+              show-icon
+              class="step-warn"
+            />
+
             <template v-if="s.url">
               <div class="sec-title">实际请求</div>
               <ActualRequestView
@@ -279,6 +289,10 @@ onMounted(loadRuns)
 .err {
   color: var(--ax-danger);
   font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.step-warn {
   margin-bottom: 6px;
 }
 
