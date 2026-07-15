@@ -1,10 +1,12 @@
 /* Tailwind v4 接入 —— 与 Element Plus 共存的关键：
-   只引入 theme + utilities 层，**跳过 base(preflight)**，
-   避免 Tailwind 的全局 reset（margin/box-sizing/heading 等）破坏 EP 组件样式。
-   shadcn-vue 组件为纯 Tailwind、不依赖 preflight，工作正常。 */
-@layer theme, base, components, utilities;
+   1) 跳过 base(preflight)：不引 preflight，避免全局 reset 破坏 EP 组件样式。
+   2) 工具类【不放进 @layer】：本项目 App.vue 有一条无 layer 的老重置
+      `* { margin:0; padding:0 }`。CSS 规则里“无 layer”永远压过“有 layer”，
+      若把工具类放进 @layer utilities，p-12/mt-2 等间距类会被这条 * 重置干掉。
+      故工具类保持无 layer，靠特异度（.p-12 = 0,1,0）稳压 *（0,0,0）。
+      theme 变量放进低优先级 layer(theme) 即可。 */
 @import 'tailwindcss/theme.css' layer(theme);
-@import 'tailwindcss/utilities.css' layer(utilities);
+@import 'tailwindcss/utilities.css';
 @import 'tw-animate-css';
 
 /* shadcn-vue 设计令牌，全部对齐 tokens.css 的 --ax-*（双轨观感一致） */
