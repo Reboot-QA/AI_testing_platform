@@ -27,8 +27,8 @@ from app.services.apifox.migration import (
     migrate_apifox_scenario_step_tree,
     migrate_apifox_schedule_cron,
 )
+from app.services.apifox.scheduler import init_schedules_on_startup
 from app.services.permission_service import migrate_all_user_permissions
-from app.services.schedule_service import init_schedules_on_startup
 from app.services.seed import seed_demo_data
 from app.services.settings_service import init_llm_settings_from_env
 from app.services.user_migration import migrate_user_must_change_password, migrate_user_optional_email

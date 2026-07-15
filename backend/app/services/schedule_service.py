@@ -1,3 +1,11 @@
+"""【已下线 · 待 G2b 删除】老接口自动化定时调度。
+
+调度已迁至 apifox/scheduler.py + apifox/schedule_calc.py。本模块的
+_scheduler_thread_loop/start_scheduler/stop_scheduler/run_due_tasks 均已无调用方，
+**请勿再引用**（误接回会导致 apifox 任务被两条线程重复执行）。execute_scheduled_task
+仅供老 router 的 run-now 手动端点使用（该 router 已不挂载，随 G2b 一并删除）。
+"""
+
 import asyncio
 import json
 import logging
