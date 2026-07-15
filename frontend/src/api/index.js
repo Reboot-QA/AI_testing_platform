@@ -386,6 +386,7 @@ export const apifoxApi = {
   runScheduleNow: (sid) => request.post(`/apifox/schedules/${sid}/run-now`),
 
   listRuns: (pid) => request.get(`/apifox/projects/${pid}/runs`),
+  listEndpointRuns: (eid) => request.get(`/apifox/endpoints/${eid}/runs`),
   getRun: (rid) => request.get(`/apifox/runs/${rid}`),
   runCaseStream: (cid, environmentId, onEvent, options = {}) =>
     apifoxRunStream(`/api/v1/apifox/cases/${cid}/run/stream`, environmentId, onEvent, options),

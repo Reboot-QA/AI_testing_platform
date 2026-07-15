@@ -2,9 +2,23 @@
 
 from typing import List, Optional
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
+
+
+def list_case_runs_by_endpoint(db: Session, endpoint_id: int, limit: int = 200) -> List[ApifoxRun]:
+    """列某接口下所有用例的运行记录（供接口维度「测试报告」，按接口 case 精确过滤、不受项目级 100 条窗口影响）。"""
+    case_ids = select(ApifoxEndpointCase.id).where(ApifoxEndpointCase.endpoint_id == endpoint_id)
+    return (
+        db.query(ApifoxRun)
+        .filter(ApifoxRun.target_type == "case", ApifoxRun.target_id.in_(case_ids))
+        .order_by(ApifoxRun.id.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def list_runs(db: Session, project_id: int, limit: int = 100) -> List[ApifoxRun]:

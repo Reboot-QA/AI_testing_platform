@@ -18,6 +18,7 @@ from app.models.apifox.script import ApifoxCaseScript
 from app.repositories.apifox import case_repo as repo
 from app.repositories.apifox import scenario_repo, script_repo
 from app.routers.apifox.case_schemas import (
+    CASE_CATEGORIES,
     AssertionRow,
     CaseBrief,
     CaseCreate,
@@ -127,6 +128,7 @@ def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
         project_id=case.project_id,
         endpoint_id=case.endpoint_id,
         name=case.name,
+        category=case.category,
         request_spec=_load_request_spec(case.request_spec),
         variables=_load_variables(case.variables),
         data_drive=_load_data_drive(case.data_drive),
@@ -163,9 +165,15 @@ def list_project_cases(db: Session, project_id: int) -> List[ProjectCaseBrief]:
 
 def list_cases(db: Session, endpoint_id: int) -> List[CaseBrief]:
     return [
-        CaseBrief(id=c.id, endpoint_id=c.endpoint_id, name=c.name, sort_order=c.sort_order)
+        CaseBrief(id=c.id, endpoint_id=c.endpoint_id, name=c.name, category=c.category, sort_order=c.sort_order)
         for c in repo.list_cases(db, endpoint_id)
     ]
+
+
+def _valid_category(category: str) -> str:
+    if category not in CASE_CATEGORIES:
+        raise ValueError(f"非法用例分类：{category}")
+    return category
 
 
 def create_case(db: Session, project_id: int, endpoint_id: int, data: CaseCreate) -> CaseOut:
@@ -173,6 +181,7 @@ def create_case(db: Session, project_id: int, endpoint_id: int, data: CaseCreate
         project_id=project_id,
         endpoint_id=endpoint_id,
         name=data.name,
+        category=_valid_category(data.category),
         request_spec=data.request_spec.model_dump_json(),
         variables=_dump_variables(data.variables),
         data_drive=data.data_drive.model_dump_json(),
@@ -196,6 +205,8 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
     versioning.bump_version(db, ApifoxEndpointCase, case, data.expected_version)
     if data.name is not None:
         case.name = data.name
+    if data.category is not None:
+        case.category = _valid_category(data.category)
     if data.request_spec is not None:
         case.request_spec = data.request_spec.model_dump_json()
     if data.variables is not None:
