@@ -329,6 +329,7 @@ export const apifoxApi = {
   createCase: (eid, data) => request.post(`/apifox/endpoints/${eid}/cases`, data),
   updateCase: (cid, data) => request.put(`/apifox/cases/${cid}`, data),
   deleteCase: (cid) => request.delete(`/apifox/cases/${cid}`),
+  copyCase: (cid) => request.post(`/apifox/cases/${cid}/copy`),
 
   listSchemas: (pid) => request.get(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid) => request.get(`/apifox/schemas/${sid}`),
@@ -361,6 +362,7 @@ export const apifoxApi = {
   listSuites: (pid) => request.get(`/apifox/projects/${pid}/suites`),
   getSuite: (sid) => request.get(`/apifox/suites/${sid}`),
   createSuite: (pid, data) => request.post(`/apifox/projects/${pid}/suites`, data),
+  copySuite: (sid) => request.post(`/apifox/suites/${sid}/copy`),
   updateSuite: (sid, data) => request.put(`/apifox/suites/${sid}`, data),
   deleteSuite: (sid) => request.delete(`/apifox/suites/${sid}`),
 
