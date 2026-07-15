@@ -15,6 +15,7 @@ class KvRow(BaseModel):
     value: str = ""
     enabled: bool = True
     desc: str = ""
+    type: str = "string"  # 参数类型标注（string/integer/number/boolean/array/object/file），仅 Params 用
 
 
 class BodySpec(BaseModel):

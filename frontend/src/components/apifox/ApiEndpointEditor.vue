@@ -17,9 +17,9 @@
     <el-tabs v-model="activeTab" class="spec-tabs">
       <el-tab-pane label="Params" name="params">
         <div class="sub-title">Query 参数</div>
-        <KvRowsEditor :rows="form.request_spec.query" />
+        <KvRowsEditor :rows="form.request_spec.query" show-type />
         <div class="sub-title">Path 变量</div>
-        <KvRowsEditor :rows="form.request_spec.path_params" />
+        <KvRowsEditor :rows="form.request_spec.path_params" show-type />
       </el-tab-pane>
       <el-tab-pane label="Headers" name="headers">
         <KvRowsEditor :rows="form.request_spec.headers" suggest="header" />

@@ -41,6 +41,16 @@
         />
         <el-input v-else v-model="row.value" placeholder="值" size="small" class="kv-val" />
 
+        <el-select
+          v-if="showType"
+          :model-value="row.type || 'string'"
+          size="small"
+          class="kv-type"
+          @update:model-value="(v) => (row.type = v)"
+        >
+          <el-option v-for="t in PARAM_TYPES" :key="t" :label="t" :value="t" />
+        </el-select>
+
         <el-button v-if="!isTail(i)" link type="danger" size="small" @click="del(i)">
           <el-icon><Delete /></el-icon>
         </el-button>
@@ -77,7 +87,11 @@ import { COMMON_HEADER_PRESETS, headerDefaultValue, rowsToText, suggestHeaderKey
 const props = defineProps({
   rows: { type: Array, required: true },
   suggest: { type: String, default: '' },
+  showType: { type: Boolean, default: false },  // Params 显示参数类型列（string/integer/...）
 })
+
+// HTTP 参数类型标注（含 file），语义不同于 useJsonSchema 的 SCHEMA_TYPES，故意不复用
+const PARAM_TYPES = ['string', 'integer', 'number', 'boolean', 'array', 'object', 'file']
 
 const bulkMode = ref(false)
 const bulkText = ref('')
@@ -85,6 +99,8 @@ const showCommon = ref(false)
 // 进入批量模式时按 key 快照 desc（说明字段表格里不可见/不可编辑，批量文本也不暴露），
 // 解析回行时找回，避免批量编辑静默清空导入接口的参数说明。
 let descByKey = {}
+// 同理快照 type：批量文本不表达参数类型，回解析时按 key 找回，避免批量编辑静默清空
+let typeByKey = {}
 
 const isEmptyRow = (r) => !(r.key || '').trim() && !(r.value || '').trim()
 const isTail = (i) => i === props.rows.length - 1 && isEmptyRow(props.rows[i])
@@ -109,7 +125,11 @@ function toggleBulk() {
   if (!bulkMode.value) {
     bulkText.value = rowsToText(props.rows)
     descByKey = {}
-    props.rows.forEach((r) => { if (r.key && r.desc) descByKey[r.key] = r.desc })
+    typeByKey = {}
+    props.rows.forEach((r) => {
+      if (r.key && r.desc) descByKey[r.key] = r.desc
+      if (r.key && r.type) typeByKey[r.key] = r.type
+    })
   } else {
     syncTail()
   }
@@ -119,7 +139,10 @@ function toggleBulk() {
 // 批量文本实时解析回行：保证父级 rows 始终与文本一致（不必切回表格才生效）；desc 按 key 找回不丢
 function syncFromText() {
   const parsed = textToRows(bulkText.value)
-  parsed.forEach((r) => { if (descByKey[r.key]) r.desc = descByKey[r.key] })
+  parsed.forEach((r) => {
+    if (descByKey[r.key]) r.desc = descByKey[r.key]
+    if (typeByKey[r.key]) r.type = typeByKey[r.key]
+  })
   props.rows.splice(0, props.rows.length, ...parsed)
 }
 
@@ -180,6 +203,11 @@ watch(() => props.rows, () => { bulkMode.value = false; syncTail() })
 .kv-val {
   flex: 1;
   min-width: 0;
+}
+
+.kv-type {
+  width: 96px;
+  flex: none;
 }
 
 .tail-placeholder {
