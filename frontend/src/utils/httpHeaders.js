@@ -21,19 +21,23 @@ const VALUE_SUGGESTIONS = {
   pragma: ['no-cache'],
 }
 
-// 选中某常用 header 时自动带的默认值（值为空时才填，不覆盖用户已填）
-const HEADER_DEFAULTS = {
-  'content-type': 'application/json',
-  accept: '*/*',
-  'cache-control': 'no-cache',
-  connection: 'keep-alive',
-  'accept-encoding': 'gzip, deflate, br',
-  authorization: 'Bearer ',
-  'x-requested-with': 'XMLHttpRequest',
-}
+// 「常用 Header → 默认值」单一数据源：既供勾选区展示，也供 autocomplete 选中时自动填值
+export const COMMON_HEADER_PRESETS = [
+  { name: 'Content-Type', value: 'application/json' },
+  { name: 'Accept', value: '*/*' },
+  { name: 'Authorization', value: 'Bearer ' },
+  { name: 'Accept-Encoding', value: 'gzip, deflate, br' },
+  { name: 'Accept-Language', value: 'zh-CN,zh;q=0.9' },
+  { name: 'Cache-Control', value: 'no-cache' },
+  { name: 'Connection', value: 'keep-alive' },
+  { name: 'User-Agent', value: 'Apifox/1.0.0 (https://apifox.com)' },
+  { name: 'X-Requested-With', value: 'XMLHttpRequest' },
+]
+
+const _defaultByKey = Object.fromEntries(COMMON_HEADER_PRESETS.map((h) => [h.name.toLowerCase(), h.value]))
 
 export function headerDefaultValue(key) {
-  return HEADER_DEFAULTS[(key || '').trim().toLowerCase()] || ''
+  return _defaultByKey[(key || '').trim().toLowerCase()] || ''
 }
 
 // el-autocomplete fetch-suggestions 结果格式：[{ value }]
