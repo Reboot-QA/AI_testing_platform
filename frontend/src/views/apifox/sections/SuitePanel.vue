@@ -17,6 +17,7 @@
         <el-icon><Files /></el-icon>
         <span class="item-name">{{ s.name }}</span>
         <el-tag size="small" type="info">{{ s.item_count }} 项</el-tag>
+        <el-button link size="small" @click.stop="copySuite(s)">复制</el-button>
         <el-button link type="danger" size="small" @click.stop="delSuite(s)">删</el-button>
       </div>
       <el-empty v-if="suites.length === 0" description="暂无套件" :image-size="60" />
@@ -188,6 +189,13 @@ async function runSuite() {
   } finally {
     running.value = false
   }
+}
+
+async function copySuite(s) {
+  const created = await apifoxApi.copySuite(s.id)
+  ElMessage.success('已复制')
+  await loadSuites()
+  await selectSuite(created.id)
 }
 
 async function delSuite(s) {

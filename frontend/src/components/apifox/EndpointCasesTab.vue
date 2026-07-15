@@ -24,6 +24,7 @@
       >
         <el-tag size="small" :type="tagType(c.category)">{{ categoryLabel(c.category) }}</el-tag>
         <span class="name">{{ c.name }}</span>
+        <el-button link size="small" @click.stop="copyCase(c)">复制</el-button>
         <el-button link type="danger" size="small" @click.stop="delCase(c)">删</el-button>
       </div>
       <el-empty v-if="!filteredCases.length" description="暂无用例" :image-size="50" />
@@ -141,6 +142,13 @@ async function delCase(c) {
   if (form.id === c.id) form.id = null
   ElMessage.success('已删除')
   await loadCases()
+}
+
+async function copyCase(c) {
+  const created = await apifoxApi.copyCase(c.id)
+  ElMessage.success('已复制')
+  await loadCases()
+  applyCase(created)
 }
 
 function casePayload() {
