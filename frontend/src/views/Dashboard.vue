@@ -1,56 +1,68 @@
 <template>
-  <div v-loading="loading">
-    <el-row :gutter="20" class="stat-row">
-      <el-col v-for="item in statCards" :key="item.label" :span="6">
-        <el-card shadow="hover" class="stat-card" @click="goToPage(item.path)">
-          <div class="stat-icon" :style="{ background: item.color }">
-            <el-icon :size="28"><component :is="item.icon" /></el-icon>
+  <div v-loading="loading" class="space-y-5">
+    <!-- 统计卡片 -->
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <button
+        v-for="item in statCards"
+        :key="item.label"
+        type="button"
+        class="group rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+        @click="goToPage(item.path)"
+      >
+        <div class="flex items-center gap-4">
+          <div
+            class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-white"
+            :style="{ background: item.color }"
+          >
+            <el-icon :size="26"><component :is="item.icon" /></el-icon>
           </div>
-          <div class="stat-info">
-            <div class="stat-value">{{ item.value }}</div>
-            <div class="stat-label">{{ item.label }}</div>
+          <div>
+            <div class="text-2xl font-bold text-foreground">{{ item.value }}</div>
+            <div class="mt-0.5 text-sm text-muted-foreground">{{ item.label }}</div>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+        </div>
+      </button>
+    </div>
 
-    <el-row :gutter="20" style="margin-top: 20px">
-      <el-col :span="14">
-        <el-card shadow="never">
-          <template #header>
-            <span>快捷操作</span>
-          </template>
-          <div class="quick-actions">
-            <el-button type="primary" @click="$router.push('/ai-generate')">
+    <!-- 快捷操作 + 平台能力 -->
+    <div class="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      <Card class="lg:col-span-2">
+        <CardHeader>
+          <CardTitle>快捷操作</CardTitle>
+          <CardDescription>常用功能一键直达</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div class="flex flex-wrap gap-3">
+            <Button @click="router.push('/ai-generate')">
               <el-icon><MagicStick /></el-icon> AI 生成用例
-            </el-button>
-            <el-button @click="$router.push('/projects')">
+            </Button>
+            <Button variant="outline" @click="router.push('/projects')">
               <el-icon><Folder /></el-icon> 新建项目
-            </el-button>
-            <el-button @click="$router.push('/requirements')">
+            </Button>
+            <Button variant="outline" @click="router.push('/requirements')">
               <el-icon><Document /></el-icon> 添加需求
-            </el-button>
-            <el-button @click="$router.push('/testcases')">
+            </Button>
+            <Button variant="outline" @click="router.push('/testcases')">
               <el-icon><List /></el-icon> 查看用例
-            </el-button>
+            </Button>
           </div>
-        </el-card>
-      </el-col>
-      <el-col :span="10">
-        <el-card shadow="never">
-          <template #header>
-            <span>平台能力</span>
-          </template>
-          <ul class="feature-list">
-            <li>基于 LLM 的智能用例生成</li>
-            <li>需求-用例全生命周期管理</li>
-            <li>用例评审与状态流转</li>
-            <li>Excel 批量导出</li>
-            <li>OpenAI 兼容 API 接入</li>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>平台能力</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul class="space-y-2.5 text-sm text-foreground">
+            <li v-for="feat in features" :key="feat" class="flex items-start gap-2">
+              <el-icon class="mt-0.5 shrink-0" color="var(--ax-success)"><CircleCheck /></el-icon>
+              <span>{{ feat }}</span>
+            </li>
           </ul>
-        </el-card>
-      </el-col>
-    </el-row>
+        </CardContent>
+      </Card>
+    </div>
   </div>
 </template>
 
@@ -58,6 +70,8 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { projectApi } from '@/api'
+import { Button } from '@/components/ui/button'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
 const router = useRouter()
 
@@ -101,6 +115,14 @@ const statCards = computed(() => [
   },
 ])
 
+const features = [
+  '基于 LLM 的智能用例生成',
+  '需求-用例全生命周期管理',
+  '用例评审与状态流转',
+  'Excel 批量导出',
+  'OpenAI 兼容 API 接入',
+]
+
 function goToPage(path) {
   if (path) router.push(path)
 }
@@ -114,78 +136,3 @@ onMounted(async () => {
   }
 })
 </script>
-
-<style scoped>
-.stat-row {
-  margin-bottom: 0;
-}
-
-.stat-card {
-  display: flex;
-  align-items: center;
-  cursor: pointer;
-  transition:
-    transform 0.15s ease,
-    box-shadow 0.15s ease;
-}
-
-.stat-card:hover {
-  transform: translateY(-2px);
-}
-
-.stat-card :deep(.el-card__body) {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 20px;
-}
-
-.stat-icon {
-  width: 56px;
-  height: 56px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #fff;
-}
-
-.stat-value {
-  font-size: 28px;
-  font-weight: 700;
-  color: #1a365d;
-}
-
-.stat-label {
-  color: #718096;
-  font-size: 14px;
-  margin-top: 4px;
-}
-
-.quick-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.feature-list {
-  list-style: none;
-  padding: 0;
-}
-
-.feature-list li {
-  padding: 8px 0;
-  color: #4a5568;
-  border-bottom: 1px dashed #e2e8f0;
-}
-
-.feature-list li:last-child {
-  border-bottom: none;
-}
-
-.feature-list li::before {
-  content: '✓ ';
-  color: #38a169;
-  font-weight: bold;
-}
-</style>
