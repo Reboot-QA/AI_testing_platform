@@ -90,12 +90,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
 import VariableTable from '@/components/apifox/VariableTable.vue'
 import GlobalParamsPanel from '@/components/apifox/GlobalParamsPanel.vue'
 import EnvDatabasesPanel from '@/components/apifox/EnvDatabasesPanel.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
+const store = useWorkspaceStore()
 
 const environments = ref([])
 const vars = ref([])
@@ -108,6 +110,8 @@ const selectedName = computed(() => environments.value.find((e) => e.id === sele
 
 async function loadEnvs() {
   environments.value = await apifoxApi.listEnvironments(pid.value)
+  // 同步共享 store：让接口调试「前置URL」下拉、顶部环境选择器、场景编辑器拿到最新命名前置URL（保留当前选中环境）
+  store.setEnvironments(environments.value)
   syncEnvDetail()
 }
 
