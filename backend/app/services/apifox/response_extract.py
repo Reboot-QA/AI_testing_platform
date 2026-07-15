@@ -5,8 +5,16 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import httpx
 
-from app.services.api_json_path import resolve_json_path
-from app.services.api_variable_service import normalize_scope
+from app.services.apifox.json_path import resolve_json_path
+
+# 从老 api_variable_service 内联（仅此处用），避免对老模块的依赖
+VALID_SCOPES = frozenset({"temporary", "environment", "global"})
+LEGACY_DEFAULT_SCOPE = "temporary"
+
+
+def normalize_scope(scope):
+    normalized = (scope or LEGACY_DEFAULT_SCOPE).lower().strip()
+    return normalized if normalized in VALID_SCOPES else LEGACY_DEFAULT_SCOPE
 
 VALID_EXTRACT_SOURCES = frozenset({
     "response_json",
