@@ -1,9 +1,9 @@
 """Apifox 定时任务 · 业务层。
 
-复用旧调度线程（不新起调度器）：只写 next_run_at 参与轮询，到期由线程扫描执行。
-调度算法/校验/描述直接复用旧 schedule_service 的鸭子类型函数（只读 schedule_type/
-run_time/week_day/interval_minutes/last_run_at 属性）。定时执行 user_id=None（只读远程值、
-提取写远程值，见 run_engine）。
+由 apifox/scheduler.py 的独立线程驱动：只写 next_run_at 参与轮询，到期由线程扫描执行。
+调度算法/校验/描述委托 apifox/schedule_calc（迁自老 schedule_service，逻辑等价，鸭子类型：
+只读 schedule_type/run_time/week_day/interval_minutes/last_run_at）。定时执行 user_id=None
+（只读远程值、提取写远程值，见 run_engine）。
 """
 
 import logging
@@ -22,7 +22,7 @@ from app.repositories.apifox import (
     variable_repo,
 )
 from app.services.apifox import run_service
-from app.services.schedule_service import (
+from app.services.apifox.schedule_calc import (
     compute_next_run_at,
     format_schedule_desc,
     validate_schedule_fields,
