@@ -12,14 +12,23 @@
         </div>
         <div class="projgrid-wrap">
           <div class="projgrid">
-            <DashboardProjectCard
-              v-for="p in overview.projects"
-              :key="p.id"
-              :project="p"
-              @enter="enter"
-              @rename="handleRename"
-              @delete="handleDelete"
-            />
+            <VueDraggable
+              v-model="overview.projects"
+              :animation="150"
+              handle=".drag-handle"
+              style="display: contents"
+              @end="persistOrder"
+            >
+              <DashboardProjectCard
+                v-for="p in overview.projects"
+                :key="p.id"
+                :project="p"
+                @enter="enter"
+                @rename="handleRename"
+                @delete="handleDelete"
+                @pin="handlePin"
+              />
+            </VueDraggable>
             <div class="projcard newcard" @click="openCreate">
               <div class="plus">＋</div>
               新建项目
@@ -60,6 +69,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { VueDraggable } from 'vue-draggable-plus'
 import { apifoxApi, projectApi } from '@/api'
 import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
 import DashboardProjectCard from '@/components/apifox/workbench/DashboardProjectCard.vue'
@@ -93,6 +103,23 @@ async function loadData() {
 
 function enter(id) {
   router.push(`/apifox/project/${id}`)
+}
+
+// 置顶项稳定置于最前（与后端排序语义一致），再按当前展示顺序保存偏好
+async function persistOrder() {
+  overview.projects.sort((a, b) => Number(b.pinned) - Number(a.pinned))
+  const items = overview.projects.map((p) => ({ project_id: p.id, pinned: !!p.pinned }))
+  try {
+    await projectApi.savePreferences(items)
+  } catch {
+    // 保存失败：全局拦截器已提示；乐观改动可能已生效，重载后端真值避免本地漂移
+    await loadData()
+  }
+}
+
+function handlePin(project) {
+  project.pinned = !project.pinned
+  persistOrder()
 }
 
 function openReports(run) {

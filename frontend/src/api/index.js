@@ -55,6 +55,8 @@ export const projectApi = {
   update: (id, data) => request.put(`/projects/${id}`, data),
   delete: (id) => request.delete(`/projects/${id}`),
   dashboard: () => request.get('/projects/stats/dashboard'),
+  // 保存当前用户的置顶/排序偏好（items 按展示顺序：[{ project_id, pinned }]）
+  savePreferences: (items) => request.put('/projects/preferences/order', { items }),
 }
 
 export const requirementApi = {

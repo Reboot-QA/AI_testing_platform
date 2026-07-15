@@ -1,14 +1,19 @@
 <template>
   <div class="projcard" @click="$emit('enter', project.id)">
     <div class="row">
+      <el-icon class="drag-handle" title="拖拽排序" @click.stop><Rank /></el-icon>
       <div class="pi" :style="{ background: color }">{{ letter }}</div>
       <div class="pn">{{ project.name }}</div>
+      <span v-if="project.pinned" class="pin-flag" title="已置顶">置顶</span>
       <el-dropdown trigger="click" @command="onCommand">
         <span class="more" @click.stop>
           <el-icon><MoreFilled /></el-icon>
         </span>
         <template #dropdown>
           <el-dropdown-menu>
+            <el-dropdown-item command="pin">
+              <el-icon><Top /></el-icon> {{ project.pinned ? '取消置顶' : '置顶' }}
+            </el-dropdown-item>
             <el-dropdown-item command="rename"><el-icon><EditPen /></el-icon> 改名</el-dropdown-item>
             <el-dropdown-item v-if="canDelete" command="delete" divided>
               <span class="del"><el-icon><Delete /></el-icon> 删除项目</span>
@@ -33,7 +38,7 @@ import { computed } from 'vue'
 const props = defineProps({
   project: { type: Object, required: true },
 })
-const emit = defineEmits(['enter', 'rename', 'delete'])
+const emit = defineEmits(['enter', 'rename', 'delete', 'pin'])
 
 // 从项目 id 稳定取色，避免依赖后端配色
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
@@ -97,6 +102,26 @@ function onCommand(cmd) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.drag-handle {
+  flex: none;
+  color: var(--ax-text-placeholder);
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.pin-flag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ax-brand);
+  background: var(--ax-brand-weak, rgba(64, 128, 255, 0.1));
+  border-radius: 10px;
+  padding: 1px 7px;
 }
 
 .more {
