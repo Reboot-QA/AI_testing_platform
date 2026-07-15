@@ -23,16 +23,22 @@ def add(db: Session, obj):
 
 # ---------- folders ----------
 def list_folders(db: Session, project_id: int) -> List[ApifoxFolder]:
+    # 仅接口文件夹（kind=endpoint），避免场景文件夹泄漏进接口树
     return (
         db.query(ApifoxFolder)
-        .filter(ApifoxFolder.project_id == project_id)
+        .filter(ApifoxFolder.project_id == project_id, ApifoxFolder.kind == "endpoint")
         .order_by(ApifoxFolder.sort_order, ApifoxFolder.id)
         .all()
     )
 
 
 def get_folder(db: Session, folder_id: int) -> Optional[ApifoxFolder]:
-    return db.query(ApifoxFolder).filter(ApifoxFolder.id == folder_id).first()
+    # 仅接口文件夹（kind=endpoint）：防接口侧路由/校验误挂载或删改场景文件夹
+    return (
+        db.query(ApifoxFolder)
+        .filter(ApifoxFolder.id == folder_id, ApifoxFolder.kind == "endpoint")
+        .first()
+    )
 
 
 def create_folder(db: Session, folder: ApifoxFolder) -> ApifoxFolder:

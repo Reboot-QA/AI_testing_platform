@@ -182,3 +182,29 @@ def migrate_apifox_scenario_priority(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN priority VARCHAR(10) NOT NULL DEFAULT 'medium'"))
     db.expire_all()
+
+
+def migrate_apifox_folder_kind(db: Session) -> None:
+    """apifox_folders 加 kind（区分 endpoint / scenario 文件夹；存量默认 endpoint）。"""
+    inspector = inspect(engine)
+    if "apifox_folders" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_folders")}
+    if "kind" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_folders ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'endpoint'"))
+    db.expire_all()
+
+
+def migrate_apifox_scenario_folder(db: Session) -> None:
+    """apifox_scenarios 加 folder_id（所属场景文件夹；NULL=未分组）。"""
+    inspector = inspect(engine)
+    if "apifox_scenarios" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_scenarios")}
+    if "folder_id" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN folder_id INTEGER"))
+    db.expire_all()
