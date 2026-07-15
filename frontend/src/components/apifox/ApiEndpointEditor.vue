@@ -2,13 +2,13 @@
   <div class="editor">
     <template v-if="showMeta">
       <div class="row1">
-        <el-select v-model="form.method" style="width: 100px">
+        <el-select v-model="form.method" class="method-sel">
           <el-option v-for="m in METHODS" :key="m" :label="m" :value="m" />
         </el-select>
-        <el-select v-model="form.server_name" placeholder="默认前置URL" clearable style="width: 150px">
+        <el-select v-model="form.server_name" placeholder="默认前置URL" clearable class="server-sel">
           <el-option v-for="n in serverNames" :key="n" :label="n" :value="n" />
         </el-select>
-        <el-input v-model="form.path" placeholder="/path/to/api" />
+        <el-input v-model="form.path" placeholder="/path/to/api" class="path-input" />
         <el-button type="primary" :loading="saving" @click="$emit('save')">保存</el-button>
       </div>
       <el-input v-model="form.name" placeholder="接口名称" class="name-input" />
@@ -166,6 +166,22 @@ function clearFile() {
   display: flex;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+/* 方法框加宽（DELETE/PATCH 不再挤）、环境(前置URL)加宽；URL 占剩余空间自然变短 */
+.method-sel {
+  width: 120px;
+  flex: none;
+}
+
+.server-sel {
+  width: 200px;
+  flex: none;
+}
+
+.path-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .name-input {
