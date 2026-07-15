@@ -1,5 +1,7 @@
 .deploy/
 文档/
+# 内部进度文档，不入库
+接口自动化重构_进度与计划.md
 monitoring/.env
 backend/.env
 .env.docker
