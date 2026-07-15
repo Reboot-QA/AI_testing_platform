@@ -22,7 +22,7 @@
       </div>
     </el-card>
 
-    <el-card shadow="never" v-loading="loading">
+    <el-card v-loading="loading" shadow="never">
       <template #header>
         <div class="card-header">
           <span>大模型配置</span>
@@ -35,7 +35,12 @@
       <el-table :data="providers" stripe border empty-text="暂无模型配置，请点击添加模型">
         <el-table-column prop="name" label="名称" min-width="160" />
         <el-table-column prop="model" label="模型" min-width="140" show-overflow-tooltip />
-        <el-table-column prop="api_base" label="API Base URL" min-width="220" show-overflow-tooltip />
+        <el-table-column
+          prop="api_base"
+          label="API Base URL"
+          min-width="220"
+          show-overflow-tooltip
+        />
         <el-table-column label="API Key" width="130">
           <template #default="{ row }">
             <el-tag v-if="row.api_key_configured" type="success" size="small">已配置</el-tag>
@@ -51,7 +56,12 @@
         </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" :disabled="row.is_default" @click="handleActivate(row.id)">
+            <el-button
+              link
+              type="primary"
+              :disabled="row.is_default"
+              @click="handleActivate(row.id)"
+            >
               设为当前
             </el-button>
             <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
@@ -89,7 +99,11 @@
             v-model="form.api_key"
             type="password"
             show-password
-            :placeholder="editing?.api_key_configured ? `已配置 (${editing.api_key_masked})，留空则不修改` : '请输入 API Key'"
+            :placeholder="
+              editing?.api_key_configured
+                ? `已配置 (${editing.api_key_masked})，留空则不修改`
+                : '请输入 API Key'
+            "
           />
         </el-form-item>
         <el-form-item label="模型名称" prop="model">

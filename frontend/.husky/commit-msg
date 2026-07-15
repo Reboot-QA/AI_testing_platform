@@ -1,0 +1,4 @@
+# 校验 commit message 符合中文 conventional commits（配置见 frontend/commitlint.config.js）
+# 钩子 cwd 为仓库根，$1 是相对仓库根的 msg 文件路径，先转绝对路径再交给 commitlint
+msg_file="$(pwd)/$1"
+pnpm -C frontend exec commitlint --edit "$msg_file"

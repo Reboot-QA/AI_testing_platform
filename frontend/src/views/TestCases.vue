@@ -1,11 +1,22 @@
 <template>
   <div>
     <div class="toolbar">
-      <el-select v-model="projectId" placeholder="选择项目" style="width: 200px" @change="handleFilterChange">
+      <el-select
+        v-model="projectId"
+        placeholder="选择项目"
+        style="width: 200px"
+        @change="handleFilterChange"
+      >
         <el-option label="全部" :value="ALL_PROJECTS" />
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-select v-model="filterStatus" placeholder="评审状态" clearable style="width: 140px" @change="handleFilterChange">
+      <el-select
+        v-model="filterStatus"
+        placeholder="评审状态"
+        clearable
+        style="width: 140px"
+        @change="handleFilterChange"
+      >
         <el-option label="草稿" value="draft" />
         <el-option label="待评审" value="pending" />
         <el-option label="已通过" value="approved" />
@@ -67,27 +78,35 @@
       >
         批量驳回{{ batchRejectCount ? ` (${batchRejectCount})` : '' }}
       </el-button>
-      <el-button
-        type="danger"
-        plain
-        :disabled="!selectedIds.length"
-        @click="handleBatchDelete"
-      >
-        <el-icon><Delete /></el-icon> 批量删除{{ selectedIds.length ? ` (${selectedIds.length})` : '' }}
+      <el-button type="danger" plain :disabled="!selectedIds.length" @click="handleBatchDelete">
+        <el-icon><Delete /></el-icon> 批量删除{{
+          selectedIds.length ? ` (${selectedIds.length})` : ''
+        }}
       </el-button>
     </div>
 
     <el-table
-      :data="testcases"
       v-loading="loading"
+      :data="testcases"
       stripe
       border
       @selection-change="handleSelectionChange"
     >
       <el-table-column type="selection" width="45" />
       <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column v-if="isAllProjects" prop="project_name" label="项目" min-width="140" show-overflow-tooltip />
-      <el-table-column prop="requirement_title" label="需求点" min-width="160" show-overflow-tooltip>
+      <el-table-column
+        v-if="isAllProjects"
+        prop="project_name"
+        label="项目"
+        min-width="140"
+        show-overflow-tooltip
+      />
+      <el-table-column
+        prop="requirement_title"
+        label="需求点"
+        min-width="160"
+        show-overflow-tooltip
+      >
         <template #default="{ row }">{{ row.requirement_title || '-' }}</template>
       </el-table-column>
       <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
@@ -113,8 +132,20 @@
       <el-table-column label="操作" width="260" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-          <el-button link type="success" v-if="row.review_status === 'pending'" @click="review(row, 'approved')">通过</el-button>
-          <el-button link type="warning" v-if="row.review_status === 'pending'" @click="review(row, 'rejected')">驳回</el-button>
+          <el-button
+            v-if="row.review_status === 'pending'"
+            link
+            type="success"
+            @click="review(row, 'approved')"
+            >通过</el-button
+          >
+          <el-button
+            v-if="row.review_status === 'pending'"
+            link
+            type="warning"
+            @click="review(row, 'rejected')"
+            >驳回</el-button
+          >
           <el-popconfirm title="确认删除？" @confirm="handleDelete(row.id)">
             <template #reference>
               <el-button link type="danger">删除</el-button>
@@ -145,7 +176,7 @@
         </el-form-item>
         <el-form-item label="优先级">
           <el-select v-model="form.priority" style="width: 120px">
-            <el-option v-for="p in ['P0','P1','P2','P3']" :key="p" :label="p" :value="p" />
+            <el-option v-for="p in ['P0', 'P1', 'P2', 'P3']" :key="p" :label="p" :value="p" />
           </el-select>
         </el-form-item>
         <el-form-item label="前置条件">
@@ -172,12 +203,20 @@
       <template v-if="detail">
         <el-descriptions :column="1" border>
           <el-descriptions-item label="标题">{{ detail.title }}</el-descriptions-item>
-          <el-descriptions-item label="需求点">{{ detail.requirement_title || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="需求点">{{
+            detail.requirement_title || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ detail.priority }}</el-descriptions-item>
           <el-descriptions-item label="类型">{{ detail.case_type }}</el-descriptions-item>
-          <el-descriptions-item label="来源">{{ detail.source === 'ai_generated' ? 'AI生成' : '手动' }}</el-descriptions-item>
-          <el-descriptions-item label="评审状态">{{ reviewMap[detail.review_status] }}</el-descriptions-item>
-          <el-descriptions-item label="前置条件">{{ detail.preconditions || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="来源">{{
+            detail.source === 'ai_generated' ? 'AI生成' : '手动'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="评审状态">{{
+            reviewMap[detail.review_status]
+          }}</el-descriptions-item>
+          <el-descriptions-item label="前置条件">{{
+            detail.preconditions || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="测试步骤">
             <pre class="pre-text">{{ detail.steps || '-' }}</pre>
           </el-descriptions-item>
@@ -209,12 +248,19 @@
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
-          <div class="el-upload__tip">Excel 需包含「标题」列，导入后评审状态均为「草稿」；XMind 导入末级节点作为用例</div>
+          <div class="el-upload__tip">
+            Excel 需包含「标题」列，导入后评审状态均为「草稿」；XMind 导入末级节点作为用例
+          </div>
         </template>
       </el-upload>
       <template #footer>
         <el-button @click="importDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="handleImport">
+        <el-button
+          type="primary"
+          :loading="importing"
+          :disabled="!importFile"
+          @click="handleImport"
+        >
           开始导入
         </el-button>
       </template>
@@ -228,7 +274,10 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
-import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
+import {
+  registerAssistantHandler,
+  unregisterAssistantHandler,
+} from '@/utils/assistantActionRegistry'
 
 const ALL_PROJECTS = '__all__'
 
@@ -273,14 +322,15 @@ const rules = { title: [{ required: true, message: '请输入标题', trigger: '
 
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
-const batchSubmitCount = computed(() =>
-  selectedRows.value.filter((row) => ['draft', 'rejected'].includes(row.review_status)).length
+const batchSubmitCount = computed(
+  () =>
+    selectedRows.value.filter((row) => ['draft', 'rejected'].includes(row.review_status)).length,
 )
-const batchApproveCount = computed(() =>
-  selectedRows.value.filter((row) => row.review_status === 'pending').length
+const batchApproveCount = computed(
+  () => selectedRows.value.filter((row) => row.review_status === 'pending').length,
 )
-const batchRejectCount = computed(() =>
-  selectedRows.value.filter((row) => row.review_status === 'pending').length
+const batchRejectCount = computed(
+  () => selectedRows.value.filter((row) => row.review_status === 'pending').length,
 )
 const canBatchSubmit = computed(() => batchSubmitCount.value > 0)
 const canBatchApprove = computed(() => batchApproveCount.value > 0)
@@ -466,7 +516,7 @@ async function handleBatchDelete() {
   await ElMessageBox.confirm(
     `确认删除选中的 ${selectedIds.value.length} 条用例？此操作不可恢复。`,
     '批量删除',
-    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' }
+    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
   )
   const groups = groupRowsByProject(selectedRows.value)
   let message = ''

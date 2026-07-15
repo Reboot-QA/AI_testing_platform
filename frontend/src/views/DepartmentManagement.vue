@@ -14,7 +14,7 @@
       </el-button>
     </div>
 
-    <el-table :data="departments" v-loading="loading" stripe border>
+    <el-table v-loading="loading" :data="departments" stripe border>
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="name" label="部门名称" min-width="160" />
       <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip>
@@ -117,7 +117,7 @@ async function handleDelete(row) {
   await ElMessageBox.confirm(
     `确认删除部门「${row.name}」？若部门下仍有用户或项目将无法删除。`,
     '提示',
-    { type: 'warning' }
+    { type: 'warning' },
   )
   await departmentApi.delete(row.id)
   ElMessage.success('删除成功')

@@ -6,7 +6,7 @@
       </el-button>
     </div>
 
-    <el-table :data="users" v-loading="loading" stripe border>
+    <el-table v-loading="loading" :data="users" stripe border>
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="username" label="用户名" width="140" />
       <el-table-column prop="full_name" label="姓名" width="140">
@@ -39,12 +39,7 @@
         <template #default="{ row }">
           <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
           <el-button link type="warning" @click="openPasswordDialog(row)">重置密码</el-button>
-          <el-button
-            v-if="row.id !== currentUserId"
-            link
-            type="danger"
-            @click="handleDelete(row)"
-          >
+          <el-button v-if="row.id !== currentUserId" link type="danger" @click="handleDelete(row)">
             删除
           </el-button>
         </template>
@@ -54,7 +49,11 @@
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用户' : '添加用户'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="用户名" prop="username" required>
-          <el-input v-model="form.username" :disabled="!!editing" placeholder="仅支持字母、数字、下划线" />
+          <el-input
+            v-model="form.username"
+            :disabled="!!editing"
+            placeholder="仅支持字母、数字、下划线"
+          />
         </el-form-item>
         <el-form-item v-if="!editing" label="密码" prop="password">
           <el-input v-model="form.password" type="password" show-password />
@@ -72,7 +71,12 @@
           </el-select>
         </el-form-item>
         <el-form-item label="部门" prop="department_id">
-          <el-select v-model="form.department_id" placeholder="请选择部门" style="width: 100%" filterable>
+          <el-select
+            v-model="form.department_id"
+            placeholder="请选择部门"
+            style="width: 100%"
+            filterable
+          >
             <el-option
               v-for="dept in departments"
               :key="dept.id"
@@ -92,7 +96,12 @@
     </el-dialog>
 
     <el-dialog v-model="passwordDialogVisible" title="重置密码" width="420px">
-      <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="90px">
+      <el-form
+        ref="passwordFormRef"
+        :model="passwordForm"
+        :rules="passwordRules"
+        label-width="90px"
+      >
         <el-form-item label="用户">
           <el-input :model-value="passwordTarget?.username" disabled />
         </el-form-item>
@@ -102,7 +111,9 @@
       </el-form>
       <template #footer>
         <el-button @click="passwordDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="passwordSubmitting" @click="handleResetPassword">确定</el-button>
+        <el-button type="primary" :loading="passwordSubmitting" @click="handleResetPassword"
+          >确定</el-button
+        >
       </template>
     </el-dialog>
   </div>

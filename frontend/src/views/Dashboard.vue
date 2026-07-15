@@ -1,7 +1,7 @@
 <template>
   <div v-loading="loading">
     <el-row :gutter="20" class="stat-row">
-      <el-col :span="6" v-for="item in statCards" :key="item.label">
+      <el-col v-for="item in statCards" :key="item.label" :span="6">
         <el-card shadow="hover" class="stat-card" @click="goToPage(item.path)">
           <div class="stat-icon" :style="{ background: item.color }">
             <el-icon :size="28"><component :is="item.icon" /></el-icon>
@@ -71,10 +71,34 @@ const stats = ref({
 })
 
 const statCards = computed(() => [
-  { label: '项目数', value: stats.value.project_count, icon: 'Folder', color: '#3182ce', path: '/projects' },
-  { label: '需求数', value: stats.value.requirement_count, icon: 'Document', color: '#38a169', path: '/requirements' },
-  { label: '用例总数', value: stats.value.testcase_count, icon: 'List', color: '#805ad5', path: '/testcases' },
-  { label: '待评审', value: stats.value.pending_review_count, icon: 'Clock', color: '#dd6b20', path: '/testcases?review_status=pending' },
+  {
+    label: '项目数',
+    value: stats.value.project_count,
+    icon: 'Folder',
+    color: '#3182ce',
+    path: '/projects',
+  },
+  {
+    label: '需求数',
+    value: stats.value.requirement_count,
+    icon: 'Document',
+    color: '#38a169',
+    path: '/requirements',
+  },
+  {
+    label: '用例总数',
+    value: stats.value.testcase_count,
+    icon: 'List',
+    color: '#805ad5',
+    path: '/testcases',
+  },
+  {
+    label: '待评审',
+    value: stats.value.pending_review_count,
+    icon: 'Clock',
+    color: '#dd6b20',
+    path: '/testcases?review_status=pending',
+  },
 ])
 
 function goToPage(path) {
@@ -100,7 +124,9 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   cursor: pointer;
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 }
 
 .stat-card:hover {
