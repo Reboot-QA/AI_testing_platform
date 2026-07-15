@@ -21,6 +21,21 @@ const VALUE_SUGGESTIONS = {
   pragma: ['no-cache'],
 }
 
+// 选中某常用 header 时自动带的默认值（值为空时才填，不覆盖用户已填）
+const HEADER_DEFAULTS = {
+  'content-type': 'application/json',
+  accept: '*/*',
+  'cache-control': 'no-cache',
+  connection: 'keep-alive',
+  'accept-encoding': 'gzip, deflate, br',
+  authorization: 'Bearer ',
+  'x-requested-with': 'XMLHttpRequest',
+}
+
+export function headerDefaultValue(key) {
+  return HEADER_DEFAULTS[(key || '').trim().toLowerCase()] || ''
+}
+
 // el-autocomplete fetch-suggestions 结果格式：[{ value }]
 export function suggestHeaderKeys(query) {
   const q = (query || '').toLowerCase()

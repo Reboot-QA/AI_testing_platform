@@ -27,6 +27,7 @@
           placeholder="键"
           size="small"
           class="kv-key"
+          @select="(item) => onKeySelect(row, item)"
         />
         <el-input v-else v-model="row.key" placeholder="键" size="small" class="kv-key" />
 
@@ -52,7 +53,7 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
-import { rowsToText, suggestHeaderKeys, suggestHeaderValues, textToRows } from '@/utils/httpHeaders'
+import { headerDefaultValue, rowsToText, suggestHeaderKeys, suggestHeaderValues, textToRows } from '@/utils/httpHeaders'
 
 // rows 为父级 reactive 数组（按引用传入），子组件就地增删改，父级自动响应。
 // suggest='header' 时键/值走 header 常用清单自动补全；其余场景为普通输入。
@@ -106,6 +107,14 @@ function syncFromText() {
 
 const fetchKeys = (query, cb) => cb(suggestHeaderKeys(query))
 const fetchValues = (row, query, cb) => cb(suggestHeaderValues(row.key, query))
+
+// 选中常用 header 时，值为空则自动带上该 header 的默认值（不覆盖已填的值）
+function onKeySelect(row, item) {
+  if (!(row.value || '').trim()) {
+    const def = headerDefaultValue(item.value)
+    if (def) row.value = def
+  }
+}
 
 onMounted(syncTail)
 // 表格模式下任意键值改动后维持末尾空行（深比较，内容变触发）
