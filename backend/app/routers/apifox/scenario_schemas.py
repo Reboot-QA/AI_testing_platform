@@ -41,10 +41,25 @@ class ScenarioRunConfig(BaseModel):
     dataset_id: Optional[int] = None
 
 
+class ScenarioFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ScenarioFolderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ScenarioFolderOut(BaseModel):
+    id: int
+    name: str
+    scenario_count: int = 0
+
+
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
     priority: ScenarioPriority = "medium"
+    folder_id: Optional[int] = None
     steps: List[StepIn] = Field(default_factory=list)
 
 
@@ -52,6 +67,7 @@ class ScenarioUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
     priority: Optional[ScenarioPriority] = None
+    folder_id: Optional[int] = None
     steps: Optional[List[StepIn]] = None
     sort_order: Optional[int] = None
     run_config: Optional[ScenarioRunConfig] = None
@@ -64,6 +80,7 @@ class ScenarioBrief(BaseModel):
     name: str
     description: Optional[str] = None
     priority: ScenarioPriority = "medium"
+    folder_id: Optional[int] = None
     step_count: int = 0
     sort_order: int
 
@@ -74,6 +91,7 @@ class ScenarioOut(BaseModel):
     name: str
     description: Optional[str] = None
     priority: ScenarioPriority = "medium"
+    folder_id: Optional[int] = None
     steps: List[StepOut]
     sort_order: int
     run_config: ScenarioRunConfig = Field(default_factory=ScenarioRunConfig)

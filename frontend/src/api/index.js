@@ -353,6 +353,10 @@ export const apifoxApi = {
   createScenario: (pid, data) => request.post(`/apifox/projects/${pid}/scenarios`, data),
   updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
+  listScenarioFolders: (pid) => request.get(`/apifox/projects/${pid}/scenario-folders`),
+  createScenarioFolder: (pid, name) => request.post(`/apifox/projects/${pid}/scenario-folders`, { name }),
+  renameScenarioFolder: (fid, name) => request.put(`/apifox/scenario-folders/${fid}`, { name }),
+  deleteScenarioFolder: (fid) => request.delete(`/apifox/scenario-folders/${fid}`),
 
   listSuites: (pid) => request.get(`/apifox/projects/${pid}/suites`),
   getSuite: (sid) => request.get(`/apifox/suites/${sid}`),

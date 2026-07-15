@@ -22,6 +22,10 @@ class ApifoxScenario(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     # high | medium | low
     priority: Mapped[str] = mapped_column(String(10), default="medium", server_default="medium")
+    # 所属场景文件夹（apifox_folders.kind='scenario'）；NULL=未分组
+    folder_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("apifox_folders.id"), nullable=True, index=True
+    )
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     # 运行配置 JSON：{"loop_count": N, "dataset_id": id}——整场景循环 N 遍 / 绑数据集按行数据驱动
     run_config: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
