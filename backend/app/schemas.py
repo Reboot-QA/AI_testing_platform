@@ -1,5 +1,5 @@
-from datetime import datetime
 import re
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -122,6 +122,7 @@ class ProjectUpdate(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     status: Optional[str] = None
+    owner_id: Optional[int] = None  # 变更负责人：仅系统管理员可用（router 校验）
 
 
 class ProjectOut(ProjectBase):
