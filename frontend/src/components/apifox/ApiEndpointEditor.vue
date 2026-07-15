@@ -22,7 +22,7 @@
         <KvRowsEditor :rows="form.request_spec.path_params" />
       </el-tab-pane>
       <el-tab-pane label="Headers" name="headers">
-        <KvRowsEditor :rows="form.request_spec.headers" />
+        <KvRowsEditor :rows="form.request_spec.headers" suggest="header" />
       </el-tab-pane>
       <el-tab-pane label="Cookies" name="cookies">
         <KvRowsEditor :rows="form.request_spec.cookies" />
