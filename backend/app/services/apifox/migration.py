@@ -90,6 +90,19 @@ def migrate_apifox_optimistic_version(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_case_category(db: Session) -> None:
+    """apifox_endpoint_cases 加 category 列（用例分类，默认 other）。"""
+    inspector = inspect(engine)
+    if "apifox_endpoint_cases" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_endpoint_cases")}
+    if "category" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_endpoint_cases ADD COLUMN category VARCHAR(20) NOT NULL DEFAULT 'other'"))
+    db.expire_all()
+
+
 def migrate_apifox_scenario_run_config(db: Session) -> None:
     """apifox_scenarios 加 run_config（场景运行配置 JSON：循环次数 / 绑数据集驱动）。"""
     inspector = inspect(engine)

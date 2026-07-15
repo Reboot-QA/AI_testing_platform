@@ -15,7 +15,14 @@ from app.auth import get_current_user
 from app.database import SessionLocal, get_db
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.user import User
-from app.repositories.apifox import case_repo, run_repo, scenario_repo, suite_repo, variable_repo
+from app.repositories.apifox import (
+    case_repo,
+    endpoint_repo,
+    run_repo,
+    scenario_repo,
+    suite_repo,
+    variable_repo,
+)
 from app.routers.apifox.run_schemas import RunBrief, RunOut, RunStepOut
 from app.services.apifox import run_service
 from app.services.project_access_service import get_accessible_project
@@ -224,6 +231,15 @@ def _step_out(step: ApifoxRunStep) -> RunStepOut:
 def list_runs(pid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     get_accessible_project(db, pid, user)
     return [_brief(r) for r in run_repo.list_runs(db, pid)]
+
+
+@router.get("/endpoints/{eid}/runs", response_model=List[RunBrief])
+def list_endpoint_runs(eid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    endpoint = endpoint_repo.get_endpoint(db, eid)
+    if not endpoint:
+        raise HTTPException(status_code=404, detail="接口不存在")
+    get_accessible_project(db, endpoint.project_id, user)
+    return [_brief(r) for r in run_repo.list_case_runs_by_endpoint(db, eid)]
 
 
 @router.get("/runs/{rid}", response_model=RunOut)

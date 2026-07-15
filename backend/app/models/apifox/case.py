@@ -20,6 +20,8 @@ class ApifoxEndpointCase(Base):
     project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
     endpoint_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoints.id"), index=True)
     name: Mapped[str] = mapped_column(String(200))
+    # 用例分类（对齐 Apifox）：positive正向 | negative逆向 | boundary边界值 | security安全性 | other其他
+    category: Mapped[str] = mapped_column(String(20), default="other", server_default="other")
     # 结构化 JSON：request_spec(query/path/headers/body/auth)、用例变量、数据驱动
     request_spec: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     variables: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

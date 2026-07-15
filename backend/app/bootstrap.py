@@ -11,6 +11,7 @@ from app.services.api_automation_migration import (
 )
 from app.services.apifox.migration import (
     migrate_apifox_assertion_operator,
+    migrate_apifox_case_category,
     migrate_apifox_endpoint_contract,
     migrate_apifox_endpoint_server_name,
     migrate_apifox_optimistic_version,
@@ -51,6 +52,7 @@ def run_bootstrap() -> None:
         ("迁移运行父运行列", migrate_apifox_run_parent),
         ("迁移乐观锁版本列", migrate_apifox_optimistic_version),
         ("迁移场景运行配置列", migrate_apifox_scenario_run_config),
+        ("迁移用例分类列", migrate_apifox_case_category),
         ("迁移运行轮次列", migrate_apifox_run_iteration),
         ("写入演示数据", seed_demo_data),
         ("加载 LLM 配置", init_llm_settings_from_env),
