@@ -17,10 +17,10 @@ from app.routers.apifox.script_schemas import (
     ScriptOut,
     ScriptUpdate,
 )
-
-# run_pre_script/run_post_script 与 run_engine 同款借自老 api_script_runner，D1 解耦一并搬迁
-from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.apifox import versioning
+
+# run_pre_script/run_post_script：apifox 执行引擎与脚本调试共用（D1a 已从老模块搬入 apifox）
+from app.services.apifox.script_runner import run_post_script, run_pre_script
 
 VALID_LANGS = {"javascript", "python"}
 
