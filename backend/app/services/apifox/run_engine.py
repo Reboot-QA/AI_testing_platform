@@ -53,11 +53,21 @@ __all__ = [
     "build_request",
     "evaluate_assertions", "run_extracts", "run_script_links",
     "persist_scoped_extracts", "execute_case",
-    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT",
+    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT", "make_http_client",
 ]
 
 HTTP_TIMEOUT = 30.0
 MAX_BODY_SNAPSHOT = 20000
+
+
+def make_http_client(plan: Dict[str, Any]) -> httpx.Client:
+    """按请求计划的 settings 构建 httpx 客户端：未设超时回落 HTTP_TIMEOUT；SSL/重定向所配即所用。"""
+    timeout = plan.get("timeout")
+    return httpx.Client(
+        timeout=timeout if timeout is not None else HTTP_TIMEOUT,
+        follow_redirects=plan.get("follow_redirects", True),
+        verify=plan.get("verify_ssl", True),
+    )
 
 _OP_WITH_OPERATOR = {"status_code", "json_path", "header"}
 
@@ -275,7 +285,7 @@ def execute_case(
 
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+        with make_http_client(plan) as client:
             response = client.request(
                 plan["method"], plan["url"],
                 params=plan["params"] or None,
@@ -366,7 +376,7 @@ def execute_http_request(
 
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+        with make_http_client(plan) as client:
             response = client.request(
                 plan["method"], plan["url"],
                 params=plan["params"] or None, headers=plan["headers"] or None,

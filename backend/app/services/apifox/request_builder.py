@@ -147,6 +147,13 @@ def build_request(
                     "服务端很可能无法解析表单字段。已按你的配置原样发送；如非有意，请移除该 Content-Type 头或改为 application/x-www-form-urlencoded。"
                 )
 
+    settings = spec.get("settings") or {}
+    timeout_ms = settings.get("timeout_ms")
+    try:  # 无/非法/非正 → None，由调用方回落平台默认超时
+        timeout = float(timeout_ms) / 1000.0 if timeout_ms and float(timeout_ms) > 0 else None
+    except (TypeError, ValueError):
+        timeout = None
+
     return {
         "method": endpoint.method,
         "url": url,
@@ -155,4 +162,7 @@ def build_request(
         "request_kwargs": request_kwargs,
         "body_snapshot": body_snapshot,
         "warnings": warnings,
+        "timeout": timeout,
+        "verify_ssl": settings.get("verify_ssl", True) is not False,
+        "follow_redirects": settings.get("follow_redirects", True) is not False,
     }

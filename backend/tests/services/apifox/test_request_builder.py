@@ -272,3 +272,33 @@ def test_request_spec_preserves_cookies_and_graphql_fields():
     assert dumped["body"]["graphql_variables"] == '{"a":1}'
     assert dumped["body"]["file_id"] == 9
     assert dumped["body"]["file_name"] == "a.bin"
+
+
+# ---------- 请求设置（超时 / SSL / 重定向）解析进 plan ----------
+def test_settings_default_when_absent():
+    plan = _build(_endpoint(path="http://x/y"))
+
+    assert plan["timeout"] is None  # 由调用方回落平台默认
+    assert plan["verify_ssl"] is True
+    assert plan["follow_redirects"] is True
+
+
+def test_settings_timeout_ms_converted_to_seconds():
+    plan = _build(_endpoint(path="http://x/y"), {"settings": {"timeout_ms": 5000}})
+
+    assert plan["timeout"] == 5.0
+
+
+@pytest.mark.parametrize("bad", [0, -1, "abc", None])
+def test_settings_nonpositive_or_invalid_timeout_falls_back_none(bad):
+    plan = _build(_endpoint(path="http://x/y"), {"settings": {"timeout_ms": bad}})
+
+    assert plan["timeout"] is None
+
+
+def test_settings_verify_ssl_and_redirects_passthrough():
+    spec = {"settings": {"verify_ssl": False, "follow_redirects": False}}
+    plan = _build(_endpoint(path="http://x/y"), spec)
+
+    assert plan["verify_ssl"] is False
+    assert plan["follow_redirects"] is False

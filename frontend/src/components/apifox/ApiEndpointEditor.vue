@@ -78,6 +78,35 @@
         </template>
       </el-tab-pane>
 
+      <el-tab-pane label="设置" name="settings">
+        <div class="settings-form">
+          <div class="set-row">
+            <span class="set-label">超时（毫秒）</span>
+            <el-input-number
+              v-model="form.request_spec.settings.timeout_ms"
+              :min="0"
+              :step="1000"
+              :precision="0"
+              :controls="false"
+              :value-on-clear="null"
+              placeholder="默认 30000"
+              style="width: 180px"
+            />
+            <span class="set-hint">留空或 0 用平台默认 30s</span>
+          </div>
+          <div class="set-row">
+            <span class="set-label">SSL 证书校验</span>
+            <el-switch v-model="form.request_spec.settings.verify_ssl" />
+            <span class="set-hint">关闭则不校验服务端证书（自签名 / 测试环境）</span>
+          </div>
+          <div class="set-row">
+            <span class="set-label">自动重定向</span>
+            <el-switch v-model="form.request_spec.settings.follow_redirects" />
+            <span class="set-hint">关闭则返回 3xx 原始响应，不自动跟随</span>
+          </div>
+        </div>
+      </el-tab-pane>
+
       <!-- 接口级处理器（与用例级合并叠加）；用例编辑器内不显示（用例有自己的处理器 tab） -->
       <template v-if="showProcessors">
         <el-tab-pane label="前置操作" name="pre">
@@ -109,7 +138,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
@@ -129,6 +158,17 @@ const props = defineProps({
   projectId: { type: [String, Number], default: '' },
 })
 defineEmits(['save'])
+
+// 兼容历史/未归一化 spec：确保 settings 存在，避免「设置」tab 的 v-model 绑定报错
+watch(
+  () => props.form.request_spec,
+  (spec) => {
+    if (spec && !spec.settings) {
+      spec.settings = { timeout_ms: null, verify_ssl: true, follow_redirects: true }
+    }
+  },
+  { immediate: true },
+)
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 const BODY_TYPES = ['none', 'json', 'xml', 'form-data', 'urlencoded', 'raw', 'graphql', 'binary']
@@ -226,5 +266,28 @@ function clearFile() {
 .c-label {
   font-size: 13px;
   color: var(--ax-text-secondary);
+}
+
+.settings-form {
+  padding: 4px 0;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.set-label {
+  flex: none;
+  width: 96px;
+  font-size: 13px;
+  color: var(--ax-text-secondary);
+}
+
+.set-hint {
+  font-size: 12px;
+  color: var(--ax-text-placeholder);
 }
 </style>
