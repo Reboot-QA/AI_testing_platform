@@ -39,7 +39,7 @@
             <el-icon class="upload-icon"><UploadFilled /></el-icon>
             <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
             <template #tip>
-              <div class="upload-tip">支持 .txt / .md / .docx，最大 5MB</div>
+              <div class="upload-tip">支持 .txt / .md / .docx，最大 50MB</div>
             </template>
           </el-upload>
         </el-form-item>
