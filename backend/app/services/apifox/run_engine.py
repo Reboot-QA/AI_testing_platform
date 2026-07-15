@@ -282,6 +282,7 @@ def execute_case(
     detail["url"] = plan["url"]
     detail["request_headers"] = plan["headers"]
     detail["request_body"] = plan["body_snapshot"]
+    detail["warnings"] = plan.get("warnings", [])
 
     started = time.perf_counter()
     try:
@@ -373,6 +374,7 @@ def execute_http_request(
     detail["url"] = plan["url"]
     detail["request_headers"] = plan["headers"]
     detail["request_body"] = plan["body_snapshot"]
+    detail["warnings"] = plan.get("warnings", [])
 
     started = time.perf_counter()
     try:

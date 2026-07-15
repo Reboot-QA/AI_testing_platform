@@ -193,3 +193,49 @@ def test_http_step_assertion_results_recorded(db, monkeypatch):
     _events, steps = _run(db, out)
 
     assert json.loads(steps[0].assertion_results)[0]["passed"] is True
+
+
+# ---------- Binary 孤儿告警贯通：生成 → detail → 落库 → RunStepOut 回读 ----------
+class _EmptyResp:
+    status_code = 200
+    headers = {}
+    text = "{}"
+
+    def json(self):
+        return {}
+
+
+def test_execute_http_request_propagates_binary_orphan_warning(db, monkeypatch):
+    import httpx
+
+    monkeypatch.setattr(httpx.Client, "request", lambda self, *a, **k: _EmptyResp())
+
+    _status, detail = run_engine.execute_http_request(
+        db, 1, "POST", "https://api.example.com/x", None,
+        {"body": {"type": "binary", "file_id": 999}},  # 无此上传文件 → 孤儿告警
+        [], [], None, {},
+    )
+
+    assert any("id=999" in w for w in detail["warnings"])
+
+
+def test_http_step_persists_binary_warning_and_reads_back(db, monkeypatch):
+    import httpx
+
+    from app.routers.apifox.runs import _step_out
+
+    monkeypatch.setattr(httpx.Client, "request", lambda self, *a, **k: _EmptyResp())
+    out = ss.create_scenario(db, 1, ScenarioCreate(name="S", steps=[
+        StepIn(type="http", name="HTTP", config={
+            "method": "POST", "path": "https://api.example.com/x",
+            "request_spec": {"body": {"type": "binary", "file_id": 999}},
+            "assertions": [], "extracts": [],
+        }),
+    ]))
+
+    _events, steps = _run(db, out)
+
+    assert any("id=999" in w for w in json.loads(steps[0].warnings))  # 落库
+    assert any("id=999" in w for w in _step_out(steps[0]).warnings)   # RunStepOut 回读
+
+
