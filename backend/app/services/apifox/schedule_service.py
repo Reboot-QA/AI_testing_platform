@@ -10,6 +10,7 @@ import logging
 from datetime import datetime
 from typing import Any, Optional, cast
 
+from croniter import croniter
 from sqlalchemy.orm import Session
 
 from app.models.apifox.schedule import ApifoxSchedule
@@ -33,15 +34,42 @@ logger = logging.getLogger(__name__)
 TARGET_TYPES = {"case", "scenario", "suite"}
 
 # 复用旧调度函数（鸭子类型：只读 schedule_type/run_time/week_day/interval_minutes/last_run_at）；
-# 薄封装并 cast，让类型系统接受 ApifoxSchedule，同时对路由屏蔽底层来源。
-validate_fields = validate_schedule_fields
+# cron 分支为 apifox 独有，不回灌即将下线的老 schedule_service。
+
+
+def validate_fields(
+    *,
+    schedule_type: str,
+    run_time: Optional[str] = None,
+    week_day: Optional[int] = None,
+    interval_minutes: Optional[int] = None,
+    cron_expr: Optional[str] = None,
+) -> None:
+    if schedule_type == "cron":
+        expr = (cron_expr or "").strip()
+        if not expr:
+            raise ValueError("cron 表达式不能为空")
+        if not croniter.is_valid(expr):
+            raise ValueError("cron 表达式无效")
+        return
+    validate_schedule_fields(
+        schedule_type=schedule_type,
+        run_time=run_time,
+        week_day=week_day,
+        interval_minutes=interval_minutes,
+    )
 
 
 def describe(task: ApifoxSchedule) -> str:
+    if task.schedule_type == "cron":
+        return f"Cron：{task.cron_expr or ''}"
     return format_schedule_desc(cast(Any, task))
 
 
 def _compute_next(task: ApifoxSchedule, from_dt: Optional[datetime] = None) -> datetime:
+    if task.schedule_type == "cron":
+        base = from_dt or now_local()
+        return croniter((task.cron_expr or "").strip(), base).get_next(datetime)
     return compute_next_run_at(cast(Any, task), from_dt=from_dt)
 
 
@@ -123,14 +151,23 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
         task.last_run_status = "failed"
     finally:
         if task.enabled:
-            task.next_run_at = _compute_next(task, from_dt=now_local())
+            try:
+                task.next_run_at = _compute_next(task, from_dt=now_local())
+            except Exception:  # noqa: BLE001 - 下次运行算不出（如运行时损坏的 cron）不得让任务每轮重试
+                logger.exception("apifox 定时任务 %s 计算下次运行失败，已禁用以止损", task.id)
+                task.enabled = False
+                task.next_run_at = None
         db.commit()
 
 
 def run_due_apifox_tasks(db: Session) -> None:
-    """轮询线程调用：执行所有到期的 apifox 定时任务。"""
+    """轮询线程调用：执行所有到期的 apifox 定时任务。单条异常隔离，不中断整批。"""
     for task in schedule_repo.list_due(db, now_local()):
-        execute_schedule(db, task)
+        try:
+            execute_schedule(db, task)
+        except Exception:  # noqa: BLE001 - 一条坏数据（如非法 cron）不得中断其余任务
+            logger.exception("apifox 定时任务 %s 处理异常", task.id)
+            db.rollback()
 
 
 __all__ = [
