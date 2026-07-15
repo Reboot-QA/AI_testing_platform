@@ -216,28 +216,11 @@ def _get_demo_preset_plan(preset: str) -> Optional[Dict[str, Any]]:
         }
 
     if preset in {"api_automation", "api_automation_management_full"}:
-        name = "AI演示套件"
+        # 老接口自动化模块已软下线（G2a）：改为引导到新版 apifox 工作台，不再调用已下线的组件 handler
         return {
-            "reply": "好的，我将为您演示接口自动化管理全流程：环境配置、套件创建、演示用例保存与执行入口，请稍候观看。",
+            "reply": "接口自动化已升级为新版工作台，我这就为您打开。",
             "actions": [
-                {"type": "navigate", "path": "/api-automation/env", "label": "打开环境配置"},
-                _wait_step("等待环境页加载"),
-                {"type": "invoke", "handler": "apiAutomation.ensureProject", "label": "选择项目"},
-                _wait_step("等待项目切换完成"),
-                {"type": "invoke", "handler": "apiAutomation.ensureEnvironment", "label": "准备执行环境"},
-                _wait_step("等待环境就绪"),
-                {"type": "navigate", "path": "/api-automation/suites", "label": "打开套件与用例"},
-                _wait_step("等待套件页加载"),
-                {
-                    "type": "invoke",
-                    "handler": "apiAutomation.createSuite",
-                    "payload": {"name": name, "base_url": "http://127.0.0.1"},
-                    "label": f"创建测试套件：{name}",
-                },
-                _wait_step("等待套件创建完成"),
-                {"type": "invoke", "handler": "apiAutomation.createDemoCase", "label": "创建并保存演示接口用例"},
-                _wait_step("等待用例保存完成"),
-                {"type": "invoke", "handler": "apiAutomation.focusRunSuite", "label": "展示执行套件入口"},
+                {"type": "navigate", "path": "/apifox", "label": "打开接口自动化工作台"},
             ],
             "needs_confirmation": False,
         }
