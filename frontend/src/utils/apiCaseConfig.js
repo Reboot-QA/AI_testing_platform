@@ -3,7 +3,7 @@ const META_KEY = '__meta'
 export const DEFAULT_ASSERTIONS = '[{"type":"status_code","expected":200}]'
 
 export function emptyKvRow() {
-  return { key: '', value: '', enabled: true, desc: '' }
+  return { key: '', value: '', enabled: true, desc: '', type: 'string' }
 }
 
 export function emptyExtractRow() {
