@@ -35,6 +35,7 @@
 import { ref, watch } from 'vue'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 
 const props = defineProps({
   endpointId: { type: [String, Number], required: true },
@@ -44,17 +45,11 @@ const props = defineProps({
 const store = useWorkspaceStore()
 const rows = ref([])
 
-const statusLabel = (s) => ({ running: '执行中', passed: '通过', failed: '失败' }[s] || s)
-const statusTag = (s) => ({ running: 'warning', passed: 'success', failed: 'danger' }[s] || 'info')
 const envName = (id) => (id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-')
-const formatTime = (v) => (v ? new Date(v).toLocaleString('zh-CN') : '-')
 
 async function load() {
-  const cases = await apifoxApi.listCases(props.endpointId)
-  const caseIds = new Set(cases.map((c) => c.id))
-  const runs = await apifoxApi.listRuns(props.projectId)
-  // 仅本接口用例的运行（用例级 run：target_type=case 且 target_id 属于本接口）
-  rows.value = runs.filter((r) => r.target_type === 'case' && caseIds.has(r.target_id))
+  // 后端按接口的用例精确过滤，不受项目级「最近 100 条」窗口影响（评审#1）
+  rows.value = await apifoxApi.listEndpointRuns(props.endpointId)
 }
 
 watch(() => props.endpointId, load, { immediate: true })

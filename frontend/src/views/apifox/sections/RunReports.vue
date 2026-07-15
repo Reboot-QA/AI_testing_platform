@@ -151,6 +151,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 import { iterationLabel } from '@/utils/iterationLabel'
+import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
@@ -176,14 +177,8 @@ const stepGroups = computed(() => {
   }))
 })
 
-const statusLabel = (s) => ({ running: '执行中', passed: '通过', failed: '失败' }[s] || s)
-const statusTag = (s) => ({ running: 'warning', passed: 'success', failed: 'danger' }[s] || 'info')
 const targetTypeLabel = (t) => (t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例')
 const targetTag = (t) => (t === 'scenario' ? 'info' : t === 'suite' ? 'primary' : 'success')
-
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN') : '-'
-}
 
 async function loadRuns() {
   runs.value = await apifoxApi.listRuns(pid.value)
