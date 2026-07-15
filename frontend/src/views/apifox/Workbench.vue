@@ -17,6 +17,8 @@
               :key="p.id"
               :project="p"
               @enter="enter"
+              @rename="handleRename"
+              @delete="handleDelete"
             />
             <div class="projcard newcard" @click="openCreate">
               <div class="plus">＋</div>
@@ -57,7 +59,7 @@
 <script setup>
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi, projectApi } from '@/api'
 import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
 import DashboardProjectCard from '@/components/apifox/workbench/DashboardProjectCard.vue'
@@ -114,6 +116,36 @@ async function handleCreate() {
   } finally {
     submitting.value = false
   }
+}
+
+async function handleRename(project) {
+  const { value } = await ElMessageBox.prompt('项目名称', '重命名项目', {
+    inputValue: project.name,
+    inputPattern: /\S/,
+    inputErrorMessage: '项目名不能为空',
+  })
+  const name = value.trim()
+  if (name === project.name) return
+  await projectApi.update(project.id, { name })
+  ElMessage.success('已重命名')
+  await loadData()
+}
+
+async function handleDelete(project) {
+  // 硬删除不可逆：要求输入项目名完全一致二次确认
+  await ElMessageBox.prompt(
+    `此操作将永久删除项目「${project.name}」及其全部数据（接口、场景、用例、需求、运行报告等），不可恢复！\n请输入项目名称以确认：`,
+    '硬删除项目',
+    {
+      type: 'warning',
+      confirmButtonText: '确认删除',
+      confirmButtonClass: 'el-button--danger',
+      inputValidator: (v) => (v || '').trim() === project.name || '项目名称不一致',
+    },
+  )
+  await projectApi.delete(project.id)
+  ElMessage.success('已删除')
+  await loadData()
 }
 
 onMounted(loadData)
