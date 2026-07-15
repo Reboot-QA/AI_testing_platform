@@ -19,6 +19,7 @@ from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.testcase import TestCase as TCase  # 避免 pytest 误当测试类收集
+from app.models.user_project_pref import UserProjectPref
 from app.services.apifox.project_cleanup import purge_project_all
 
 
@@ -60,6 +61,7 @@ def _seed_project(db, name: str) -> int:
     db.add(ApiScheduledTaskSuite(task_id=task.id, suite_id=suite.id))
 
     db.add(ApifoxEndpoint(project_id=pid, name="apifox接口", method="GET", path="/y"))
+    db.add(UserProjectPref(user_id=1, project_id=pid, pinned=True, sort_order=0))
     db.commit()
     return pid
 
@@ -83,6 +85,7 @@ def _count_for_project(db, pid: int) -> dict:
         "task": len(task_ids),
         "task_suite": db.query(ApiScheduledTaskSuite).filter(ApiScheduledTaskSuite.task_id.in_(task_ids or [-1])).count(),
         "apifox_ep": db.query(ApifoxEndpoint).filter(ApifoxEndpoint.project_id == pid).count(),
+        "pref": db.query(UserProjectPref).filter(UserProjectPref.project_id == pid).count(),
     }
 
 

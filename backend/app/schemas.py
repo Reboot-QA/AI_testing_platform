@@ -125,6 +125,15 @@ class ProjectUpdate(BaseModel):
     owner_id: Optional[int] = None  # 变更负责人：仅系统管理员可用（router 校验）
 
 
+class ProjectPrefItem(BaseModel):
+    project_id: int
+    pinned: bool = False
+
+
+class ProjectPrefOrderIn(BaseModel):
+    items: List[ProjectPrefItem]  # 按展示顺序排列；后端以下标为 sort_order
+
+
 class ProjectOut(ProjectBase):
     id: int
     owner_id: int

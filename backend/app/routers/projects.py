@@ -9,7 +9,14 @@ from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
-from app.schemas import DashboardStats, ProjectCreate, ProjectOut, ProjectUpdate
+from app.schemas import (
+    DashboardStats,
+    ProjectCreate,
+    ProjectOut,
+    ProjectPrefOrderIn,
+    ProjectUpdate,
+)
+from app.services import user_project_pref_service
 from app.services.apifox.project_cleanup import purge_project_all
 from app.services.project_access_service import (
     accessible_projects_query,
@@ -71,6 +78,17 @@ def create_project(
     db.commit()
     db.refresh(project)
     return _project_out(project, db)
+
+
+@router.put("/preferences/order")
+def save_project_preferences(
+    data: ProjectPrefOrderIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """保存当前用户的项目置顶 / 排序偏好（按传入展示顺序）。"""
+    user_project_pref_service.save_order(db, current_user, [i.model_dump() for i in data.items])
+    return {"message": "已保存"}
 
 
 @router.get("/stats/dashboard", response_model=DashboardStats)
