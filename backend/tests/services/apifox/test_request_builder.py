@@ -302,3 +302,33 @@ def test_settings_verify_ssl_and_redirects_passthrough():
 
     assert plan["verify_ssl"] is False
     assert plan["follow_redirects"] is False
+
+
+# ---------- Binary 孤儿/未选文件告警（run-report warning） ----------
+def test_binary_orphan_file_warns_and_sends_nothing():
+    spec = {"body": {"type": "binary", "file_id": 7}}
+    plan = build_request(
+        _endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [],
+        binary_loader=lambda fid: None,  # 文件已被 GC/删除
+    )
+
+    assert "content" not in plan["request_kwargs"]
+    assert any("id=7" in w and "不存在或已被清理" in w for w in plan["warnings"])
+
+
+def test_binary_without_file_id_warns():
+    spec = {"body": {"type": "binary"}}
+    plan = build_request(_endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [])
+
+    assert any("未选择文件" in w for w in plan["warnings"])
+
+
+def test_binary_valid_file_no_warning():
+    spec = {"body": {"type": "binary", "file_id": 3}}
+    plan = build_request(
+        _endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [],
+        binary_loader=lambda fid: (b"abc", "application/octet-stream"),
+    )
+
+    assert plan["request_kwargs"]["content"] == b"abc"
+    assert plan["warnings"] == []

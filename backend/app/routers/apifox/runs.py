@@ -223,6 +223,7 @@ def _step_out(step: ApifoxRunStep) -> RunStepOut:
         extract_results=_loads(step.extract_results, []),
         script_logs=_loads(step.script_logs, []),
         contract_result=_loads(step.contract_result, None),
+        warnings=_loads(step.warnings, []),
         error_message=step.error_message,
     )
 

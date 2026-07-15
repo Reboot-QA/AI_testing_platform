@@ -116,6 +116,13 @@ def build_request(
             if ctype:
                 headers.setdefault("Content-Type", ctype)
             body_snapshot = f"<binary {len(data)} bytes>"
+        elif file_id:  # 孤儿引用：文件被 GC/删除，如实告警而非静默发空请求
+            warnings.append(
+                f"Binary 请求体引用的上传文件(id={file_id})不存在或已被清理，本次未发送文件内容；"
+                "请重新上传文件后再运行。"
+            )
+        else:
+            warnings.append("Binary 请求体未选择文件，本次未发送任何内容。")
     elif body_type == "form-data":
         form = _rows_to_dict(body.get("form") or [], variables)
         if form:
