@@ -33,6 +33,7 @@
         <ScenarioRunConfigBar
           v-model:loop-count="form.run_config.loop_count"
           v-model:dataset-id="form.run_config.dataset_id"
+          v-model:propagate-auth="form.run_config.propagate_auth"
           :datasets="datasets"
         />
         <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
@@ -96,7 +97,7 @@ const form = reactive({
   priority: 'medium',
   steps: [],
   version: 1,
-  run_config: { loop_count: 1, dataset_id: null },
+  run_config: { loop_count: 1, dataset_id: null, propagate_auth: true },
 })
 const { folders, loadFolders, createFolder, renameFolder, deleteFolder } = useScenarioFolders(pid)
 
@@ -205,6 +206,7 @@ async function selectScenario(sid) {
   form.run_config = {
     loop_count: s.run_config?.loop_count ?? 1,
     dataset_id: s.run_config?.dataset_id ?? null,
+    propagate_auth: s.run_config?.propagate_auth ?? true,
   }
   guard.markSaved() // 加载后重置未保存基线
 }
