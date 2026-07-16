@@ -1,8 +1,16 @@
 <template>
-  <div class="list-panel">
-    <div class="list-toolbar">
-      <span>场景</span>
-      <div class="toolbar-actions">
+  <div class="w-60 border-r border-[var(--ax-border)] overflow-auto pr-2 shrink-0">
+    <!-- 头部工具栏 -->
+    <div class="flex items-center justify-between font-semibold text-[var(--ax-brand)] mb-2">
+      <div class="flex items-center gap-1">
+        <span>场景</span>
+        <el-tooltip content="按住场景左侧手柄可拖动到其他分组" placement="right">
+          <el-icon class="text-xs text-[var(--ax-text-placeholder)] cursor-default">
+            <QuestionFilled />
+          </el-icon>
+        </el-tooltip>
+      </div>
+      <div class="flex items-center gap-1.5">
         <el-select
           v-model="priorityFilter"
           size="small"
@@ -26,13 +34,22 @@
       </div>
     </div>
 
-    <div v-for="grp in groups" :key="grp.key" class="folder-group">
-      <div class="folder-head" :class="{ ungrouped: !grp.folder }">
+    <!-- 分组列表 -->
+    <div v-for="grp in localGroups" :key="grp.key" class="mb-0.5">
+      <!-- 文件夹 header -->
+      <div
+        class="flex items-center gap-1.5 px-1.5 py-[5px] mt-1.5 text-[12.5px] font-semibold"
+        :class="grp.folder ? 'text-[var(--ax-text-secondary)]' : 'text-[var(--ax-text-tertiary)]'"
+      >
         <el-icon><component :is="grp.folder ? 'Folder' : 'Files'" /></el-icon>
-        <span class="folder-name">{{ grp.folder ? grp.folder.name : '未分组' }}</span>
-        <span class="folder-count">{{ grp.scenarios.length }}</span>
+        <span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+          {{ grp.folder ? grp.folder.name : '未分组' }}
+        </span>
+        <span class="text-[11px] text-[var(--ax-text-tertiary)]">{{ grp.scenarios.length }}</span>
         <el-dropdown v-if="grp.folder" trigger="click" @command="(c) => onFolderCmd(c, grp.folder)">
-          <el-icon class="folder-more" @click.stop><MoreFilled /></el-icon>
+          <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
+            <MoreFilled />
+          </el-icon>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="rename">重命名</el-dropdown-item>
@@ -42,38 +59,67 @@
         </el-dropdown>
       </div>
 
-      <div
-        v-for="s in grp.scenarios"
-        :key="s.id"
-        class="item"
-        :class="{ active: s.id === activeId }"
-        @click="$emit('select', s.id)"
+      <!-- 场景行（可拖拽，跨分组移动） -->
+      <VueDraggable
+        v-model="grp.scenarios"
+        :group="{ name: 'scenarios' }"
+        handle=".drag-handle"
+        :animation="150"
+        class="min-h-[8px]"
+        @add="(e) => onDrop(grp, e)"
       >
-        <el-icon><Share /></el-icon>
-        <span class="item-name">{{ s.name }}</span>
-        <el-tag size="small" :type="priorityMeta(s.priority).type">{{
-          priorityMeta(s.priority).label
-        }}</el-tag>
-        <el-tag size="small" type="info">{{ s.step_count }} 步</el-tag>
-        <el-dropdown trigger="click" @command="(fid) => onMoveCmd(fid, s)">
-          <el-icon class="item-more" title="移动到文件夹" @click.stop><Rank /></el-icon>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="__none__" :disabled="s.folder_id == null"
-                >移到未分组</el-dropdown-item
-              >
-              <el-dropdown-item
-                v-for="f in folders"
-                :key="f.id"
-                :command="f.id"
-                :disabled="f.id === s.folder_id"
-              >
-                移到「{{ f.name }}」
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button link type="danger" size="small" @click.stop="$emit('del', s)">删</el-button>
+        <div
+          v-for="s in grp.scenarios"
+          :key="s.id"
+          class="group flex items-center gap-2 pl-2 pr-1.5 py-1.5 rounded cursor-pointer"
+          :class="s.id === activeId ? 'bg-[var(--ax-bg-active)]' : 'hover:bg-[var(--ax-bg-hover)]'"
+          @click="$emit('select', s.id)"
+        >
+          <!-- 拖拽抓手（默认淡，hover 提亮） -->
+          <el-icon
+            class="drag-handle shrink-0 cursor-grab text-[var(--ax-text-placeholder)] opacity-40 group-hover:opacity-100 hover:!text-[var(--ax-brand)] transition"
+            title="拖动到其他分组"
+            @click.stop
+          >
+            <DCaret />
+          </el-icon>
+
+          <!-- 优先级：小圆点（颜色区分高/中/低） -->
+          <span
+            class="shrink-0 w-2 h-2 rounded-full"
+            :style="{ background: `var(--el-color-${priorityMeta(s.priority).type})` }"
+            :title="`优先级：${priorityMeta(s.priority).label}`"
+          />
+
+          <!-- 名称（截断 + tooltip 全称） -->
+          <el-tooltip :content="s.name" placement="right" :show-after="600">
+            <span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
+              {{ s.name }}
+            </span>
+          </el-tooltip>
+
+          <!-- 步数（纯文字） -->
+          <span class="shrink-0 text-[11px] text-[var(--ax-text-placeholder)] tabular-nums">
+            {{ s.step_count }} 步
+          </span>
+
+          <!-- 删除：常驻 icon，hover 变红 -->
+          <el-icon
+            class="shrink-0 cursor-pointer text-[var(--ax-text-placeholder)] hover:!text-[var(--el-color-danger)] transition-colors"
+            title="删除场景"
+            @click.stop="$emit('del', s)"
+          >
+            <Delete />
+          </el-icon>
+        </div>
+      </VueDraggable>
+
+      <!-- 空分组：提示可拖入 -->
+      <div
+        v-if="grp.scenarios.length === 0"
+        class="pl-7 py-1 text-[11px] text-[var(--ax-text-placeholder)]"
+      >
+        拖动场景到此分组
       </div>
     </div>
 
@@ -82,7 +128,8 @@
 </template>
 
 <script setup>
-import { computed, toRef } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
+import { VueDraggable } from 'vue-draggable-plus'
 import {
   PRIORITY_OPTIONS,
   priorityMeta,
@@ -125,96 +172,26 @@ const groups = computed(() => {
   return result
 })
 
+// 拖拽需要可变数组：从 groups 派生本地可变副本，props 变化时重建
+const localGroups = ref([])
+watch(
+  groups,
+  (g) => {
+    localGroups.value = g.map((grp) => ({ ...grp, scenarios: [...grp.scenarios] }))
+  },
+  { immediate: true },
+)
+
+// 拖入某分组：仅当跨分组时持久化 folder_id（组内重排后端不支持排序，忽略）
+function onDrop(grp, evt) {
+  const moved = grp.scenarios[evt.newIndex]
+  if (!moved) return
+  const targetFolderId = grp.folder ? grp.folder.id : null
+  if (moved.folder_id === targetFolderId) return
+  emit('move', { id: moved.id, folderId: targetFolderId })
+}
+
 function onFolderCmd(cmd, folder) {
   emit(cmd === 'rename' ? 'rename-folder' : 'delete-folder', folder)
 }
-
-function onMoveCmd(cmd, scenario) {
-  emit('move', { id: scenario.id, folderId: cmd === '__none__' ? null : cmd })
-}
 </script>
-
-<style scoped>
-.list-panel {
-  width: 240px;
-  border-right: 1px solid var(--ax-border);
-  overflow: auto;
-  padding-right: 8px;
-}
-
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
-  margin-bottom: 8px;
-}
-
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.folder-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 6px;
-  margin-top: 6px;
-  font-size: 12.5px;
-  font-weight: 600;
-  color: var(--ax-text-secondary);
-}
-
-.folder-head.ungrouped {
-  color: var(--ax-text-tertiary);
-}
-
-.folder-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.folder-count {
-  font-size: 11px;
-  color: var(--ax-text-tertiary);
-}
-
-.folder-more {
-  cursor: pointer;
-  color: var(--ax-text-tertiary);
-}
-
-.item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px 6px 18px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.item:hover {
-  background: var(--ax-bg-hover);
-}
-
-.item.active {
-  background: var(--ax-bg-active);
-}
-
-.item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.item-more {
-  cursor: pointer;
-  color: var(--ax-text-tertiary);
-}
-</style>
