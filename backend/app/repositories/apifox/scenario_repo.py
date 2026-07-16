@@ -105,3 +105,14 @@ def count_case_refs(db: Session, case_id: int) -> int:
         .filter(ApifoxScenarioStep.ref_case_id == case_id)
         .count()
     )
+
+
+def list_scenarios_referencing_case(db: Session, case_id: int) -> List[ApifoxScenario]:
+    """步骤引用了该用例的场景（去重）——供 swagger 更新时的引用告警。"""
+    return (
+        db.query(ApifoxScenario)
+        .join(ApifoxScenarioStep, ApifoxScenarioStep.scenario_id == ApifoxScenario.id)
+        .filter(ApifoxScenarioStep.ref_case_id == case_id)
+        .distinct()
+        .all()
+    )
