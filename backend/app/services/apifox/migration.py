@@ -80,7 +80,7 @@ def migrate_apifox_optimistic_version(db: Session) -> None:
     with engine.begin() as conn:
         for table in (
             "apifox_endpoint_cases", "apifox_scenarios", "apifox_endpoints",
-            "apifox_scripts", "apifox_schemas", "apifox_datasets",
+            "apifox_scripts", "apifox_schemas", "apifox_datasets", "apifox_suites",
         ):
             if table not in tables:
                 continue
