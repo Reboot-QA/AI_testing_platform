@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <div class="toolbar">
+  <PageCard>
+    <template #toolbar>
       <el-select
         v-model="projectId"
         placeholder="选择项目"
@@ -71,7 +71,7 @@
       <el-button :disabled="isAllProjects" :loading="importing" @click="openImportDialog">
         导入
       </el-button>
-    </div>
+    </template>
 
     <el-table
       v-loading="loading"
@@ -311,7 +311,7 @@
         </el-descriptions>
       </template>
     </el-drawer>
-  </div>
+  </PageCard>
 </template>
 
 <script setup>
@@ -319,6 +319,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
+import PageCard from '@/components/PageCard.vue'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
@@ -726,14 +727,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
 .empty-count {
   color: #909399;
 }

@@ -1,10 +1,10 @@
 <template>
-  <div>
-    <div class="toolbar">
+  <PageCard>
+    <template #toolbar>
       <el-button type="primary" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加用户
       </el-button>
-    </div>
+    </template>
 
     <el-table v-loading="loading" :data="users" stripe border>
       <el-table-column prop="id" label="ID" width="70" />
@@ -116,7 +116,7 @@
         >
       </template>
     </el-dialog>
-  </div>
+  </PageCard>
 </template>
 
 <script setup>
@@ -124,6 +124,7 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi, departmentApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import PageCard from '@/components/PageCard.vue'
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.user?.id)
@@ -293,9 +294,3 @@ onMounted(async () => {
   loadData()
 })
 </script>
-
-<style scoped>
-.toolbar {
-  margin-bottom: 16px;
-}
-</style>

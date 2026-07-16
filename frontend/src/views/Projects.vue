@@ -1,10 +1,10 @@
 <template>
-  <div>
-    <div class="toolbar">
+  <PageCard>
+    <template #toolbar>
       <el-button type="primary" data-assistant="projects.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新建项目
       </el-button>
-    </div>
+    </template>
 
     <el-table v-loading="loading" :data="projects" stripe border>
       <el-table-column prop="id" label="ID" width="70" />
@@ -40,45 +40,42 @@
         </template>
       </el-table-column>
     </el-table>
+  </PageCard>
 
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="500px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
-        <el-form-item label="名称" prop="name">
-          <el-input
-            v-model="form.name"
-            data-assistant="projects.form.name"
-            placeholder="项目名称"
-          />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input
-            v-model="form.description"
-            data-assistant="projects.form.description"
-            type="textarea"
-            :rows="3"
-            placeholder="项目描述"
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          data-assistant="projects.form.submit"
-          :loading="submitting"
-          @click="handleSubmit"
-        >
-          确定
-        </el-button>
-      </template>
-    </el-dialog>
-  </div>
+  <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="500px">
+    <el-form ref="formRef" :model="form" :rules="rules" label-width="80px">
+      <el-form-item label="名称" prop="name">
+        <el-input v-model="form.name" data-assistant="projects.form.name" placeholder="项目名称" />
+      </el-form-item>
+      <el-form-item label="描述">
+        <el-input
+          v-model="form.description"
+          data-assistant="projects.form.description"
+          type="textarea"
+          :rows="3"
+          placeholder="项目描述"
+        />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="dialogVisible = false">取消</el-button>
+      <el-button
+        type="primary"
+        data-assistant="projects.form.submit"
+        :loading="submitting"
+        @click="handleSubmit"
+      >
+        确定
+      </el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi } from '@/api'
+import PageCard from '@/components/PageCard.vue'
 
 const projects = ref([])
 const loading = ref(false)
@@ -148,9 +145,3 @@ async function handleDelete(row) {
 
 onMounted(loadData)
 </script>
-
-<style scoped>
-.toolbar {
-  margin-bottom: 16px;
-}
-</style>

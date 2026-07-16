@@ -1,6 +1,6 @@
 <template>
-  <div>
-    <div class="toolbar">
+  <PageCard>
+    <template #toolbar>
       <el-select
         v-model="projectId"
         placeholder="选择项目"
@@ -83,7 +83,7 @@
           selectedIds.length ? ` (${selectedIds.length})` : ''
         }}
       </el-button>
-    </div>
+    </template>
 
     <el-table
       v-loading="loading"
@@ -265,7 +265,7 @@
         </el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageCard>
 </template>
 
 <script setup>
@@ -274,6 +274,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
+import PageCard from '@/components/PageCard.vue'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
@@ -611,13 +612,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-
 .pre-text {
   white-space: pre-wrap;
   font-family: inherit;

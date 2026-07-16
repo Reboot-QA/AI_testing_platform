@@ -1,18 +1,18 @@
 <template>
-  <div>
-    <el-alert
-      title="同部门用户共享项目、需求、用例等数据；管理员可查看所有部门数据。"
-      type="info"
-      :closable="false"
-      show-icon
-      class="tip-alert"
-    />
+  <el-alert
+    title="同部门用户共享项目、需求、用例等数据；管理员可查看所有部门数据。"
+    type="info"
+    :closable="false"
+    show-icon
+    class="tip-alert"
+  />
 
-    <div class="toolbar">
+  <PageCard>
+    <template #toolbar>
       <el-button type="primary" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加部门
       </el-button>
-    </div>
+    </template>
 
     <el-table v-loading="loading" :data="departments" stripe border>
       <el-table-column prop="id" label="ID" width="70" />
@@ -47,13 +47,14 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageCard>
 </template>
 
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { departmentApi } from '@/api'
+import PageCard from '@/components/PageCard.vue'
 
 const departments = ref([])
 const loading = ref(false)
@@ -129,9 +130,6 @@ onMounted(loadData)
 
 <style scoped>
 .tip-alert {
-  margin-bottom: 16px;
-}
-.toolbar {
   margin-bottom: 16px;
 }
 </style>
