@@ -14,6 +14,15 @@ request.interceptors.request.use((config) => {
   return config
 })
 
+function shouldSuppress401Toast(error) {
+  const url = error.config?.url || ''
+  const onLoginPage = window.location.pathname.includes('/login')
+  const isAuthMe = url.includes('/auth/me')
+  const isLoginAttempt = url.includes('/auth/login')
+  // 会话失效、登录页静默校验：不打扰用户；登录失败仍提示
+  return !isLoginAttempt && (isAuthMe || onLoginPage)
+}
+
 request.interceptors.response.use(
   (response) => response.data,
   (error) => {
@@ -27,6 +36,9 @@ request.interceptors.response.use(
       localStorage.removeItem('token')
       if (!window.location.pathname.includes('/login')) {
         window.location.href = '/login'
+      }
+      if (shouldSuppress401Toast(error)) {
+        return Promise.reject(error)
       }
     }
     ElMessage.error(typeof msg === 'string' ? msg : JSON.stringify(msg))
