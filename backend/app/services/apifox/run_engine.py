@@ -236,6 +236,95 @@ def _truncate(text: str, limit: int = MAX_BODY_SNAPSHOT) -> str:
     return text if len(text) <= limit else text[:limit] + "...(截断)"
 
 
+# ---------- 登录态跨步骤透传（场景级 cookie jar + token 自动捕获/注入） ----------
+# 响应体里常见的 token 字段名（大小写不敏感），含 data./result./body. 一层嵌套。
+_TOKEN_KEYS = {"token", "access_token", "accesstoken", "jwt", "id_token", "auth_token"}
+_TOKEN_NEST_KEYS = ("data", "result", "body")
+
+
+def _bearer_from_headers(headers: Dict[str, str]) -> Optional[str]:
+    """取手动写死的 Bearer token（去前缀）用于向后传递；非 Bearer 方案不转发（避免注成 Bearer Token xxx）。"""
+    for key, value in headers.items():
+        if key.lower() == "authorization":
+            val = (value or "").strip()
+            return val[7:].strip() or None if val.lower().startswith("bearer ") else None
+    return None
+
+
+def _has_authorization(headers: Dict[str, str]) -> bool:
+    """该步是否已显式设置 Authorization（任何方案）——手动优先，不自动注入。"""
+    return any(key.lower() == "authorization" for key in headers)
+
+
+def _find_token(obj: Dict[str, Any]) -> Optional[str]:
+    for key, value in obj.items():
+        if key.lower() in _TOKEN_KEYS and isinstance(value, str) and value.strip():
+            return value.strip()
+    for nest in _TOKEN_NEST_KEYS:
+        sub = obj.get(nest)
+        if isinstance(sub, dict):
+            found = _find_token(sub)
+            if found:
+                return found
+    return None
+
+
+def _capture_token_from_body(response: httpx.Response) -> Optional[str]:
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    return _find_token(data) if isinstance(data, dict) else None
+
+
+def _send_request(
+    plan: Dict[str, Any],
+    detail: Dict[str, Any],
+    cookie_jar: Optional[httpx.Cookies] = None,
+    auth_token: Optional[str] = None,
+) -> Optional[httpx.Response]:
+    """统一发送：Authorization 自动注入（手动优先）+ cookie jar 透传 + token 捕获。
+
+    记录 req/resp 快照与 detail["captured_token"]（供上层更新传递中的 token）。
+    网络错误时置 detail 并返回 None。cookie_jar/auth_token 为 None 即现状行为。
+    """
+    headers = plan["headers"]
+    if auth_token and not _has_authorization(headers):  # 该步未显式设 Authorization → 自动注入
+        headers["Authorization"] = f"Bearer {auth_token}"
+
+    detail["url"] = plan["url"]
+    detail["request_headers"] = headers
+    detail["request_body"] = plan["body_snapshot"]
+    detail["warnings"] = plan.get("warnings", [])
+
+    started = time.perf_counter()
+    try:
+        with make_http_client(plan) as client:
+            response = client.request(
+                plan["method"], plan["url"],
+                params=plan["params"] or None,
+                headers=headers or None,
+                cookies=cookie_jar,
+                **plan["request_kwargs"],
+            )
+    except httpx.RequestError as exc:
+        detail["duration_ms"] = (time.perf_counter() - started) * 1000
+        detail["error_message"] = f"请求失败: {exc}"
+        return None
+    detail["duration_ms"] = (time.perf_counter() - started) * 1000
+
+    if cookie_jar is not None:
+        cookie_jar.update(response.cookies)
+    # 传递中的 token：手动写死的 Bearer 优先更新；响应体新 token 再覆盖（refresh 场景）
+    captured = _capture_token_from_body(response) or _bearer_from_headers(headers)
+    detail["captured_token"] = captured
+
+    detail["response_status"] = response.status_code
+    detail["response_headers"] = dict(response.headers)
+    detail["response_body"] = _truncate(response.text)
+    return response
+
+
 # ---------- 单用例执行 ----------
 def execute_case(
     db: Session,
@@ -245,6 +334,8 @@ def execute_case(
     variables: Dict[str, str],
     assertions,
     extracts,
+    cookie_jar: Optional[httpx.Cookies] = None,
+    auth_token: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """执行一次用例（一组变量），返回 (passed|failed, detail 快照)。不落库。"""
     detail: Dict[str, Any] = {
@@ -280,30 +371,10 @@ def execute_case(
         detail["error_message"] = str(exc)
         return "failed", detail
 
-    detail["url"] = plan["url"]
-    detail["request_headers"] = plan["headers"]
-    detail["request_body"] = plan["body_snapshot"]
-    detail["warnings"] = plan.get("warnings", [])
-
-    started = time.perf_counter()
-    try:
-        with make_http_client(plan) as client:
-            response = client.request(
-                plan["method"], plan["url"],
-                params=plan["params"] or None,
-                headers=plan["headers"] or None,
-                **plan["request_kwargs"],
-            )
-    except httpx.RequestError as exc:
-        detail["duration_ms"] = (time.perf_counter() - started) * 1000
-        detail["error_message"] = f"请求失败: {exc}"
+    response = _send_request(plan, detail, cookie_jar=cookie_jar, auth_token=auth_token)
+    if response is None:
         return "failed", detail
-    duration_ms = (time.perf_counter() - started) * 1000
-
-    detail["duration_ms"] = duration_ms
-    detail["response_status"] = response.status_code
-    detail["response_headers"] = dict(response.headers)
-    detail["response_body"] = _truncate(response.text)
+    duration_ms = detail["duration_ms"]
 
     # 断言并集：接口断言 + 用例断言都评估
     passed, assertion_results = evaluate_assertions(
@@ -348,6 +419,8 @@ def execute_http_request(
     db: Session, project_id: int, method: str, path: str, server_name: Optional[str],
     request_spec: Dict[str, Any], assertions, extracts,
     environment: Optional[ApifoxEnvironment], variables: Dict[str, str],
+    cookie_jar: Optional[httpx.Cookies] = None,
+    auth_token: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """执行一个内联 HTTP 请求（场景裸步骤）：假 endpoint(鸭子类型) 复用 build_request + 断言 + 提取。
 
@@ -372,29 +445,10 @@ def execute_http_request(
         detail["error_message"] = str(exc)
         return "failed", detail
 
-    detail["url"] = plan["url"]
-    detail["request_headers"] = plan["headers"]
-    detail["request_body"] = plan["body_snapshot"]
-    detail["warnings"] = plan.get("warnings", [])
-
-    started = time.perf_counter()
-    try:
-        with make_http_client(plan) as client:
-            response = client.request(
-                plan["method"], plan["url"],
-                params=plan["params"] or None, headers=plan["headers"] or None,
-                **plan["request_kwargs"],
-            )
-    except httpx.RequestError as exc:
-        detail["duration_ms"] = (time.perf_counter() - started) * 1000
-        detail["error_message"] = f"请求失败: {exc}"
+    response = _send_request(plan, detail, cookie_jar=cookie_jar, auth_token=auth_token)
+    if response is None:
         return "failed", detail
-    duration_ms = (time.perf_counter() - started) * 1000
-
-    detail["duration_ms"] = duration_ms
-    detail["response_status"] = response.status_code
-    detail["response_headers"] = dict(response.headers)
-    detail["response_body"] = _truncate(response.text)
+    duration_ms = detail["duration_ms"]
 
     passed, assertion_results = evaluate_assertions(assertions, response, duration_ms)
     detail["assertion_results"] = assertion_results

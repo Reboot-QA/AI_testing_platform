@@ -14,7 +14,7 @@ from app.services.apifox import run_engine, run_service, scenario_service, suite
 
 @pytest.fixture
 def stub_execute_case(monkeypatch):
-    def _fake(db, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
         return "passed", {"method": endpoint.method, "url": endpoint.path,
                           "extracted": {}, "scoped": []}
 
@@ -62,7 +62,7 @@ def test_suite_run_executes_items_in_order(db, make_case, stub_execute_case):
 def test_suite_run_parent_stats_item_level(db, make_case, monkeypatch):
     ok, bad = make_case(name="OK"), make_case(name="BAD")
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         status = "failed" if case.name == "BAD" else "passed"
         return status, {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
 
@@ -92,7 +92,7 @@ def test_suite_items_use_independent_runtime(db, make_case, monkeypatch):
     setter, reader = make_case(name="setter"), make_case(name="reader")
     seen = []
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         extracted = {"tok": "abc"} if case.name == "setter" else {}
         if case.name == "reader":
             seen.append(variables.get("tok"))
@@ -148,7 +148,7 @@ def test_suite_item_db_error_isolated_and_parent_finalized(db, make_case, monkey
     """
     boom, alive = make_case(name="BOOM"), make_case(name="ALIVE")
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         if case.name == "BOOM":
             # 制造一次失败 flush（project_id NOT NULL 违规），令 session 进入 PendingRollback 态
             db_.add(ApifoxRun(project_id=None, target_type="x", target_id=0))

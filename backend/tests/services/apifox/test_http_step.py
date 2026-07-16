@@ -67,7 +67,7 @@ def test_http_step_extracts_to_runtime_for_next_step(db, monkeypatch):
     """裸步骤提取的变量须写入 runtime 供后续步骤 {{var}} 使用。"""
     seen = {}
 
-    def fake(db_, pid, method, path, sn, spec, asserts, extracts, env, variables):
+    def fake(db_, pid, method, path, sn, spec, asserts, extracts, env, variables, **_):
         if path == "/login":
             return "passed", {"method": method, "url": path, "extracted": {"tok": "abc"},
                               "extract_results": [], "assertion_results": [], "scoped": []}
@@ -200,6 +200,7 @@ class _EmptyResp:
     status_code = 200
     headers = {}
     text = "{}"
+    cookies = {}  # 场景默认开启登录态透传后，_send_request 会读 response.cookies
 
     def json(self):
         return {}
