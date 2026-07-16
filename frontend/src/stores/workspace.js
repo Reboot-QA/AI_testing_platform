@@ -25,6 +25,10 @@ export const useWorkspaceStore = defineStore('workspace', {
       this.currentEnvironmentId = def ? def.id : null
       return this.environments
     },
+    // 环境配置面板改动后同步共享环境集（含命名前置URL），保留当前选中环境（不像 loadEnvironments 重置为默认）
+    setEnvironments(list) {
+      this.environments = list
+    },
     setCurrentEnvironment(id) {
       this.currentEnvironmentId = id
     },

@@ -5,6 +5,7 @@ from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
+from app.models.apifox.endpoint import ApifoxFolder
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 
 
@@ -14,6 +15,35 @@ def list_scenarios(db: Session, project_id: int) -> List[ApifoxScenario]:
         .filter(ApifoxScenario.project_id == project_id)
         .order_by(ApifoxScenario.sort_order, ApifoxScenario.id)
         .all()
+    )
+
+
+# ---------- 场景文件夹（复用 apifox_folders，kind='scenario'，单层） ----------
+def list_scenario_folders(db: Session, project_id: int) -> List[ApifoxFolder]:
+    return (
+        db.query(ApifoxFolder)
+        .filter(ApifoxFolder.project_id == project_id, ApifoxFolder.kind == "scenario")
+        .order_by(ApifoxFolder.sort_order, ApifoxFolder.id)
+        .all()
+    )
+
+
+def get_scenario_folder(db: Session, folder_id: int) -> Optional[ApifoxFolder]:
+    return (
+        db.query(ApifoxFolder)
+        .filter(ApifoxFolder.id == folder_id, ApifoxFolder.kind == "scenario")
+        .first()
+    )
+
+
+def count_folder_scenarios(db: Session, folder_id: int) -> int:
+    return db.query(ApifoxScenario).filter(ApifoxScenario.folder_id == folder_id).count()
+
+
+def clear_folder_on_scenarios(db: Session, folder_id: int) -> None:
+    """把该文件夹下场景移到未分组（删文件夹前调用）。"""
+    db.query(ApifoxScenario).filter(ApifoxScenario.folder_id == folder_id).update(
+        {ApifoxScenario.folder_id: None}, synchronize_session=False
     )
 
 

@@ -62,34 +62,6 @@ const routes = [
         meta: { permission: 'test_execution' },
       },
       {
-        path: 'api-automation',
-        redirect: '/api-automation/suites',
-      },
-      {
-        path: 'api-automation/env',
-        name: 'ApiAutomationEnv',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_env', apiTab: 'env' },
-      },
-      {
-        path: 'api-automation/suites',
-        name: 'ApiAutomationSuites',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_suites', apiTab: 'suite' },
-      },
-      {
-        path: 'api-automation/reports',
-        name: 'ApiAutomationReports',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_reports', apiTab: 'report' },
-      },
-      {
-        path: 'api-automation/schedule',
-        name: 'ApiAutomationSchedule',
-        component: () => import('@/views/ApiAutomation.vue'),
-        meta: { permission: 'api_automation_schedule', apiTab: 'schedule' },
-      },
-      {
         path: 'apifox',
         name: 'ApifoxWorkbench',
         component: () => import('@/views/apifox/Workbench.vue'),
@@ -147,37 +119,37 @@ const routes = [
         path: 'system/settings',
         name: 'SystemSettings',
         component: () => import('@/views/SystemSettings.vue'),
-        meta: { permission: 'system_settings', requiresAdmin: true },
+        meta: { permission: 'system_settings' },
       },
       {
         path: 'system/users',
         name: 'UserManagement',
         component: () => import('@/views/UserManagement.vue'),
-        meta: { permission: 'system_users', requiresAdmin: true },
+        meta: { permission: 'system_users' },
       },
       {
         path: 'system/departments',
         name: 'DepartmentManagement',
         component: () => import('@/views/DepartmentManagement.vue'),
-        meta: { permission: 'system_departments', requiresAdmin: true },
+        meta: { permission: 'system_departments' },
       },
       {
         path: 'system/permissions',
         name: 'PermissionManagement',
         component: () => import('@/views/PermissionManagement.vue'),
-        meta: { permission: 'system_permissions', requiresAdmin: true },
+        meta: { permission: 'system_permissions' },
       },
       {
         path: 'system/logs',
         name: 'LogMonitor',
         component: () => import('@/views/LogMonitor.vue'),
-        meta: { permission: 'system_logs', requiresAdmin: true },
+        meta: { permission: 'system_logs' },
       },
       {
         path: 'system/error-logs',
         name: 'ErrorLogs',
         component: () => import('@/views/ErrorLogs.vue'),
-        meta: { permission: 'system_error_logs', requiresAdmin: true },
+        meta: { permission: 'system_error_logs' },
       },
     ],
   },
@@ -212,9 +184,6 @@ router.beforeEach(async (to, _from, next) => {
       return next('/dashboard')
     }
     return next()
-  }
-  if (to.meta.requiresAdmin && userStore.user?.role !== 'admin') {
-    return next('/dashboard')
   }
   if (to.meta.permission && !userStore.hasPermission(to.meta.permission)) {
     return next('/dashboard')

@@ -78,6 +78,12 @@ def get_case(cid: int, db: Session = Depends(get_db), user: User = Depends(get_c
     return service.get_case_out(db, case)
 
 
+@router.post("/cases/{cid}/copy", response_model=CaseOut)
+def copy_case(cid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    case = _case_checked(db, cid, user)
+    return service.copy_case(db, case)
+
+
 @router.put("/cases/{cid}", response_model=CaseOut)
 def update_case(
     cid: int, data: CaseUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)

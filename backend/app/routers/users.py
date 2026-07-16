@@ -20,7 +20,7 @@ from app.schemas import (
     UserUpdate,
 )
 from app.services.permission_service import (
-    ensure_default_permissions,
+    ensure_default_department_permissions,
     get_user_menu_keys,
     list_menu_definitions,
     set_user_menu_keys,
@@ -88,16 +88,15 @@ def create_user(
         username=data.username,
         email=data.email,
         full_name=data.full_name,
-        role=data.role,
+        role=data.role or "tester",
         department_id=data.department_id,
         hashed_password=get_password_hash(data.password),
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    ensure_default_permissions(db, user)
-    if data.menu_permissions is not None and user.role != "admin":
-        set_user_menu_keys(db, user.id, data.menu_permissions)
+    if user.department_id:
+        ensure_default_department_permissions(db, user.department_id)
     return _user_out(user, db)
 
 

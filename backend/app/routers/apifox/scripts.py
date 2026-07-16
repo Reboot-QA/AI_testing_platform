@@ -13,6 +13,8 @@ from app.repositories.apifox import script_repo as repo
 from app.routers.apifox.script_schemas import (
     ScriptBrief,
     ScriptCreate,
+    ScriptDebugIn,
+    ScriptDebugOut,
     ScriptOut,
     ScriptUpdate,
 )
@@ -44,6 +46,16 @@ def create_script(
     get_accessible_project(db, pid, user)
     try:
         return service.create_script(db, pid, data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/scripts/debug", response_model=ScriptDebugOut)
+def debug_script(data: ScriptDebugIn, user: User = Depends(get_current_user)):
+    """独立调试前置/后置脚本（不落库，纯执行）。GET /scripts/{sid} 是不同 method 不冲突；
+    若未来给 /scripts/{sid} 加 POST，需保持本路由在前。"""
+    try:
+        return service.debug_script(data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

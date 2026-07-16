@@ -22,6 +22,8 @@ class ApifoxFolder(Base):
     parent_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("apifox_folders.id"), nullable=True, index=True
     )
+    # endpoint | scenario —— 同一张表按 kind 区分接口文件夹与场景文件夹
+    kind: Mapped[str] = mapped_column(String(20), default="endpoint", server_default="endpoint", index=True)
     name: Mapped[str] = mapped_column(String(200))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

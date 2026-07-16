@@ -1,8 +1,17 @@
-"""删除项目前清空其全部 apifox 数据（FK 安全顺序：子表先于父表）。不提交事务（调用方 commit）。"""
+"""删除项目前清空其全部数据（FK 安全顺序：子表先于父表）。不提交事务（调用方 commit）。"""
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.models.api_automation import (
+    ApiEnvironment,
+    ApiScheduledTask,
+    ApiScheduledTaskSuite,
+    ApiTestCase,
+    ApiTestRun,
+    ApiTestStepResult,
+    ApiTestSuite,
+)
 from app.models.apifox.case import ApifoxCaseAssertion, ApifoxCaseExtract, ApifoxEndpointCase
 from app.models.apifox.data_model import ApifoxSchema
 from app.models.apifox.database_conn import ApifoxEnvironmentDatabase
@@ -28,6 +37,10 @@ from app.models.apifox.variable import (
     ApifoxGlobalVariable,
     ApifoxGlobalVarLocal,
 )
+from app.models.requirement import Requirement
+from app.models.test_execution import ManualTestRun, ManualTestRunCase
+from app.models.testcase import TestCase
+from app.models.user_project_pref import UserProjectPref
 
 
 def purge_project_apifox(db: Session, project_id: int) -> None:
@@ -94,3 +107,39 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     wipe(ApifoxSchedule, ApifoxSchedule.project_id == project_id)
     # 上传文件（Binary body）
     wipe(ApifoxUploadFile, ApifoxUploadFile.project_id == project_id)
+
+
+def purge_project_all(db: Session, project_id: int) -> None:
+    """硬删项目前清空其**全部**数据：老平台接口自动化 + 手工执行 + 需求/用例 + apifox。
+
+    FK 安全顺序（子表先于父表）。用批量删，不 commit（调用方 commit）。
+    """
+    suite_ids = select(ApiTestSuite.id).where(ApiTestSuite.project_id == project_id)
+    run_ids = select(ApiTestRun.id).where(ApiTestRun.suite_id.in_(suite_ids))
+    task_ids = select(ApiScheduledTask.id).where(ApiScheduledTask.project_id == project_id)
+    mrun_ids = select(ManualTestRun.id).where(ManualTestRun.project_id == project_id)
+
+    def wipe(model, cond) -> None:
+        db.query(model).filter(cond).delete(synchronize_session=False)
+
+    # 老平台接口自动化：步骤结果 → 运行 → 用例 → 定时任务链接 → 定时任务 → 套件(自引用) → 环境
+    wipe(ApiTestStepResult, ApiTestStepResult.run_id.in_(run_ids))
+    wipe(ApiTestRun, ApiTestRun.suite_id.in_(suite_ids))
+    wipe(ApiTestCase, ApiTestCase.suite_id.in_(suite_ids))
+    wipe(ApiScheduledTaskSuite, ApiScheduledTaskSuite.task_id.in_(task_ids))
+    wipe(ApiScheduledTask, ApiScheduledTask.project_id == project_id)
+    db.query(ApiTestSuite).filter(ApiTestSuite.project_id == project_id).update(
+        {ApiTestSuite.parent_id: None}, synchronize_session=False
+    )
+    wipe(ApiTestSuite, ApiTestSuite.project_id == project_id)
+    wipe(ApiEnvironment, ApiEnvironment.project_id == project_id)
+    # 手工测试执行：明细（引用用例）→ 主表
+    wipe(ManualTestRunCase, ManualTestRunCase.run_id.in_(mrun_ids))
+    wipe(ManualTestRun, ManualTestRun.project_id == project_id)
+    # 用例（引用需求）→ 需求
+    wipe(TestCase, TestCase.project_id == project_id)
+    wipe(Requirement, Requirement.project_id == project_id)
+    # 用户置顶/排序偏好
+    wipe(UserProjectPref, UserProjectPref.project_id == project_id)
+    # apifox 全套
+    purge_project_apifox(db, project_id)

@@ -63,6 +63,7 @@ def debug_send(
         "url": plan["url"],
         "request_headers": plan["headers"],
         "request_body": plan["body_snapshot"],
+        "warnings": plan.get("warnings", []),
         "status_code": None,
         "response_headers": {},
         "response_body": "",
@@ -76,7 +77,7 @@ def debug_send(
 
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=engine.HTTP_TIMEOUT, follow_redirects=True) as client:
+        with engine.make_http_client(plan) as client:
             response = client.request(
                 plan["method"], plan["url"],
                 params=plan["params"] or None,

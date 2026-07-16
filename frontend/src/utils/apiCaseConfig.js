@@ -3,7 +3,7 @@ const META_KEY = '__meta'
 export const DEFAULT_ASSERTIONS = '[{"type":"status_code","expected":200}]'
 
 export function emptyKvRow() {
-  return { key: '', value: '', enabled: true, desc: '' }
+  return { key: '', value: '', enabled: true, desc: '', type: 'string' }
 }
 
 export function emptyExtractRow() {
@@ -22,14 +22,54 @@ export function inferExtractSource(rows, fallback = 'response_json') {
 }
 
 export const EXTRACT_SOURCE_OPTIONS = [
-  { value: 'response_json', label: 'Response JSON', pathLabel: 'JSONPath 表达式', placeholder: '$.data.token' },
-  { value: 'response_xml', label: 'Response XML', pathLabel: 'XML 路径', placeholder: 'token 或 //token' },
-  { value: 'response_text', label: 'Response Text', pathLabel: '正则/留空', placeholder: '留空取全文，或 regex:pattern' },
-  { value: 'response_header', label: 'Response Header', pathLabel: 'Header 名称', placeholder: 'X-Trace-Id' },
-  { value: 'response_cookie', label: 'Response Cookie', pathLabel: 'Cookie 名称', placeholder: 'session_id' },
-  { value: 'response_time', label: '响应时间', pathLabel: '（无需填写）', placeholder: '自动提取毫秒数' },
-  { value: 'request_header', label: 'Request Header', pathLabel: 'Header 名称', placeholder: 'Authorization' },
-  { value: 'request_body', label: 'Request Body', pathLabel: 'JSONPath 表达式', placeholder: '$.username' },
+  {
+    value: 'response_json',
+    label: 'Response JSON',
+    pathLabel: 'JSONPath 表达式',
+    placeholder: '$.data.token',
+  },
+  {
+    value: 'response_xml',
+    label: 'Response XML',
+    pathLabel: 'XML 路径',
+    placeholder: 'token 或 //token',
+  },
+  {
+    value: 'response_text',
+    label: 'Response Text',
+    pathLabel: '正则/留空',
+    placeholder: '留空取全文，或 regex:pattern',
+  },
+  {
+    value: 'response_header',
+    label: 'Response Header',
+    pathLabel: 'Header 名称',
+    placeholder: 'X-Trace-Id',
+  },
+  {
+    value: 'response_cookie',
+    label: 'Response Cookie',
+    pathLabel: 'Cookie 名称',
+    placeholder: 'session_id',
+  },
+  {
+    value: 'response_time',
+    label: '响应时间',
+    pathLabel: '（无需填写）',
+    placeholder: '自动提取毫秒数',
+  },
+  {
+    value: 'request_header',
+    label: 'Request Header',
+    pathLabel: 'Header 名称',
+    placeholder: 'Authorization',
+  },
+  {
+    value: 'request_body',
+    label: 'Request Body',
+    pathLabel: 'JSONPath 表达式',
+    placeholder: '$.username',
+  },
 ]
 
 const LEGACY_EXTRACT_SOURCE_MAP = {
@@ -45,7 +85,9 @@ export function normalizeExtractSource(source) {
 
 export function getExtractSourceMeta(source) {
   const normalized = normalizeExtractSource(source)
-  return EXTRACT_SOURCE_OPTIONS.find((item) => item.value === normalized) || EXTRACT_SOURCE_OPTIONS[0]
+  return (
+    EXTRACT_SOURCE_OPTIONS.find((item) => item.value === normalized) || EXTRACT_SOURCE_OPTIONS[0]
+  )
 }
 
 export function extractRowNeedsPath(source) {
@@ -54,7 +96,11 @@ export function extractRowNeedsPath(source) {
 
 export const VARIABLE_SCOPE_OPTIONS = [
   { value: 'temporary', label: '临时变量', tip: '单次运行结束后消失，仅在当前流程内有效' },
-  { value: 'environment', label: '环境变量', tip: '随环境保存，切换环境后互不影响（推荐 Token 等）' },
+  {
+    value: 'environment',
+    label: '环境变量',
+    tip: '随环境保存，切换环境后互不影响（推荐 Token 等）',
+  },
   { value: 'global', label: '全局变量', tip: '跨所有环境永久有效，除非手动删除' },
 ]
 
@@ -72,7 +118,9 @@ export const VARIABLE_SCOPE_LABELS = {
 }
 
 export function stripBearerTokenPrefix(token) {
-  return String(token || '').trim().replace(/^Bearer\s+/i, '')
+  return String(token || '')
+    .trim()
+    .replace(/^Bearer\s+/i, '')
 }
 
 export function normalizeBearerAuthToken(token) {
@@ -87,7 +135,7 @@ export function parseVariablesJson(text) {
     return Object.fromEntries(
       Object.entries(parsed)
         .filter(([key]) => String(key || '').trim())
-        .map(([key, value]) => [String(key).trim(), value == null ? '' : String(value)])
+        .map(([key, value]) => [String(key).trim(), value == null ? '' : String(value)]),
     )
   } catch {
     return {}
@@ -113,8 +161,12 @@ export function collectEditorVariables({
     })
   }
 
-  Object.entries(parseVariablesJson(globalVariables)).forEach(([key, value]) => add(key, value, 'global'))
-  Object.entries(parseVariablesJson(environment?.variables)).forEach(([key, value]) => add(key, value, 'environment'))
+  Object.entries(parseVariablesJson(globalVariables)).forEach(([key, value]) =>
+    add(key, value, 'global'),
+  )
+  Object.entries(parseVariablesJson(environment?.variables)).forEach(([key, value]) =>
+    add(key, value, 'environment'),
+  )
 
   ;(variableRows || []).forEach((row) => {
     if (row?.enabled === false) return
@@ -138,13 +190,15 @@ export function collectEditorVariables({
 }
 
 export function ensureExtractRows(rows) {
-  return rows?.length ? rows.map((row) => ({
-    key: row.key || '',
-    path: row.path || '',
-    enabled: row.enabled !== false,
-    desc: row.desc || '',
-    scope: normalizeExtractScope(row.scope),
-  })) : [emptyExtractRow()]
+  return rows?.length
+    ? rows.map((row) => ({
+        key: row.key || '',
+        path: row.path || '',
+        enabled: row.enabled !== false,
+        desc: row.desc || '',
+        scope: normalizeExtractScope(row.scope),
+      }))
+    : [emptyExtractRow()]
 }
 
 export function countActiveExtractRows(rows, source = 'response_json') {
@@ -161,7 +215,8 @@ export const PRE_OPERATION_OPTIONS = [
     type: 'script',
     label: '自定义脚本',
     color: '#67c23a',
-    description: '在请求发送前运行脚本，将结果写入 variables，供 URL / Header / Body 中 {{变量名}} 引用',
+    description:
+      '在请求发送前运行脚本，将结果写入 variables，供 URL / Header / Body 中 {{变量名}} 引用',
   },
   {
     type: 'database',
@@ -281,9 +336,7 @@ export function operationHasContent(operation) {
       return Number(operation.ms) > 0
     case 'database':
       return Boolean(
-        operation.db?.sql?.trim() ||
-          operation.db?.host?.trim() ||
-          operation.db?.database?.trim()
+        operation.db?.sql?.trim() || operation.db?.host?.trim() || operation.db?.database?.trim(),
       )
     case 'assertion':
       return Boolean((operation.content || '').trim())
@@ -318,7 +371,7 @@ export function parsePreOperations(meta, preScriptStores, preScriptLang) {
 export function parsePostOperations(meta, postScript, extractRows, assertions) {
   const legacyExtractSource = inferExtractSource(meta?.response_extract || extractRows)
   const stored = sanitizeStoredPostOperations(
-    (meta?.post_operations || []).map(normalizeOperation).filter(Boolean)
+    (meta?.post_operations || []).map(normalizeOperation).filter(Boolean),
   )
   if (stored.length) {
     return stored.map((operation) => {
@@ -337,16 +390,15 @@ export function parsePostOperations(meta, postScript, extractRows, assertions) {
     ops.push(createOperation('script', { stores, lang: 'javascript' }))
   }
   if (countActiveExtractRows(extractRows, inferExtractSource(extractRows)) > 0) {
-    ops.push(createOperation('extract', {
-      rows: ensureExtractRows(extractRows),
-      source: inferExtractSource(extractRows),
-    }))
+    ops.push(
+      createOperation('extract', {
+        rows: ensureExtractRows(extractRows),
+        source: inferExtractSource(extractRows),
+      }),
+    )
   }
   const assertionText = (assertions || '').trim()
-  if (
-    assertionText &&
-    normalizeJsonText(assertionText) !== normalizeJsonText(DEFAULT_ASSERTIONS)
-  ) {
+  if (assertionText && normalizeJsonText(assertionText) !== normalizeJsonText(DEFAULT_ASSERTIONS)) {
     ops.push(createOperation('assertion', { content: assertions }))
   }
   return ops
@@ -360,14 +412,16 @@ export function syncLegacyFromOperations(preOperations = [], postOperations = []
   const extractOp = extractOps[0]
   const rawExtractRows = extractOps.flatMap((item) => item.rows || [])
   const extractSource = normalizeExtractSource(
-    extractOp?.source || inferExtractSource(rawExtractRows)
+    extractOp?.source || inferExtractSource(rawExtractRows),
   )
   const extractRows = extractOps.length ? ensureExtractRows(rawExtractRows) : [emptyExtractRow()]
 
   return {
     preScriptStores: preScriptOp?.stores || emptyPreScriptStores(),
     preScriptLang: preScriptOp?.lang || 'javascript',
-    postScript: postScriptOp ? activePreScript(postScriptOp.stores, postScriptOp.lang || 'javascript') : '',
+    postScript: postScriptOp
+      ? activePreScript(postScriptOp.stores, postScriptOp.lang || 'javascript')
+      : '',
     extractRows,
     extractSource,
     assertions: assertionOp?.content || DEFAULT_ASSERTIONS,
@@ -410,7 +464,10 @@ function resolveJsonPath(data, path) {
   else if (normalized.startsWith('$')) normalized = normalized.slice(1).replace(/^\./, '')
 
   let current = data
-  const parts = normalized.replace(/\[(\d+)\]/g, '.$1').split('.').filter(Boolean)
+  const parts = normalized
+    .replace(/\[(\d+)\]/g, '.$1')
+    .split('.')
+    .filter(Boolean)
 
   for (const part of parts) {
     if (current == null) return { found: false, value: undefined }
@@ -479,8 +536,12 @@ export function looksLikeRequestBody(data) {
 
   const responseHints = ['code', 'msg', 'message', 'success', 'errno', 'errorCode']
   const requestHints = ['solidLetterPower', 'securityUpgrade', 'deviceNo', 'platformType', 'client']
-  const hasResponseHint = responseHints.some((key) => Object.prototype.hasOwnProperty.call(data, key))
-  const requestHintCount = requestHints.filter((key) => Object.prototype.hasOwnProperty.call(data, key)).length
+  const hasResponseHint = responseHints.some((key) =>
+    Object.prototype.hasOwnProperty.call(data, key),
+  )
+  const requestHintCount = requestHints.filter((key) =>
+    Object.prototype.hasOwnProperty.call(data, key),
+  ).length
 
   if (requestHintCount >= 2 && !hasResponseHint) return true
 
@@ -549,7 +610,10 @@ export function buildExtractExpression(fieldInput, responseBody = '') {
 
   if (text.startsWith('$.')) {
     path = text
-    const segments = text.slice(2).split(/\.|\[|\]/).filter(Boolean)
+    const segments = text
+      .slice(2)
+      .split(/\.|\[|\]/)
+      .filter(Boolean)
     variableName = segments[segments.length - 1] || ''
   } else if (text.startsWith('$[')) {
     path = text
@@ -558,7 +622,10 @@ export function buildExtractExpression(fieldInput, responseBody = '') {
   } else if (text.includes('.') || text.includes('[')) {
     const normalized = text.replace(/^\./, '')
     path = normalized.startsWith('$') ? normalized : `$.${normalized}`
-    const segments = path.replace(/^\$\.?/, '').split(/\.|\[|\]/).filter(Boolean)
+    const segments = path
+      .replace(/^\$\.?/, '')
+      .split(/\.|\[|\]/)
+      .filter(Boolean)
     variableName = segments[segments.length - 1] || ''
   } else {
     variableName = text
@@ -589,7 +656,10 @@ export function buildExtractExpression(fieldInput, responseBody = '') {
   }
 
   if (!variableName) {
-    const segments = path.replace(/^\$\.?/, '').split(/\.|\[|\]/).filter(Boolean)
+    const segments = path
+      .replace(/^\$\.?/, '')
+      .split(/\.|\[|\]/)
+      .filter(Boolean)
     variableName = segments[segments.length - 1] || text
   }
 
@@ -852,12 +922,16 @@ export function parseCaseConfig(headersText, bodyText, assertions = DEFAULT_ASSE
     preScriptStores: parsePreScriptStores(meta),
     preScriptLang: meta.pre_script_lang || 'javascript',
     postScript: meta.post_script || '',
-    preOperations: parsePreOperations(meta, parsePreScriptStores(meta), meta.pre_script_lang || 'javascript'),
+    preOperations: parsePreOperations(
+      meta,
+      parsePreScriptStores(meta),
+      meta.pre_script_lang || 'javascript',
+    ),
     postOperations: parsePostOperations(
       meta,
       meta.post_script || '',
       meta.response_extract || [],
-      assertions
+      assertions,
     ),
   }
 }
@@ -986,7 +1060,7 @@ export function serializeCaseConfig({
   const resolvedPostOperations = synced.postOperations
   const extractOp = (resolvedPostOperations || []).find((item) => item.type === 'extract')
   const extractSource = normalizeExtractSource(
-    extractOp?.source || synced.extractSource || inferExtractSource(resolvedExtractRows)
+    extractOp?.source || synced.extractSource || inferExtractSource(resolvedExtractRows),
   )
   const stores = bodyStores || emptyBodyStores()
   const activeFormRows =
@@ -1000,11 +1074,11 @@ export function serializeCaseConfig({
   const headersObj = {}
 
   const authHeaderRow = headerRows.find(
-    (row) => row.enabled !== false && (row.key || '').trim().toLowerCase() === 'authorization'
+    (row) => row.enabled !== false && (row.key || '').trim().toLowerCase() === 'authorization',
   )
   const authForMeta = {
     ...auth,
-    token: auth?.type === 'bearer' ? stripBearerTokenPrefix(auth.token || '') : (auth?.token || ''),
+    token: auth?.type === 'bearer' ? stripBearerTokenPrefix(auth.token || '') : auth?.token || '',
   }
   let authorizationHeader = ''
   if (authForMeta.type === 'none' && authHeaderRow?.value?.trim()) {
@@ -1027,7 +1101,12 @@ export function serializeCaseConfig({
     data_drive: {
       enabled: Boolean(dataDriveEnabled),
       rows: (dataDriveRows || [])
-        .filter((row) => row && (row.name?.trim() || Object.values(row.values || {}).some((v) => String(v ?? '').trim())))
+        .filter(
+          (row) =>
+            row &&
+            (row.name?.trim() ||
+              Object.values(row.values || {}).some((v) => String(v ?? '').trim())),
+        )
         .map((row) => ({
           enabled: row.enabled !== false,
           name: (row.name || '').trim(),
@@ -1057,7 +1136,10 @@ export function serializeCaseConfig({
       urlencoded: filterFormRows(stores.urlencoded),
       form_data: filterFormRows(stores.formData),
     },
-    pre_script: activePreScript(resolvedPreScriptStores || emptyPreScriptStores(), resolvedPreScriptLang),
+    pre_script: activePreScript(
+      resolvedPreScriptStores || emptyPreScriptStores(),
+      resolvedPreScriptLang,
+    ),
     pre_script_lang: resolvedPreScriptLang || 'javascript',
     pre_script_stores: {
       javascript: (resolvedPreScriptStores || emptyPreScriptStores()).javascript || '',
@@ -1125,7 +1207,11 @@ export function splitUrlForEditor(fullUrl, env) {
   }
 
   try {
-    const parsed = new URL(text.includes('://') ? text : `https://placeholder.local${text.startsWith('/') ? '' : '/'}${text}`)
+    const parsed = new URL(
+      text.includes('://')
+        ? text
+        : `https://placeholder.local${text.startsWith('/') ? '' : '/'}${text}`,
+    )
     const queryRows = []
     parsed.searchParams.forEach((value, key) => {
       queryRows.push({ key, value, enabled: true, desc: '' })
@@ -1183,7 +1269,9 @@ export function bodyContentFromStored(bodyType, bodyText, formBodyRows) {
     try {
       const parsed = JSON.parse(bodyText || '[]')
       if (Array.isArray(parsed)) {
-        return ensureKvRows(parsed.map((i) => ({ key: i.key, value: i.value, enabled: true, desc: '' })))
+        return ensureKvRows(
+          parsed.map((i) => ({ key: i.key, value: i.value, enabled: true, desc: '' })),
+        )
       }
       if (parsed && typeof parsed === 'object') {
         return jsonToFormBodyRows(JSON.stringify(parsed))

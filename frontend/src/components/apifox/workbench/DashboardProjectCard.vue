@@ -1,8 +1,30 @@
 <template>
   <div class="projcard" @click="$emit('enter', project.id)">
     <div class="row">
+      <el-icon class="drag-handle" title="拖拽排序" @click.stop><Rank /></el-icon>
       <div class="pi" :style="{ background: color }">{{ letter }}</div>
       <div class="pn">{{ project.name }}</div>
+      <span v-if="project.pinned" class="pin-flag" title="已置顶">置顶</span>
+      <el-dropdown trigger="click" @command="onCommand">
+        <span class="more" @click.stop>
+          <el-icon><MoreFilled /></el-icon>
+        </span>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="pin">
+              <el-icon><Top /></el-icon> {{ project.pinned ? '取消置顶' : '置顶' }}
+            </el-dropdown-item>
+            <el-dropdown-item command="rename"
+              ><el-icon><EditPen /></el-icon> 改名</el-dropdown-item
+            >
+            <el-dropdown-item v-if="canDelete" command="delete" divided>
+              <span class="del"
+                ><el-icon><Delete /></el-icon> 删除项目</span
+              >
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </div>
     <div class="pmeta">
       <span>🔗 {{ project.endpoint_count }} 接口</span>
@@ -20,16 +42,26 @@ import { computed } from 'vue'
 const props = defineProps({
   project: { type: Object, required: true },
 })
-defineEmits(['enter'])
+const emit = defineEmits(['enter', 'rename', 'delete', 'pin'])
 
 // 从项目 id 稳定取色，避免依赖后端配色
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
 const color = computed(() => PALETTE[props.project.id % PALETTE.length])
 const letter = computed(() => (props.project.name || '?').trim().charAt(0).toUpperCase())
-const roleClass = computed(() => ({
-  管理员: 'r-admin',
-  负责人: 'r-owner',
-}[props.project.role] || 'r-member'))
+const roleClass = computed(
+  () =>
+    ({
+      管理员: 'r-admin',
+      负责人: 'r-owner',
+    })[props.project.role] || 'r-member',
+)
+
+// 硬删除仅项目负责人/系统管理员可见（后端同样校验），成员只能改名
+const canDelete = computed(() => ['管理员', '负责人'].includes(props.project.role))
+
+function onCommand(cmd) {
+  emit(cmd, props.project)
+}
 </script>
 
 <style scoped>
@@ -70,12 +102,54 @@ const roleClass = computed(() => ({
 }
 
 .pn {
+  flex: 1;
   font-weight: 600;
   font-size: 15px;
   color: var(--ax-text);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.drag-handle {
+  flex: none;
+  color: var(--ax-text-placeholder);
+  cursor: grab;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.pin-flag {
+  flex: none;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--ax-brand);
+  background: var(--ax-brand-weak, rgba(64, 128, 255, 0.1));
+  border-radius: 10px;
+  padding: 1px 7px;
+}
+
+.more {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  color: var(--ax-text-tertiary);
+  cursor: pointer;
+  outline: none;
+}
+
+.more:hover {
+  background: var(--ax-bg-subtle);
+  color: var(--ax-text);
+}
+
+.del {
+  color: var(--ax-danger);
 }
 
 .pmeta {

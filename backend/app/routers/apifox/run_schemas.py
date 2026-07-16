@@ -44,6 +44,7 @@ class RunStepOut(BaseModel):
     extract_results: List[Dict[str, Any]] = Field(default_factory=list)
     script_logs: List[str] = Field(default_factory=list)
     contract_result: Optional[Dict[str, Any]] = None
+    warnings: List[str] = Field(default_factory=list)
     error_message: Optional[str] = None
 
 

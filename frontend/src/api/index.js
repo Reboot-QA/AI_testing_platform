@@ -31,7 +31,7 @@ request.interceptors.response.use(
     }
     ElMessage.error(typeof msg === 'string' ? msg : JSON.stringify(msg))
     return Promise.reject(error)
-  }
+  },
 )
 
 export const authApi = {
@@ -55,6 +55,8 @@ export const projectApi = {
   update: (id, data) => request.put(`/projects/${id}`, data),
   delete: (id) => request.delete(`/projects/${id}`),
   dashboard: () => request.get('/projects/stats/dashboard'),
+  // 保存当前用户的置顶/排序偏好（items 按展示顺序：[{ project_id, pinned }]）
+  savePreferences: (items) => request.put('/projects/preferences/order', { items }),
 }
 
 export const requirementApi = {
@@ -273,6 +275,9 @@ export const departmentApi = {
   create: (data) => request.post('/departments', data),
   update: (id, data) => request.put(`/departments/${id}`, data),
   delete: (id) => request.delete(`/departments/${id}`),
+  getPermissions: (id) => request.get(`/departments/${id}/permissions`),
+  updatePermissions: (id, menu_permissions) =>
+    request.put(`/departments/${id}/permissions`, { menu_permissions }),
 }
 
 export const userApi = {
@@ -311,19 +316,22 @@ export const apifoxApi = {
   createEnvVar: (eid, data) => request.post(`/apifox/environments/${eid}/variables`, data),
   updateEnvVar: (vid, data) => request.put(`/apifox/env-variables/${vid}`, data),
   deleteEnvVar: (vid) => request.delete(`/apifox/env-variables/${vid}`),
-  setEnvVarLocal: (vid, local_value) => request.put(`/apifox/env-variables/${vid}/local`, { local_value }),
+  setEnvVarLocal: (vid, local_value) =>
+    request.put(`/apifox/env-variables/${vid}/local`, { local_value }),
 
   listGlobalVars: (pid) => request.get(`/apifox/projects/${pid}/global-variables`),
   createGlobalVar: (pid, data) => request.post(`/apifox/projects/${pid}/global-variables`, data),
   updateGlobalVar: (gid, data) => request.put(`/apifox/global-variables/${gid}`, data),
   deleteGlobalVar: (gid) => request.delete(`/apifox/global-variables/${gid}`),
-  setGlobalVarLocal: (gid, local_value) => request.put(`/apifox/global-variables/${gid}/local`, { local_value }),
+  setGlobalVarLocal: (gid, local_value) =>
+    request.put(`/apifox/global-variables/${gid}/local`, { local_value }),
 
   listCases: (eid) => request.get(`/apifox/endpoints/${eid}/cases`),
   getCase: (cid) => request.get(`/apifox/cases/${cid}`),
   createCase: (eid, data) => request.post(`/apifox/endpoints/${eid}/cases`, data),
   updateCase: (cid, data) => request.put(`/apifox/cases/${cid}`, data),
   deleteCase: (cid) => request.delete(`/apifox/cases/${cid}`),
+  copyCase: (cid) => request.post(`/apifox/cases/${cid}/copy`),
 
   listSchemas: (pid) => request.get(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid) => request.get(`/apifox/schemas/${sid}`),
@@ -336,6 +344,7 @@ export const apifoxApi = {
   createScript: (pid, data) => request.post(`/apifox/projects/${pid}/scripts`, data),
   updateScript: (sid, data) => request.put(`/apifox/scripts/${sid}`, data),
   deleteScript: (sid) => request.delete(`/apifox/scripts/${sid}`),
+  debugScript: (data) => request.post('/apifox/scripts/debug', data),
 
   listGlobalParams: (pid) => request.get(`/apifox/projects/${pid}/global-params`),
   createGlobalParam: (pid, data) => request.post(`/apifox/projects/${pid}/global-params`, data),
@@ -348,10 +357,16 @@ export const apifoxApi = {
   createScenario: (pid, data) => request.post(`/apifox/projects/${pid}/scenarios`, data),
   updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
+  listScenarioFolders: (pid) => request.get(`/apifox/projects/${pid}/scenario-folders`),
+  createScenarioFolder: (pid, name) =>
+    request.post(`/apifox/projects/${pid}/scenario-folders`, { name }),
+  renameScenarioFolder: (fid, name) => request.put(`/apifox/scenario-folders/${fid}`, { name }),
+  deleteScenarioFolder: (fid) => request.delete(`/apifox/scenario-folders/${fid}`),
 
   listSuites: (pid) => request.get(`/apifox/projects/${pid}/suites`),
   getSuite: (sid) => request.get(`/apifox/suites/${sid}`),
   createSuite: (pid, data) => request.post(`/apifox/projects/${pid}/suites`, data),
+  copySuite: (sid) => request.post(`/apifox/suites/${sid}/copy`),
   updateSuite: (sid, data) => request.put(`/apifox/suites/${sid}`, data),
   deleteSuite: (sid) => request.delete(`/apifox/suites/${sid}`),
 
@@ -388,6 +403,8 @@ export const apifoxApi = {
   listRuns: (pid) => request.get(`/apifox/projects/${pid}/runs`),
   listEndpointRuns: (eid) => request.get(`/apifox/endpoints/${eid}/runs`),
   getRun: (rid) => request.get(`/apifox/runs/${rid}`),
+  exportRun: (rid, format = 'excel') =>
+    request.get(`/apifox/runs/${rid}/export`, { params: { format }, responseType: 'blob' }),
   runCaseStream: (cid, environmentId, onEvent, options = {}) =>
     apifoxRunStream(`/api/v1/apifox/cases/${cid}/run/stream`, environmentId, onEvent, options),
   runScenarioStream: (sid, environmentId, onEvent, options = {}) =>
@@ -438,8 +455,7 @@ function apifoxRunStream(url, environmentId, onEvent, options = {}) {
 }
 
 export const testExecutionApi = {
-  listRuns: (projectId) =>
-    request.get('/test-executions', { params: { project_id: projectId } }),
+  listRuns: (projectId) => request.get('/test-executions', { params: { project_id: projectId } }),
   getRun: (id) => request.get(`/test-executions/${id}`),
   createRun: (data) => request.post('/test-executions', data),
   updateRun: (id, data) => request.put(`/test-executions/${id}`, data),
@@ -451,99 +467,6 @@ export const testExecutionApi = {
       params: { project_id: projectId, ...params },
       paramsSerializer: { indexes: null },
     }),
-}
-
-export const apiAutomationApi = {
-  listEnvironments: (projectId) =>
-    request.get('/api-automation/environments', { params: { project_id: projectId } }),
-  createEnvironment: (data) => request.post('/api-automation/environments', data),
-  updateEnvironment: (id, data) => request.put(`/api-automation/environments/${id}`, data),
-  deleteEnvironment: (id) => request.delete(`/api-automation/environments/${id}`),
-  getGlobalVariables: (projectId) =>
-    request.get(`/api-automation/projects/${projectId}/global-variables`),
-  updateGlobalVariables: (projectId, data) =>
-    request.put(`/api-automation/projects/${projectId}/global-variables`, data),
-  listSuites: (projectId) =>
-    request.get('/api-automation/suites', { params: { project_id: projectId } }),
-  createSuite: (data) => request.post('/api-automation/suites', data),
-  updateSuite: (id, data) => request.put(`/api-automation/suites/${id}`, data),
-  deleteSuite: (id) => request.delete(`/api-automation/suites/${id}`),
-  copySuite: (id) => request.post(`/api-automation/suites/${id}/copy`),
-  listCases: (suiteId) => request.get('/api-automation/cases', { params: { suite_id: suiteId } }),
-  createCase: (data) => request.post('/api-automation/cases', data),
-  updateCase: (id, data) => request.put(`/api-automation/cases/${id}`, data),
-  deleteCase: (id) => request.delete(`/api-automation/cases/${id}`),
-  batchDeleteCases: (data) => request.post('/api-automation/cases/batch/delete', data),
-  copyCase: (id, data = {}) => request.post(`/api-automation/cases/${id}/copy`, data),
-  debugCase: (data) => request.post('/api-automation/cases/debug', data),
-  generateCaseData: (data) => request.post('/api-automation/cases/generate-data', data),
-  batchGenerateCaseData: (data) => request.post('/api-automation/cases/batch/generate-data', data),
-  debugPreScript: (data) => request.post('/api-automation/scripts/pre/debug', data),
-  debugPostScript: (data) => request.post('/api-automation/scripts/post/debug', data),
-  runSuite: (suiteId) => request.post(`/api-automation/suites/${suiteId}/run`),
-  runSuiteStream: (suiteId, onEvent, options = {}) => {
-    const token = localStorage.getItem('token')
-    return fetch(`/api/v1/api-automation/suites/${suiteId}/run/stream`, {
-      method: 'POST',
-      headers: {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-      signal: options.signal,
-    }).then(async (response) => {
-      if (!response.ok) {
-        let message = '请求失败'
-        try {
-          const body = await response.json()
-          message = body.detail || message
-        } catch {
-          // ignore parse error
-        }
-        throw new Error(typeof message === 'string' ? message : JSON.stringify(message))
-      }
-
-      const reader = response.body.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-        const chunks = buffer.split('\n\n')
-        buffer = chunks.pop() || ''
-        for (const chunk of chunks) {
-          const line = chunk.trim()
-          if (!line.startsWith('data:')) continue
-          const event = JSON.parse(line.slice(5).trim())
-          onEvent(event)
-        }
-      }
-    })
-  },
-  listRuns: (params = {}) => request.get('/api-automation/runs', { params }),
-  getRun: (id) => request.get(`/api-automation/runs/${id}`),
-  getCombinedRun: (runIds) =>
-    request.get('/api-automation/runs/combined', { params: { run_ids: runIds.join(',') } }),
-  deleteRun: (id) => request.delete(`/api-automation/runs/${id}`),
-  batchDeleteRuns: (data) => request.post('/api-automation/runs/batch/delete', data),
-  exportRun: (id, format = 'excel') =>
-    request.get(`/api-automation/runs/${id}/export`, {
-      params: { format },
-      responseType: 'blob',
-    }),
-  batchExportRuns: (data) =>
-    request.post('/api-automation/runs/batch/export', data, { responseType: 'blob' }),
-  parseCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: true }),
-  importCapture: (data) => request.post('/api-automation/import/capture', { ...data, preview: false }),
-  parseSwagger: (data) => request.post('/api-automation/import/swagger', { ...data, preview: true }),
-  importSwagger: (data) => request.post('/api-automation/import/swagger', { ...data, preview: false }),
-  swaggerGenerateData: (data) => request.post('/api-automation/import/swagger/generate-data', data, { timeout: 300000 }),
-  listSchedules: (projectId) => request.get('/api-automation/schedules', { params: { project_id: projectId } }),
-  createSchedule: (data) => request.post('/api-automation/schedules', data),
-  updateSchedule: (id, data) => request.put(`/api-automation/schedules/${id}`, data),
-  deleteSchedule: (id) => request.delete(`/api-automation/schedules/${id}`),
-  refreshSchedule: (id) => request.post(`/api-automation/schedules/${id}/refresh`),
-  runScheduleNow: (id) => request.post(`/api-automation/schedules/${id}/run-now`),
 }
 
 export const logsApi = {

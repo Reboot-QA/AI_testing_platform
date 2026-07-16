@@ -54,6 +54,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { departmentApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
 
 const departments = ref([])
@@ -73,7 +74,7 @@ const rules = {
 }
 
 function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN') : '-'
+  return formatBeijingTime(value)
 }
 
 async function loadData() {

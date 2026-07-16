@@ -48,6 +48,15 @@ def list_cases(db: Session, endpoint_id: int) -> List[ApifoxEndpointCase]:
     )
 
 
+def name_exists(db: Session, endpoint_id: int, name: str) -> bool:
+    return (
+        db.query(ApifoxEndpointCase.id)
+        .filter(ApifoxEndpointCase.endpoint_id == endpoint_id, ApifoxEndpointCase.name == name)
+        .first()
+        is not None
+    )
+
+
 def get_case(db: Session, case_id: int) -> Optional[ApifoxEndpointCase]:
     return db.query(ApifoxEndpointCase).filter(ApifoxEndpointCase.id == case_id).first()
 

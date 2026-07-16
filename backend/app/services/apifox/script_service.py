@@ -12,12 +12,34 @@ from app.repositories.apifox import script_repo as repo
 from app.routers.apifox.script_schemas import (
     ScriptBrief,
     ScriptCreate,
+    ScriptDebugIn,
+    ScriptDebugOut,
     ScriptOut,
     ScriptUpdate,
 )
 from app.services.apifox import versioning
 
+# run_pre_script/run_post_script：apifox 执行引擎与脚本调试共用（D1a 已从老模块搬入 apifox）
+from app.services.apifox.script_runner import run_post_script, run_pre_script
+
 VALID_LANGS = {"javascript", "python"}
+
+
+def debug_script(data: ScriptDebugIn) -> ScriptDebugOut:
+    """独立调试一段前置/后置脚本：按传入变量与响应上下文执行，回传日志/变量/错误。"""
+    if not data.content.strip():
+        raise ValueError("脚本内容不能为空")
+    if data.phase == "post":
+        variables, logs, error = run_post_script(
+            data.content, data.lang, data.variables,
+            data.response_body, data.response_status, data.response_headers,
+        )
+    else:
+        variables, logs, error = run_pre_script(data.content, data.lang, data.variables)
+    return ScriptDebugOut(
+        status="failed" if error else "passed",
+        logs=logs, variables=variables, error_message=error,
+    )
 
 
 def _validate_lang(lang: str) -> None:

@@ -5,7 +5,12 @@
         <el-select v-model="form.method" class="method-sel">
           <el-option v-for="m in METHODS" :key="m" :label="m" :value="m" />
         </el-select>
-        <el-select v-model="form.server_name" placeholder="默认前置URL" clearable class="server-sel">
+        <el-select
+          v-model="form.server_name"
+          placeholder="默认前置URL"
+          clearable
+          class="server-sel"
+        >
           <el-option v-for="n in serverNames" :key="n" :label="n" :value="n" />
         </el-select>
         <el-input v-model="form.path" placeholder="/path/to/api" class="path-input" />
@@ -17,12 +22,12 @@
     <el-tabs v-model="activeTab" class="spec-tabs">
       <el-tab-pane label="Params" name="params">
         <div class="sub-title">Query 参数</div>
-        <KvRowsEditor :rows="form.request_spec.query" />
+        <KvRowsEditor :rows="form.request_spec.query" show-type />
         <div class="sub-title">Path 变量</div>
-        <KvRowsEditor :rows="form.request_spec.path_params" />
+        <KvRowsEditor :rows="form.request_spec.path_params" show-type />
       </el-tab-pane>
       <el-tab-pane label="Headers" name="headers">
-        <KvRowsEditor :rows="form.request_spec.headers" />
+        <KvRowsEditor :rows="form.request_spec.headers" suggest="header" />
       </el-tab-pane>
       <el-tab-pane label="Cookies" name="cookies">
         <KvRowsEditor :rows="form.request_spec.cookies" />
@@ -44,9 +49,17 @@
         />
         <template v-else-if="form.request_spec.body.type === 'graphql'">
           <div class="sub-title">Query</div>
-          <CodeEditor v-model="form.request_spec.body.graphql_query" language="graphql" height="180px" />
+          <CodeEditor
+            v-model="form.request_spec.body.graphql_query"
+            language="graphql"
+            height="180px"
+          />
           <div class="sub-title">Variables（JSON）</div>
-          <CodeEditor v-model="form.request_spec.body.graphql_variables" language="json" height="120px" />
+          <CodeEditor
+            v-model="form.request_spec.body.graphql_variables"
+            language="json"
+            height="120px"
+          />
         </template>
         <div v-else-if="form.request_spec.body.type === 'binary'" class="binary-body">
           <el-upload :show-file-list="false" :before-upload="onPickFile" :disabled="uploading">
@@ -73,9 +86,46 @@
           class="auth-input"
         />
         <template v-else-if="form.request_spec.auth.type === 'basic'">
-          <el-input v-model="form.request_spec.auth.username" placeholder="用户名" class="auth-input" />
-          <el-input v-model="form.request_spec.auth.password" placeholder="密码" class="auth-input" />
+          <el-input
+            v-model="form.request_spec.auth.username"
+            placeholder="用户名"
+            class="auth-input"
+          />
+          <el-input
+            v-model="form.request_spec.auth.password"
+            placeholder="密码"
+            class="auth-input"
+          />
         </template>
+      </el-tab-pane>
+
+      <el-tab-pane label="设置" name="settings">
+        <div class="settings-form">
+          <div class="set-row">
+            <span class="set-label">超时（毫秒）</span>
+            <el-input-number
+              v-model="form.request_spec.settings.timeout_ms"
+              :min="0"
+              :step="1000"
+              :precision="0"
+              :controls="false"
+              :value-on-clear="null"
+              placeholder="默认 30000"
+              style="width: 180px"
+            />
+            <span class="set-hint">留空或 0 用平台默认 30s</span>
+          </div>
+          <div class="set-row">
+            <span class="set-label">SSL 证书校验</span>
+            <el-switch v-model="form.request_spec.settings.verify_ssl" />
+            <span class="set-hint">关闭则不校验服务端证书（自签名 / 测试环境）</span>
+          </div>
+          <div class="set-row">
+            <span class="set-label">自动重定向</span>
+            <el-switch v-model="form.request_spec.settings.follow_redirects" />
+            <span class="set-hint">关闭则返回 3xx 原始响应，不自动跟随</span>
+          </div>
+        </div>
       </el-tab-pane>
 
       <!-- 接口级处理器（与用例级合并叠加）；用例编辑器内不显示（用例有自己的处理器 tab） -->
@@ -95,7 +145,13 @@
         <el-tab-pane label="响应契约" name="contract">
           <div class="contract-row">
             <span class="c-label">响应数据模型</span>
-            <el-select v-model="form.response_schema_id" placeholder="不校验" clearable filterable style="width: 260px">
+            <el-select
+              v-model="form.response_schema_id"
+              placeholder="不校验"
+              clearable
+              filterable
+              style="width: 260px"
+            >
               <el-option v-for="s in schemas" :key="s.id" :label="s.name" :value="s.id" />
             </el-select>
           </div>
@@ -109,7 +165,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
@@ -129,6 +185,17 @@ const props = defineProps({
   projectId: { type: [String, Number], default: '' },
 })
 defineEmits(['save'])
+
+// 兼容历史/未归一化 spec：确保 settings 存在，避免「设置」tab 的 v-model 绑定报错
+watch(
+  () => props.form.request_spec,
+  (spec) => {
+    if (spec && !spec.settings) {
+      spec.settings = { timeout_ms: null, verify_ssl: true, follow_redirects: true }
+    }
+  },
+  { immediate: true },
+)
 
 const METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 const BODY_TYPES = ['none', 'json', 'xml', 'form-data', 'urlencoded', 'raw', 'graphql', 'binary']
@@ -226,5 +293,28 @@ function clearFile() {
 .c-label {
   font-size: 13px;
   color: var(--ax-text-secondary);
+}
+
+.settings-form {
+  padding: 4px 0;
+}
+
+.set-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.set-label {
+  flex: none;
+  width: 96px;
+  font-size: 13px;
+  color: var(--ax-text-secondary);
+}
+
+.set-hint {
+  font-size: 12px;
+  color: var(--ax-text-placeholder);
 }
 </style>

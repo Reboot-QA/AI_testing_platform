@@ -15,6 +15,7 @@ class KvRow(BaseModel):
     value: str = ""
     enabled: bool = True
     desc: str = ""
+    type: str = "string"  # 参数类型标注（string/integer/number/boolean/array/object/file），仅 Params 用
 
 
 class BodySpec(BaseModel):
@@ -34,6 +35,12 @@ class AuthSpec(BaseModel):
     password: str = ""
 
 
+class RequestSettings(BaseModel):
+    timeout_ms: Optional[int] = None  # None 或 <=0 → 用平台默认超时（HTTP_TIMEOUT）
+    verify_ssl: bool = True
+    follow_redirects: bool = True
+
+
 class RequestSpec(BaseModel):
     query: List[KvRow] = Field(default_factory=list)
     path_params: List[KvRow] = Field(default_factory=list)
@@ -41,6 +48,7 @@ class RequestSpec(BaseModel):
     cookies: List[KvRow] = Field(default_factory=list)
     body: BodySpec = Field(default_factory=BodySpec)
     auth: AuthSpec = Field(default_factory=AuthSpec)
+    settings: RequestSettings = Field(default_factory=RequestSettings)
 
 
 # ---------- 处理器行（接口级与用例级共用，case_schemas 从此导入避免循环依赖） ----------

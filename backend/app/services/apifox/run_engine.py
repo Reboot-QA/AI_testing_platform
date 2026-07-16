@@ -5,8 +5,9 @@
 脚本执行、作用域落库与单用例编排 execute_case，并 re-export 上述子模块的对外符号，
 保持既有导入路径（debug_service / run_service / scenario_service / 测试依赖之）不变。
 
-复用旧模块纯函数：断言判定 _evaluate_assertion、提取取值 _extract_value_by_source、
-脚本执行 run_pre_script/run_post_script。生成器编排与 run 落库在 run_service。
+复用同目录 apifox 纯函数（D1 已从老模块搬入）：断言判定 assertions._evaluate_assertion、
+提取取值 response_extract._extract_value_by_source、脚本执行 script_runner.run_pre/post_script。
+生成器编排与 run 落库在 run_service。
 提取的 environment/global 作用域写当前用户本地值（不污染团队远程值）。
 """
 
@@ -28,13 +29,13 @@ from app.repositories.apifox import (
     script_repo,
     variable_repo,
 )
-from app.services.api_response_extract import _extract_value_by_source
-from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
-from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.apifox import contract_service, schema_ref, upload_service
+from app.services.apifox.assertions import _evaluate_assertion, _extract_json_path
 from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
 from app.services.apifox.operators import CONDITION_OPERATORS, _apply_operator
 from app.services.apifox.request_builder import build_request
+from app.services.apifox.response_extract import _extract_value_by_source
+from app.services.apifox.script_runner import run_post_script, run_pre_script
 from app.services.apifox.variables import (
     _loads,
     apply_vars,
@@ -53,11 +54,21 @@ __all__ = [
     "build_request",
     "evaluate_assertions", "run_extracts", "run_script_links",
     "persist_scoped_extracts", "execute_case",
-    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT",
+    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT", "make_http_client",
 ]
 
 HTTP_TIMEOUT = 30.0
 MAX_BODY_SNAPSHOT = 20000
+
+
+def make_http_client(plan: Dict[str, Any]) -> httpx.Client:
+    """按请求计划的 settings 构建 httpx 客户端：未设超时回落 HTTP_TIMEOUT；SSL/重定向所配即所用。"""
+    timeout = plan.get("timeout")
+    return httpx.Client(
+        timeout=timeout if timeout is not None else HTTP_TIMEOUT,
+        follow_redirects=plan.get("follow_redirects", True),
+        verify=plan.get("verify_ssl", True),
+    )
 
 _OP_WITH_OPERATOR = {"status_code", "json_path", "header"}
 
@@ -272,10 +283,11 @@ def execute_case(
     detail["url"] = plan["url"]
     detail["request_headers"] = plan["headers"]
     detail["request_body"] = plan["body_snapshot"]
+    detail["warnings"] = plan.get("warnings", [])
 
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+        with make_http_client(plan) as client:
             response = client.request(
                 plan["method"], plan["url"],
                 params=plan["params"] or None,
@@ -363,10 +375,11 @@ def execute_http_request(
     detail["url"] = plan["url"]
     detail["request_headers"] = plan["headers"]
     detail["request_body"] = plan["body_snapshot"]
+    detail["warnings"] = plan.get("warnings", [])
 
     started = time.perf_counter()
     try:
-        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
+        with make_http_client(plan) as client:
             response = client.request(
                 plan["method"], plan["url"],
                 params=plan["params"] or None, headers=plan["headers"] or None,

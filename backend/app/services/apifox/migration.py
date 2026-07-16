@@ -156,3 +156,68 @@ def migrate_apifox_run_step_depth(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN depth INTEGER NOT NULL DEFAULT 0"))
     db.expire_all()
+
+
+def migrate_apifox_schedule_cron(db: Session) -> None:
+    """apifox_schedules 加 cron_expr（schedule_type=cron 时的表达式）。"""
+    inspector = inspect(engine)
+    if "apifox_schedules" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_schedules")}
+    if "cron_expr" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_schedules ADD COLUMN cron_expr VARCHAR(120)"))
+    db.expire_all()
+
+
+def migrate_apifox_scenario_priority(db: Session) -> None:
+    """apifox_scenarios 加 priority（场景优先级：high/medium/low）。"""
+    inspector = inspect(engine)
+    if "apifox_scenarios" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_scenarios")}
+    if "priority" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN priority VARCHAR(10) NOT NULL DEFAULT 'medium'"))
+    db.expire_all()
+
+
+def migrate_apifox_folder_kind(db: Session) -> None:
+    """apifox_folders 加 kind（区分 endpoint / scenario 文件夹；存量默认 endpoint）。"""
+    inspector = inspect(engine)
+    if "apifox_folders" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_folders")}
+    if "kind" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_folders ADD COLUMN kind VARCHAR(20) NOT NULL DEFAULT 'endpoint'"))
+    db.expire_all()
+
+
+def migrate_apifox_scenario_folder(db: Session) -> None:
+    """apifox_scenarios 加 folder_id（所属场景文件夹；NULL=未分组）。"""
+    inspector = inspect(engine)
+    if "apifox_scenarios" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_scenarios")}
+    if "folder_id" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_scenarios ADD COLUMN folder_id INTEGER"))
+    db.expire_all()
+
+
+def migrate_apifox_run_step_warnings(db: Session) -> None:
+    """apifox_run_steps 加 warnings（诊断告警 JSON 列表，如 Binary 孤儿文件）。"""
+    inspector = inspect(engine)
+    if "apifox_run_steps" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_run_steps")}
+    if "warnings" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN warnings TEXT"))
+    db.expire_all()

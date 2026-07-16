@@ -7,25 +7,9 @@ const TARGET_ALIASES = {
   'projects.form.description': 'projects.form.description',
   'projects.form.submit': 'projects.form.submit',
   'menu.projects': 'menu.projects',
-  'suites.import_btn': 'suites.swagger_import_btn',
-  'suites.swagger_import_btn': 'suites.swagger_import_btn',
-  'suites.swagger_source_url': 'suites.swagger_source_url',
-  'suites.swagger_url_input': 'suites.swagger_url_input',
-  'suites.swagger_parse_btn': 'suites.swagger_parse_btn',
-  'suites.swagger_confirm_btn': 'suites.swagger_confirm_btn',
-  'apiAutomation.create_suite_btn': 'suites.open_create_suite_dialog',
-  'suites.create_suite_btn': 'suites.open_create_suite_dialog',
-  'suites.open_create_suite_dialog': 'suites.open_create_suite_dialog',
-  'suites.create_btn': 'suites.create_btn',
-  'suites.form.name': 'suites.form.name',
-  'suites.form.environment': 'suites.form.environment',
-  'suites.form.description': 'suites.form.description',
-  'suites.form.submit': 'suites.form.submit',
   'menu.ai_generate': 'menu.ai_generate',
   'menu.requirements': 'menu.requirements',
   'menu.testcases': 'menu.testcases',
-  'menu.api_automation_suites': 'menu.api_automation_suites',
-  'menu.api_automation_env': 'menu.api_automation_env',
   'requirements.create_btn': 'requirements.create_btn',
   'requirements.form.title': 'requirements.form.title',
   'requirements.form.description': 'requirements.form.description',
@@ -33,10 +17,6 @@ const TARGET_ALIASES = {
   'ai_generate.generate_btn': 'ai_generate.generate_btn',
   'ai_generate.project_select': 'ai_generate.project_select',
   'ai_generate.requirement_text': 'ai_generate.requirement_text',
-  'suites.run_suite_btn': 'suites.run_suite_btn',
-  'cases.new_btn': 'cases.new_btn',
-  'cases.save_btn': 'cases.save_btn',
-  'cases.form.name': 'cases.form.name',
 }
 
 const DEFAULT_WAIT_MS = 1000
@@ -134,9 +114,9 @@ async function executeStep(step, onProgress) {
     case 'click': {
       const el = findElement(step.target)
       const blocked =
-        el.disabled
-        || el.getAttribute('aria-disabled') === 'true'
-        || el.classList.contains('is-disabled')
+        el.disabled ||
+        el.getAttribute('aria-disabled') === 'true' ||
+        el.classList.contains('is-disabled')
       if (blocked) {
         throw new Error(`操作目标暂不可用：${step.target}`)
       }

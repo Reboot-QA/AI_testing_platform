@@ -83,32 +83,6 @@
           <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox">
             工作台
           </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_env')"
-            index="/api-automation/env"
-            data-assistant="menu.api_automation_env"
-          >
-            环境配置
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_suites')"
-            index="/api-automation/suites"
-            data-assistant="menu.api_automation_suites"
-          >
-            套件与用例
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_reports')"
-            index="/api-automation/reports"
-          >
-            测试报告
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_schedule')"
-            index="/api-automation/schedule"
-          >
-            定时任务
-          </el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu v-if="showLogMenu" index="log_mgmt">
@@ -257,14 +231,7 @@ const showTestcaseMenu = computed(
     userStore.hasPermission('test_execution'),
 )
 
-const showAutomationMenu = computed(
-  () =>
-    userStore.hasPermission('apifox_workbench') ||
-    userStore.hasPermission('api_automation_env') ||
-    userStore.hasPermission('api_automation_suites') ||
-    userStore.hasPermission('api_automation_reports') ||
-    userStore.hasPermission('api_automation_schedule'),
-)
+const showAutomationMenu = computed(() => userStore.hasPermission('apifox_workbench'))
 
 const showLogMenu = computed(
   () => userStore.hasPermission('system_logs') || userStore.hasPermission('system_error_logs'),

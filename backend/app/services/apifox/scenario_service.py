@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 from sqlalchemy.orm import Session
 
@@ -40,6 +40,14 @@ def _loads(text: str | None, fallback: dict) -> dict:
         return json.loads(text)
     except (ValueError, TypeError):
         return fallback
+
+
+def _validate_folder(db: Session, folder_id: Optional[int], project_id: int) -> None:
+    if folder_id is None:
+        return
+    folder = repo.get_scenario_folder(db, folder_id)
+    if not folder or folder.project_id != project_id:
+        raise ValueError("场景文件夹不存在或不属于本项目")
 
 
 def _would_cycle(db: Session, root_id: int, ref_scenario_id: int) -> bool:
@@ -210,6 +218,8 @@ def _out(db: Session, scenario: ApifoxScenario) -> ScenarioOut:
         project_id=scenario.project_id,
         name=scenario.name,
         description=scenario.description,
+        priority=cast(Any, scenario.priority),
+        folder_id=scenario.folder_id,
         steps=[_step_out(db, s, by_parent) for s in by_parent.get(None, [])],
         sort_order=scenario.sort_order,
         run_config=ScenarioRunConfig(**_loads(scenario.run_config, {})),
@@ -225,6 +235,8 @@ def list_scenarios(db: Session, project_id: int) -> List[ScenarioBrief]:
             id=s.id,
             name=s.name,
             description=s.description,
+            priority=cast(Any, s.priority),
+            folder_id=s.folder_id,
             step_count=len(repo.list_steps(db, s.id)),
             sort_order=s.sort_order,
         )
@@ -233,7 +245,11 @@ def list_scenarios(db: Session, project_id: int) -> List[ScenarioBrief]:
 
 
 def create_scenario(db: Session, project_id: int, data: ScenarioCreate) -> ScenarioOut:
-    scenario = ApifoxScenario(project_id=project_id, name=data.name, description=data.description)
+    _validate_folder(db, data.folder_id, project_id)
+    scenario = ApifoxScenario(
+        project_id=project_id, name=data.name, description=data.description,
+        priority=data.priority, folder_id=data.folder_id,
+    )
     repo.add(db, scenario)
     _write_steps(db, scenario, data.steps)
     db.commit()
@@ -252,6 +268,11 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
         scenario.name = data.name
     if "description" in data.model_fields_set:
         scenario.description = data.description
+    if data.priority is not None:
+        scenario.priority = data.priority
+    if "folder_id" in data.model_fields_set:  # None=移到未分组，需与"未传"区分
+        _validate_folder(db, data.folder_id, scenario.project_id)
+        scenario.folder_id = data.folder_id
     if data.sort_order is not None:
         scenario.sort_order = data.sort_order
     if data.run_config is not None:

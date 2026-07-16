@@ -1,7 +1,12 @@
 <template>
   <div class="test-execution">
     <div class="toolbar">
-      <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="handleProjectChange">
+      <el-select
+        v-model="projectId"
+        placeholder="选择项目"
+        style="width: 220px"
+        @change="handleProjectChange"
+      >
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
       <el-button type="primary" @click="openCreateDialog">
@@ -23,7 +28,13 @@
             <div class="progress-cell">
               <el-progress
                 :percentage="runProgress(row)"
-                :status="row.status === 'finished' && row.failed_count ? 'exception' : row.status === 'finished' ? 'success' : ''"
+                :status="
+                  row.status === 'finished' && row.failed_count
+                    ? 'exception'
+                    : row.status === 'finished'
+                      ? 'success'
+                      : ''
+                "
                 :stroke-width="8"
               />
               <span class="progress-text">
@@ -45,7 +56,9 @@
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="runStatusType[row.status]" size="small">{{ runStatusLabel[row.status] }}</el-tag>
+            <el-tag :type="runStatusType[row.status]" size="small">{{
+              runStatusLabel[row.status]
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="executor_name" label="执行人" width="100" />
@@ -92,7 +105,13 @@
         <el-progress
           :percentage="runProgress(executingRun)"
           :stroke-width="10"
-          :status="executingRun.status === 'finished' && executingRun.failed_count ? 'exception' : executingRun.status === 'finished' ? 'success' : ''"
+          :status="
+            executingRun.status === 'finished' && executingRun.failed_count
+              ? 'exception'
+              : executingRun.status === 'finished'
+                ? 'success'
+                : ''
+          "
         />
       </el-card>
 
@@ -118,7 +137,9 @@
             >
               <span class="case-index">{{ index + 1 }}</span>
               <span class="case-title" :title="item.case_title">{{ item.case_title }}</span>
-              <el-tag :type="resultType[item.result]" size="small">{{ resultLabel[item.result] }}</el-tag>
+              <el-tag :type="resultType[item.result]" size="small">{{
+                resultLabel[item.result]
+              }}</el-tag>
             </div>
             <el-empty v-if="!filteredCases.length" description="暂无匹配用例" />
           </div>
@@ -164,18 +185,38 @@
               />
             </el-form-item>
             <el-form-item label="备注">
-              <el-input v-model="resultForm.remark" type="textarea" :rows="2" placeholder="缺陷编号、环境问题等" />
+              <el-input
+                v-model="resultForm.remark"
+                type="textarea"
+                :rows="2"
+                placeholder="缺陷编号、环境问题等"
+              />
             </el-form-item>
           </el-form>
 
           <div class="result-actions">
-            <el-button type="success" size="large" :loading="submitting" @click="submitResult('pass')">
+            <el-button
+              type="success"
+              size="large"
+              :loading="submitting"
+              @click="submitResult('pass')"
+            >
               通过
             </el-button>
-            <el-button type="danger" size="large" :loading="submitting" @click="submitResult('fail')">
+            <el-button
+              type="danger"
+              size="large"
+              :loading="submitting"
+              @click="submitResult('fail')"
+            >
               失败
             </el-button>
-            <el-button type="warning" size="large" :loading="submitting" @click="submitResult('blocked')">
+            <el-button
+              type="warning"
+              size="large"
+              :loading="submitting"
+              @click="submitResult('blocked')"
+            >
               阻塞
             </el-button>
             <el-button type="info" size="large" :loading="submitting" @click="submitResult('skip')">
@@ -224,7 +265,12 @@
               style="flex: 1"
               @change="loadAvailableCases"
             >
-              <el-option v-for="r in createRequirements" :key="r.id" :label="r.title" :value="r.id" />
+              <el-option
+                v-for="r in createRequirements"
+                :key="r.id"
+                :label="r.title"
+                :value="r.id"
+              />
             </el-select>
             <el-button
               link
@@ -279,22 +325,30 @@
       <template v-if="detailRun">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="名称">{{ detailRun.name }}</el-descriptions-item>
-          <el-descriptions-item label="版本">{{ detailRun.build_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="版本">{{
+            detailRun.build_name || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="runStatusType[detailRun.status]" size="small">
               {{ runStatusLabel[detailRun.status] }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="通过率">{{ detailRun.pass_rate }}%</el-descriptions-item>
-          <el-descriptions-item label="执行人">{{ detailRun.executor_name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ formatTime(detailRun.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="执行人">{{
+            detailRun.executor_name || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{
+            formatTime(detailRun.created_at)
+          }}</el-descriptions-item>
         </el-descriptions>
         <el-table :data="detailRun.cases" stripe border class="detail-table">
           <el-table-column prop="testcase_id" label="用例ID" width="80" />
           <el-table-column prop="case_title" label="标题" min-width="180" show-overflow-tooltip />
           <el-table-column label="结果" width="80">
             <template #default="{ row }">
-              <el-tag :type="resultType[row.result]" size="small">{{ resultLabel[row.result] }}</el-tag>
+              <el-tag :type="resultType[row.result]" size="small">{{
+                resultLabel[row.result]
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="executor_name" label="执行人" width="90" />
@@ -311,6 +365,7 @@
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 
 const projects = ref([])
 const projectId = ref(null)
@@ -336,13 +391,15 @@ const createForm = reactive({
 const createRules = {
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   name: [{ required: true, message: '请输入测试单名称', trigger: 'blur' }],
-  requirement_ids: [{
-    type: 'array',
-    required: true,
-    min: 1,
-    message: '请至少选择一个需求点',
-    trigger: 'change',
-  }],
+  requirement_ids: [
+    {
+      type: 'array',
+      required: true,
+      min: 1,
+      message: '请至少选择一个需求点',
+      trigger: 'change',
+    },
+  ],
 }
 const availableCases = ref([])
 const casesLoading = ref(false)
@@ -357,7 +414,13 @@ const detailRun = ref(null)
 const runStatusLabel = { waiting: '待开始', running: '执行中', finished: '已完成' }
 const runStatusType = { waiting: 'info', running: 'warning', finished: 'success' }
 const resultLabel = { pending: '待测', pass: '通过', fail: '失败', blocked: '阻塞', skip: '跳过' }
-const resultType = { pending: 'info', pass: 'success', fail: 'danger', blocked: 'warning', skip: '' }
+const resultType = {
+  pending: 'info',
+  pass: 'success',
+  fail: 'danger',
+  blocked: 'warning',
+  skip: '',
+}
 
 const filteredCases = computed(() => {
   if (!executingRun.value?.cases) return []
@@ -383,18 +446,18 @@ const nextCase = computed(() => {
 })
 
 const allSelected = computed(
-  () => availableCases.value.length > 0 && selectedCaseIds.value.length === availableCases.value.length
+  () =>
+    availableCases.value.length > 0 && selectedCaseIds.value.length === availableCases.value.length,
 )
 
 const allRequirementsSelected = computed(
   () =>
     createRequirements.value.length > 0 &&
-    createForm.requirement_ids.length === createRequirements.value.length
+    createForm.requirement_ids.length === createRequirements.value.length,
 )
 
 function formatTime(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString()
+  return formatBeijingTime(value)
 }
 
 function runProgress(run) {
@@ -660,12 +723,25 @@ onMounted(loadProjects)
   background: #f1f5f9;
 }
 
-.stat-item.pass { color: #16a34a; }
-.stat-item.fail { color: #dc2626; }
-.stat-item.block { color: #d97706; }
-.stat-item.skip { color: #64748b; }
-.stat-item.pending { color: #2563eb; }
-.stat-item.rate { color: #0f172a; font-weight: 600; }
+.stat-item.pass {
+  color: #16a34a;
+}
+.stat-item.fail {
+  color: #dc2626;
+}
+.stat-item.block {
+  color: #d97706;
+}
+.stat-item.skip {
+  color: #64748b;
+}
+.stat-item.pending {
+  color: #2563eb;
+}
+.stat-item.rate {
+  color: #0f172a;
+  font-weight: 600;
+}
 
 .execute-body {
   display: grid;

@@ -157,6 +157,60 @@ def test_form_data_body_goes_to_files():
     assert plan["request_kwargs"]["files"] == {"a": (None, "1")}
 
 
+def test_form_data_conflicting_content_type_kept_and_warned():
+    # 测试工具「所配即所发」：form-data 带 Content-Type: application/json 时**不改动**用户配置，
+    # 原样发送（服务端会因类型不符报错，这是有效测试结果），仅给出诊断警告
+    spec = {
+        "headers": [{"key": "Content-Type", "value": "application/json"}],
+        "body": {"type": "form-data", "form": [{"key": "username", "value": "admin"}]},
+    }
+    plan = _build(_endpoint(path="/login", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["headers"]["Content-Type"] == "application/json"  # 不被删/改，原样保留
+    assert plan["request_kwargs"]["files"] == {"username": (None, "admin")}
+    assert plan["warnings"] and "form-data" in plan["warnings"][0] and "application/json" in plan["warnings"][0]
+
+
+def test_form_data_multipart_without_boundary_warns():
+    # multipart/form-data 但缺 boundary 也是坏配置（httpx 不回填 boundary 到用户显式头）→ 诊断警告
+    spec = {
+        "headers": [{"key": "Content-Type", "value": "multipart/form-data"}],
+        "body": {"type": "form-data", "form": [{"key": "a", "value": "1"}]},
+    }
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["warnings"] and "boundary" in plan["warnings"][0]
+
+
+def test_form_data_multipart_with_boundary_no_warning():
+    spec = {
+        "headers": [{"key": "Content-Type", "value": "multipart/form-data; boundary=xyz"}],
+        "body": {"type": "form-data", "form": [{"key": "a", "value": "1"}]},
+    }
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["warnings"] == []  # 类型对且有 boundary，不打扰
+
+
+def test_form_data_without_content_type_no_warning():
+    spec = {"body": {"type": "form-data", "form": [{"key": "a", "value": "1"}]}}
+    plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    assert plan["warnings"] == []  # 无显式 Content-Type，httpx 自动生成正确 multipart，不打扰
+
+
+def test_urlencoded_conflicting_content_type_kept_and_warned():
+    spec = {
+        "headers": [{"key": "content-type", "value": "application/json"}],
+        "body": {"type": "urlencoded", "form": [{"key": "username", "value": "admin"}]},
+    }
+    plan = _build(_endpoint(path="/login", method="POST"), spec=spec, environment=_env(base_url="https://api.test"))
+
+    cts = [v for k, v in plan["headers"].items() if k.lower() == "content-type"]
+    assert cts == ["application/json"]  # 用户配置原样保留，不被覆盖
+    assert plan["warnings"] and "x-www-form-urlencoded" in plan["warnings"][0]
+
+
 def test_xml_body_sets_xml_content_type_and_interpolates():
     spec = {"body": {"type": "xml", "raw": "<a>{{v}}</a>"}}
     plan = _build(_endpoint(path="/s", method="POST"), spec=spec, environment=_env(base_url="https://api.test"), variables={"v": "1"})
@@ -218,3 +272,63 @@ def test_request_spec_preserves_cookies_and_graphql_fields():
     assert dumped["body"]["graphql_variables"] == '{"a":1}'
     assert dumped["body"]["file_id"] == 9
     assert dumped["body"]["file_name"] == "a.bin"
+
+
+# ---------- 请求设置（超时 / SSL / 重定向）解析进 plan ----------
+def test_settings_default_when_absent():
+    plan = _build(_endpoint(path="http://x/y"))
+
+    assert plan["timeout"] is None  # 由调用方回落平台默认
+    assert plan["verify_ssl"] is True
+    assert plan["follow_redirects"] is True
+
+
+def test_settings_timeout_ms_converted_to_seconds():
+    plan = _build(_endpoint(path="http://x/y"), {"settings": {"timeout_ms": 5000}})
+
+    assert plan["timeout"] == 5.0
+
+
+@pytest.mark.parametrize("bad", [0, -1, "abc", None])
+def test_settings_nonpositive_or_invalid_timeout_falls_back_none(bad):
+    plan = _build(_endpoint(path="http://x/y"), {"settings": {"timeout_ms": bad}})
+
+    assert plan["timeout"] is None
+
+
+def test_settings_verify_ssl_and_redirects_passthrough():
+    spec = {"settings": {"verify_ssl": False, "follow_redirects": False}}
+    plan = _build(_endpoint(path="http://x/y"), spec)
+
+    assert plan["verify_ssl"] is False
+    assert plan["follow_redirects"] is False
+
+
+# ---------- Binary 孤儿/未选文件告警（run-report warning） ----------
+def test_binary_orphan_file_warns_and_sends_nothing():
+    spec = {"body": {"type": "binary", "file_id": 7}}
+    plan = build_request(
+        _endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [],
+        binary_loader=lambda fid: None,  # 文件已被 GC/删除
+    )
+
+    assert "content" not in plan["request_kwargs"]
+    assert any("id=7" in w and "不存在或已被清理" in w for w in plan["warnings"])
+
+
+def test_binary_without_file_id_warns():
+    spec = {"body": {"type": "binary"}}
+    plan = build_request(_endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [])
+
+    assert any("未选择文件" in w for w in plan["warnings"])
+
+
+def test_binary_valid_file_no_warning():
+    spec = {"body": {"type": "binary", "file_id": 3}}
+    plan = build_request(
+        _endpoint(path="/s", method="POST"), spec, _env(base_url="https://api.test"), {}, [],
+        binary_loader=lambda fid: (b"abc", "application/octet-stream"),
+    )
+
+    assert plan["request_kwargs"]["content"] == b"abc"
+    assert plan["warnings"] == []

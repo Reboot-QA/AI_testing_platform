@@ -53,6 +53,12 @@ def get_suite(sid: int, db: Session = Depends(get_db), user: User = Depends(get_
     return service.get_suite_out(db, suite)
 
 
+@router.post("/suites/{sid}/copy", response_model=SuiteOut)
+def copy_suite(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    suite = _suite_checked(db, sid, user)
+    return service.copy_suite(db, suite)
+
+
 @router.put("/suites/{sid}", response_model=SuiteOut)
 def update_suite(
     sid: int, data: SuiteUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)

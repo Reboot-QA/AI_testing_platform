@@ -8,7 +8,14 @@ from app.database import get_db
 from app.models.department import Department
 from app.models.project import Project
 from app.models.user import User
-from app.schemas import DepartmentCreate, DepartmentOut, DepartmentUpdate
+from app.schemas import DepartmentCreate, DepartmentOut, DepartmentPermissionsOut, DepartmentPermissionsUpdate, DepartmentUpdate
+from app.constants.menus import MENU_KEY_SET
+from app.services.permission_service import (
+    ensure_default_department_permissions,
+    get_department_menu_keys,
+    list_menu_definitions,
+    set_department_menu_keys,
+)
 
 router = APIRouter(prefix="/departments", tags=["部门"])
 
@@ -48,7 +55,52 @@ def create_department(
     db.add(department)
     db.commit()
     db.refresh(department)
+    ensure_default_department_permissions(db, department.id)
     return _department_out(department, db)
+
+
+@router.get("/menus", response_model=List[dict])
+def list_menus(_: User = Depends(get_current_admin)):
+    return list_menu_definitions()
+
+
+@router.get("/{department_id}/permissions", response_model=DepartmentPermissionsOut)
+def get_department_permissions(
+    department_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    department = db.query(Department).filter(Department.id == department_id).first()
+    if not department:
+        raise HTTPException(status_code=404, detail="部门不存在")
+    return DepartmentPermissionsOut(
+        department_id=department.id,
+        department_name=department.name,
+        menu_permissions=get_department_menu_keys(db, department.id),
+    )
+
+
+@router.put("/{department_id}/permissions", response_model=DepartmentPermissionsOut)
+def update_department_permissions(
+    department_id: int,
+    data: DepartmentPermissionsUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    department = db.query(Department).filter(Department.id == department_id).first()
+    if not department:
+        raise HTTPException(status_code=404, detail="部门不存在")
+
+    invalid = [key for key in data.menu_permissions if key not in MENU_KEY_SET]
+    if invalid:
+        raise HTTPException(status_code=400, detail=f"无效菜单权限：{', '.join(invalid)}")
+
+    keys = set_department_menu_keys(db, department.id, data.menu_permissions)
+    return DepartmentPermissionsOut(
+        department_id=department.id,
+        department_name=department.name,
+        menu_permissions=keys,
+    )
 
 
 @router.put("/{department_id}", response_model=DepartmentOut)

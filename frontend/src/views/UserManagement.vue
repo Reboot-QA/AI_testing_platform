@@ -15,14 +15,7 @@
       <el-table-column prop="email" label="邮箱" min-width="180">
         <template #default="{ row }">{{ row.email || '-' }}</template>
       </el-table-column>
-      <el-table-column prop="role" label="角色" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.role === 'admin' ? 'danger' : 'info'" size="small">
-            {{ roleMap[row.role] || row.role }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="department_name" label="部门" width="120">
+      <el-table-column prop="department_name" label="部门" width="140">
         <template #default="{ row }">{{ row.department_name || '-' }}</template>
       </el-table-column>
       <el-table-column prop="is_active" label="状态" width="100">
@@ -63,12 +56,6 @@
         </el-form-item>
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="form.email" placeholder="选填" />
-        </el-form-item>
-        <el-form-item label="角色" prop="role">
-          <el-select v-model="form.role" style="width: 100%">
-            <el-option label="管理员" value="admin" />
-            <el-option label="测试员" value="tester" />
-          </el-select>
         </el-form-item>
         <el-form-item label="部门" prop="department_id">
           <el-select
@@ -123,6 +110,7 @@
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi, departmentApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 import { useUserStore } from '@/stores/user'
 import PageCard from '@/components/PageCard.vue'
 
@@ -141,8 +129,16 @@ const passwordTarget = ref(null)
 const formRef = ref()
 const passwordFormRef = ref()
 
-const roleMap = { admin: '管理员', tester: '测试员' }
 const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/
+
+const form = reactive({
+  username: '',
+  password: '',
+  full_name: '',
+  email: '',
+  department_id: null,
+  is_active: true,
+})
 
 function validateUsername(_rule, value, callback) {
   if (!value) {
@@ -170,16 +166,6 @@ function validateEmail(_rule, value, callback) {
   callback()
 }
 
-const form = reactive({
-  username: '',
-  password: '',
-  full_name: '',
-  email: '',
-  role: 'tester',
-  department_id: null,
-  is_active: true,
-})
-
 const passwordForm = reactive({
   password: '',
 })
@@ -188,7 +174,6 @@ const rules = {
   username: [{ required: true, validator: validateUsername, trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   email: [{ validator: validateEmail, trigger: 'blur' }],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
   department_id: [{ required: true, message: '请选择部门', trigger: 'change' }],
 }
 
@@ -200,7 +185,7 @@ const passwordRules = {
 }
 
 function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN') : '-'
+  return formatBeijingTime(value)
 }
 
 async function loadDepartments() {
@@ -222,7 +207,6 @@ function openDialog(row = null) {
   form.password = ''
   form.full_name = row?.full_name || ''
   form.email = row?.email || ''
-  form.role = row?.role || 'tester'
   form.department_id = row?.department_id ?? null
   form.is_active = row?.is_active ?? true
   dialogVisible.value = true
@@ -242,7 +226,6 @@ async function handleSubmit() {
       await userApi.update(editing.value.id, {
         full_name: form.full_name,
         email: form.email.trim() || null,
-        role: form.role,
         department_id: form.department_id,
         is_active: form.is_active,
       })
@@ -253,7 +236,6 @@ async function handleSubmit() {
         password: form.password,
         full_name: form.full_name,
         email: form.email.trim() || undefined,
-        role: form.role,
         department_id: form.department_id,
       })
       ElMessage.success('创建成功')

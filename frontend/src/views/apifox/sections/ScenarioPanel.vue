@@ -1,31 +1,30 @@
 <template>
   <div class="scenario-panel">
-    <div class="list-panel">
-      <div class="list-toolbar">
-        <span>场景</span>
-        <el-button size="small" type="primary" @click="addScenario">
-          <el-icon><Plus /></el-icon>
-        </el-button>
-      </div>
-      <div
-        v-for="s in scenarios"
-        :key="s.id"
-        class="item"
-        :class="{ active: form.id === s.id }"
-        @click="onSelectScenario(s.id)"
-      >
-        <el-icon><Share /></el-icon>
-        <span class="item-name">{{ s.name }}</span>
-        <el-tag size="small" type="info">{{ s.step_count }} 步</el-tag>
-        <el-button link type="danger" size="small" @click.stop="delScenario(s)">删</el-button>
-      </div>
-      <el-empty v-if="scenarios.length === 0" description="暂无场景" :image-size="60" />
-    </div>
+    <ScenarioListPanel
+      :scenarios="scenarios"
+      :folders="folders"
+      :active-id="form.id"
+      @select="onSelectScenario"
+      @del="delScenario"
+      @move="onMoveScenario"
+      @new-scenario="addScenario"
+      @new-folder="createFolder"
+      @rename-folder="renameFolder"
+      @delete-folder="onDeleteFolder"
+    />
 
     <div class="editor-panel">
       <template v-if="form.id">
         <div class="row1">
-          <el-input v-model="form.name" placeholder="场景名称" style="width: 260px" />
+          <el-input v-model="form.name" placeholder="场景名称" style="width: 220px" />
+          <el-select v-model="form.priority" style="width: 96px">
+            <el-option
+              v-for="p in PRIORITY_OPTIONS"
+              :key="p.value"
+              :label="`优先级 ${p.label}`"
+              :value="p.value"
+            />
+          </el-select>
           <el-button type="primary" :loading="saving" @click="saveScenario">保存</el-button>
           <el-button type="success" :loading="running" @click="runScenario">运行</el-button>
           <span class="run-hint">环境在顶部选择</span>
@@ -63,6 +62,9 @@ import { normalizeSpec } from '@/utils/apifoxSpec'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { PRIORITY_OPTIONS } from '@/composables/useScenarioPriority'
+import { useScenarioFolders } from '@/composables/useScenarioFolders'
+import ScenarioListPanel from '@/components/apifox/ScenarioListPanel.vue'
 import ScenarioRunConfigBar from '@/components/apifox/ScenarioRunConfigBar.vue'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
@@ -91,10 +93,23 @@ const form = reactive({
   id: null,
   name: '',
   description: '',
+  priority: 'medium',
   steps: [],
   version: 1,
   run_config: { loop_count: 1, dataset_id: null },
 })
+const { folders, loadFolders, createFolder, renameFolder, deleteFolder } = useScenarioFolders(pid)
+
+async function onMoveScenario({ id, folderId }) {
+  // 轻量移动：仅改 folder_id，不带乐观锁版本（后端 expected_version=None 跳过校验）
+  await apifoxApi.updateScenario(id, { folder_id: folderId })
+  await loadScenarios()
+}
+
+async function onDeleteFolder(folder) {
+  await deleteFolder(folder) // 后端把其下场景移到未分组
+  await loadScenarios() // 刷新场景的 folder_id 归属
+}
 
 async function loadScenarios() {
   scenarios.value = await apifoxApi.listScenarios(pid.value)
@@ -169,6 +184,7 @@ const guard = useUnsavedGuard({
     JSON.stringify({
       name: form.name,
       description: form.description,
+      priority: form.priority,
       steps: form.steps,
       run_config: form.run_config,
     }),
@@ -183,6 +199,7 @@ async function selectScenario(sid) {
   form.id = s.id
   form.name = s.name
   form.description = s.description || ''
+  form.priority = s.priority || 'medium'
   form.steps = normalizeSteps(s.steps || [])
   form.version = s.version ?? 1
   form.run_config = {
@@ -248,6 +265,7 @@ async function doSaveScenario() {
   const updated = await apifoxApi.updateScenario(form.id, {
     name: form.name,
     description: form.description || null,
+    priority: form.priority,
     steps: form.steps.map(serializeStep),
     run_config: {
       loop_count: form.run_config.loop_count || 1,
@@ -309,6 +327,7 @@ async function delScenario(s) {
 
 onMounted(async () => {
   await loadScenarios()
+  await loadFolders()
   await loadProjectCases()
   await loadScripts()
   await loadDatabases()
@@ -322,46 +341,6 @@ onMounted(async () => {
   display: flex;
   gap: 16px;
   height: 100%;
-}
-
-.list-panel {
-  width: 260px;
-  border-right: 1px solid var(--ax-border);
-  overflow: auto;
-  padding-right: 8px;
-}
-
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
-  margin-bottom: 8px;
-}
-
-.item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.item:hover {
-  background: var(--ax-bg-hover);
-}
-
-.item.active {
-  background: var(--ax-bg-active);
-}
-
-.item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .editor-panel {

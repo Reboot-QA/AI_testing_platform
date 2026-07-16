@@ -10,7 +10,6 @@ from app.bootstrap import run_bootstrap
 from app.config import settings
 from app.request_logging import register_request_logging
 from app.routers import (
-    api_automation,
     assistant,
     auth,
     departments,
@@ -38,7 +37,7 @@ from app.routers.apifox import suites_router as apifox_suites_router
 from app.routers.apifox import uploads_router as apifox_uploads_router
 from app.routers.apifox import variables_router as apifox_variables_router
 from app.routers.apifox import workbench_router as apifox_workbench_router
-from app.services.schedule_service import start_scheduler, stop_scheduler
+from app.services.apifox.scheduler import start_scheduler, stop_scheduler
 
 
 def setup_logging() -> None:
@@ -115,7 +114,6 @@ app.include_router(testcases.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
-app.include_router(api_automation.router, prefix="/api/v1")
 app.include_router(test_execution.router, prefix="/api/v1")
 app.include_router(logs.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
