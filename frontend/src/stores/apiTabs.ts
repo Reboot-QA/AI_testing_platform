@@ -1,12 +1,45 @@
 import { defineStore } from 'pinia'
 import { apifoxApi } from '@/api'
+import type { Schemas } from '@/api/types'
 import { normalizeSpec } from '@/utils/apifoxSpec'
+import type { RequestSpec } from '@/types/apifox'
 
-// 接口管理「同时打开多个接口」的多标签状态（借鉴 Apifox-UI：tabs + activeId + lastActiveId）。
-// 存 Pinia 而非组件内：切主 tab 会销毁 ApiManage，Pinia 存活可保留已打开的接口 tab 与编辑态。
-// 按项目隔离。dirty 用「初始快照深比较」判定（快照存 JSON 串）。
+type Endpoint = Schemas['EndpointOut']
 
-function endpointToForm(e) {
+export interface EndpointForm {
+  id: number
+  name: string
+  method: string
+  path: string
+  server_name: string | null
+  description: string
+  request_spec: RequestSpec
+  assertions: unknown[]
+  extracts: unknown[]
+  pre_scripts: unknown[]
+  post_scripts: unknown[]
+  response_schema_id: number | null
+  contract_strict: boolean
+}
+
+export interface ApiTab {
+  id: number
+  name: string
+  method: string
+  form: EndpointForm
+  snapshot: string
+  version: number
+  endpointTab: string
+  saving: boolean
+}
+
+interface ProjectTabsState {
+  tabs: ApiTab[]
+  activeId: number | null
+  lastActiveId: number | null
+}
+
+function endpointToForm(e: Endpoint): EndpointForm {
   return {
     id: e.id,
     name: e.name,
@@ -24,12 +57,11 @@ function endpointToForm(e) {
   }
 }
 
-const snap = (form) => JSON.stringify(form)
+const snap = (form: EndpointForm): string => JSON.stringify(form)
 
-// 打开中的接口去重锁（key=`pid:id`）——纯并发锁不需响应式，防连点产生重复 tab
-const _pending = new Set()
+const _pending = new Set<string>()
 
-function newTab(e) {
+function newTab(e: Endpoint): ApiTab {
   const form = endpointToForm(e)
   return {
     id: e.id,
@@ -38,57 +70,57 @@ function newTab(e) {
     form,
     snapshot: snap(form),
     version: e.version ?? 1,
-    endpointTab: 'debug', // 接口内子 tab（调试/文档/用例）各 tab 独立
-    saving: false, // 保存中态按 tab 隔离，避免多 tab 互相污染保存按钮
+    endpointTab: 'debug',
+    saving: false,
   }
 }
 
 export const useApiTabsStore = defineStore('apiTabs', {
-  state: () => ({ byProject: {} }),
+  state: () => ({ byProject: {} as Record<string, ProjectTabsState> }),
   getters: {
-    tabsOf: (s) => (pid) => s.byProject[String(pid)]?.tabs || [],
-    activeIdOf: (s) => (pid) => s.byProject[String(pid)]?.activeId ?? null,
+    tabsOf: (s) => (pid: number | string) => s.byProject[String(pid)]?.tabs || [],
+    activeIdOf: (s) => (pid: number | string) => s.byProject[String(pid)]?.activeId ?? null,
   },
   actions: {
-    _p(pid) {
+    _p(pid: number | string): ProjectTabsState {
       const k = String(pid)
       if (!this.byProject[k]) this.byProject[k] = { tabs: [], activeId: null, lastActiveId: null }
       return this.byProject[k]
     },
-    findTab(pid, id) {
+    findTab(pid: number | string, id: number): ApiTab | null {
       return this._p(pid).tabs.find((t) => t.id === id) || null
     },
-    isDirty(tab) {
+    isDirty(tab: ApiTab | null): boolean {
       return !!tab && snap(tab.form) !== tab.snapshot
     },
-    hasAnyDirty(pid) {
+    hasAnyDirty(pid: number | string): boolean {
       return this._p(pid).tabs.some((t) => this.isDirty(t))
     },
-    activate(pid, id) {
+    activate(pid: number | string, id: number): void {
       const p = this._p(pid)
       if (p.activeId !== id) {
         p.lastActiveId = p.activeId
         p.activeId = id
       }
     },
-    async openEndpoint(pid, id) {
+    async openEndpoint(pid: number | string, id: number): Promise<void> {
       const p = this._p(pid)
       if (p.tabs.some((t) => t.id === id)) {
         this.activate(pid, id)
         return
       }
       const key = `${pid}:${id}`
-      if (_pending.has(key)) return // 同一接口正在打开中，忽略连点，避免重复 tab
+      if (_pending.has(key)) return
       _pending.add(key)
       try {
         const e = await apifoxApi.getEndpoint(id)
-        if (!p.tabs.some((t) => t.id === id)) p.tabs.push(newTab(e)) // 双检：await 期间可能已被打开
+        if (!p.tabs.some((t) => t.id === id)) p.tabs.push(newTab(e))
         this.activate(pid, id)
       } finally {
         _pending.delete(key)
       }
     },
-    async reloadEndpoint(pid, id) {
+    async reloadEndpoint(pid: number | string, id: number): Promise<void> {
       const t = this.findTab(pid, id)
       if (!t) return
       const e = await apifoxApi.getEndpoint(id)
@@ -98,20 +130,18 @@ export const useApiTabsStore = defineStore('apiTabs', {
       t.name = e.name
       t.method = e.method
     },
-    closeTab(pid, id) {
+    closeTab(pid: number | string, id: number): void {
       const p = this._p(pid)
       const idx = p.tabs.findIndex((t) => t.id === id)
       if (idx < 0) return
       p.tabs.splice(idx, 1)
       if (p.activeId === id) {
-        // 优先回退上一次激活的 tab，否则激活末尾
         const last = p.tabs.find((t) => t.id === p.lastActiveId)
-        p.activeId = last ? last.id : (p.tabs.at(-1)?.id ?? null)
+        p.activeId = last ? last.id : p.tabs.length ? p.tabs[p.tabs.length - 1]!.id : null
       }
       if (p.lastActiveId === id) p.lastActiveId = null
     },
-    // 保存成功：重置快照(清脏) + 回写 version + 同步展示名/方法
-    afterSave(pid, id, updated) {
+    afterSave(pid: number | string, id: number, updated?: Partial<Endpoint>): void {
       const t = this.findTab(pid, id)
       if (!t) return
       if (updated?.version != null) t.version = updated.version
@@ -119,8 +149,7 @@ export const useApiTabsStore = defineStore('apiTabs', {
       t.method = t.form.method
       t.snapshot = snap(t.form)
     },
-    // 树上重命名/删除的联动
-    onRenamed(pid, id, name) {
+    onRenamed(pid: number | string, id: number, name: string): void {
       const t = this.findTab(pid, id)
       if (!t) return
       t.name = name

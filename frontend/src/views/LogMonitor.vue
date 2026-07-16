@@ -8,17 +8,21 @@
           :class="{ active: activeSource === item.key }"
           @click="switchSource(item.key)"
         >
-          <div class="stat-title">{{ item.label }}</div>
-          <div class="stat-meta">
-            <el-tag :type="item.exists ? 'success' : 'info'" size="small">
-              {{ item.exists ? '在线' : '暂无文件' }}
-            </el-tag>
-            <span>{{ formatSize(item.size) }}</span>
-            <span>{{ item.line_count || 0 }} 行</span>
-          </div>
-          <div class="stat-path">{{ item.filename }}</div>
-          <div v-if="item.modified_at" class="stat-time">
-            更新: {{ formatTime(item.modified_at) }}
+          <div class="stat-body">
+            <div class="stat-title">{{ item.label }}</div>
+            <div class="stat-content">
+              <div class="stat-meta">
+                <el-tag :type="item.exists ? 'success' : 'info'" size="small">
+                  {{ item.exists ? '在线' : '暂无文件' }}
+                </el-tag>
+                <span>{{ formatSize(item.size) }}</span>
+                <span>{{ item.line_count || 0 }} 行</span>
+              </div>
+            </div>
+            <div class="stat-footer">
+              <div class="stat-path">{{ item.filename }}</div>
+              <div class="stat-time">更新: {{ formatBeijingTime(item.modified_at) }}</div>
+            </div>
           </div>
         </el-card>
       </el-col>
@@ -107,6 +111,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { logsApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 
 const sources = ref([])
 const logDir = ref('')
@@ -133,11 +138,6 @@ function formatSize(size) {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatTime(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString()
 }
 
 async function loadSources() {
@@ -298,20 +298,53 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .log-monitor {
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 16px;
 }
 
 .stats-row {
-  margin-bottom: 0;
+  flex: none;
+  align-items: stretch;
+}
+
+.stats-row :deep(.el-col) {
+  display: flex;
+}
+
+.viewer-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .stat-card {
+  width: 100%;
   cursor: pointer;
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
+}
+
+.stat-card :deep(.el-card__body) {
+  height: 100%;
+  padding: 16px 20px;
+}
+
+.stat-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .stat-card.active {
@@ -322,22 +355,38 @@ onBeforeUnmount(() => {
 .stat-title {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.stat-content {
+  flex: 1;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .stat-meta {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
   color: #606266;
   font-size: 13px;
-  margin-bottom: 8px;
+}
+
+.stat-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 .stat-path,
 .stat-time {
   color: #909399;
   font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .toolbar {
@@ -361,6 +410,7 @@ onBeforeUnmount(() => {
   color: #909399;
   font-size: 12px;
   margin-bottom: 12px;
+  flex: none;
 }
 
 .live-dot {
@@ -373,7 +423,8 @@ onBeforeUnmount(() => {
 }
 
 .log-viewer {
-  height: 560px;
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   background: #0f172a;
   border-radius: 8px;

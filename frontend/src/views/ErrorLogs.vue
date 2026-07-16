@@ -8,22 +8,30 @@
           :class="{ active: activeCategory === item.key }"
           @click="switchCategory(item.key)"
         >
-          <div class="stat-title">{{ item.label }}</div>
-          <div class="stat-meta">
-            <el-tag :type="item.exists ? 'success' : 'info'" size="small">
-              {{ item.exists ? '已启用' : '暂无文件' }}
-            </el-tag>
-            <span>{{ formatSize(item.size) }}</span>
-            <span>{{ item.line_count || 0 }} 行</span>
+          <div class="stat-body">
+            <div class="stat-title">{{ item.label }}</div>
+            <div class="stat-content">
+              <div class="stat-meta">
+                <el-tag :type="item.exists ? 'success' : 'info'" size="small">
+                  {{ item.exists ? '已启用' : '暂无文件' }}
+                </el-tag>
+                <span>{{ formatSize(item.size) }}</span>
+                <span>{{ item.line_count || 0 }} 行</span>
+              </div>
+            </div>
+            <div class="stat-path">{{ item.filename }}</div>
           </div>
-          <div class="stat-path">{{ item.filename }}</div>
         </el-card>
       </el-col>
       <el-col :xs="24" :sm="8">
         <el-card shadow="never" class="stat-card summary-card">
-          <div class="stat-title">错误总数</div>
-          <div class="summary-value">{{ totalMatched }}</div>
-          <div class="stat-path">目录: {{ logDir || '-' }}</div>
+          <div class="stat-body">
+            <div class="stat-title">错误总数</div>
+            <div class="stat-content">
+              <div class="summary-value">{{ totalMatched }}</div>
+            </div>
+            <div class="stat-path">目录: {{ logDir || '-' }}</div>
+          </div>
         </el-card>
       </el-col>
     </el-row>
@@ -325,6 +333,11 @@ onBeforeUnmount(() => {
 /* 顶部统计卡固定，日志卡吃掉剩余高度、内部滚动 */
 .stats-row {
   flex: none;
+  align-items: stretch;
+}
+
+.stats-row :deep(.el-col) {
+  display: flex;
 }
 
 .viewer-card {
@@ -342,10 +355,23 @@ onBeforeUnmount(() => {
 }
 
 .stat-card {
+  width: 100%;
   cursor: pointer;
   transition:
     border-color 0.2s,
     box-shadow 0.2s;
+}
+
+.stat-card :deep(.el-card__body) {
+  height: 100%;
+  padding: 16px 20px;
+}
+
+.stat-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .stat-card.active {
@@ -360,28 +386,38 @@ onBeforeUnmount(() => {
 .stat-title {
   font-size: 16px;
   font-weight: 600;
-  margin-bottom: 8px;
+  line-height: 1.4;
+}
+
+.stat-content {
+  flex: 1;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
 }
 
 .summary-value {
-  font-size: 28px;
+  font-size: 24px;
   font-weight: 700;
+  line-height: 1;
   color: #f56c6c;
-  margin-bottom: 8px;
 }
 
 .stat-meta {
   display: flex;
   gap: 12px;
   align-items: center;
+  flex-wrap: wrap;
   color: #606266;
   font-size: 13px;
-  margin-bottom: 8px;
 }
 
 .stat-path {
+  margin-top: auto;
   color: #909399;
   font-size: 12px;
+  line-height: 1.4;
+  word-break: break-all;
 }
 
 .toolbar {

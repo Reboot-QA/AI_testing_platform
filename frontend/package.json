@@ -12,13 +12,13 @@
     "preview": "vite preview",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "format": "prettier --write \"src/**/*.{js,ts,vue,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{js,ts,vue,css,json}\"",
+    "format": "prettier --write \"src/**/*.{ts,vue,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,vue,css,json}\"",
     "typecheck": "vue-tsc --noEmit",
     "gen:api-types": "openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts"
   },
   "lint-staged": {
-    "src/**/*.{js,ts,vue}": [
+    "src/**/*.{ts,vue}": [
       "eslint --fix",
       "prettier --write"
     ],
