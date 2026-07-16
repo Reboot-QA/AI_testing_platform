@@ -1,6 +1,18 @@
 <template>
   <PageCard>
     <template #toolbar>
+      <el-input
+        v-model="keyword"
+        clearable
+        placeholder="搜索项目名称/描述/创建人/部门"
+        style="width: 280px"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+      />
+      <el-button type="primary" plain @click="handleSearch">
+        <el-icon><Search /></el-icon>
+        搜索
+      </el-button>
       <el-button type="primary" data-assistant="projects.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新建项目
       </el-button>
@@ -40,6 +52,19 @@
         </template>
       </el-table-column>
     </el-table>
+
+    <div class="pagination-bar">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[10, 20, 50, 100]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="loadData"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </PageCard>
 
   <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="500px">
@@ -84,6 +109,10 @@ const dialogVisible = ref(false)
 const submitting = ref(false)
 const editing = ref(null)
 const formRef = ref()
+const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = ref(10)
+const total = ref(0)
 
 const form = reactive({ name: '', description: '' })
 const rules = { name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }] }
@@ -95,10 +124,36 @@ function formatDate(d) {
 async function loadData() {
   loading.value = true
   try {
-    projects.value = await projectApi.list()
+    const params = {
+      page: currentPage.value,
+      page_size: pageSize.value,
+    }
+    if (keyword.value.trim()) {
+      params.keyword = keyword.value.trim()
+    }
+    const data = await projectApi.list(params)
+    projects.value = data.items || []
+    total.value = data.total || 0
+    const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage
+      if (maxPage !== params.page) {
+        return loadData()
+      }
+    }
   } finally {
     loading.value = false
   }
+}
+
+function handleSearch() {
+  currentPage.value = 1
+  loadData()
+}
+
+function handlePageSizeChange() {
+  currentPage.value = 1
+  loadData()
 }
 
 function openDialog(row = null) {
@@ -146,3 +201,11 @@ async function handleDelete(row) {
 
 onMounted(loadData)
 </script>
+
+<style scoped>
+.pagination-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+</style>

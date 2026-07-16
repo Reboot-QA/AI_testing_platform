@@ -1,8 +1,24 @@
 import { del, get, post, put, type Id } from './request'
 import type { Schemas } from './types'
 
+export type ProjectListParams = {
+  page?: number
+  page_size?: number
+  keyword?: string
+}
+
+export type ProjectPageOut = {
+  items: Schemas['ProjectOut'][]
+  total: number
+  page: number
+  page_size: number
+}
+
 export const projectApi = {
-  list: () => get<Schemas['ProjectOut'][]>('/projects'),
+  list: (params: ProjectListParams = {}) =>
+    get<Schemas['ProjectOut'][] | ProjectPageOut>('/projects', {
+      params: Object.keys(params).length ? params : undefined,
+    }),
   get: (id: Id) => get<Schemas['ProjectOut']>(`/projects/${id}`),
   create: (data: Schemas['ProjectCreate']) => post<Schemas['ProjectOut']>('/projects', data),
   update: (id: Id, data: Schemas['ProjectUpdate']) =>

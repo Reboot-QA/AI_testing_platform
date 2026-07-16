@@ -1,10 +1,12 @@
-from typing import List
+from typing import List, Optional, Union
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
 from app.database import get_db
+from app.models.department import Department
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
@@ -13,6 +15,7 @@ from app.schemas import (
     DashboardStats,
     ProjectCreate,
     ProjectOut,
+    ProjectPageOut,
     ProjectPrefOrderIn,
     ProjectUpdate,
 )
@@ -51,14 +54,44 @@ def _project_out(project: Project, db: Session) -> ProjectOut:
     )
 
 
-@router.get("", response_model=List[ProjectOut])
-def list_projects(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    projects = (
-        accessible_projects_query(db, current_user)
-        .options(joinedload(Project.owner), joinedload(Project.department))
-        .order_by(Project.id.desc())
-        .all()
+@router.get("", response_model=Union[List[ProjectOut], ProjectPageOut])
+def list_projects(
+    keyword: Optional[str] = Query(None, max_length=200),
+    page: Optional[int] = Query(None, ge=1),
+    page_size: int = Query(10, ge=1, le=100),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    query = accessible_projects_query(db, current_user).options(
+        joinedload(Project.owner), joinedload(Project.department)
     )
+    if keyword and keyword.strip():
+        like = f"%{keyword.strip()}%"
+        owner_ids = db.query(User.id).filter(
+            or_(User.username.like(like), User.full_name.like(like))
+        )
+        dept_ids = db.query(Department.id).filter(Department.name.like(like))
+        query = query.filter(
+            or_(
+                Project.name.like(like),
+                Project.description.like(like),
+                Project.owner_id.in_(owner_ids),
+                Project.department_id.in_(dept_ids),
+            )
+        )
+    query = query.order_by(Project.id.desc())
+
+    if page is not None:
+        total = query.count()
+        projects = query.offset((page - 1) * page_size).limit(page_size).all()
+        return ProjectPageOut(
+            items=[_project_out(p, db) for p in projects],
+            total=total,
+            page=page,
+            page_size=page_size,
+        )
+
+    projects = query.all()
     return [_project_out(p, db) for p in projects]
 
 
