@@ -6,21 +6,31 @@
         v-for="item in statCards"
         :key="item.label"
         type="button"
-        class="group rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+        class="group relative overflow-hidden rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-transparent hover:shadow-md"
         @click="goToPage(item.path)"
       >
         <div class="flex items-center gap-4">
           <div
-            class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl text-white"
-            :style="{ background: item.color }"
+            class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
+            :style="{ backgroundColor: tint(item.color), color: item.color }"
           >
             <el-icon :size="26"><component :is="item.icon" /></el-icon>
           </div>
           <div>
-            <div class="text-2xl font-bold text-foreground">{{ item.value }}</div>
-            <div class="mt-0.5 text-sm text-muted-foreground">{{ item.label }}</div>
+            <div class="text-3xl font-bold leading-none text-foreground">{{ item.value }}</div>
+            <div class="mt-2 text-sm text-muted-foreground">{{ item.label }}</div>
           </div>
         </div>
+        <el-icon
+          class="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground opacity-0 transition-all group-hover:translate-x-0 group-hover:opacity-100"
+          :size="18"
+        >
+          <ArrowRight />
+        </el-icon>
+        <span
+          class="absolute inset-x-0 bottom-0 h-1 origin-left scale-x-0 transition-transform group-hover:scale-x-100"
+          :style="{ backgroundColor: item.color }"
+        />
       </button>
     </div>
 
@@ -32,19 +42,25 @@
           <CardDescription>常用功能一键直达</CardDescription>
         </CardHeader>
         <CardContent>
-          <div class="flex flex-wrap gap-3">
-            <Button @click="router.push('/ai-generate')">
-              <el-icon><MagicStick /></el-icon> AI 生成用例
-            </Button>
-            <Button variant="outline" @click="router.push('/projects')">
-              <el-icon><Folder /></el-icon> 新建项目
-            </Button>
-            <Button variant="outline" @click="router.push('/requirements')">
-              <el-icon><Document /></el-icon> 添加需求
-            </Button>
-            <Button variant="outline" @click="router.push('/testcases')">
-              <el-icon><List /></el-icon> 查看用例
-            </Button>
+          <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              v-for="action in quickActions"
+              :key="action.label"
+              type="button"
+              class="group flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-accent hover:shadow-sm"
+              @click="router.push(action.path)"
+            >
+              <div
+                class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg transition-transform group-hover:scale-105"
+                :style="{ backgroundColor: tint(action.color), color: action.color }"
+              >
+                <el-icon :size="20"><component :is="action.icon" /></el-icon>
+              </div>
+              <div class="min-w-0">
+                <div class="font-medium text-foreground">{{ action.label }}</div>
+                <div class="mt-0.5 text-xs text-muted-foreground">{{ action.desc }}</div>
+              </div>
+            </button>
           </div>
         </CardContent>
       </Card>
@@ -52,11 +68,14 @@
       <Card>
         <CardHeader>
           <CardTitle>平台能力</CardTitle>
+          <CardDescription>覆盖测试全生命周期</CardDescription>
         </CardHeader>
         <CardContent>
-          <ul class="space-y-2.5 text-sm text-foreground">
-            <li v-for="feat in features" :key="feat" class="flex items-start gap-2">
-              <el-icon class="mt-0.5 shrink-0" color="var(--ax-success)"><CircleCheck /></el-icon>
+          <ul class="space-y-3 text-sm text-foreground">
+            <li v-for="feat in features" :key="feat" class="flex items-start gap-2.5">
+              <el-icon class="mt-0.5 shrink-0" :size="16" color="var(--ax-success)">
+                <CircleCheck />
+              </el-icon>
               <span>{{ feat }}</span>
             </li>
           </ul>
@@ -70,7 +89,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { projectApi } from '@/api'
-import { Button } from '@/components/ui/button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 
 const router = useRouter()
@@ -83,6 +101,9 @@ const stats = ref({
   ai_generated_count: 0,
   pending_review_count: 0,
 })
+
+// 图标底色：品牌/状态色的 14% 淡色调，配同色图标，观感比纯色块更柔和
+const tint = (color) => `color-mix(in srgb, ${color} 14%, white)`
 
 const statCards = computed(() => [
   {
@@ -114,6 +135,37 @@ const statCards = computed(() => [
     path: '/testcases?review_status=pending',
   },
 ])
+
+const quickActions = [
+  {
+    label: 'AI 生成用例',
+    desc: '从需求智能生成测试用例',
+    icon: 'MagicStick',
+    color: '#1a365d',
+    path: '/ai-generate',
+  },
+  {
+    label: '新建项目',
+    desc: '创建一个新的测试项目',
+    icon: 'FolderAdd',
+    color: '#3182ce',
+    path: '/projects',
+  },
+  {
+    label: '添加需求',
+    desc: '录入或导入需求点',
+    icon: 'Document',
+    color: '#38a169',
+    path: '/requirements',
+  },
+  {
+    label: '查看用例',
+    desc: '浏览与管理用例库',
+    icon: 'List',
+    color: '#805ad5',
+    path: '/testcases',
+  },
+]
 
 const features = [
   '基于 LLM 的智能用例生成',
