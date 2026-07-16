@@ -70,7 +70,9 @@ export const apifoxApi = {
   deleteCase: (cid: Id) => del<any>(`/apifox/cases/${cid}`),
   copyCase: (cid: Id) => post<Schemas['CaseOut']>(`/apifox/cases/${cid}/copy`),
   aiGenerateCases: (eid: Id, data: Schemas['AiGenerateRequest']) =>
-    post<Schemas['AiGenerateResult']>(`/apifox/endpoints/${eid}/cases/ai-generate`, data),
+    post<Schemas['AiGenerateResult']>(`/apifox/endpoints/${eid}/cases/ai-generate`, data, {
+      timeout: 120000, // LLM 生成耗时长，覆盖默认 60s，与功能用例生成/需求抽取一致
+    }),
 
   listSchemas: (pid: Id) => get<Schemas['SchemaBrief'][]>(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid: Id) => get<Schemas['SchemaOut']>(`/apifox/schemas/${sid}`),
