@@ -35,7 +35,6 @@
             v-if="userStore.hasPermission('requirement_docs')"
             index="/requirement-docs"
           >
-            <el-icon><Upload /></el-icon>
             <span>AI分析需求</span>
           </el-menu-item>
           <el-menu-item
@@ -43,7 +42,6 @@
             index="/requirements"
             data-assistant="menu.requirements"
           >
-            <el-icon><Tickets /></el-icon>
             <span>需求点</span>
           </el-menu-item>
         </el-sub-menu>
@@ -58,7 +56,6 @@
             index="/ai-generate"
             data-assistant="menu.ai_generate"
           >
-            <el-icon><MagicStick /></el-icon>
             <span>AI生成用例</span>
           </el-menu-item>
           <el-menu-item
@@ -66,11 +63,9 @@
             index="/testcases"
             data-assistant="menu.testcases"
           >
-            <el-icon><Collection /></el-icon>
             <span>用例库</span>
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('test_execution')" index="/test-execution">
-            <el-icon><VideoPlay /></el-icon>
             <span>用例执行</span>
           </el-menu-item>
         </el-sub-menu>

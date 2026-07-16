@@ -56,3 +56,14 @@ def delete_items(db: Session, suite_id: int) -> None:
     db.query(ApifoxSuiteItem).filter(ApifoxSuiteItem.suite_id == suite_id).delete(
         synchronize_session=False
     )
+
+
+def list_suites_referencing_case(db: Session, case_id: int) -> List[ApifoxSuite]:
+    """把该用例作为 case 项引用的套件（去重）——供 swagger 更新时的引用告警。"""
+    return (
+        db.query(ApifoxSuite)
+        .join(ApifoxSuiteItem, ApifoxSuiteItem.suite_id == ApifoxSuite.id)
+        .filter(ApifoxSuiteItem.target_type == "case", ApifoxSuiteItem.target_id == case_id)
+        .distinct()
+        .all()
+    )

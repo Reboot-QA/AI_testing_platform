@@ -1,3 +1,5 @@
 node_modules/
 dist/
 pnpm-lock.yaml
+# openapi-typescript 生成产物，不手工格式化/维护
+src/api/schema.d.ts

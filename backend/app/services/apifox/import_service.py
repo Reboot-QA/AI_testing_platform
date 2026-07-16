@@ -240,6 +240,38 @@ def parse_openapi(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
     return endpoints
 
 
+def _resolve_folder_id(
+    db: Session, project_id: int, folder_name: Optional[str], folder_by_name: Dict[str, ApifoxFolder]
+) -> Tuple[Optional[int], bool]:
+    """按 tag 名 get-or-create 顶层文件夹；返回 (folder_id, 是否新建)。"""
+    if not folder_name:
+        return None, False
+    folder = folder_by_name.get(folder_name)
+    if folder is None:
+        folder = ApifoxFolder(project_id=project_id, name=folder_name)
+        repo.create_folder(db, folder)
+        folder_by_name[folder_name] = folder
+        return folder.id, True
+    return folder.id, False
+
+
+def create_endpoint_from_item(
+    db: Session, project_id: int, item: Dict[str, Any], folder_by_name: Dict[str, ApifoxFolder]
+) -> bool:
+    """按解析项建接口（folder get-or-create）；返回是否新建了文件夹。导入与更新同步共用。"""
+    folder_id, folder_created = _resolve_folder_id(db, project_id, item["folder"], folder_by_name)
+    repo.create_endpoint(db, ApifoxEndpoint(
+        project_id=project_id,
+        folder_id=folder_id,
+        name=item["name"][:200],
+        method=item["method"],
+        path=item["path"][:500],
+        request_spec=item["request_spec"].model_dump_json(),
+        description=item["description"],
+    ))
+    return folder_created
+
+
 def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[str, int]:
     """导入编排：跳重(method,path) + 按 tag get-or-create 文件夹 + 批量入库单次 commit。"""
     validate_openapi(doc)
@@ -257,28 +289,12 @@ def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[st
         if (item["method"], item["path"]) in existing:
             skipped += 1
             continue
-        folder_id = None
-        if item["folder"]:
-            folder = folder_by_name.get(item["folder"])
-            if folder is None:
-                folder = ApifoxFolder(project_id=project_id, name=item["folder"])
-                repo.create_folder(db, folder)
-                folder_by_name[item["folder"]] = folder
-                folders_created += 1
-            folder_id = folder.id
-        repo.create_endpoint(db, ApifoxEndpoint(
-            project_id=project_id,
-            folder_id=folder_id,
-            name=item["name"][:200],
-            method=item["method"],
-            path=item["path"][:500],
-            request_spec=item["request_spec"].model_dump_json(),
-            description=item["description"],
-        ))
+        if create_endpoint_from_item(db, project_id, item, folder_by_name):
+            folders_created += 1
         existing.add((item["method"], item["path"]))
         created += 1
 
-    schemas_created = _import_schemas(db, project_id, doc)
+    schemas_created = import_schemas(db, project_id, doc)
 
     db.commit()
     return {
@@ -290,7 +306,20 @@ def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[st
     }
 
 
-def _import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
+def count_new_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
+    """只读统计 components/schemas 中的新增数量（供 diff 预览，不写库）。"""
+    components_schemas = (doc.get("components") or {}).get("schemas") or {}
+    if not isinstance(components_schemas, dict):
+        return 0
+    existing_names = {s.name for s in schema_repo.list_schemas(db, project_id)}
+    return sum(
+        1
+        for name, sd in components_schemas.items()
+        if isinstance(sd, dict) and str(name)[:200] not in existing_names
+    )
+
+
+def import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
     """把 components/schemas 导入为数据模型（同名去重不覆盖；$ref 就地展开）。"""
     components_schemas = (doc.get("components") or {}).get("schemas") or {}
     if not isinstance(components_schemas, dict):

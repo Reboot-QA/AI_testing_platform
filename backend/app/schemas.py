@@ -149,6 +149,13 @@ class ProjectOut(ProjectBase):
         from_attributes = True
 
 
+class ProjectPageOut(BaseModel):
+    items: List[ProjectOut]
+    total: int
+    page: int
+    page_size: int
+
+
 class DepartmentBase(BaseModel):
     name: str
     description: Optional[str] = None
