@@ -1,11 +1,21 @@
 <template>
-  <div>
-    <div class="toolbar">
-      <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="handleProjectChange">
+  <PageCard fill>
+    <template #toolbar>
+      <el-select
+        v-model="projectId"
+        placeholder="选择项目"
+        style="width: 220px"
+        @change="handleProjectChange"
+      >
         <el-option label="全部" :value="ALL_PROJECTS" />
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
-      <el-button type="primary" :disabled="isAllProjects" data-assistant="requirements.create_btn" @click="openDialog()">
+      <el-button
+        type="primary"
+        :disabled="isAllProjects"
+        data-assistant="requirements.create_btn"
+        @click="openDialog()"
+      >
         <el-icon><Plus /></el-icon> 添加需求
       </el-button>
       <el-select v-model="filterStatus" placeholder="状态筛选" clearable style="width: 120px">
@@ -61,68 +71,79 @@
       <el-button :disabled="isAllProjects" :loading="importing" @click="openImportDialog">
         导入
       </el-button>
-    </div>
+    </template>
 
-    <el-table
-      :data="requirements"
-      v-loading="loading"
-      stripe
-      border
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column v-if="isAllProjects" prop="project_name" label="项目" min-width="140" show-overflow-tooltip />
-      <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="req_type" label="类型" width="100">
-        <template #default="{ row }">
-          <el-tag size="small">{{ typeMap[row.req_type] || row.req_type }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="priority" label="优先级" width="90" align="center" />
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.source === 'ai_document' ? 'warning' : ''" size="small">
-            {{ sourceMap[row.source] || row.source }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="statusType[row.status]" size="small">{{ statusMap[row.status] || row.status }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="creator_name" label="创建人" width="100">
-        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="testcase_count" label="关联用例" width="100" align="center">
-        <template #default="{ row }">
-          <el-button
-            v-if="row.testcase_count > 0"
-            link
-            type="primary"
-            @click="openTestcases(row)"
-          >
-            {{ row.testcase_count }}
-          </el-button>
-          <span v-else class="empty-count">0</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button
-            link
-            type="danger"
-            :disabled="row.testcase_count > 0"
-            @click="handleDelete(row)"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-fill">
+      <el-table
+        v-loading="loading"
+        :data="requirements"
+        stripe
+        border
+        height="100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="45" />
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column
+          v-if="isAllProjects"
+          prop="project_name"
+          label="项目"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column prop="title" label="标题" min-width="200" />
+        <el-table-column prop="req_type" label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag size="small">{{ typeMap[row.req_type] || row.req_type }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="90" align="center" />
+        <el-table-column prop="source" label="来源" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.source === 'ai_document' ? 'warning' : ''" size="small">
+              {{ sourceMap[row.source] || row.source }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="statusType[row.status]" size="small">{{
+              statusMap[row.status] || row.status
+            }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="creator_name" label="创建人" width="100">
+          <template #default="{ row }">{{ row.creator_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="testcase_count" label="关联用例" width="100" align="center">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.testcase_count > 0"
+              link
+              type="primary"
+              @click="openTestcases(row)"
+            >
+              {{ row.testcase_count }}
+            </el-button>
+            <span v-else class="empty-count">0</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="row.testcase_count > 0"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <div class="pagination-bar">
       <el-pagination
@@ -157,12 +178,19 @@
         <el-icon class="el-icon--upload"><UploadFilled /></el-icon>
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
-          <div class="el-upload__tip">Excel 需包含「标题」列，导入后状态均为「草稿」；XMind 导入末级节点作为需求点</div>
+          <div class="el-upload__tip">
+            Excel 需包含「标题」列，导入后状态均为「草稿」；XMind 导入末级节点作为需求点
+          </div>
         </template>
       </el-upload>
       <template #footer>
         <el-button @click="importDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="importing" :disabled="!importFile" @click="handleImport">
+        <el-button
+          type="primary"
+          :loading="importing"
+          :disabled="!importFile"
+          @click="handleImport"
+        >
           开始导入
         </el-button>
       </template>
@@ -208,7 +236,13 @@
       </el-form>
       <template #footer>
         <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" data-assistant="requirements.form.submit" :loading="submitting" @click="handleSubmit">确定</el-button>
+        <el-button
+          type="primary"
+          data-assistant="requirements.form.submit"
+          :loading="submitting"
+          @click="handleSubmit"
+          >确定</el-button
+        >
       </template>
     </el-dialog>
 
@@ -217,7 +251,7 @@
       :title="`关联用例 - ${currentRequirement?.title || ''}`"
       width="900px"
     >
-      <el-table :data="linkedTestcases" v-loading="casesLoading" stripe border max-height="420">
+      <el-table v-loading="casesLoading" :data="linkedTestcases" stripe border max-height="420">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column prop="priority" label="优先级" width="80" align="center" />
@@ -272,7 +306,9 @@
           <el-descriptions-item label="评审状态">
             {{ reviewMap[caseDetail.review_status] || caseDetail.review_status }}
           </el-descriptions-item>
-          <el-descriptions-item label="前置条件">{{ caseDetail.preconditions || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="前置条件">{{
+            caseDetail.preconditions || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="测试步骤">
             <pre class="pre-text">{{ caseDetail.steps || '-' }}</pre>
           </el-descriptions-item>
@@ -283,7 +319,7 @@
         </el-descriptions>
       </template>
     </el-drawer>
-  </div>
+  </PageCard>
 </template>
 
 <script setup>
@@ -291,7 +327,11 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
-import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
+import PageCard from '@/components/PageCard.vue'
+import {
+  registerAssistantHandler,
+  unregisterAssistantHandler,
+} from '@/utils/assistantActionRegistry'
 
 const ALL_PROJECTS = '__all__'
 
@@ -346,10 +386,10 @@ const rules = { title: [{ required: true, message: '请输入标题', trigger: '
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
 const deletableSelectedCount = computed(
-  () => selectedRows.value.filter((row) => !row.testcase_count).length
+  () => selectedRows.value.filter((row) => !row.testcase_count).length,
 )
 const blockedSelectedCount = computed(
-  () => selectedRows.value.filter((row) => row.testcase_count > 0).length
+  () => selectedRows.value.filter((row) => row.testcase_count > 0).length,
 )
 
 async function loadProjects() {
@@ -519,7 +559,7 @@ async function handleSubmit() {
 async function handleDelete(row) {
   if (row.testcase_count > 0) {
     ElMessage.warning(
-      `该需求下有 ${row.testcase_count} 条关联用例，请先点击关联用例数字，清理全部关联用例后再删除`
+      `该需求下有 ${row.testcase_count} 条关联用例，请先点击关联用例数字，清理全部关联用例后再删除`,
     )
     return
   }
@@ -543,7 +583,7 @@ async function handleClearTestcases() {
       type: 'warning',
       confirmButtonText: '清理',
       cancelButtonText: '取消',
-    }
+    },
   )
   clearingCases.value = true
   try {
@@ -605,9 +645,7 @@ function groupRowsByProject(rows) {
 async function handleBatchDelete() {
   if (!deletableSelectedCount.value) return
 
-  const deletableIds = selectedRows.value
-    .filter((row) => !row.testcase_count)
-    .map((row) => row.id)
+  const deletableIds = selectedRows.value.filter((row) => !row.testcase_count).map((row) => row.id)
 
   let confirmMessage = `确认删除选中的 ${deletableIds.length} 条需求？此操作不可恢复。`
   if (blockedSelectedCount.value) {
@@ -622,9 +660,7 @@ async function handleBatchDelete() {
 
   batchDeleting.value = true
   try {
-    const groups = groupRowsByProject(
-      selectedRows.value.filter((row) => !row.testcase_count)
-    )
+    const groups = groupRowsByProject(selectedRows.value.filter((row) => !row.testcase_count))
     let message = ''
     for (const [pid, rows] of groups) {
       const res = await requirementApi.batchDelete({
@@ -699,22 +735,21 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
 .empty-count {
   color: #909399;
+}
+
+/* 表格填满 PageCard fill 的剩余高度；min-height:0 让 el-table 内部滚动生效 */
+.table-fill {
+  flex: 1;
+  min-height: 0;
 }
 
 .pagination-bar {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+  flex: none;
 }
 
 .pre-text {

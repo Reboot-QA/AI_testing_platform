@@ -51,13 +51,17 @@
         </el-tab-pane>
         <el-tab-pane v-if="resp.assertion_results?.length" label="断言" name="assertions">
           <div v-for="(a, i) in resp.assertion_results" :key="'a' + i" class="line">
-            <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{ a.passed ? '过' : '败' }}</el-tag>
+            <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{
+              a.passed ? '过' : '败'
+            }}</el-tag>
             {{ a.message }}
           </div>
         </el-tab-pane>
         <el-tab-pane v-if="resp.extract_results?.length" label="提取" name="extracts">
           <div v-for="(e, i) in resp.extract_results" :key="'e' + i" class="line">
-            <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{ e.passed ? '成' : '败' }}</el-tag>
+            <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{
+              e.passed ? '成' : '败'
+            }}</el-tag>
             {{ e.var_name }} = {{ e.value || e.message }}（{{ e.scope }}）
           </div>
         </el-tab-pane>
@@ -71,7 +75,9 @@
             </el-tag>
             {{ resp.contract_result.schema_name }} · {{ resp.contract_result.message }}
           </div>
-          <div v-for="(err, i) in resp.contract_result.errors" :key="'c' + i" class="line mono">{{ err }}</div>
+          <div v-for="(err, i) in resp.contract_result.errors" :key="'c' + i" class="line mono">
+            {{ err }}
+          </div>
         </el-tab-pane>
       </el-tabs>
     </div>
@@ -119,8 +125,14 @@ async function send() {
       environment_id: store.currentEnvironmentId,
       assertions: props.form.assertions || [],
       extracts: props.form.extracts || [],
-      pre_scripts: (props.form.pre_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
-      post_scripts: (props.form.post_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
+      pre_scripts: (props.form.pre_scripts || []).map(({ script_id, enabled }) => ({
+        script_id,
+        enabled,
+      })),
+      post_scripts: (props.form.post_scripts || []).map(({ script_id, enabled }) => ({
+        script_id,
+        enabled,
+      })),
       response_schema_id: props.form.response_schema_id || null,
     })
     respTab.value = 'body'

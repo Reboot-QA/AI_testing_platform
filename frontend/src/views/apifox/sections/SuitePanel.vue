@@ -45,10 +45,16 @@
             <span class="si-name" :class="{ 'si-gone': !it.target_name }">
               {{ it.target_name || '(目标已删除，建议移除)' }}
             </span>
-            <el-button link type="danger" size="small" @click="form.items.splice(i, 1)">移除</el-button>
+            <el-button link type="danger" size="small" @click="form.items.splice(i, 1)"
+              >移除</el-button
+            >
           </div>
         </VueDraggable>
-        <el-empty v-if="form.items.length === 0" description="下方添加用例或场景" :image-size="50" />
+        <el-empty
+          v-if="form.items.length === 0"
+          description="下方添加用例或场景"
+          :image-size="50"
+        />
 
         <div class="add-row">
           <el-select
@@ -183,7 +189,9 @@ async function runSuite() {
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runSuiteStream(form.id, store.currentEnvironmentId, (e) => runEvents.value.push(e))
+    await apifoxApi.runSuiteStream(form.id, store.currentEnvironmentId, (e) =>
+      runEvents.value.push(e),
+    )
   } catch (e) {
     ElMessage.error(e.message || '运行失败')
   } finally {

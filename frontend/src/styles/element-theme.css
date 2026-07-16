@@ -1,0 +1,59 @@
+/* Element Plus 主题打通：用 design token（--ax-*）覆盖 EP 的 CSS 变量，
+   让全站主色/圆角/文字色由 tokens.css 单一来源驱动。
+   必须在 element-plus/dist/index.css 之后引入（见 main.js）。
+   派生梯度用 color-mix（现代浏览器原生支持），避免手写 hex。 */
+
+:root {
+  /* 主色及其明暗梯队（EP 组件按 light-3/5/7/8/9 取色） */
+  --el-color-primary: var(--ax-brand);
+  --el-color-primary-light-3: color-mix(in srgb, var(--ax-brand) 70%, white);
+  --el-color-primary-light-5: color-mix(in srgb, var(--ax-brand) 50%, white);
+  --el-color-primary-light-7: color-mix(in srgb, var(--ax-brand) 30%, white);
+  --el-color-primary-light-8: color-mix(in srgb, var(--ax-brand) 20%, white);
+  --el-color-primary-light-9: color-mix(in srgb, var(--ax-brand) 10%, white);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--ax-brand) 100%, black 20%);
+
+  /* 语义状态色 */
+  --el-color-success: var(--ax-success);
+  --el-color-warning: var(--ax-warning);
+  --el-color-danger: var(--ax-danger);
+  --el-color-error: var(--ax-danger);
+  --el-color-info: var(--ax-info);
+
+  /* 文字色 */
+  --el-text-color-primary: var(--ax-text);
+  --el-text-color-regular: var(--ax-text-tertiary);
+  --el-text-color-secondary: var(--ax-text-secondary);
+  --el-text-color-placeholder: var(--ax-text-placeholder);
+  --el-text-color-disabled: var(--ax-text-disabled);
+
+  /* 边框色 */
+  --el-border-color: var(--ax-border);
+  --el-border-color-light: var(--ax-border);
+  --el-border-color-lighter: color-mix(in srgb, var(--ax-border) 60%, white);
+  --el-border-color-extra-light: color-mix(in srgb, var(--ax-border) 40%, white);
+
+  /* 背景/填充 */
+  --el-fill-color-blank: var(--ax-bg);
+  --el-fill-color-light: var(--ax-bg-subtle);
+  --el-fill-color-lighter: var(--ax-bg-subtle);
+  --el-bg-color: var(--ax-bg);
+  --el-bg-color-page: var(--ax-bg-subtle);
+
+  /* 圆角 */
+  --el-border-radius-small: var(--ax-radius-sm);
+  --el-border-radius-base: var(--ax-radius);
+  --el-border-radius-round: var(--ax-radius-lg);
+
+  /* 阴影（弹窗/下拉/卡片） */
+  --el-box-shadow-light: var(--ax-shadow-sm);
+  --el-box-shadow: var(--ax-shadow);
+}
+
+/* 主按钮 hover/active 用品牌梯度，观感更统一 */
+.el-button--primary {
+  --el-button-hover-bg-color: var(--ax-brand-hover);
+  --el-button-hover-border-color: var(--ax-brand-hover);
+  --el-button-active-bg-color: var(--ax-brand-active);
+  --el-button-active-border-color: var(--ax-brand-active);
+}

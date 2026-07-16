@@ -7,6 +7,7 @@ export const useUserStore = defineStore('user', {
   state: () => ({
     token: localStorage.getItem('token') || '',
     user: null,
+    _fetchUserPromise: null,
   }),
   getters: {
     isLoggedIn: (state) => !!state.token,
@@ -23,7 +24,19 @@ export const useUserStore = defineStore('user', {
     },
     async fetchUser() {
       if (!this.token) return
-      this.user = await authApi.me()
+      if (this._fetchUserPromise) {
+        return this._fetchUserPromise
+      }
+      this._fetchUserPromise = authApi
+        .me()
+        .then((user) => {
+          this.user = user
+          return user
+        })
+        .finally(() => {
+          this._fetchUserPromise = null
+        })
+      return this._fetchUserPromise
     },
     hasPermission(permission) {
       if (this.isAdmin) return true
@@ -40,6 +53,7 @@ export const useUserStore = defineStore('user', {
       useAiGenerateStore().stopForLogout()
       this.token = ''
       this.user = null
+      this._fetchUserPromise = null
       localStorage.removeItem('token')
       clearAssistantChat()
     },

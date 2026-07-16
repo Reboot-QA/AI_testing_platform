@@ -40,7 +40,11 @@
       <el-empty v-else description="选择或新建一个脚本（脚本跟随项目，可被用例前后置引用）" />
     </div>
 
-    <ScriptDebugDialog v-model:visible="debugVisible" :lang="scriptForm.lang" :content="scriptForm.content" />
+    <ScriptDebugDialog
+      v-model:visible="debugVisible"
+      :lang="scriptForm.lang"
+      :content="scriptForm.content"
+    />
   </div>
 </template>
 
@@ -60,7 +64,14 @@ const props = defineProps({
 const scripts = ref([])
 const saving = ref(false)
 const debugVisible = ref(false)
-const scriptForm = reactive({ id: null, name: '', lang: 'javascript', content: '', description: '', version: 1 })
+const scriptForm = reactive({
+  id: null,
+  name: '',
+  lang: 'javascript',
+  content: '',
+  description: '',
+  version: 1,
+})
 
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(props.projectId)
@@ -68,10 +79,14 @@ async function loadScripts() {
 
 // 脚本未保存保护：切脚本/关浏览器前，dirty 则提示
 const scriptGuard = useUnsavedGuard({
-  serialize: () => JSON.stringify({
-    id: scriptForm.id, name: scriptForm.name, lang: scriptForm.lang,
-    content: scriptForm.content, description: scriptForm.description,
-  }),
+  serialize: () =>
+    JSON.stringify({
+      id: scriptForm.id,
+      name: scriptForm.name,
+      lang: scriptForm.lang,
+      content: scriptForm.content,
+      description: scriptForm.description,
+    }),
   save: () => saveScript(),
   name: () => scriptForm.name,
 })
@@ -99,7 +114,11 @@ async function addScript() {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
   })
-  const created = await apifoxApi.createScript(props.projectId, { name: value, lang: 'javascript', content: '' })
+  const created = await apifoxApi.createScript(props.projectId, {
+    name: value,
+    lang: 'javascript',
+    content: '',
+  })
   ElMessage.success('已创建')
   await loadScripts()
   await selectScript(created.id)
@@ -147,7 +166,9 @@ async function saveScript() {
 }
 
 async function delScript(s) {
-  await ElMessageBox.confirm(`确认删除脚本「${s.name}」？被用例引用时会被拦截。`, '提示', { type: 'warning' })
+  await ElMessageBox.confirm(`确认删除脚本「${s.name}」？被用例引用时会被拦截。`, '提示', {
+    type: 'warning',
+  })
   await apifoxApi.deleteScript(s.id)
   if (scriptForm.id === s.id) {
     scriptForm.id = null

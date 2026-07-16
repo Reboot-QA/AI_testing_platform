@@ -22,12 +22,28 @@
         </div>
         <div class="field">
           <span class="lbl">描述</span>
-          <el-input v-model="basicForm.description" type="textarea" :rows="3" placeholder="选填" style="max-width: 360px" />
+          <el-input
+            v-model="basicForm.description"
+            type="textarea"
+            :rows="3"
+            placeholder="选填"
+            style="max-width: 360px"
+          />
         </div>
         <div v-if="isAdmin" class="field">
           <span class="lbl">负责人</span>
-          <el-select v-model="basicForm.owner_id" filterable placeholder="选择负责人" style="max-width: 360px">
-            <el-option v-for="u in users" :key="u.id" :label="u.full_name ? `${u.username}（${u.full_name}）` : u.username" :value="u.id" />
+          <el-select
+            v-model="basicForm.owner_id"
+            filterable
+            placeholder="选择负责人"
+            style="max-width: 360px"
+          >
+            <el-option
+              v-for="u in users"
+              :key="u.id"
+              :label="u.full_name ? `${u.username}（${u.full_name}）` : u.username"
+              :value="u.id"
+            />
           </el-select>
         </div>
         <el-button type="primary" :loading="savingBasic" @click="saveBasic">保存</el-button>
@@ -38,7 +54,10 @@
         <div class="dz-row">
           <div>
             <div class="dz-h">删除项目</div>
-            <div class="dz-desc">永久删除该项目及其全部接口 / 用例 / 场景 / 环境 / 数据模型 / 脚本 / 定时任务 / 运行记录等数据，不可恢复。</div>
+            <div class="dz-desc">
+              永久删除该项目及其全部接口 / 用例 / 场景 / 环境 / 数据模型 / 脚本 / 定时任务 /
+              运行记录等数据，不可恢复。
+            </div>
           </div>
           <el-button v-if="canDelete" type="danger" @click="delProject">删除项目</el-button>
           <el-tag v-else type="info" size="small">仅项目负责人或系统管理员可删除</el-tag>
@@ -94,7 +113,7 @@ async function saveBasic() {
   savingBasic.value = true
   try {
     const payload = { name: basicForm.name, description: basicForm.description || null }
-    if (isAdmin.value) payload.owner_id = basicForm.owner_id  // 仅管理员可变更负责人
+    if (isAdmin.value) payload.owner_id = basicForm.owner_id // 仅管理员可变更负责人
     await projectApi.update(pid.value, payload)
     ElMessage.success('已保存')
   } finally {

@@ -1,6 +1,6 @@
 <template>
   <div>
-    <el-card shadow="never" class="upload-card">
+    <el-card class="upload-card">
       <template #header>
         <span>上传需求文档</span>
       </template>
@@ -50,25 +50,35 @@
             :disabled="!projectId || !selectedFile"
             @click="handleExtract"
           >
-            <el-icon><MagicStick /></el-icon> {{ extracting ? '正在解析，请稍候...' : 'AI 解析需求点' }}
+            <el-icon><MagicStick /></el-icon>
+            {{ extracting ? '正在解析，请稍候...' : 'AI 解析需求点' }}
           </el-button>
         </el-form-item>
       </el-form>
 
       <el-alert
-        :title="mockMode ? '当前为 Mock 模式，将使用本地规则提取需求点' : '未配置 API Key 的模型无法解析，请先在系统管理中配置 Key 或开启 Mock 模式'"
+        :title="
+          mockMode
+            ? '当前为 Mock 模式，将使用本地规则提取需求点'
+            : '未配置 API Key 的模型无法解析，请先在系统管理中配置 Key 或开启 Mock 模式'
+        "
         type="info"
         :closable="false"
         show-icon
       />
     </el-card>
 
-    <el-card v-if="extracting || extracted.length" shadow="never" class="result-card">
+    <el-card v-if="extracting || extracted.length" class="result-card">
       <template #header>
         <div class="result-header">
           <div>
             <span>解析结果</span>
-            <el-tag v-if="lastMode" :type="lastMode === 'llm' ? 'success' : 'warning'" size="small" class="mode-tag">
+            <el-tag
+              v-if="lastMode"
+              :type="lastMode === 'llm' ? 'success' : 'warning'"
+              size="small"
+              class="mode-tag"
+            >
               {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
             </el-tag>
             <el-text v-if="extractMessage" type="info" size="small">{{ extractMessage }}</el-text>
@@ -171,7 +181,7 @@ const progressChunkTotal = ref(0)
 let tempKey = 0
 
 const allSelected = computed(
-  () => extracted.value.length > 0 && selectedRows.value.length === extracted.value.length
+  () => extracted.value.length > 0 && selectedRows.value.length === extracted.value.length,
 )
 
 const progressPercent = computed(() => {
@@ -291,7 +301,7 @@ async function handleExtract() {
         } else if (event.type === 'error') {
           throw new Error(event.message)
         }
-      }
+      },
     )
   } catch (error) {
     ElMessage.error(error.message || '解析失败')
@@ -305,7 +315,7 @@ async function handleImport() {
   await ElMessageBox.confirm(
     `确认将选中的 ${selectedRows.value.length} 条需求导入到需求点？`,
     '导入确认',
-    { type: 'info' }
+    { type: 'info' },
   )
 
   importing.value = true

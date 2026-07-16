@@ -972,10 +972,14 @@ install_frontend() {
   fi
   info "[2/2] 安装前端依赖..."
   cd "$FRONTEND_DIR"
+  # 包管理器统一为 pnpm（corepack 激活）
+  if ! command -v pnpm >/dev/null 2>&1; then
+    corepack enable pnpm 2>/dev/null || npm install -g pnpm
+  fi
   if [[ ! -d node_modules ]]; then
-    npm install
+    pnpm install
   else
-    npm install --prefer-offline --no-audit --no-fund
+    pnpm install --prefer-offline
   fi
   # 修复从 Windows 拷贝或 git 检出后 .bin 脚本无执行权限的问题
   if [[ -d node_modules/.bin ]]; then
@@ -1109,7 +1113,7 @@ build_frontend() {
   detect_node
   local vite_js="node_modules/vite/bin/vite.js"
   if [[ ! -f "$vite_js" ]]; then
-    npm install
+    pnpm install
   fi
   node "$vite_js" build
   ok "前端构建完成: frontend/dist"
@@ -1121,7 +1125,7 @@ start_prod() {
   build_frontend
   start_backend_prod
   info "生产模式：请使用 Nginx 托管 frontend/dist，并将 /api 反代至 :${BACKEND_PORT}"
-  info "本地预览前端: cd frontend && npm run preview -- --host 0.0.0.0 --port ${FRONTEND_PORT}"
+  info "本地预览前端: cd frontend && pnpm preview -- --host 0.0.0.0 --port ${FRONTEND_PORT}"
 }
 
 start_dev() {

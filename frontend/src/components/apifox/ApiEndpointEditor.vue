@@ -5,7 +5,12 @@
         <el-select v-model="form.method" class="method-sel">
           <el-option v-for="m in METHODS" :key="m" :label="m" :value="m" />
         </el-select>
-        <el-select v-model="form.server_name" placeholder="默认前置URL" clearable class="server-sel">
+        <el-select
+          v-model="form.server_name"
+          placeholder="默认前置URL"
+          clearable
+          class="server-sel"
+        >
           <el-option v-for="n in serverNames" :key="n" :label="n" :value="n" />
         </el-select>
         <el-input v-model="form.path" placeholder="/path/to/api" class="path-input" />
@@ -44,9 +49,17 @@
         />
         <template v-else-if="form.request_spec.body.type === 'graphql'">
           <div class="sub-title">Query</div>
-          <CodeEditor v-model="form.request_spec.body.graphql_query" language="graphql" height="180px" />
+          <CodeEditor
+            v-model="form.request_spec.body.graphql_query"
+            language="graphql"
+            height="180px"
+          />
           <div class="sub-title">Variables（JSON）</div>
-          <CodeEditor v-model="form.request_spec.body.graphql_variables" language="json" height="120px" />
+          <CodeEditor
+            v-model="form.request_spec.body.graphql_variables"
+            language="json"
+            height="120px"
+          />
         </template>
         <div v-else-if="form.request_spec.body.type === 'binary'" class="binary-body">
           <el-upload :show-file-list="false" :before-upload="onPickFile" :disabled="uploading">
@@ -73,8 +86,16 @@
           class="auth-input"
         />
         <template v-else-if="form.request_spec.auth.type === 'basic'">
-          <el-input v-model="form.request_spec.auth.username" placeholder="用户名" class="auth-input" />
-          <el-input v-model="form.request_spec.auth.password" placeholder="密码" class="auth-input" />
+          <el-input
+            v-model="form.request_spec.auth.username"
+            placeholder="用户名"
+            class="auth-input"
+          />
+          <el-input
+            v-model="form.request_spec.auth.password"
+            placeholder="密码"
+            class="auth-input"
+          />
         </template>
       </el-tab-pane>
 
@@ -124,7 +145,13 @@
         <el-tab-pane label="响应契约" name="contract">
           <div class="contract-row">
             <span class="c-label">响应数据模型</span>
-            <el-select v-model="form.response_schema_id" placeholder="不校验" clearable filterable style="width: 260px">
+            <el-select
+              v-model="form.response_schema_id"
+              placeholder="不校验"
+              clearable
+              filterable
+              style="width: 260px"
+            >
               <el-option v-for="s in schemas" :key="s.id" :label="s.name" :value="s.id" />
             </el-select>
           </div>

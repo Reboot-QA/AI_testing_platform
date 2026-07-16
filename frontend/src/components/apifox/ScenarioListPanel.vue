@@ -3,8 +3,19 @@
     <div class="list-toolbar">
       <span>场景</span>
       <div class="toolbar-actions">
-        <el-select v-model="priorityFilter" size="small" placeholder="优先级" clearable style="width: 84px">
-          <el-option v-for="p in PRIORITY_OPTIONS" :key="p.value" :label="p.label" :value="p.value" />
+        <el-select
+          v-model="priorityFilter"
+          size="small"
+          placeholder="优先级"
+          clearable
+          style="width: 84px"
+        >
+          <el-option
+            v-for="p in PRIORITY_OPTIONS"
+            :key="p.value"
+            :label="p.label"
+            :value="p.value"
+          />
         </el-select>
         <el-button size="small" title="新建文件夹" @click="$emit('new-folder')">
           <el-icon><FolderAdd /></el-icon>
@@ -40,13 +51,17 @@
       >
         <el-icon><Share /></el-icon>
         <span class="item-name">{{ s.name }}</span>
-        <el-tag size="small" :type="priorityMeta(s.priority).type">{{ priorityMeta(s.priority).label }}</el-tag>
+        <el-tag size="small" :type="priorityMeta(s.priority).type">{{
+          priorityMeta(s.priority).label
+        }}</el-tag>
         <el-tag size="small" type="info">{{ s.step_count }} 步</el-tag>
         <el-dropdown trigger="click" @command="(fid) => onMoveCmd(fid, s)">
           <el-icon class="item-more" title="移动到文件夹" @click.stop><Rank /></el-icon>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item command="__none__" :disabled="s.folder_id == null">移到未分组</el-dropdown-item>
+              <el-dropdown-item command="__none__" :disabled="s.folder_id == null"
+                >移到未分组</el-dropdown-item
+              >
               <el-dropdown-item
                 v-for="f in folders"
                 :key="f.id"
@@ -79,7 +94,15 @@ const props = defineProps({
   folders: { type: Array, default: () => [] },
   activeId: { type: [Number, String], default: null },
 })
-const emit = defineEmits(['select', 'del', 'move', 'new-scenario', 'new-folder', 'rename-folder', 'delete-folder'])
+const emit = defineEmits([
+  'select',
+  'del',
+  'move',
+  'new-scenario',
+  'new-folder',
+  'rename-folder',
+  'delete-folder',
+])
 
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
 
@@ -91,7 +114,11 @@ const groups = computed(() => {
     if (s.folder_id != null && bucket.has(s.folder_id)) bucket.get(s.folder_id).push(s)
     else ungrouped.push(s)
   }
-  const result = props.folders.map((f) => ({ key: `f${f.id}`, folder: f, scenarios: bucket.get(f.id) }))
+  const result = props.folders.map((f) => ({
+    key: `f${f.id}`,
+    folder: f,
+    scenarios: bucket.get(f.id),
+  }))
   if (ungrouped.length || props.folders.length === 0) {
     result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
   }

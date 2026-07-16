@@ -31,11 +31,7 @@
         <el-icon><Star /></el-icon>
         <span class="env-name">全局变量</span>
       </div>
-      <div
-        class="env-item"
-        :class="{ active: selected.type === 'params' }"
-        @click="selectParams"
-      >
+      <div class="env-item" :class="{ active: selected.type === 'params' }" @click="selectParams">
         <el-icon><SetUp /></el-icon>
         <span class="env-name">全局参数</span>
       </div>
@@ -44,42 +40,60 @@
     <div class="var-panel">
       <GlobalParamsPanel v-if="selected.type === 'params'" :project-id="pid" />
       <template v-else>
-      <template v-if="selected.type === 'env'">
-        <div class="var-title">前置 URL · {{ selectedName }}</div>
-        <div class="base-row">
-          <span class="base-label">默认前置 URL</span>
-          <el-input
-            v-model="baseUrl"
-            size="small"
-            placeholder="如 https://api.xxx.com（接口相对路径会拼在它前面）"
-            @change="saveBaseUrl"
-          />
-        </div>
-        <div v-for="s in servers" :key="s.id" class="server-row">
-          <el-input v-model="s.name" size="small" placeholder="名称(如 服务A)" style="width: 160px" @change="saveServer(s)" />
-          <el-input v-model="s.base_url" size="small" placeholder="URL" @change="saveServer(s)" />
-          <el-button link type="danger" size="small" @click="delServer(s)">删</el-button>
-        </div>
-        <div class="add-server">
-          <el-input v-model="newServer.name" size="small" placeholder="名称" style="width: 160px" />
-          <el-input v-model="newServer.base_url" size="small" placeholder="URL" />
-          <el-button size="small" type="primary" :disabled="!newServer.name.trim()" @click="addServer">
-            + 命名前置 URL
-          </el-button>
-        </div>
-      </template>
+        <template v-if="selected.type === 'env'">
+          <div class="var-title">前置 URL · {{ selectedName }}</div>
+          <div class="base-row">
+            <span class="base-label">默认前置 URL</span>
+            <el-input
+              v-model="baseUrl"
+              size="small"
+              placeholder="如 https://api.xxx.com（接口相对路径会拼在它前面）"
+              @change="saveBaseUrl"
+            />
+          </div>
+          <div v-for="s in servers" :key="s.id" class="server-row">
+            <el-input
+              v-model="s.name"
+              size="small"
+              placeholder="名称(如 服务A)"
+              style="width: 160px"
+              @change="saveServer(s)"
+            />
+            <el-input v-model="s.base_url" size="small" placeholder="URL" @change="saveServer(s)" />
+            <el-button link type="danger" size="small" @click="delServer(s)">删</el-button>
+          </div>
+          <div class="add-server">
+            <el-input
+              v-model="newServer.name"
+              size="small"
+              placeholder="名称"
+              style="width: 160px"
+            />
+            <el-input v-model="newServer.base_url" size="small" placeholder="URL" />
+            <el-button
+              size="small"
+              type="primary"
+              :disabled="!newServer.name.trim()"
+              @click="addServer"
+            >
+              + 命名前置 URL
+            </el-button>
+          </div>
+        </template>
 
-      <div class="var-title" :style="{ marginTop: selected.type === 'env' ? '18px' : '0' }">
-        {{ selected.type === 'global' ? '全局变量（项目级，跨环境）' : `环境变量 · ${selectedName}` }}
-      </div>
-      <VariableTable
-        :variables="vars"
-        @create="onCreate"
-        @update="onUpdate"
-        @delete="onDelete"
-        @set-local="onSetLocal"
-      />
-      <EnvDatabasesPanel v-if="selected.type === 'env'" :environment-id="selected.id" />
+        <div class="var-title" :style="{ marginTop: selected.type === 'env' ? '18px' : '0' }">
+          {{
+            selected.type === 'global' ? '全局变量（项目级，跨环境）' : `环境变量 · ${selectedName}`
+          }}
+        </div>
+        <VariableTable
+          :variables="vars"
+          @create="onCreate"
+          @update="onUpdate"
+          @delete="onDelete"
+          @set-local="onSetLocal"
+        />
+        <EnvDatabasesPanel v-if="selected.type === 'env'" :environment-id="selected.id" />
       </template>
     </div>
   </div>
@@ -106,7 +120,9 @@ const baseUrl = ref('')
 const newServer = reactive({ name: '', base_url: '' })
 const selected = reactive({ type: 'global', id: null })
 
-const selectedName = computed(() => environments.value.find((e) => e.id === selected.id)?.name || '')
+const selectedName = computed(
+  () => environments.value.find((e) => e.id === selected.id)?.name || '',
+)
 
 async function loadEnvs() {
   environments.value = await apifoxApi.listEnvironments(pid.value)
@@ -130,7 +146,10 @@ async function saveBaseUrl() {
 
 async function addServer() {
   try {
-    await apifoxApi.createEnvServer(selected.id, { name: newServer.name.trim(), base_url: newServer.base_url })
+    await apifoxApi.createEnvServer(selected.id, {
+      name: newServer.name.trim(),
+      base_url: newServer.base_url,
+    })
     newServer.name = ''
     newServer.base_url = ''
     await loadEnvs()
@@ -177,14 +196,21 @@ function selectParams() {
 }
 
 async function addEnv() {
-  const { value } = await ElMessageBox.prompt('环境名称', '新建环境', { inputPattern: /\S/, inputErrorMessage: '不能为空' })
+  const { value } = await ElMessageBox.prompt('环境名称', '新建环境', {
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   await apifoxApi.createEnvironment(pid.value, { name: value })
   ElMessage.success('已创建')
   await loadEnvs()
 }
 
 async function renameEnv(e) {
-  const { value } = await ElMessageBox.prompt('新名称', '改名', { inputValue: e.name, inputPattern: /\S/, inputErrorMessage: '不能为空' })
+  const { value } = await ElMessageBox.prompt('新名称', '改名', {
+    inputValue: e.name,
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   await apifoxApi.updateEnvironment(e.id, { name: value })
   await loadEnvs()
 }

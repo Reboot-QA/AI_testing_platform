@@ -80,14 +80,21 @@
 <script setup>
 import { onMounted, ref, watch } from 'vue'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
-import { COMMON_HEADER_PRESETS, headerDefaultValue, rowsToText, suggestHeaderKeys, suggestHeaderValues, textToRows } from '@/utils/httpHeaders'
+import {
+  COMMON_HEADER_PRESETS,
+  headerDefaultValue,
+  rowsToText,
+  suggestHeaderKeys,
+  suggestHeaderValues,
+  textToRows,
+} from '@/utils/httpHeaders'
 
 // rows 为父级 reactive 数组（按引用传入），子组件就地增删改，父级自动响应。
 // suggest='header' 时键/值走 header 常用清单自动补全；其余场景为普通输入。
 const props = defineProps({
   rows: { type: Array, required: true },
   suggest: { type: String, default: '' },
-  showType: { type: Boolean, default: false },  // Params 显示参数类型列（string/integer/...）
+  showType: { type: Boolean, default: false }, // Params 显示参数类型列（string/integer/...）
 })
 
 // HTTP 参数类型标注（含 file），语义不同于 useJsonSchema 的 SCHEMA_TYPES，故意不复用
@@ -108,7 +115,11 @@ const isTail = (i) => i === props.rows.length - 1 && isEmptyRow(props.rows[i])
 // 自动新行：始终保留恰好一个末尾空行（幂等，稳定后不再变更，不会递归死循环）
 function syncTail() {
   const list = props.rows
-  while (list.length > 1 && isEmptyRow(list[list.length - 1]) && isEmptyRow(list[list.length - 2])) {
+  while (
+    list.length > 1 &&
+    isEmptyRow(list[list.length - 1]) &&
+    isEmptyRow(list[list.length - 2])
+  ) {
     list.pop()
   }
   if (list.length === 0 || !isEmptyRow(list[list.length - 1])) {
@@ -178,9 +189,21 @@ function toggleCommon(h, checked) {
 
 onMounted(syncTail)
 // 表格模式下任意键值改动后维持末尾空行（深比较，内容变触发）
-watch(() => props.rows, () => { if (!bulkMode.value) syncTail() }, { deep: true })
+watch(
+  () => props.rows,
+  () => {
+    if (!bulkMode.value) syncTail()
+  },
+  { deep: true },
+)
 // 父级换了整份 rows（切用例/接口）：退出批量模式并重建末尾空行，避免残留旧文本覆盖新数据
-watch(() => props.rows, () => { bulkMode.value = false; syncTail() })
+watch(
+  () => props.rows,
+  () => {
+    bulkMode.value = false
+    syncTail()
+  },
+)
 </script>
 
 <style scoped>

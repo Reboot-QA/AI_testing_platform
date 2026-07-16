@@ -1,20 +1,20 @@
 <template>
-  <div>
-    <el-alert
-      title="同部门用户共享项目、需求、用例等数据；管理员可查看所有部门数据。"
-      type="info"
-      :closable="false"
-      show-icon
-      class="tip-alert"
-    />
+  <el-alert
+    title="同部门用户共享项目、需求、用例等数据；管理员可查看所有部门数据。"
+    type="info"
+    :closable="false"
+    show-icon
+    class="tip-alert"
+  />
 
-    <div class="toolbar">
+  <PageCard>
+    <template #toolbar>
       <el-button type="primary" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加部门
       </el-button>
-    </div>
+    </template>
 
-    <el-table :data="departments" v-loading="loading" stripe border>
+    <el-table v-loading="loading" :data="departments" stripe border>
       <el-table-column prop="id" label="ID" width="70" />
       <el-table-column prop="name" label="部门名称" min-width="160" />
       <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip>
@@ -47,7 +47,7 @@
         <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
       </template>
     </el-dialog>
-  </div>
+  </PageCard>
 </template>
 
 <script setup>
@@ -55,6 +55,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { departmentApi } from '@/api'
 import { formatBeijingTime } from '@/utils/datetime'
+import PageCard from '@/components/PageCard.vue'
 
 const departments = ref([])
 const loading = ref(false)
@@ -118,7 +119,7 @@ async function handleDelete(row) {
   await ElMessageBox.confirm(
     `确认删除部门「${row.name}」？若部门下仍有用户或项目将无法删除。`,
     '提示',
-    { type: 'warning' }
+    { type: 'warning' },
   )
   await departmentApi.delete(row.id)
   ElMessage.success('删除成功')
@@ -130,9 +131,6 @@ onMounted(loadData)
 
 <style scoped>
 .tip-alert {
-  margin-bottom: 16px;
-}
-.toolbar {
   margin-bottom: 16px;
 }
 </style>
