@@ -8,6 +8,8 @@ from app.models.api_automation import (
     ApiTestSuite,
 )
 from app.models.apifox import (
+    ApifoxAiGenTask,
+    ApifoxAiGenTaskItem,
     ApifoxCaseAssertion,
     ApifoxCaseExtract,
     ApifoxCaseScript,
@@ -64,6 +66,8 @@ __all__ = [
     "ApiScheduledTaskSuite",
     "ManualTestRun",
     "ManualTestRunCase",
+    "ApifoxAiGenTask",
+    "ApifoxAiGenTaskItem",
     "ApifoxFolder",
     "ApifoxEndpoint",
     "ApifoxEnvironment",

@@ -1335,6 +1335,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/ai-gen-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Ai Gen Task */
+        post: operations["create_ai_gen_task_api_v1_apifox_projects__pid__ai_gen_tasks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/projects/{pid}/ai-gen-tasks/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Active Ai Gen Tasks */
+        get: operations["list_active_ai_gen_tasks_api_v1_apifox_projects__pid__ai_gen_tasks_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/ai-gen-tasks/{tid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Ai Gen Task */
+        get: operations["get_ai_gen_task_api_v1_apifox_ai_gen_tasks__tid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/ai-gen-tasks/{tid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Ai Gen Task */
+        post: operations["cancel_ai_gen_task_api_v1_apifox_ai_gen_tasks__tid__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/ai-gen-tasks/{tid}/items/{iid}/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Apply Ai Gen Task Item */
+        post: operations["apply_ai_gen_task_item_api_v1_apifox_ai_gen_tasks__tid__items__iid__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/projects/{pid}/schemas": {
         parameters: {
             query?: never;
@@ -2040,6 +2125,21 @@ export interface components {
             /** Model */
             model?: string | null;
         };
+        /** AiGenApplyRequest */
+        AiGenApplyRequest: {
+            /** Indexes */
+            indexes?: number[] | null;
+        };
+        /** AiGenApplyResult */
+        AiGenApplyResult: {
+            /** Created */
+            created: number;
+            /**
+             * Failed
+             * @default []
+             */
+            failed: string[];
+        };
         /** AiGenCategory */
         AiGenCategory: {
             /**
@@ -2049,6 +2149,86 @@ export interface components {
             category: "positive" | "negative" | "boundary" | "security";
             /** Count */
             count?: number | null;
+        };
+        /** AiGenTaskBrief */
+        AiGenTaskBrief: {
+            /** Id */
+            id: number;
+            /** Status */
+            status: string;
+            /** Total Items */
+            total_items: number;
+            /** Done Items */
+            done_items: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+        };
+        /** AiGenTaskCreate */
+        AiGenTaskCreate: {
+            /** Endpoint Ids */
+            endpoint_ids: number[];
+            /** Categories */
+            categories: components["schemas"]["AiGenCategory"][];
+            /** Provider Id */
+            provider_id?: number | null;
+        };
+        /** AiGenTaskItemOut */
+        AiGenTaskItemOut: {
+            /** Id */
+            id: number;
+            /** Endpoint Id */
+            endpoint_id: number;
+            /** Endpoint Name */
+            endpoint_name: string;
+            /** Endpoint Method */
+            endpoint_method: string;
+            /** Status */
+            status: string;
+            /** Generated Count */
+            generated_count: number;
+            /** Applied Count */
+            applied_count: number;
+            /** Error */
+            error?: string | null;
+            /**
+             * Cases
+             * @default []
+             */
+            cases: components["schemas"]["CaseCreate"][];
+        };
+        /** AiGenTaskOut */
+        AiGenTaskOut: {
+            /** Id */
+            id: number;
+            /** Project Id */
+            project_id: number;
+            /** Status */
+            status: string;
+            /** Mode */
+            mode?: string | null;
+            /** Provider Id */
+            provider_id?: number | null;
+            /** Total Items */
+            total_items: number;
+            /** Done Items */
+            done_items: number;
+            /** Error */
+            error?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["AiGenTaskItemOut"][];
         };
         /** AiGenerateRequest */
         AiGenerateRequest: {
@@ -8613,6 +8793,170 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_ai_gen_task_api_v1_apifox_projects__pid__ai_gen_tasks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiGenTaskCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_active_ai_gen_tasks_api_v1_apifox_projects__pid__ai_gen_tasks_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenTaskBrief"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_ai_gen_task_api_v1_apifox_ai_gen_tasks__tid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_ai_gen_task_api_v1_apifox_ai_gen_tasks__tid__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_ai_gen_task_item_api_v1_apifox_ai_gen_tasks__tid__items__iid__apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: number;
+                iid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiGenApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenApplyResult"];
                 };
             };
             /** @description Validation Error */
