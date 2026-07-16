@@ -314,6 +314,38 @@ def _extract_llm_error(response: httpx.Response) -> str:
         return response.text[:300] or f"HTTP {response.status_code}"
 
 
+async def call_llm_chat(
+    *,
+    api_base: str,
+    api_key: str,
+    model: str,
+    system_prompt: str,
+    user_prompt: str,
+) -> str:
+    """发一次 OpenAI 兼容 chat/completions 请求，返回非空 content；失败抛 ValueError。"""
+    timeout = httpx.Timeout(connect=15.0, read=120.0, write=15.0, pool=15.0)
+    payload = _build_request_payload(
+        model=model, api_base=api_base, system_prompt=system_prompt, user_prompt=user_prompt
+    )
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                f"{api_base.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}"},
+                json=payload,
+            )
+            if response.status_code >= 400:
+                raise ValueError(_extract_llm_error(response))
+            content = response.json().get("choices", [{}])[0].get("message", {}).get("content") or ""
+    except httpx.TimeoutException as exc:
+        raise ValueError("LLM 请求超时，请稍后重试或检查网络连接") from exc
+    except httpx.HTTPError as exc:
+        raise ValueError(f"LLM 网络请求失败: {exc}") from exc
+    if not content.strip():
+        raise ValueError("LLM 返回内容为空，请检查模型名称或 API 配置")
+    return content
+
+
 async def generate_testcases(
     requirement_text: str,
     case_type: str,

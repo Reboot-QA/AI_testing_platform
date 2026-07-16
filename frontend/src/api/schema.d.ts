@@ -1282,6 +1282,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/endpoints/{eid}/cases/ai-generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Ai Generate Cases */
+        post: operations["ai_generate_cases_api_v1_apifox_endpoints__eid__cases_ai_generate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/cases/{cid}": {
         parameters: {
             query?: never;
@@ -2022,6 +2039,30 @@ export interface components {
             provider_name?: string | null;
             /** Model */
             model?: string | null;
+        };
+        /** AiGenCategory */
+        AiGenCategory: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "positive" | "negative" | "boundary" | "security";
+            /** Count */
+            count: number;
+        };
+        /** AiGenerateRequest */
+        AiGenerateRequest: {
+            /** Categories */
+            categories: components["schemas"]["AiGenCategory"][];
+            /** Provider Id */
+            provider_id?: number | null;
+        };
+        /** AiGenerateResult */
+        AiGenerateResult: {
+            /** Mode */
+            mode: string;
+            /** Cases */
+            cases: components["schemas"]["CaseCreate"][];
         };
         /** AssertionRow */
         AssertionRow: {
@@ -8409,6 +8450,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_generate_cases_api_v1_apifox_endpoints__eid__cases_ai_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiGenerateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenerateResult"];
                 };
             };
             /** @description Validation Error */

@@ -4,7 +4,7 @@
 """
 
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -25,6 +25,9 @@ __all__ = [
     "DataDriveRow",
     "DataDrive",
     "CaseCreate",
+    "AiGenCategory",
+    "AiGenerateRequest",
+    "AiGenerateResult",
     "CaseUpdate",
     "CaseBrief",
     "ProjectCaseBrief",
@@ -59,6 +62,21 @@ class CaseCreate(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
     post_scripts: List[CaseScriptRef] = Field(default_factory=list)
+
+
+class AiGenCategory(BaseModel):
+    category: Literal["positive", "negative", "boundary", "security"]
+    count: int = Field(ge=1, le=20)
+
+
+class AiGenerateRequest(BaseModel):
+    categories: List[AiGenCategory] = Field(min_length=1)
+    provider_id: Optional[int] = None
+
+
+class AiGenerateResult(BaseModel):
+    mode: str  # mock|llm
+    cases: List[CaseCreate]
 
 
 class CaseUpdate(BaseModel):

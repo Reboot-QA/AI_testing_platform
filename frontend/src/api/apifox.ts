@@ -69,6 +69,8 @@ export const apifoxApi = {
     put<Schemas['CaseOut']>(`/apifox/cases/${cid}`, data),
   deleteCase: (cid: Id) => del<any>(`/apifox/cases/${cid}`),
   copyCase: (cid: Id) => post<Schemas['CaseOut']>(`/apifox/cases/${cid}/copy`),
+  aiGenerateCases: (eid: Id, data: Schemas['AiGenerateRequest']) =>
+    post<Schemas['AiGenerateResult']>(`/apifox/endpoints/${eid}/cases/ai-generate`, data),
 
   listSchemas: (pid: Id) => get<Schemas['SchemaBrief'][]>(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid: Id) => get<Schemas['SchemaOut']>(`/apifox/schemas/${sid}`),

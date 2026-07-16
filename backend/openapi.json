@@ -5377,6 +5377,63 @@
         }
       }
     },
+    "/api/v1/apifox/endpoints/{eid}/cases/ai-generate": {
+      "post": {
+        "tags": [
+          "接口自动化v2·用例"
+        ],
+        "summary": "Ai Generate Cases",
+        "operationId": "ai_generate_cases_api_v1_apifox_endpoints__eid__cases_ai_generate_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Eid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiGenerateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiGenerateResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/cases/{cid}": {
       "get": {
         "tags": [
@@ -8689,6 +8746,81 @@
           "mode"
         ],
         "title": "AIGenerateResponse"
+      },
+      "AiGenCategory": {
+        "properties": {
+          "category": {
+            "type": "string",
+            "enum": [
+              "positive",
+              "negative",
+              "boundary",
+              "security"
+            ],
+            "title": "Category"
+          },
+          "count": {
+            "type": "integer",
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "category",
+          "count"
+        ],
+        "title": "AiGenCategory"
+      },
+      "AiGenerateRequest": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/AiGenCategory"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Categories"
+          },
+          "provider_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "categories"
+        ],
+        "title": "AiGenerateRequest"
+      },
+      "AiGenerateResult": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "cases": {
+            "items": {
+              "$ref": "#/components/schemas/CaseCreate"
+            },
+            "type": "array",
+            "title": "Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode",
+          "cases"
+        ],
+        "title": "AiGenerateResult"
       },
       "AssertionRow": {
         "properties": {
