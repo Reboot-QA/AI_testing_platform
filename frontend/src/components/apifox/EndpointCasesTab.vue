@@ -63,7 +63,12 @@
       <el-empty v-else description="选择或新建一个用例" :image-size="60" />
     </div>
 
-    <AiGenerateCasesDialog ref="aiDialogRef" :endpoint-id="endpointId" @created="loadCases" />
+    <AiGenerateCasesDialog
+      ref="aiDialogRef"
+      :endpoint-id="endpointId"
+      :project-id="projectId"
+      @created="loadCases"
+    />
   </div>
 </template>
 
