@@ -272,6 +272,7 @@ async function doSaveScenario() {
     run_config: {
       loop_count: form.run_config.loop_count || 1,
       dataset_id: form.run_config.dataset_id || null, // el-select 清空可能给 ''，统一收敛为 null
+      propagate_auth: form.run_config.propagate_auth !== false, // 登录态透传开关，缺省视为开
     },
     expected_version: form.version,
   })
