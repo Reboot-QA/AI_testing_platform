@@ -1,33 +1,38 @@
 import { defineStore } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { testcaseApi } from '@/api'
+import type { Schemas } from '@/api/types'
+import type { SSEEvent } from '@/api/request'
+
+type GeneratedCase = Schemas['TestCaseOut']
+type GeneratePayload = Schemas['AIGenerateRequest']
 
 const PAGE_LEAVE_TIMEOUT_SEC = 60
 
-let abortController = null
-let leaveTimer = null
+let abortController: AbortController | null = null
+let leaveTimer: ReturnType<typeof window.setInterval> | null = null
 
 export const useAiGenerateStore = defineStore('aiGenerate', {
   state: () => ({
     generating: false,
-    results: [],
+    results: [] as GeneratedCase[],
     progressMessage: '',
     progressCurrent: 0,
     progressTotal: 0,
     lastMode: '',
     lastProviderName: '',
     errorMessage: '',
-    activeNames: [],
-    leftPageAt: null,
+    activeNames: [] as Array<number | string>,
+    leftPageAt: null as number | null,
     leaveCountdown: 0,
   }),
   getters: {
-    shouldShowLeaveWarning(state) {
+    shouldShowLeaveWarning(state): boolean {
       return state.generating && state.leftPageAt !== null
     },
   },
   actions: {
-    resetSession() {
+    resetSession(): void {
       this.results = []
       this.errorMessage = ''
       this.activeNames = []
@@ -38,7 +43,7 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       this.progressMessage = '准备生成...'
     },
 
-    handleStreamEvent(event) {
+    handleStreamEvent(event: SSEEvent): void {
       if (event.type === 'status') {
         this.progressMessage = event.message
         this.progressCurrent = event.current || this.progressCurrent
@@ -51,9 +56,7 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
         this.activeNames = [event.data.id, ...this.activeNames]
       } else if (event.type === 'done') {
         this.lastMode = event.mode
-        this.lastProviderName = event.provider_name
-          ? `${event.provider_name} (${event.model})`
-          : ''
+        this.lastProviderName = event.provider_name ? `${event.provider_name} (${event.model})` : ''
         this.progressCurrent = event.generated_count
         this.progressMessage = '生成完成'
         const successMessage =
@@ -69,7 +72,7 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       }
     },
 
-    async startGeneration(payload) {
+    async startGeneration(payload: GeneratePayload): Promise<boolean> {
       if (this.generating) {
         ElMessage.warning('已有进行中的 AI 生成任务')
         return false
@@ -84,18 +87,17 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       this.leaveCountdown = 0
 
       try {
-        await testcaseApi.aiGenerateStream(
-          payload,
-          (event) => this.handleStreamEvent(event),
-          { signal: abortController.signal }
-        )
+        await testcaseApi.aiGenerateStream(payload, (event) => this.handleStreamEvent(event), {
+          signal: abortController.signal,
+        })
       } catch (error) {
-        if (error.name === 'AbortError') {
+        const err = error as Error
+        if (err.name === 'AbortError') {
           if (!this.errorMessage) {
             this.errorMessage = '生成已取消'
           }
         } else {
-          this.errorMessage = error.message || '生成失败'
+          this.errorMessage = err.message || '生成失败'
           ElMessage.error(this.errorMessage)
         }
       } finally {
@@ -108,7 +110,7 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       return true
     },
 
-    cancelGeneration(message) {
+    cancelGeneration(message?: string): void {
       if (message) {
         this.errorMessage = message
       }
@@ -122,7 +124,7 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       this.leaveCountdown = 0
     },
 
-    stopForLogout() {
+    stopForLogout(): void {
       if (abortController) {
         abortController.abort()
         abortController = null
@@ -133,7 +135,7 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       this.leaveCountdown = 0
     },
 
-    onLeaveAiGeneratePage() {
+    onLeaveAiGeneratePage(): void {
       if (!this.generating) return
       this.leftPageAt = Date.now()
       this.leaveCountdown = PAGE_LEAVE_TIMEOUT_SEC
@@ -152,13 +154,13 @@ export const useAiGenerateStore = defineStore('aiGenerate', {
       }, 1000)
     },
 
-    onEnterAiGeneratePage() {
+    onEnterAiGeneratePage(): void {
       this.clearLeaveTimer()
       this.leftPageAt = null
       this.leaveCountdown = 0
     },
 
-    clearLeaveTimer() {
+    clearLeaveTimer(): void {
       if (leaveTimer) {
         clearInterval(leaveTimer)
         leaveTimer = null

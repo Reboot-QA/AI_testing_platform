@@ -1,15 +1,36 @@
 export const ASSISTANT_CHAT_STORAGE_KEY = 'assistant-chat-messages-v1'
 export const MAX_STORED_ASSISTANT_MESSAGES = 80
 
-export function clearAssistantChat() {
+export interface StoredAssistantMessage {
+  id: string
+  role: string
+  content: string
+  actions?: unknown
+  actionStatus?: unknown
+  executionLogs?: unknown
+  actionError?: unknown
+}
+
+export interface AssistantMessageStore {
+  messages: StoredAssistantMessage[]
+  messageSeq: number
+}
+
+export function clearAssistantChat(): void {
   localStorage.removeItem(ASSISTANT_CHAT_STORAGE_KEY)
 }
 
-export function loadAssistantMessages({ createMessageId, normalizeMessage }) {
+export function loadAssistantMessages({
+  createMessageId: _createMessageId,
+  normalizeMessage,
+}: {
+  createMessageId: (seq: number) => string
+  normalizeMessage: (raw: unknown) => StoredAssistantMessage
+}): AssistantMessageStore {
   try {
     const raw = localStorage.getItem(ASSISTANT_CHAT_STORAGE_KEY)
     if (!raw) return { messages: [], messageSeq: 0 }
-    const parsed = JSON.parse(raw)
+    const parsed: unknown = JSON.parse(raw)
     if (!Array.isArray(parsed)) return { messages: [], messageSeq: 0 }
     const normalized = parsed.map(normalizeMessage)
     const maxId = normalized.reduce((max, item) => {
@@ -25,7 +46,7 @@ export function loadAssistantMessages({ createMessageId, normalizeMessage }) {
   }
 }
 
-export function saveAssistantMessages(messages) {
+export function saveAssistantMessages(messages: StoredAssistantMessage[]): void {
   const payload = messages.slice(-MAX_STORED_ASSISTANT_MESSAGES).map((item) => ({
     id: item.id,
     role: item.role,

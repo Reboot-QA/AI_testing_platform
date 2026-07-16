@@ -1,8 +1,8 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
 
-const routes = [
+const routes: RouteRecordRaw[] = [
   {
     path: '/login',
     name: 'Login',
@@ -188,7 +188,7 @@ router.beforeEach(async (to, _from, next) => {
     }
     return next()
   }
-  if (to.meta.permission && !userStore.hasPermission(to.meta.permission)) {
+  if (to.meta.permission && !userStore.hasPermission(to.meta.permission as string)) {
     return next('/dashboard')
   }
   next()

@@ -1,26 +1,29 @@
 // 场景文件夹（单层分组）：状态 + 增删改，封装弹窗与 API。pidRef 为项目 id 的响应式引用。
-import { ref } from 'vue'
+import { ref, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
+import type { Schemas } from '@/api/types'
 
-export function useScenarioFolders(pidRef) {
-  const folders = ref([])
+type ScenarioFolder = Schemas['ScenarioFolderOut']
 
-  async function loadFolders() {
-    folders.value = await apifoxApi.listScenarioFolders(pidRef.value)
+export function useScenarioFolders(pidRef: Ref<number | string | null | undefined>) {
+  const folders = ref<ScenarioFolder[]>([])
+
+  async function loadFolders(): Promise<void> {
+    folders.value = await apifoxApi.listScenarioFolders(pidRef.value!)
   }
 
-  async function createFolder() {
+  async function createFolder(): Promise<void> {
     const { value } = await ElMessageBox.prompt('文件夹名称', '新建场景文件夹', {
       inputPattern: /\S/,
       inputErrorMessage: '不能为空',
     })
-    await apifoxApi.createScenarioFolder(pidRef.value, value.trim())
+    await apifoxApi.createScenarioFolder(pidRef.value!, value.trim())
     ElMessage.success('已创建')
     await loadFolders()
   }
 
-  async function renameFolder(folder) {
+  async function renameFolder(folder: ScenarioFolder): Promise<void> {
     const { value } = await ElMessageBox.prompt('文件夹名称', '重命名', {
       inputValue: folder.name,
       inputPattern: /\S/,
@@ -31,7 +34,7 @@ export function useScenarioFolders(pidRef) {
     await loadFolders()
   }
 
-  async function deleteFolder(folder) {
+  async function deleteFolder(folder: ScenarioFolder): Promise<void> {
     await ElMessageBox.confirm(
       `删除文件夹「${folder.name}」？其下场景会移到未分组（不会删除场景）。`,
       '删除文件夹',

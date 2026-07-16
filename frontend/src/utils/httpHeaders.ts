@@ -1,5 +1,6 @@
 // header 名/值自动补全用的常用清单 + 键值行↔文本的批量互转
 import { emptyKvRow } from '@/utils/apiCaseConfig'
+import type { KvRow } from '@/types/apifox'
 
 export const COMMON_HEADERS = [
   'Accept',
@@ -21,9 +22,9 @@ export const COMMON_HEADERS = [
   'If-Modified-Since',
   'Range',
   'Pragma',
-]
+] as const
 
-const VALUE_SUGGESTIONS = {
+const VALUE_SUGGESTIONS: Record<string, string[]> = {
   'content-type': [
     'application/json',
     'application/xml',
@@ -41,8 +42,13 @@ const VALUE_SUGGESTIONS = {
   pragma: ['no-cache'],
 }
 
+export interface HeaderPreset {
+  name: string
+  value: string
+}
+
 // 「常用 Header → 默认值」单一数据源：既供勾选区展示，也供 autocomplete 选中时自动填值
-export const COMMON_HEADER_PRESETS = [
+export const COMMON_HEADER_PRESETS: HeaderPreset[] = [
   { name: 'Content-Type', value: 'application/json' },
   { name: 'Accept', value: '*/*' },
   { name: 'Authorization', value: 'Bearer ' },
@@ -58,32 +64,32 @@ const _defaultByKey = Object.fromEntries(
   COMMON_HEADER_PRESETS.map((h) => [h.name.toLowerCase(), h.value]),
 )
 
-export function headerDefaultValue(key) {
+export function headerDefaultValue(key: string | null | undefined): string {
   return _defaultByKey[(key || '').trim().toLowerCase()] || ''
 }
 
-// el-autocomplete fetch-suggestions 结果格式：[{ value }]
-export function suggestHeaderKeys(query) {
+export function suggestHeaderKeys(query: string | null | undefined): Array<{ value: string }> {
   const q = (query || '').toLowerCase()
   return COMMON_HEADERS.filter((h) => h.toLowerCase().includes(q)).map((value) => ({ value }))
 }
 
-export function suggestHeaderValues(key, query) {
+export function suggestHeaderValues(
+  key: string | null | undefined,
+  query: string | null | undefined,
+): Array<{ value: string }> {
   const list = VALUE_SUGGESTIONS[(key || '').trim().toLowerCase()] || []
   const q = (query || '').toLowerCase()
   return list.filter((v) => v.toLowerCase().includes(q)).map((value) => ({ value }))
 }
 
-// 行 → 文本（批量编辑用）：禁用行以 // 前缀标注，空行跳过
-export function rowsToText(rows) {
+export function rowsToText(rows: KvRow[] | null | undefined): string {
   return (rows || [])
     .filter((r) => (r.key || '').trim() || (r.value || '').trim())
     .map((r) => `${r.enabled === false ? '// ' : ''}${r.key || ''}: ${r.value || ''}`)
     .join('\n')
 }
 
-// 文本 → 行：每行 `Key: Value`，// 或 # 开头表示禁用；无冒号则整行当键
-export function textToRows(text) {
+export function textToRows(text: string | null | undefined): KvRow[] {
   return (text || '')
     .split('\n')
     .map((l) => l.trim())

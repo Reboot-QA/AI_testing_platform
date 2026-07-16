@@ -3,6 +3,7 @@
     <div class="toolbar">
       <el-select
         v-model="projectId"
+        filterable
         placeholder="选择项目"
         style="width: 220px"
         @change="handleProjectChange"
@@ -237,6 +238,7 @@
         <el-form-item label="项目" prop="project_id">
           <el-select
             v-model="createForm.project_id"
+            filterable
             placeholder="请选择项目"
             style="width: 100%"
             @change="handleCreateProjectChange"

@@ -1,7 +1,8 @@
 // apifox 请求规格（request_spec）的空模板与归一化。三处(ApiManage/AutoTests/ApiCasesPanel)共用。
 import { ensureKvRows } from '@/utils/apiCaseConfig'
+import type { RequestSpec } from '@/types/apifox'
 
-export function emptySpec() {
+export function emptySpec(): RequestSpec {
   return {
     query: [],
     path_params: [],
@@ -21,9 +22,9 @@ export function emptySpec() {
   }
 }
 
-export function normalizeSpec(spec) {
-  const s = spec || {}
-  const b = s.body || {}
+export function normalizeSpec(spec: unknown): RequestSpec {
+  const s = (spec || {}) as Partial<RequestSpec>
+  const b = (s.body || {}) as Partial<RequestSpec['body']>
   return {
     query: ensureKvRows(s.query || []),
     path_params: ensureKvRows(s.path_params || []),

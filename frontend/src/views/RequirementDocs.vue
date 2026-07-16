@@ -7,7 +7,12 @@
 
       <el-form label-width="90px">
         <el-form-item label="项目">
-          <el-select v-model="projectId" placeholder="选择项目" style="width: 280px">
+          <el-select
+            v-model="projectId"
+            filterable
+            placeholder="选择项目"
+            style="width: 280px"
+          >
             <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
           </el-select>
         </el-form-item>

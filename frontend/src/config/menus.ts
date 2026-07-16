@@ -1,4 +1,19 @@
-export const MENU_DEFINITIONS = [
+export interface MenuDefinition {
+  key: string
+  label: string
+  path: string
+  group: 'business' | 'system' | 'logs'
+  parent?: string
+  parentLabel?: string
+}
+
+export interface MenuGroup {
+  key: string
+  label: string
+  items: MenuDefinition[]
+}
+
+export const MENU_DEFINITIONS: MenuDefinition[] = [
   { key: 'dashboard', label: '仪表盘', path: '/dashboard', group: 'business' },
   { key: 'projects', label: '项目管理', path: '/projects', group: 'business' },
   {
@@ -71,7 +86,7 @@ export const MENU_DEFINITIONS = [
   },
 ]
 
-export const PAGE_TITLES = {
+export const PAGE_TITLES: Record<string, string> = {
   '/dashboard': '仪表盘',
   '/projects': '项目管理',
   '/apifox': '工作台',
@@ -94,7 +109,7 @@ export const LOG_MENUS = MENU_DEFINITIONS.filter((item) => item.group === 'logs'
 
 export const STANDALONE_BUSINESS_MENUS = BUSINESS_MENUS.filter((item) => !item.parent)
 
-export const BUSINESS_MENU_GROUPS = [
+export const BUSINESS_MENU_GROUPS: MenuGroup[] = [
   {
     key: 'requirement_mgmt',
     label: '需求管理',
@@ -112,7 +127,7 @@ export const BUSINESS_MENU_GROUPS = [
   },
 ]
 
-export const LOG_MENU_GROUPS = [
+export const LOG_MENU_GROUPS: MenuGroup[] = [
   {
     key: 'log_mgmt',
     label: '日志管理',
@@ -120,7 +135,7 @@ export const LOG_MENU_GROUPS = [
   },
 ]
 
-export const SUBMENU_INDEX_BY_PATH = {
+export const SUBMENU_INDEX_BY_PATH: Record<string, string> = {
   '/apifox': 'api_automation_mgmt',
   '/requirement-docs': 'requirement_mgmt',
   '/requirements': 'requirement_mgmt',

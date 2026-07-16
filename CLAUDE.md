@@ -76,7 +76,7 @@ models/apifox/     # SQLAlchemy 模型，表前缀 apifox_
 ```
 
 - 所有 REST 接口统一前缀 `/api/v1`，路由在 `app/main.py` 注册。
-- 认证：JWT（`app/auth.py`）；权限：部门 + 项目隔离 + 菜单权限（`app/constants/menus.py` 与前端 `src/config/menus.js` 对应）。
+- 认证：JWT（`app/auth.py`）；权限：部门 + 项目隔离 + 菜单权限（`app/constants/menus.py` 与前端 `src/config/menus.ts` 对应）。
 - 应用启动：`main.py` lifespan → `bootstrap.py`（建表/种子数据）→ `start_scheduler()`（后台线程定时调度）。
 - **乐观锁**：apifox 六实体带 version 字段，冲突返回 HTTP 409。
 - 执行引擎通过 **SSE** 推送套件/场景运行进度。
@@ -84,8 +84,9 @@ models/apifox/     # SQLAlchemy 模型，表前缀 apifox_
 
 ### 前端结构
 
-- **API 层集中在 `src/api/index.js`**（axios 单实例，baseURL `/api/v1`，自动带 token，401 跳登录，响应拦截器直接返回 `response.data`）。注意：`/apifox/` 路径的 409 不弹全局错误，由调用方配合 `composables/useSaveConflict.js` 处理保存冲突。
-- 路由守卫：`src/router/index.js`，每个路由 `meta.permission` 对应后端菜单权限。
+- **API 层集中在 `src/api/index.ts`**（axios 单实例，baseURL `/api/v1`，自动带 token，401 跳登录，响应拦截器直接返回 `response.data`）。注意：`/apifox/` 路径的 409 不弹全局错误，由调用方配合 `composables/useSaveConflict.ts` 处理保存冲突。
+- 路由守卫：`src/router/index.ts`，每个路由 `meta.permission` 对应后端菜单权限。
+- **`src/` 业务代码统一 TypeScript**（`.ts`）；禁止新增 `.js` 源文件。Vue SFC 的 `<script setup lang="ts">` 为后续阶段。
 - apifox 前端：`views/apifox/ProjectWorkspace.vue` 是项目工作区外壳（顶部 tab 切 `views/apifox/sections/` 下各面板），可复用组件在 `components/apifox/`。
 - 代码编辑器统一用 Monaco（`@guolao/vue-monaco-editor`，本地 worker 无 CDN）；design token / Apifox 配色在 `src/styles/`。
 - Pinia stores：`user`（登录态/权限）、`workspace`（当前项目）、`apiTabs`、`aiGenerate`。
