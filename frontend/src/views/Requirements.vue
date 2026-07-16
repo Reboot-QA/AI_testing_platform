@@ -1,5 +1,5 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
       <el-select
         v-model="projectId"
@@ -73,69 +73,77 @@
       </el-button>
     </template>
 
-    <el-table
-      v-loading="loading"
-      :data="requirements"
-      stripe
-      border
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column
-        v-if="isAllProjects"
-        prop="project_name"
-        label="项目"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <el-table-column prop="title" label="标题" min-width="200" />
-      <el-table-column prop="req_type" label="类型" width="100">
-        <template #default="{ row }">
-          <el-tag size="small">{{ typeMap[row.req_type] || row.req_type }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="priority" label="优先级" width="90" align="center" />
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.source === 'ai_document' ? 'warning' : ''" size="small">
-            {{ sourceMap[row.source] || row.source }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="status" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="statusType[row.status]" size="small">{{
-            statusMap[row.status] || row.status
-          }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="creator_name" label="创建人" width="100">
-        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="testcase_count" label="关联用例" width="100" align="center">
-        <template #default="{ row }">
-          <el-button v-if="row.testcase_count > 0" link type="primary" @click="openTestcases(row)">
-            {{ row.testcase_count }}
-          </el-button>
-          <span v-else class="empty-count">0</span>
-        </template>
-      </el-table-column>
-      <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button
-            link
-            type="danger"
-            :disabled="row.testcase_count > 0"
-            @click="handleDelete(row)"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-fill">
+      <el-table
+        v-loading="loading"
+        :data="requirements"
+        stripe
+        border
+        height="100%"
+        @selection-change="handleSelectionChange"
+      >
+        <el-table-column type="selection" width="45" />
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column
+          v-if="isAllProjects"
+          prop="project_name"
+          label="项目"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column prop="title" label="标题" min-width="200" />
+        <el-table-column prop="req_type" label="类型" width="100">
+          <template #default="{ row }">
+            <el-tag size="small">{{ typeMap[row.req_type] || row.req_type }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="priority" label="优先级" width="90" align="center" />
+        <el-table-column prop="source" label="来源" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.source === 'ai_document' ? 'warning' : ''" size="small">
+              {{ sourceMap[row.source] || row.source }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="status" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="statusType[row.status]" size="small">{{
+              statusMap[row.status] || row.status
+            }}</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="creator_name" label="创建人" width="100">
+          <template #default="{ row }">{{ row.creator_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="testcase_count" label="关联用例" width="100" align="center">
+          <template #default="{ row }">
+            <el-button
+              v-if="row.testcase_count > 0"
+              link
+              type="primary"
+              @click="openTestcases(row)"
+            >
+              {{ row.testcase_count }}
+            </el-button>
+            <span v-else class="empty-count">0</span>
+          </template>
+        </el-table-column>
+        <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="row.testcase_count > 0"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <div class="pagination-bar">
       <el-pagination
@@ -731,10 +739,17 @@ onUnmounted(() => {
   color: #909399;
 }
 
+/* 表格填满 PageCard fill 的剩余高度；min-height:0 让 el-table 内部滚动生效 */
+.table-fill {
+  flex: 1;
+  min-height: 0;
+}
+
 .pagination-bar {
   display: flex;
   justify-content: flex-end;
   margin-top: 16px;
+  flex: none;
 }
 
 .pre-text {

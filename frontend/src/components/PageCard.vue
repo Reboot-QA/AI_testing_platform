@@ -9,11 +9,14 @@
 defineProps({
   // 内容区是否带内边距（表格类留 true；需要内容自行贴边时传 false）
   padded: { type: Boolean, default: true },
+  // 撑满 el-main 剩余高度：卡片变纵向 flex，内容区 flex-1 内部滚动
+  // （配合内部表格 height="100%"，实现表头/工具栏/分页固定、仅数据区滚动）
+  fill: { type: Boolean, default: false },
 })
 </script>
 
 <template>
-  <section class="page-card">
+  <section class="page-card" :class="{ 'page-card--fill': fill }">
     <div v-if="$slots.toolbar" class="page-card__toolbar">
       <slot name="toolbar" />
     </div>
@@ -47,5 +50,19 @@ defineProps({
 
 .page-card__body--flush {
   margin: -20px;
+}
+
+/* 撑满高度模式：卡片纵向 flex，body 撑满剩余、内部滚动 */
+.page-card--fill {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
+.page-card--fill .page-card__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 </style>
