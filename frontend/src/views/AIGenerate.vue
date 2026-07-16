@@ -12,6 +12,8 @@
             <el-form-item label="项目" prop="project_id">
               <el-select
                 v-model="form.project_id"
+                filterable
+                placeholder="请选择项目"
                 data-assistant="ai_generate.project_select"
                 style="width: 100%"
                 @change="loadRequirements"
