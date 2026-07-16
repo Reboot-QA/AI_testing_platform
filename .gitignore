@@ -13,6 +13,7 @@ backend/*.db
 frontend/dist/
 frontend/.claude
 frontend/node_modules/
+**/node_modules/
 
 # Python
 __pycache__/
