@@ -124,6 +124,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import { apifoxApi } from '@/api'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useSuiteTabsStore } from '@/stores/suiteTabs'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
@@ -143,6 +144,9 @@ const pickScenario = ref(null)
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
 const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
+
+// 路由级未保存守卫：切路由/切项目/退出前，有未保存改动则确认
+useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
 
 let uid = 0
 const nextUid = () => `new-${uid++}`

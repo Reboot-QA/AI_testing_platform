@@ -100,6 +100,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { apifoxApi } from '@/api'
 import { serializeStep } from '@/utils/scenarioSteps'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useScenarioTabsStore } from '@/stores/scenarioTabs'
 import { PRIORITY_OPTIONS } from '@/composables/useScenarioPriority'
@@ -125,6 +126,9 @@ const endpoints = ref([])
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
 const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
+
+// 路由级未保存守卫：切路由/切项目/退出前，有未保存改动则确认
+useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
 
 // 场景 HTTP 步骤的服务名选择（取自工作区环境的命名前置 URL）
 const serverNames = computed(() => {
