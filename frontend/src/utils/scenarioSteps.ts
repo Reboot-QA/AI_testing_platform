@@ -5,12 +5,17 @@ import { normalizeSpec } from '@/utils/apifoxSpec'
 
 const MAX_STEP_DEPTH = 50
 
+// 加载时即给步骤补稳定 _uid（字符串前缀，与编辑器新建步骤用的数字 _seq 不冲突），
+// 使脏检测快照已含 _uid；否则编辑器挂载时才补 _uid 会改动 steps → "打开即脏"误判。
+let _stepUidSeq = 0
+const nextStepUid = (): string => `s-${_stepUidSeq++}`
+
 export function normalizeSteps(steps: any[]): any[] {
   return (steps || []).map(normalizeStep)
 }
 
 function normalizeStep(s: any): any {
-  const node = { ...s }
+  const node = { ...s, _uid: s._uid ?? nextStepUid() }
   if (s.type === 'if') {
     const kids = normalizeSteps(s.children)
     const elseStep = kids.find((k) => k.type === 'else')
