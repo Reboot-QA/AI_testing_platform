@@ -62,6 +62,8 @@
       </template>
       <el-empty v-else description="选择或新建一个用例" :image-size="60" />
     </div>
+
+    <AiGenerateCasesDialog ref="aiDialogRef" :endpoint-id="endpointId" @created="loadCases" />
   </div>
 </template>
 
@@ -76,6 +78,7 @@ import { CASE_CATEGORIES, CATEGORY_FILTERS, categoryLabel } from '@/utils/caseCa
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
+import AiGenerateCasesDialog from '@/components/apifox/AiGenerateCasesDialog.vue'
 
 const props = defineProps({
   endpointId: { type: [String, Number], required: true },
@@ -166,9 +169,9 @@ async function addCase() {
   applyCase(created)
 }
 
+const aiDialogRef = ref(null)
 function aiGenerate() {
-  // 前端按钮占位：AI 生成用例后端待接入（正向/逆向/边界值/安全性），见进度计划
-  ElMessage.info('AI 生成用例功能开发中，后端待接入')
+  aiDialogRef.value?.open()
 }
 
 async function selectCase(cid) {
