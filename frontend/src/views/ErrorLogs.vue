@@ -103,6 +103,7 @@
         v-loading="loading"
         :data="displayItems"
         stripe
+        height="100%"
         class="error-table"
         empty-text="暂无错误日志"
       >
@@ -315,9 +316,29 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .error-logs {
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* 顶部统计卡固定，日志卡吃掉剩余高度、内部滚动 */
+.stats-row {
+  flex: none;
+}
+
+.viewer-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .stat-card {
@@ -384,6 +405,7 @@ onBeforeUnmount(() => {
   color: #909399;
   font-size: 12px;
   margin-bottom: 12px;
+  flex: none;
 }
 
 .live-dot {

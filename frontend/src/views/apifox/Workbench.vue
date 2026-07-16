@@ -5,7 +5,9 @@
     <div class="dash-grid">
       <div class="card projects-card">
         <div class="card-h">
-          我的项目
+          <span class="card-title"
+            ><el-icon><Folder /></el-icon> 我的项目</span
+          >
           <el-button type="primary" size="small" @click="openCreate">
             <el-icon><Plus /></el-icon> 新建项目
           </el-button>
@@ -30,7 +32,9 @@
               />
             </VueDraggable>
             <div class="projcard newcard" @click="openCreate">
-              <div class="plus">＋</div>
+              <div class="plus">
+                <el-icon><Plus /></el-icon>
+              </div>
               新建项目
             </div>
           </div>
@@ -196,6 +200,7 @@ onMounted(loadData)
   border: 1px solid var(--ax-border);
   border-radius: var(--ax-radius-lg);
   background: var(--ax-bg);
+  box-shadow: var(--ax-shadow-sm);
 }
 
 .card-h {
@@ -205,6 +210,16 @@ onMounted(loadData)
   padding: 12px 16px;
   border-bottom: 1px solid var(--ax-border);
   font-weight: 600;
+}
+
+.card-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.card-title .el-icon {
+  color: var(--ax-brand);
 }
 
 .projgrid-wrap {
@@ -224,20 +239,35 @@ onMounted(loadData)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--ax-text-tertiary);
   cursor: pointer;
   min-height: 118px;
-  transition: all 0.15s;
+  font-size: 13px;
+  transition: all var(--ax-transition);
 }
 
 .projcard.newcard:hover {
   color: var(--ax-brand);
   border-color: var(--ax-brand);
+  background: var(--ax-brand-subtle);
 }
 
 .plus {
-  font-size: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  color: var(--ax-brand);
+  background: var(--ax-brand-subtle);
+  transition: all var(--ax-transition);
+}
+
+.projcard.newcard:hover .plus {
+  background: var(--ax-brand);
+  color: #fff;
 }
 
 .side-col {

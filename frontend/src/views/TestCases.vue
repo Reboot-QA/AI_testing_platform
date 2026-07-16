@@ -1,5 +1,5 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
       <el-select
         v-model="projectId"
@@ -85,75 +85,78 @@
       </el-button>
     </template>
 
-    <el-table
-      v-loading="loading"
-      :data="testcases"
-      stripe
-      border
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column
-        v-if="isAllProjects"
-        prop="project_name"
-        label="项目"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="requirement_title"
-        label="需求点"
-        min-width="160"
-        show-overflow-tooltip
+    <div class="table-fill">
+      <el-table
+        v-loading="loading"
+        :data="testcases"
+        stripe
+        border
+        height="100%"
+        @selection-change="handleSelectionChange"
       >
-        <template #default="{ row }">{{ row.requirement_title || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="priority" label="优先级" width="80" align="center" />
-      <el-table-column prop="case_type" label="类型" width="90" />
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.source === 'ai_generated' ? 'warning' : ''" size="small">
-            {{ row.source === 'ai_generated' ? 'AI生成' : '手动' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="creator_name" label="创建人" width="100">
-        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="review_status" label="评审" width="100">
-        <template #default="{ row }">
-          <el-tag :type="reviewType[row.review_status]" size="small">
-            {{ reviewMap[row.review_status] || row.review_status }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="260" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-          <el-button
-            v-if="row.review_status === 'pending'"
-            link
-            type="success"
-            @click="review(row, 'approved')"
-            >通过</el-button
-          >
-          <el-button
-            v-if="row.review_status === 'pending'"
-            link
-            type="warning"
-            @click="review(row, 'rejected')"
-            >驳回</el-button
-          >
-          <el-popconfirm title="确认删除？" @confirm="handleDelete(row.id)">
-            <template #reference>
-              <el-button link type="danger">删除</el-button>
-            </template>
-          </el-popconfirm>
-        </template>
-      </el-table-column>
-    </el-table>
+        <el-table-column type="selection" width="45" />
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column
+          v-if="isAllProjects"
+          prop="project_name"
+          label="项目"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="requirement_title"
+          label="需求点"
+          min-width="160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">{{ row.requirement_title || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="priority" label="优先级" width="80" align="center" />
+        <el-table-column prop="case_type" label="类型" width="90" />
+        <el-table-column prop="source" label="来源" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.source === 'ai_generated' ? 'warning' : ''" size="small">
+              {{ row.source === 'ai_generated' ? 'AI生成' : '手动' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="creator_name" label="创建人" width="100">
+          <template #default="{ row }">{{ row.creator_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="review_status" label="评审" width="100">
+          <template #default="{ row }">
+            <el-tag :type="reviewType[row.review_status]" size="small">
+              {{ reviewMap[row.review_status] || row.review_status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="260" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+            <el-button
+              v-if="row.review_status === 'pending'"
+              link
+              type="success"
+              @click="review(row, 'approved')"
+              >通过</el-button
+            >
+            <el-button
+              v-if="row.review_status === 'pending'"
+              link
+              type="warning"
+              @click="review(row, 'rejected')"
+              >驳回</el-button
+            >
+            <el-popconfirm title="确认删除？" @confirm="handleDelete(row.id)">
+              <template #reference>
+                <el-button link type="danger">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <div class="pagination-bar">
       <el-pagination
@@ -619,9 +622,5 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
+/* .pagination-bar 已提取为全局工具类（src/styles/layout.css） */
 </style>

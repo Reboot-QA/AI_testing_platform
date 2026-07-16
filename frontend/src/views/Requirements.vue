@@ -739,18 +739,7 @@ onUnmounted(() => {
   color: #909399;
 }
 
-/* 表格填满 PageCard fill 的剩余高度；min-height:0 让 el-table 内部滚动生效 */
-.table-fill {
-  flex: 1;
-  min-height: 0;
-}
-
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  flex: none;
-}
+/* .table-fill / .pagination-bar 已提取为全局工具类（src/styles/layout.css） */
 
 .pre-text {
   white-space: pre-wrap;

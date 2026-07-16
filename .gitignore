@@ -12,8 +12,25 @@ backend/*.db
 # 前端构建产物（部署从源码 npm build，不入库）
 frontend/dist/
 frontend/.claude
-frontend/node_modules/
-**/node_modules/
+
+# 依赖目录（任意层级；pnpm install / dev 会在其下产生缓存，勿入库）
+node_modules/
+
+# node_modules 内 dev 工具运行时缓存（Vite 预构建、各类 bundler cache 等）
+**/.vite/
+**/.cache/
+**/.turbo/
+**/.eslintcache
+
+# 编辑器 / IDE 产生的文件
+.vscode/
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
 
 # Python
 __pycache__/
