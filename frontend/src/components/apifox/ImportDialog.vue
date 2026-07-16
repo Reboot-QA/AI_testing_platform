@@ -74,6 +74,7 @@ import ImportDiffPreview from './ImportDiffPreview.vue'
 const props = defineProps({
   visible: { type: Boolean, default: false },
   projectId: { type: [String, Number], required: true },
+  defaultAction: { type: String, default: 'import' }, // 'import' | 'update'：打开时初始模式
 })
 const emit = defineEmits(['update:visible', 'imported'])
 
@@ -103,11 +104,13 @@ function resetDiff() {
   deleteUnreferenced.value = false
 }
 
-// 关闭时清空，避免下次打开残留预览/输入
+// 打开时按调用方指定初始模式；关闭时清空，避免下次打开残留预览/输入
 watch(
   () => props.visible,
   (open) => {
-    if (!open) {
+    if (open) {
+      action.value = props.defaultAction === 'update' ? 'update' : 'import'
+    } else {
       resetDiff()
       url.value = ''
       content.value = ''
