@@ -7161,6 +7161,122 @@
         }
       }
     },
+    "/api/v1/apifox/projects/{pid}/import/openapi/diff": {
+      "post": {
+        "tags": [
+          "接口自动化v2·导入"
+        ],
+        "summary": "Import Openapi Diff",
+        "description": "更新同步前的只读预览：新增/变更/移除 + 引用告警。",
+        "operationId": "import_openapi_diff_api_v1_apifox_projects__pid__import_openapi_diff_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportDiffOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apifox/projects/{pid}/import/openapi/sync": {
+      "post": {
+        "tags": [
+          "接口自动化v2·导入"
+        ],
+        "summary": "Import Openapi Sync",
+        "description": "应用更新同步：建新增、更新变更契约、按需删无引用移除项；有引用只告警。",
+        "operationId": "import_openapi_sync_api_v1_apifox_projects__pid__import_openapi_sync_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportSyncRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportSyncReport"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/projects/{pid}/schedules": {
       "get": {
         "tags": [
@@ -11098,6 +11214,184 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "ImportCaseRef": {
+        "properties": {
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
+          "case_name": {
+            "type": "string",
+            "title": "Case Name"
+          },
+          "scenarios": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Scenarios"
+          },
+          "suites": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Suites"
+          }
+        },
+        "type": "object",
+        "required": [
+          "case_id",
+          "case_name"
+        ],
+        "title": "ImportCaseRef",
+        "description": "被移除接口下、被场景/套件引用的用例（修改提示锚点）。"
+      },
+      "ImportChangedEndpoint": {
+        "properties": {
+          "endpoint_id": {
+            "type": "integer",
+            "title": "Endpoint Id"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "changes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "affected_cases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Affected Cases"
+          }
+        },
+        "type": "object",
+        "required": [
+          "endpoint_id",
+          "method",
+          "path",
+          "name"
+        ],
+        "title": "ImportChangedEndpoint",
+        "description": "变更项：两边都有但接口定义不同；受影响用例仅告知（不自动改）。"
+      },
+      "ImportDiffEndpoint": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "path",
+          "name"
+        ],
+        "title": "ImportDiffEndpoint",
+        "description": "新增项：新 spec 有、库里无。"
+      },
+      "ImportDiffOut": {
+        "properties": {
+          "added": {
+            "items": {
+              "$ref": "#/components/schemas/ImportDiffEndpoint"
+            },
+            "type": "array",
+            "title": "Added"
+          },
+          "changed": {
+            "items": {
+              "$ref": "#/components/schemas/ImportChangedEndpoint"
+            },
+            "type": "array",
+            "title": "Changed"
+          },
+          "removed": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRemovedEndpoint"
+            },
+            "type": "array",
+            "title": "Removed"
+          },
+          "schemas_added": {
+            "type": "integer",
+            "title": "Schemas Added",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ImportDiffOut"
+      },
+      "ImportRemovedEndpoint": {
+        "properties": {
+          "endpoint_id": {
+            "type": "integer",
+            "title": "Endpoint Id"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "case_count": {
+            "type": "integer",
+            "title": "Case Count",
+            "default": 0
+          },
+          "referenced": {
+            "type": "boolean",
+            "title": "Referenced",
+            "default": false
+          },
+          "references": {
+            "items": {
+              "$ref": "#/components/schemas/ImportCaseRef"
+            },
+            "type": "array",
+            "title": "References"
+          }
+        },
+        "type": "object",
+        "required": [
+          "endpoint_id",
+          "method",
+          "path",
+          "name"
+        ],
+        "title": "ImportRemovedEndpoint",
+        "description": "移除项：库里有、新 spec 无。referenced=True 表示有用例被引用，不自动删。"
+      },
       "ImportReport": {
         "properties": {
           "total": {
@@ -11158,6 +11452,77 @@
         },
         "type": "object",
         "title": "ImportRequest"
+      },
+      "ImportSyncReport": {
+        "properties": {
+          "added": {
+            "type": "integer",
+            "title": "Added",
+            "default": 0
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated",
+            "default": 0
+          },
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted",
+            "default": 0
+          },
+          "kept_referenced": {
+            "type": "integer",
+            "title": "Kept Referenced",
+            "default": 0
+          },
+          "schemas_created": {
+            "type": "integer",
+            "title": "Schemas Created",
+            "default": 0
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "title": "ImportSyncReport"
+      },
+      "ImportSyncRequest": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "delete_unreferenced": {
+            "type": "boolean",
+            "title": "Delete Unreferenced",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "ImportSyncRequest"
       },
       "KvRow": {
         "properties": {

@@ -1661,6 +1661,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/import/openapi/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Openapi Diff
+         * @description 更新同步前的只读预览：新增/变更/移除 + 引用告警。
+         */
+        post: operations["import_openapi_diff_api_v1_apifox_projects__pid__import_openapi_diff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/projects/{pid}/import/openapi/sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Openapi Sync
+         * @description 应用更新同步：建新增、更新变更契约、按需删无引用移除项；有引用只告警。
+         */
+        post: operations["import_openapi_sync_api_v1_apifox_projects__pid__import_openapi_sync_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/projects/{pid}/schedules": {
         parameters: {
             query?: never;
@@ -2930,6 +2970,90 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /**
+         * ImportCaseRef
+         * @description 被移除接口下、被场景/套件引用的用例（修改提示锚点）。
+         */
+        ImportCaseRef: {
+            /** Case Id */
+            case_id: number;
+            /** Case Name */
+            case_name: string;
+            /** Scenarios */
+            scenarios?: string[];
+            /** Suites */
+            suites?: string[];
+        };
+        /**
+         * ImportChangedEndpoint
+         * @description 变更项：两边都有但接口定义不同；受影响用例仅告知（不自动改）。
+         */
+        ImportChangedEndpoint: {
+            /** Endpoint Id */
+            endpoint_id: number;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+            /** Changes */
+            changes?: string[];
+            /** Affected Cases */
+            affected_cases?: string[];
+        };
+        /**
+         * ImportDiffEndpoint
+         * @description 新增项：新 spec 有、库里无。
+         */
+        ImportDiffEndpoint: {
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+        };
+        /** ImportDiffOut */
+        ImportDiffOut: {
+            /** Added */
+            added?: components["schemas"]["ImportDiffEndpoint"][];
+            /** Changed */
+            changed?: components["schemas"]["ImportChangedEndpoint"][];
+            /** Removed */
+            removed?: components["schemas"]["ImportRemovedEndpoint"][];
+            /**
+             * Schemas Added
+             * @default 0
+             */
+            schemas_added: number;
+        };
+        /**
+         * ImportRemovedEndpoint
+         * @description 移除项：库里有、新 spec 无。referenced=True 表示有用例被引用，不自动删。
+         */
+        ImportRemovedEndpoint: {
+            /** Endpoint Id */
+            endpoint_id: number;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /** Name */
+            name: string;
+            /**
+             * Case Count
+             * @default 0
+             */
+            case_count: number;
+            /**
+             * Referenced
+             * @default false
+             */
+            referenced: boolean;
+            /** References */
+            references?: components["schemas"]["ImportCaseRef"][];
+        };
         /** ImportReport */
         ImportReport: {
             /** Total */
@@ -2952,6 +3076,48 @@ export interface components {
             url?: string | null;
             /** Content */
             content?: string | null;
+        };
+        /** ImportSyncReport */
+        ImportSyncReport: {
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
+            /**
+             * Deleted
+             * @default 0
+             */
+            deleted: number;
+            /**
+             * Kept Referenced
+             * @default 0
+             */
+            kept_referenced: number;
+            /**
+             * Schemas Created
+             * @default 0
+             */
+            schemas_created: number;
+            /** Warnings */
+            warnings?: string[];
+        };
+        /** ImportSyncRequest */
+        ImportSyncRequest: {
+            /** Url */
+            url?: string | null;
+            /** Content */
+            content?: string | null;
+            /**
+             * Delete Unreferenced
+             * @default false
+             */
+            delete_unreferenced: boolean;
         };
         /** KvRow */
         KvRow: {
@@ -9381,6 +9547,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ImportReport"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_openapi_diff_api_v1_apifox_projects__pid__import_openapi_diff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportDiffOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_openapi_sync_api_v1_apifox_projects__pid__import_openapi_sync_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportSyncRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportSyncReport"];
                 };
             };
             /** @description Validation Error */
