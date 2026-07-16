@@ -10,6 +10,8 @@ import './styles/tokens.css'
 import './styles/element-theme.css'
 // Tailwind（跳过 preflight，与 EP 共存）+ shadcn-vue 设计令牌
 import './styles/tailwind.css'
+// 页面布局公共工具类（.table-fill / .pagination-bar / .page-col）
+import './styles/layout.css'
 
 import App from './App.vue'
 import router from './router'

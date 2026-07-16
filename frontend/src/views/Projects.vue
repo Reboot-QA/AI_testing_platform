@@ -1,45 +1,47 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
       <el-button type="primary" data-assistant="projects.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新建项目
       </el-button>
     </template>
 
-    <el-table v-loading="loading" :data="projects" stripe border>
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="name" label="项目名称" min-width="180" />
-      <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
-      <el-table-column prop="requirement_count" label="需求数" width="90" align="center" />
-      <el-table-column prop="testcase_count" label="用例数" width="90" align="center" />
-      <el-table-column prop="status" label="状态" width="90">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
-            {{ row.status === 'active' ? '进行中' : row.status }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="owner_name" label="创建人" width="100" />
-      <el-table-column prop="department_name" label="部门" width="120">
-        <template #default="{ row }">{{ row.department_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" width="170">
-        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button
-            link
-            type="danger"
-            :disabled="row.requirement_count > 0 || row.testcase_count > 0"
-            @click="handleDelete(row)"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-fill">
+      <el-table v-loading="loading" :data="projects" stripe border height="100%">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="name" label="项目名称" min-width="180" />
+        <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
+        <el-table-column prop="requirement_count" label="需求数" width="90" align="center" />
+        <el-table-column prop="testcase_count" label="用例数" width="90" align="center" />
+        <el-table-column prop="status" label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
+              {{ row.status === 'active' ? '进行中' : row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="owner_name" label="创建人" width="100" />
+        <el-table-column prop="department_name" label="部门" width="120">
+          <template #default="{ row }">{{ row.department_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="row.requirement_count > 0 || row.testcase_count > 0"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
   </PageCard>
 
   <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="500px">

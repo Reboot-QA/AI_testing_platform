@@ -1,53 +1,57 @@
 <template>
-  <el-alert
-    title="同部门用户共享项目、需求、用例等数据；管理员可查看所有部门数据。"
-    type="info"
-    :closable="false"
-    show-icon
-    class="tip-alert"
-  />
+  <div class="page-col">
+    <el-alert
+      title="同部门用户共享项目、需求、用例等数据；管理员可查看所有部门数据。"
+      type="info"
+      :closable="false"
+      show-icon
+      class="tip-alert"
+    />
 
-  <PageCard>
-    <template #toolbar>
-      <el-button type="primary" @click="openDialog()">
-        <el-icon><Plus /></el-icon> 添加部门
-      </el-button>
-    </template>
-
-    <el-table v-loading="loading" :data="departments" stripe border>
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="name" label="部门名称" min-width="160" />
-      <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip>
-        <template #default="{ row }">{{ row.description || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="user_count" label="用户数" width="90" align="center" />
-      <el-table-column prop="project_count" label="项目数" width="90" align="center" />
-      <el-table-column prop="created_at" label="创建时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
-        </template>
-      </el-table-column>
-    </el-table>
-
-    <el-dialog v-model="dialogVisible" :title="editing ? '编辑部门' : '添加部门'" width="520px">
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
-        <el-form-item label="部门名称" prop="name">
-          <el-input v-model="form.name" placeholder="请输入部门名称" />
-        </el-form-item>
-        <el-form-item label="描述">
-          <el-input v-model="form.description" type="textarea" :rows="3" placeholder="选填" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="dialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+    <PageCard fill>
+      <template #toolbar>
+        <el-button type="primary" @click="openDialog()">
+          <el-icon><Plus /></el-icon> 添加部门
+        </el-button>
       </template>
-    </el-dialog>
-  </PageCard>
+
+      <div class="table-fill">
+        <el-table v-loading="loading" :data="departments" stripe border height="100%">
+          <el-table-column prop="id" label="ID" width="70" />
+          <el-table-column prop="name" label="部门名称" min-width="160" />
+          <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip>
+            <template #default="{ row }">{{ row.description || '-' }}</template>
+          </el-table-column>
+          <el-table-column prop="user_count" label="用户数" width="90" align="center" />
+          <el-table-column prop="project_count" label="项目数" width="90" align="center" />
+          <el-table-column prop="created_at" label="创建时间" width="170">
+            <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="160" fixed="right">
+            <template #default="{ row }">
+              <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button link type="danger" @click="handleDelete(row)">删除</el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <el-dialog v-model="dialogVisible" :title="editing ? '编辑部门' : '添加部门'" width="520px">
+        <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
+          <el-form-item label="部门名称" prop="name">
+            <el-input v-model="form.name" placeholder="请输入部门名称" />
+          </el-form-item>
+          <el-form-item label="描述">
+            <el-input v-model="form.description" type="textarea" :rows="3" placeholder="选填" />
+          </el-form-item>
+        </el-form>
+        <template #footer>
+          <el-button @click="dialogVisible = false">取消</el-button>
+          <el-button type="primary" :loading="submitting" @click="handleSubmit">确定</el-button>
+        </template>
+      </el-dialog>
+    </PageCard>
+  </div>
 </template>
 
 <script setup>
@@ -132,5 +136,14 @@ onMounted(loadData)
 <style scoped>
 .tip-alert {
   margin-bottom: 16px;
+  flex: none;
+}
+
+/* .page-col 是撑满高度的纵向 flex 列；让 PageCard fill 在其中吃掉横幅以下的剩余高度
+   （单根页面靠 PageCard fill 自身 height:100% 生效，此处覆盖为 flex 项） */
+.page-col :deep(.page-card) {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 </style>

@@ -1,43 +1,50 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
       <el-button type="primary" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加用户
       </el-button>
     </template>
 
-    <el-table v-loading="loading" :data="users" stripe border>
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="username" label="用户名" width="140" />
-      <el-table-column prop="full_name" label="姓名" width="140">
-        <template #default="{ row }">{{ row.full_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="email" label="邮箱" min-width="180">
-        <template #default="{ row }">{{ row.email || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="department_name" label="部门" width="140">
-        <template #default="{ row }">{{ row.department_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="is_active" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
-            {{ row.is_active ? '启用' : '禁用' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="warning" @click="openPasswordDialog(row)">重置密码</el-button>
-          <el-button v-if="row.id !== currentUserId" link type="danger" @click="handleDelete(row)">
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-fill">
+      <el-table v-loading="loading" :data="users" stripe border height="100%">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="username" label="用户名" width="140" />
+        <el-table-column prop="full_name" label="姓名" width="140">
+          <template #default="{ row }">{{ row.full_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="email" label="邮箱" min-width="180">
+          <template #default="{ row }">{{ row.email || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="department_name" label="部门" width="140">
+          <template #default="{ row }">{{ row.department_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="is_active" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
+              {{ row.is_active ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="280" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+            <el-button link type="warning" @click="openPasswordDialog(row)">重置密码</el-button>
+            <el-button
+              v-if="row.id !== currentUserId"
+              link
+              type="danger"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用户' : '添加用户'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">

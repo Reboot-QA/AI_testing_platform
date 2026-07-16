@@ -138,23 +138,44 @@ import PageCard from '@/components/PageCard.vue'
 </PageCard>
 ```
 
+> `.table-fill` / `.pagination-bar` / `.page-col` 已是**全局工具类**（`src/styles/layout.css`，`main.js` 引入），页面直接写类名即可，**不用再在 scoped 里定义**。
+
 ```css
-/* 页面 scoped 样式 */
-.table-fill {
-  flex: 1;
-  min-height: 0;   /* 关键：让 el-table 内部滚动生效 */
-}
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  flex: none;
-}
+/* src/styles/layout.css —— 全局，勿在页面重复定义 */
+.table-fill    { flex: 1; min-height: 0; }            /* min-height:0 是内部滚动关键 */
+.pagination-bar{ display:flex; justify-content:flex-end; margin-top:16px; flex:none; }
+.page-col      { height:100%; display:flex; flex-direction:column; }
 ```
 
 原理：`PageCard fill` 让卡片成为撑满高度的纵向 flex，`body` 为 `flex:1; min-height:0`；`.table-fill` 再 `flex:1` 吃掉剩余高度，`el-table height="100%"` 在确定高度的父容器内启用自身滚动（表头 sticky）。
 
 **注意**：`min-height: 0` 必写，否则 flex 子项按内容撑高、表格不会内部滚动。
+
+#### 变体 A：顶部有横幅/工具栏（示范见 `views/DepartmentManagement.vue`）
+
+页面顶部有 `el-alert` 提示条等兄弟节点时，`PageCard fill` 不能直接铺满整页（会连横幅高度一起算）。用 `.page-col` 包成纵向 flex 列，横幅 `flex:none`，卡片吃剩余：
+
+```vue
+<div class="page-col">
+  <el-alert ... class="tip-alert" />      <!-- scoped: .tip-alert{ flex:none } -->
+  <PageCard fill> <div class="table-fill"><el-table height="100%" .../></div> </PageCard>
+</div>
+```
+```css
+/* 该页 scoped：把 PageCard fill 的 height:100% 覆盖为「吃剩余高度」 */
+.page-col :deep(.page-card) { flex: 1; min-height: 0; height: auto; }
+```
+
+#### 变体 B：表格在 `el-card` 里（示范见 `views/ErrorLogs.vue`、`views/TestExecution.vue`）
+
+已用 `el-card`（自带 header/统计区）承载表格、不便换 `PageCard` 时，逐层打通高度链，并**穿透 `.el-card__body`** 成为纵向 flex：
+
+```css
+.page-root  { height:100%; display:flex; flex-direction:column; }  /* 统计行/工具栏 flex:none */
+.the-card   { flex:1; min-height:0; display:flex; flex-direction:column; }
+.the-card :deep(.el-card__body) { flex:1; min-height:0; display:flex; flex-direction:column; }
+/* 表格加 height="100%"；卡内其他小节（如 .log-meta）保持 flex:none */
+```
 
 ### 4.3 分页
 - 统一 `background`，`layout="total, sizes, prev, pager, next, jumper"`，`:page-sizes="[10,20,50,100]"`。
@@ -272,18 +293,7 @@ async function load() {
 onMounted(load)
 </script>
 
-<style scoped>
-.table-fill {
-  flex: 1;
-  min-height: 0;
-}
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  flex: none;
-}
-</style>
+<!-- .table-fill / .pagination-bar 是全局工具类（src/styles/layout.css），无需 scoped 定义 -->
 ```
 
 ---
@@ -293,7 +303,10 @@ onMounted(load)
 | 范式 | 参考文件 |
 | --- | --- |
 | PageCard 容器 | `src/components/PageCard.vue` |
-| 撑满高度表格 | `src/views/Requirements.vue` |
+| 撑满高度公共工具类 | `src/styles/layout.css` |
+| 撑满高度表格（单根 PageCard） | `src/views/Requirements.vue`、`TestCases.vue` |
+| 撑满高度表格（顶部横幅 · 变体 A） | `src/views/DepartmentManagement.vue` |
+| 撑满高度表格（el-card 承载 · 变体 B） | `src/views/ErrorLogs.vue`、`TestExecution.vue` |
 | 统计卡 + 磁贴 | `src/views/Dashboard.vue` |
 | 门面页（双栏 + shadcn） | `src/views/Login.vue` |
 | token → EP 变量映射 | `src/styles/element-theme.css` |

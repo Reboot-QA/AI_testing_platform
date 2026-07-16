@@ -16,8 +16,8 @@
     </div>
 
     <!-- 测试单列表 -->
-    <el-card v-if="!executingRun" shadow="never">
-      <el-table v-loading="runsLoading" :data="runs" stripe border>
+    <el-card v-if="!executingRun" shadow="never" class="list-card">
+      <el-table v-loading="runsLoading" :data="runs" stripe border height="100%">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="name" label="测试单" min-width="180" show-overflow-tooltip />
         <el-table-column prop="build_name" label="版本/构建" width="120">
@@ -668,11 +668,41 @@ onMounted(loadProjects)
 </script>
 
 <style scoped>
+/* 页面撑满 el-main 高度：工具栏固定，列表卡/执行面板吃掉剩余高度、内部滚动 */
+.test-execution {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .toolbar {
   display: flex;
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
+  flex: none;
+}
+
+/* 测试单列表：卡片吃剩余高度，表格在卡片内部滚动 */
+.list-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 执行模式：整块作为一个滚动区，内部两栏各自的 max-height 仍生效 */
+.execute-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .progress-cell {
