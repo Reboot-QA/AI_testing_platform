@@ -11,7 +11,7 @@
         v-for="s in suites"
         :key="s.id"
         class="item"
-        :class="{ active: form.id === s.id }"
+        :class="{ active: activeId === s.id }"
         @click="onSelectSuite(s.id)"
       >
         <el-icon><Files /></el-icon>
@@ -24,64 +24,93 @@
     </div>
 
     <div class="editor-panel">
-      <template v-if="form.id">
-        <div class="row1">
-          <el-input v-model="form.name" placeholder="套件名称" style="width: 260px" />
-          <el-button type="primary" :loading="saving" @click="saveSuite">保存</el-button>
-          <el-button type="success" :loading="running" @click="runSuite">运行</el-button>
-          <span class="run-hint">每项独立执行 · 环境在顶部选择</span>
-        </div>
-        <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
+      <template v-if="tabs.length">
+        <el-tabs
+          :model-value="activeId"
+          type="card"
+          class="suite-tabbar"
+          @tab-change="(id) => tabsStore.activate(pid, id)"
+          @tab-remove="onTabRemove"
+        >
+          <el-tab-pane v-for="t in tabs" :key="t.id" :name="t.id" closable>
+            <template #label>
+              <span class="tab-name">{{ t.name }}</span>
+              <span v-if="tabsStore.isDirty(t)" class="dirty-dot" title="有未保存改动">●</span>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
 
-        <div class="items-title">套件项（按序批量执行 · 拖拽调整顺序）</div>
-        <VueDraggable v-model="form.items" handle=".drag-handle" :animation="150">
-          <div v-for="(it, i) in form.items" :key="it._uid" class="suite-item">
-            <el-icon class="drag-handle"><Rank /></el-icon>
-            <el-switch v-model="it.enabled" size="small" />
-            <el-tag size="small" :type="it.target_type === 'scenario' ? 'warning' : ''">
-              {{ it.target_type === 'scenario' ? '场景' : '用例' }}
-            </el-tag>
-            <MethodTag v-if="it.endpoint_method" :method="it.endpoint_method" />
-            <span class="si-name" :class="{ 'si-gone': !it.target_name }">
-              {{ it.target_name || '(目标已删除，建议移除)' }}
-            </span>
-            <el-button link type="danger" size="small" @click="form.items.splice(i, 1)"
-              >移除</el-button
-            >
+        <div v-if="activeTab" :key="activeTab.id" class="tab-body">
+          <div class="row1">
+            <el-input v-model="activeTab.form.name" placeholder="套件名称" style="width: 260px" />
+            <el-button type="primary" :loading="activeTab.saving" @click="saveSuite(activeTab.id)">
+              保存
+            </el-button>
+            <el-button type="success" :loading="activeTab.running" @click="runSuite(activeTab.id)">
+              运行
+            </el-button>
+            <span class="run-hint">每项独立执行 · 环境在顶部选择</span>
           </div>
-        </VueDraggable>
-        <el-empty
-          v-if="form.items.length === 0"
-          description="下方添加用例或场景"
-          :image-size="50"
-        />
+          <el-input
+            v-model="activeTab.form.description"
+            placeholder="描述（选填）"
+            class="desc-input"
+          />
 
-        <div class="add-row">
-          <el-select
-            v-model="pickCase"
-            filterable
-            clearable
-            placeholder="+ 添加用例"
-            size="small"
-            class="picker"
-            @change="onPickCase"
-          >
-            <el-option v-for="c in projectCases" :key="c.id" :label="c.name" :value="c.id" />
-          </el-select>
-          <el-select
-            v-model="pickScenario"
-            filterable
-            clearable
-            placeholder="+ 添加场景"
-            size="small"
-            class="picker"
-            @change="onPickScenario"
-          >
-            <el-option v-for="s in scenarios" :key="s.id" :label="s.name" :value="s.id" />
-          </el-select>
+          <div class="items-title">套件项（按序批量执行 · 拖拽调整顺序）</div>
+          <VueDraggable v-model="activeTab.form.items" handle=".drag-handle" :animation="150">
+            <div v-for="(it, i) in activeTab.form.items" :key="it._uid" class="suite-item">
+              <el-icon class="drag-handle"><Rank /></el-icon>
+              <el-switch v-model="it.enabled" size="small" />
+              <el-tag size="small" :type="it.target_type === 'scenario' ? 'warning' : ''">
+                {{ it.target_type === 'scenario' ? '场景' : '用例' }}
+              </el-tag>
+              <MethodTag v-if="it.endpoint_method" :method="it.endpoint_method" />
+              <span class="si-name" :class="{ 'si-gone': !it.target_name }">
+                {{ it.target_name || '(目标已删除，建议移除)' }}
+              </span>
+              <el-button link type="danger" size="small" @click="activeTab.form.items.splice(i, 1)"
+                >移除</el-button
+              >
+            </div>
+          </VueDraggable>
+          <el-empty
+            v-if="activeTab.form.items.length === 0"
+            description="下方添加用例或场景"
+            :image-size="50"
+          />
+
+          <div class="add-row">
+            <el-select
+              v-model="pickCase"
+              filterable
+              clearable
+              placeholder="+ 添加用例"
+              size="small"
+              class="picker"
+              @change="onPickCase"
+            >
+              <el-option v-for="c in projectCases" :key="c.id" :label="c.name" :value="c.id" />
+            </el-select>
+            <el-select
+              v-model="pickScenario"
+              filterable
+              clearable
+              placeholder="+ 添加场景"
+              size="small"
+              class="picker"
+              @change="onPickScenario"
+            >
+              <el-option v-for="s in scenarios" :key="s.id" :label="s.name" :value="s.id" />
+            </el-select>
+          </div>
+
+          <SuiteRunProgress
+            :events="activeTab.runEvents"
+            :running="activeTab.running"
+            @clear="activeTab.runEvents = []"
+          />
         </div>
-
-        <SuiteRunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
       <el-empty v-else description="选择或新建一个套件（把用例/场景成组批量回归）" />
     </div>
@@ -89,66 +118,48 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import { apifoxApi } from '@/api'
-import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
-import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
+import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useSuiteTabsStore } from '@/stores/suiteTabs'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import SuiteRunProgress from '@/components/apifox/SuiteRunProgress.vue'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
+const tabsStore = useSuiteTabsStore()
 
 const suites = ref([])
 const projectCases = ref([])
 const scenarios = ref([])
-const saving = ref(false)
-const running = ref(false)
-const runEvents = ref([])
 const pickCase = ref(null)
 const pickScenario = ref(null)
-const form = reactive({ id: null, name: '', description: '', items: [], version: 1 })
 
-// 未保存守卫：切套件/切主 tab/关浏览器前，dirty 则提示（与场景一致）
-const guard = useUnsavedGuard({
-  serialize: () =>
-    JSON.stringify({ name: form.name, description: form.description, items: form.items }),
-  save: () => saveSuite(),
-  name: () => form.name,
-})
-defineExpose({ confirmLeave: guard.confirmLeave })
+const tabs = computed(() => tabsStore.tabsOf(pid.value))
+const activeId = computed(() => tabsStore.activeIdOf(pid.value))
+const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
 
 let uid = 0
-const nextUid = () => `si-${uid++}`
+const nextUid = () => `new-${uid++}`
 
 async function loadSuites() {
   suites.value = await apifoxApi.listSuites(pid.value)
 }
 
-// 点选其它套件前先过未保存守卫（与场景 onSelectScenario 一致）
 async function onSelectSuite(sid) {
-  if (sid === form.id) return
-  if (!(await guard.confirmLeave())) return
-  await selectSuite(sid)
-}
-
-async function selectSuite(sid) {
-  const s = await apifoxApi.getSuite(sid)
-  form.id = s.id
-  form.name = s.name
-  form.description = s.description || ''
-  form.items = (s.items || []).map((it) => ({ ...it, _uid: nextUid() }))
-  form.version = s.version ?? 1
-  guard.markSaved() // 加载后重置未保存基线
+  try {
+    await tabsStore.openSuite(pid.value, sid)
+  } catch {
+    ElMessage.error('套件加载失败')
+  }
 }
 
 async function addSuite() {
-  if (!(await guard.confirmLeave())) return // 当前有未保存改动时先确认
   const { value } = await ElMessageBox.prompt('套件名称', '新建套件', {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
@@ -156,13 +167,13 @@ async function addSuite() {
   const created = await apifoxApi.createSuite(pid.value, { name: value, items: [] })
   ElMessage.success('已创建')
   await loadSuites()
-  await selectSuite(created.id)
+  await tabsStore.openSuite(pid.value, created.id)
 }
 
 function onPickCase(id) {
-  if (!id) return
+  if (!id || !activeTab.value) return
   const c = projectCases.value.find((x) => x.id === id)
-  form.items.push({
+  activeTab.value.form.items.push({
     _uid: nextUid(),
     target_type: 'case',
     target_id: id,
@@ -174,9 +185,9 @@ function onPickCase(id) {
 }
 
 function onPickScenario(id) {
-  if (!id) return
+  if (!id || !activeTab.value) return
   const s = scenarios.value.find((x) => x.id === id)
-  form.items.push({
+  activeTab.value.form.items.push({
     _uid: nextUid(),
     target_type: 'scenario',
     target_id: id,
@@ -187,85 +198,110 @@ function onPickScenario(id) {
   pickScenario.value = null
 }
 
-async function doSaveSuite() {
-  const updated = await apifoxApi.updateSuite(form.id, {
-    name: form.name,
-    description: form.description || null,
-    items: form.items.map((it) => ({
+async function doSaveSuite(tab) {
+  const updated = await apifoxApi.updateSuite(tab.id, {
+    name: tab.form.name,
+    description: tab.form.description || null,
+    items: tab.form.items.map((it) => ({
       target_type: it.target_type,
       target_id: it.target_id,
       enabled: it.enabled !== false,
     })),
-    expected_version: form.version,
+    expected_version: tab.version,
   })
-  form.version = updated.version
+  tabsStore.afterSave(pid.value, tab.id, updated.version)
   await loadSuites()
 }
 
-async function saveSuite() {
-  saving.value = true
+// 返回 true=已保存(可安全关闭)，false=未保存/用户取消
+async function saveSuite(id) {
+  const tab = tabsStore.findTab(pid.value, id)
+  if (!tab) return false
+  tab.saving = true
   try {
-    await doSaveSuite()
-    guard.markSaved()
+    await doSaveSuite(tab)
     ElMessage.success('已保存')
     return true
   } catch (e) {
-    if (!isConflict(e)) return false // 非冲突错误已由 api 拦截器提示，不外抛(避免穿透 confirmLeave)
+    if (!isConflict(e)) {
+      ElMessage.error(e.message || '保存失败')
+      return false
+    }
     let resolved = false
     await resolveSaveConflict({
       reload: async () => {
-        await selectSuite(form.id)
+        await tabsStore.reloadSuite(pid.value, tab.id)
         resolved = true
       },
       overwrite: async () => {
-        const latest = await apifoxApi.getSuite(form.id)
-        form.version = latest.version
-        await doSaveSuite()
-        guard.markSaved()
+        const latest = await apifoxApi.getSuite(tab.id)
+        tab.version = latest.version
+        await doSaveSuite(tab)
         resolved = true
       },
     })
     return resolved
   } finally {
-    saving.value = false
+    tab.saving = false
   }
 }
 
-async function runSuite() {
-  runEvents.value = []
-  running.value = true
+async function runSuite(id) {
+  const tab = tabsStore.findTab(pid.value, id)
+  if (!tab) return
+  tab.runEvents = []
+  tab.running = true
   try {
-    await apifoxApi.runSuiteStream(form.id, store.currentEnvironmentId, (e) =>
-      runEvents.value.push(e),
-    )
+    await apifoxApi.runSuiteStream(id, store.currentEnvironmentId, (e) => tab.runEvents.push(e))
   } catch (e) {
     ElMessage.error(e.message || '运行失败')
   } finally {
-    running.value = false
+    tab.running = false
   }
 }
 
+async function onTabRemove(id) {
+  const tab = tabsStore.findTab(pid.value, id)
+  if (!tab) return
+  if (!tabsStore.isDirty(tab)) {
+    tabsStore.closeTab(pid.value, id)
+    return
+  }
+  const choice = await confirmCloseDirty(tab.name)
+  if (choice === 'cancel') return
+  if (choice === 'save' && !(await saveSuite(id))) return
+  tabsStore.closeTab(pid.value, id)
+}
+
 async function copySuite(s) {
-  if (!(await guard.confirmLeave())) return // 复制会切到新套件，先确认未保存改动
   const created = await apifoxApi.copySuite(s.id)
   ElMessage.success('已复制')
   await loadSuites()
-  await selectSuite(created.id)
+  await tabsStore.openSuite(pid.value, created.id)
 }
 
 async function delSuite(s) {
   await ElMessageBox.confirm(`确认删除套件「${s.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteSuite(s.id)
-  if (form.id === s.id) form.id = null
+  tabsStore.closeTab(pid.value, s.id)
   ElMessage.success('已删除')
   await loadSuites()
 }
 
+function beforeUnloadHandler(e) {
+  if (tabsStore.hasAnyDirty(pid.value)) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('beforeunload', beforeUnloadHandler)
   await loadSuites()
   projectCases.value = await apifoxApi.listProjectCases(pid.value)
   scenarios.value = await apifoxApi.listScenarios(pid.value)
 })
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHandler))
 </script>
 
 <style scoped>
@@ -318,6 +354,20 @@ onMounted(async () => {
 .editor-panel {
   flex: 1;
   overflow: auto;
+  min-width: 0;
+}
+
+.suite-tabbar :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+
+.tab-name {
+  margin-right: 4px;
+}
+
+.dirty-dot {
+  color: var(--ax-warning);
+  font-size: 12px;
 }
 
 .row1 {
