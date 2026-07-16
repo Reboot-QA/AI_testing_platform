@@ -4,11 +4,13 @@
     title="AI 生成接口测试用例"
     width="640px"
     :close-on-click-modal="false"
-    @closed="reset"
+    @closed="onClosed"
   >
+    <!-- 配置 -->
     <div v-if="step === 'config'" class="config">
       <div class="tip">
-        勾选类别，AI 将按接口复杂度自动决定用例数量；需要时可勾「限量」指定每类上限。
+        勾选类别，AI
+        将按接口复杂度自动决定用例数量；需要时可勾「限量」指定每类上限。生成在后台进行，可关闭弹窗做其他事。
       </div>
       <div class="provider-row">
         <span class="provider-label">大模型</span>
@@ -49,64 +51,85 @@
       </div>
     </div>
 
-    <div v-else class="preview">
-      <div class="tip">
-        共生成 {{ generated.length }} 条<span v-if="mode === 'mock'">（Mock 模式 · 样例数据）</span
-        >，勾选要创建的用例：
+    <!-- 生成中 / 结果 -->
+    <div v-else class="result">
+      <div v-if="generating" class="running">
+        <el-progress :percentage="100" :indeterminate="true" :show-text="false" :stroke-width="4" />
+        <div class="run-text">AI 生成中，请稍候…（可关闭弹窗，后台继续；完成后重新打开查看）</div>
       </div>
-      <el-checkbox
-        v-model="allSelected"
-        :indeterminate="someSelected"
-        class="select-all"
-        @change="toggleAll"
-        >全选</el-checkbox
-      >
-      <div v-for="(g, i) in generated" :key="i" class="gen-item">
-        <el-checkbox v-model="selected[i]" />
-        <el-tag size="small" :type="tagType(g.category)">{{ categoryLabel(g.category) }}</el-tag>
-        <div class="gen-body">
-          <div class="gen-name">{{ g.name }}</div>
-          <div class="gen-sum">{{ summarize(g) }}</div>
+      <el-alert
+        v-else-if="item && item.status === 'failed'"
+        type="error"
+        :closable="false"
+        :title="item.error || '生成失败'"
+      />
+      <template v-else>
+        <div class="tip">
+          共生成 {{ generated.length }} 条<span v-if="task && task.mode === 'mock'"
+            >（Mock 模式 · 样例数据）</span
+          >，勾选要创建的用例：
         </div>
-      </div>
-      <el-empty v-if="!generated.length" description="未生成用例" :image-size="50" />
+        <el-checkbox
+          v-model="allSelected"
+          :indeterminate="someSelected"
+          class="select-all"
+          @change="toggleAll"
+          >全选</el-checkbox
+        >
+        <div v-for="(g, i) in generated" :key="i" class="gen-item">
+          <el-checkbox v-model="selected[i]" />
+          <el-tag size="small" :type="tagType(g.category)">{{ categoryLabel(g.category) }}</el-tag>
+          <div class="gen-body">
+            <div class="gen-name">{{ g.name }}</div>
+            <div class="gen-sum">{{ summarize(g) }}</div>
+          </div>
+        </div>
+        <el-empty v-if="!generated.length" description="未生成用例" :image-size="50" />
+      </template>
     </div>
 
     <template #footer>
-      <el-button @click="visible = false">取消</el-button>
-      <el-button v-if="step === 'preview'" :disabled="creating" @click="step = 'config'"
-        >上一步</el-button
-      >
-      <el-button
-        v-if="step === 'config'"
-        type="primary"
-        :loading="loading"
-        :disabled="!anyChecked"
-        @click="generate"
-        >生成</el-button
-      >
-      <el-button
-        v-else
-        type="primary"
-        :loading="creating"
-        :disabled="!selectedCount"
-        @click="createSelected"
-        >创建勾选（{{ selectedCount }}）</el-button
-      >
+      <template v-if="step === 'config'">
+        <el-button @click="visible = false">取消</el-button>
+        <el-button type="primary" :loading="submitting" :disabled="!anyChecked" @click="generate"
+          >生成</el-button
+        >
+      </template>
+      <template v-else-if="generating">
+        <el-button @click="visible = false">关闭（后台继续）</el-button>
+        <el-button :loading="canceling" @click="cancel">取消生成</el-button>
+      </template>
+      <template v-else-if="item && item.status === 'failed'">
+        <el-button type="primary" @click="backToConfig">返回重试</el-button>
+      </template>
+      <template v-else>
+        <el-button @click="backToConfig">重新生成</el-button>
+        <el-button
+          type="primary"
+          :loading="creating"
+          :disabled="!selectedCount"
+          @click="createSelected"
+          >创建勾选（{{ selectedCount }}）</el-button
+        >
+      </template>
     </template>
   </el-dialog>
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { apifoxApi, settingsApi } from '@/api'
+import { settingsApi } from '@/api'
+import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
 import { categoryLabel } from '@/utils/caseCategory'
 
 const props = defineProps({
   endpointId: { type: [String, Number], required: true },
+  projectId: { type: [String, Number], required: true },
 })
 const emit = defineEmits(['created'])
+
+const store = useApifoxAiGenerateStore()
 
 const DEFAULT_CATEGORIES = () => [
   {
@@ -145,16 +168,24 @@ const DEFAULT_CATEGORIES = () => [
 
 const visible = ref(false)
 const step = ref('config')
-const loading = ref(false)
+const submitting = ref(false)
 const creating = ref(false)
+const canceling = ref(false)
 const categories = ref(DEFAULT_CATEGORIES())
-const generated = ref([])
 const selected = ref([])
-const mode = ref('llm')
+const taskId = ref(null)
 const llmProviders = ref([])
 const providersLoading = ref(false)
 const providerId = ref(null)
 const mockMode = ref(false)
+
+const eid = computed(() => Number(props.endpointId))
+const task = computed(() => (taskId.value ? store.taskById(taskId.value) : undefined))
+const item = computed(() => task.value?.items?.[0])
+const generating = computed(
+  () => !!task.value && !['succeeded', 'partial', 'failed', 'canceled'].includes(task.value.status),
+)
+const generated = computed(() => item.value?.cases || [])
 
 const anyChecked = computed(() => categories.value.some((c) => c.checked))
 const selectedCount = computed(() => selected.value.filter(Boolean).length)
@@ -166,12 +197,41 @@ const someSelected = computed(() => selectedCount.value > 0 && !allSelected.valu
 const tagType = (cat) =>
   ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' })[cat] || 'info'
 
+// 生成完成、拿到用例后默认全选
+watch(generated, (rows) => {
+  if (rows.length && selected.value.length !== rows.length) selected.value = rows.map(() => true)
+})
+
 function open() {
-  reset()
-  visible.value = true
+  step.value = 'config'
+  categories.value = DEFAULT_CATEGORIES()
+  selected.value = []
+  submitting.value = false
+  creating.value = false
+  canceling.value = false
   loadProviders()
+  // 重开时恢复该接口最近的任务（进行中或本会话刚生成完的），失败的则回配置重试
+  const existing = store.latestTaskForEndpoint(eid.value)
+  if (existing && existing.status !== 'failed' && existing.status !== 'canceled') {
+    taskId.value = existing.id
+    step.value = 'result'
+  } else {
+    taskId.value = null
+  }
+  visible.value = true
 }
 defineExpose({ open })
+
+function onClosed() {
+  // 关闭不取消任务（后台继续）；仅重置弹窗自身瞬态
+  step.value = 'config'
+}
+
+function backToConfig() {
+  taskId.value = null
+  selected.value = []
+  step.value = 'config'
+}
 
 function formatProviderLabel(item) {
   const tags = []
@@ -187,23 +247,11 @@ async function loadProviders() {
     const data = await settingsApi.getLLMOptions()
     llmProviders.value = data.providers || []
     mockMode.value = data.mock_mode
-    if (data.active_provider_id) {
-      providerId.value = data.active_provider_id
-    } else if (llmProviders.value.length) {
-      providerId.value = llmProviders.value[0].id
-    }
+    if (data.active_provider_id) providerId.value = data.active_provider_id
+    else if (llmProviders.value.length) providerId.value = llmProviders.value[0].id
   } finally {
     providersLoading.value = false
   }
-}
-
-function reset() {
-  step.value = 'config'
-  categories.value = DEFAULT_CATEGORIES()
-  generated.value = []
-  selected.value = []
-  loading.value = false
-  creating.value = false
 }
 
 function toggleAll(val) {
@@ -224,56 +272,55 @@ function summarize(g) {
 }
 
 async function generate() {
-  const payload = {
-    categories: categories.value
-      .filter((c) => c.checked)
-      .map((c) => ({ category: c.value, count: c.limit ? c.count : undefined })),
-    provider_id: providerId.value ?? undefined,
-  }
-  loading.value = true
+  const cats = categories.value
+    .filter((c) => c.checked)
+    .map((c) => ({ category: c.value, count: c.limit ? c.count : undefined }))
+  submitting.value = true
   try {
-    const res = await apifoxApi.aiGenerateCases(props.endpointId, payload)
-    generated.value = res.cases || []
-    selected.value = generated.value.map(() => true)
-    mode.value = res.mode
-    step.value = 'preview'
+    taskId.value = await store.start(Number(props.projectId), [eid.value], cats, providerId.value)
+    selected.value = []
+    step.value = 'result'
   } catch (e) {
-    ElMessage.error(e.message || 'AI 生成失败')
+    ElMessage.error(e.message || 'AI 生成任务创建失败')
   } finally {
-    loading.value = false
+    submitting.value = false
+  }
+}
+
+async function cancel() {
+  canceling.value = true
+  try {
+    await store.cancel(taskId.value)
+    ElMessage.info('已取消生成')
+    backToConfig()
+  } catch (e) {
+    ElMessage.error(e.message || '取消失败')
+  } finally {
+    canceling.value = false
   }
 }
 
 async function createSelected() {
+  if (!item.value) return
+  const indexes = generated.value.map((_, i) => i).filter((i) => selected.value[i])
   creating.value = true
-  let ok = 0
-  const failed = [] // 保留创建失败的条目，供用户重试；成功的从列表移除以防重复创建
-  const failedNames = []
   try {
-    for (let i = 0; i < generated.value.length; i += 1) {
-      if (!selected.value[i]) {
-        failed.push(generated.value[i]) // 未勾选的原样保留
-        continue
-      }
-      try {
-        await apifoxApi.createCase(props.endpointId, generated.value[i])
-        ok += 1
-      } catch {
-        failed.push(generated.value[i])
-        failedNames.push(generated.value[i].name)
-      }
+    const res = await store.applyItem(taskId.value, item.value.id, indexes)
+    if (res.created) emit('created')
+    if (res.failed?.length) {
+      ElMessage.warning(
+        `已创建 ${res.created} 条，${res.failed.length} 条失败：${res.failed.join('、')}`,
+      )
+    } else {
+      ElMessage.success(`已创建 ${res.created} 条用例`)
+      store.removeTask(taskId.value) // 全部入库成功，移除任务避免重开时重复入库
+      taskId.value = null
+      visible.value = false
     }
+  } catch (e) {
+    ElMessage.error(e.message || '入库失败')
   } finally {
     creating.value = false
-  }
-  generated.value = failed
-  selected.value = failed.map(() => true)
-  if (ok) emit('created')
-  if (failedNames.length) {
-    ElMessage.warning(`已创建 ${ok} 条，${failedNames.length} 条失败：${failedNames.join('、')}`)
-  } else {
-    ElMessage.success(`已创建 ${ok} 条用例`)
-    visible.value = false
   }
 }
 </script>
@@ -323,9 +370,20 @@ async function createSelected() {
   font-size: 12px;
 }
 
-.preview {
+.result {
   max-height: 52vh;
   overflow: auto;
+}
+
+.running {
+  padding: 24px 8px;
+}
+
+.run-text {
+  margin-top: 12px;
+  color: var(--ax-text-secondary);
+  font-size: 13px;
+  text-align: center;
 }
 
 .select-all {
