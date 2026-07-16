@@ -1,7 +1,7 @@
 <template>
   <div class="error-logs">
     <el-row :gutter="16" class="stats-row">
-      <el-col v-for="item in categories" :key="item.key" :xs="24" :sm="12">
+      <el-col v-for="item in categories" :key="item.key" :xs="24" :sm="8">
         <el-card
           shadow="never"
           class="stat-card"
@@ -19,7 +19,7 @@
           <div class="stat-path">{{ item.filename }}</div>
         </el-card>
       </el-col>
-      <el-col :xs="24" :sm="12">
+      <el-col :xs="24" :sm="8">
         <el-card shadow="never" class="stat-card summary-card">
           <div class="stat-title">错误总数</div>
           <div class="summary-value">{{ totalMatched }}</div>

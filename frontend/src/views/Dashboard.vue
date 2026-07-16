@@ -1,7 +1,7 @@
 <template>
   <div v-loading="loading" class="space-y-5">
     <!-- 统计卡片 -->
-    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
       <button
         v-for="item in statCards"
         :key="item.label"
@@ -9,7 +9,7 @@
         class="group relative overflow-hidden rounded-lg border border-border bg-card p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-transparent hover:shadow-md"
         @click="goToPage(item.path)"
       >
-        <div class="flex items-center gap-4">
+        <div class="flex items-center gap-4 cursor-pointer">
           <div
             class="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl"
             :style="{ backgroundColor: tint(item.color), color: item.color }"
@@ -47,7 +47,7 @@
               v-for="action in quickActions"
               :key="action.label"
               type="button"
-              class="group flex items-start gap-3 rounded-lg border border-border p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-accent hover:shadow-sm"
+              class="group flex cursor-pointer items-start gap-3 rounded-lg border border-border p-4 text-left transition-all hover:-translate-y-0.5 hover:border-primary/30 hover:bg-accent hover:shadow-sm"
               @click="router.push(action.path)"
             >
               <div
