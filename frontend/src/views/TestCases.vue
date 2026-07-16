@@ -3,6 +3,7 @@
     <template #toolbar>
       <el-select
         v-model="projectId"
+        filterable
         placeholder="选择项目"
         style="width: 200px"
         @change="handleFilterChange"
@@ -130,6 +131,9 @@
               {{ reviewMap[row.review_status] || row.review_status }}
             </el-tag>
           </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
@@ -277,6 +281,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
 import {
   registerAssistantHandler,
@@ -284,6 +289,10 @@ import {
 } from '@/utils/assistantActionRegistry'
 
 const ALL_PROJECTS = '__all__'
+
+function formatTime(value) {
+  return formatBeijingTime(value)
+}
 
 const route = useRoute()
 const projects = ref([])

@@ -25,6 +25,20 @@
     <span class="rc-hint">
       {{ datasetId ? '按数据集每行数据各跑一遍整场景' : '整场景重复跑 N 遍' }}
     </span>
+    <el-checkbox
+      :model-value="propagateAuth"
+      size="small"
+      class="rc-auth"
+      @update:model-value="$emit('update:propagateAuth', $event)"
+    >
+      自动传递 token/cookie
+      <el-tooltip
+        content="开启后：登录/refresh 响应的 Set-Cookie 与 token 自动跨步骤透传，无需手动提取；某步手动写了 Authorization 则以手动为准。关闭则保持逐步手动提取。"
+        placement="top"
+      >
+        <el-icon class="rc-help"><QuestionFilled /></el-icon>
+      </el-tooltip>
+    </el-checkbox>
   </div>
 </template>
 
@@ -34,8 +48,9 @@ defineProps({
   datasets: { type: Array, default: () => [] },
   loopCount: { type: Number, default: 1 },
   datasetId: { type: [Number, String], default: null },
+  propagateAuth: { type: Boolean, default: true },
 })
-defineEmits(['update:loopCount', 'update:datasetId'])
+defineEmits(['update:loopCount', 'update:datasetId', 'update:propagateAuth'])
 </script>
 
 <style scoped>

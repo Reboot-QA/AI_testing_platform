@@ -3,6 +3,7 @@
     <template #toolbar>
       <el-select
         v-model="projectId"
+        filterable
         placeholder="选择项目"
         style="width: 220px"
         @change="handleProjectChange"
@@ -129,6 +130,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
@@ -327,6 +331,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
 import {
   registerAssistantHandler,
@@ -334,6 +339,10 @@ import {
 } from '@/utils/assistantActionRegistry'
 
 const ALL_PROJECTS = '__all__'
+
+function formatTime(value) {
+  return formatBeijingTime(value)
+}
 
 const projects = ref([])
 const requirements = ref([])

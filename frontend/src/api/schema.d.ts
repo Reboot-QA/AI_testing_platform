@@ -3524,6 +3524,17 @@ export interface components {
              */
             testcase_count: number;
         };
+        /** ProjectPageOut */
+        ProjectPageOut: {
+            /** Items */
+            items: components["schemas"]["ProjectOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** ProjectPrefItem */
         ProjectPrefItem: {
             /** Project Id */
@@ -4039,6 +4050,11 @@ export interface components {
             loop_count: number;
             /** Dataset Id */
             dataset_id?: number | null;
+            /**
+             * Propagate Auth
+             * @default true
+             */
+            propagate_auth: boolean;
         };
         /** ScenarioUpdate */
         ScenarioUpdate: {
@@ -5138,7 +5154,11 @@ export interface operations {
     };
     list_projects_api_v1_projects_get: {
         parameters: {
-            query?: never;
+            query?: {
+                keyword?: string | null;
+                page?: number | null;
+                page_size?: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5151,7 +5171,16 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ProjectOut"][];
+                    "application/json": components["schemas"]["ProjectOut"][] | components["schemas"]["ProjectPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
