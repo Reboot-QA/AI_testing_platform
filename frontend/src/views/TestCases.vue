@@ -125,15 +125,15 @@
         <el-table-column prop="creator_name" label="创建人" width="100">
           <template #default="{ row }">{{ row.creator_name || '-' }}</template>
         </el-table-column>
-        <el-table-column prop="created_at" label="创建时间" width="170">
-          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-        </el-table-column>
         <el-table-column prop="review_status" label="评审" width="100">
           <template #default="{ row }">
             <el-tag :type="reviewType[row.review_status]" size="small">
               {{ reviewMap[row.review_status] || row.review_status }}
             </el-tag>
           </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
