@@ -99,17 +99,26 @@ const canSubmit = computed(() =>
 const payload = () =>
   mode.value === 'url' ? { url: url.value.trim() } : { content: content.value }
 
+// 按项目记住上次拉取地址（更新 Swagger 通常反复用同一个 openapi.json 地址）
+const urlStoreKey = () => `apifox:lastImportUrl:${props.projectId}`
+function rememberUrl() {
+  if (mode.value === 'url' && url.value.trim()) {
+    localStorage.setItem(urlStoreKey(), url.value.trim())
+  }
+}
+
 function resetDiff() {
   diff.value = null
   deleteUnreferenced.value = false
 }
 
-// 打开时按调用方指定初始模式；关闭时清空，避免下次打开残留预览/输入
+// 打开时按调用方指定初始模式 + 回填上次地址；关闭时清空，避免下次打开残留预览/输入
 watch(
   () => props.visible,
   (open) => {
     if (open) {
       action.value = props.defaultAction === 'update' ? 'update' : 'import'
+      url.value = localStorage.getItem(urlStoreKey()) || ''
     } else {
       resetDiff()
       url.value = ''
@@ -122,6 +131,7 @@ async function doImport() {
   busy.value = true
   try {
     const report = await apifoxApi.importOpenapi(props.projectId, payload())
+    rememberUrl()
     ElMessage.success(
       `导入完成：新建 ${report.created} 个接口、${report.schemas_created || 0} 个数据模型、` +
         `跳过 ${report.skipped} 个、新建文件夹 ${report.folders_created} 个`,
@@ -137,6 +147,7 @@ async function doPreview() {
   busy.value = true
   try {
     diff.value = await apifoxApi.importDiff(props.projectId, payload())
+    rememberUrl()
   } finally {
     busy.value = false
   }
