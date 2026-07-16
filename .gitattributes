@@ -13,3 +13,7 @@ deploy.sh text eol=lf
 *.json text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
+
+# 合并时保留本分支版本，防止 test 等仍跟踪 node_modules 的分支合入时恢复依赖
+node_modules/** -merge
+frontend/node_modules/** -merge
