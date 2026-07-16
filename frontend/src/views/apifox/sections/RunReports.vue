@@ -297,7 +297,12 @@ function backToParent() {
   parentDetail.value = null
 }
 
-onMounted(loadRuns)
+onMounted(async () => {
+  await loadRuns()
+  // 从运行进度「查看测试报告」跳转而来：自动打开对应 run 的报告
+  const runId = route.query.run
+  if (runId) await openDetail({ id: Number(runId) })
+})
 </script>
 
 <style scoped>
