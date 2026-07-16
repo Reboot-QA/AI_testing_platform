@@ -1,6 +1,6 @@
 <template>
   <div class="system-settings">
-    <el-card shadow="never" class="global-card">
+    <el-card class="global-card">
       <template #header>
         <div class="card-header">
           <span>全局设置</span>
@@ -22,7 +22,7 @@
       </div>
     </el-card>
 
-    <el-card v-loading="loading" shadow="never">
+    <el-card v-loading="loading">
       <template #header>
         <div class="card-header">
           <span>大模型配置</span>

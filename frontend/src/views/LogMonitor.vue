@@ -2,7 +2,12 @@
   <div class="log-monitor">
     <el-row :gutter="16" class="stats-row">
       <el-col v-for="item in sources" :key="item.key" :xs="24" :sm="8">
-        <el-card shadow="never" class="stat-card" :class="{ active: activeSource === item.key }" @click="switchSource(item.key)">
+        <el-card
+          shadow="never"
+          class="stat-card"
+          :class="{ active: activeSource === item.key }"
+          @click="switchSource(item.key)"
+        >
           <div class="stat-title">{{ item.label }}</div>
           <div class="stat-meta">
             <el-tag :type="item.exists ? 'success' : 'info'" size="small">
@@ -12,23 +17,35 @@
             <span>{{ item.line_count || 0 }} 行</span>
           </div>
           <div class="stat-path">{{ item.filename }}</div>
-          <div v-if="item.modified_at" class="stat-time">更新: {{ formatTime(item.modified_at) }}</div>
+          <div v-if="item.modified_at" class="stat-time">
+            更新: {{ formatTime(item.modified_at) }}
+          </div>
         </el-card>
       </el-col>
     </el-row>
 
-    <el-card shadow="never" class="viewer-card">
+    <el-card class="viewer-card">
       <template #header>
         <div class="toolbar">
           <div class="toolbar-left">
-            <el-segmented v-model="activeSource" :options="sourceOptions" @change="handleSourceChange" />
+            <el-segmented
+              v-model="activeSource"
+              :options="sourceOptions"
+              @change="handleSourceChange"
+            />
             <el-select v-model="lineCount" style="width: 110px" @change="refreshLogs">
               <el-option label="100 行" :value="100" />
               <el-option label="200 行" :value="200" />
               <el-option label="500 行" :value="500" />
               <el-option label="1000 行" :value="1000" />
             </el-select>
-            <el-select v-model="levelFilter" clearable placeholder="级别" style="width: 110px" @change="refreshLogs">
+            <el-select
+              v-model="levelFilter"
+              clearable
+              placeholder="级别"
+              style="width: 110px"
+              @change="refreshLogs"
+            >
               <el-option label="ERROR" value="ERROR" />
               <el-option label="WARN" value="WARN" />
               <el-option label="INFO" value="INFO" />
@@ -44,7 +61,12 @@
             />
           </div>
           <div class="toolbar-right">
-            <el-switch v-model="liveMode" active-text="实时" inactive-text="静态" @change="handleLiveToggle" />
+            <el-switch
+              v-model="liveMode"
+              active-text="实时"
+              inactive-text="静态"
+              @change="handleLiveToggle"
+            />
             <el-switch v-model="autoScroll" active-text="自动滚动" inactive-text="暂停滚动" />
             <el-button :loading="loading" @click="refreshLogs">
               <el-icon><Refresh /></el-icon>
@@ -103,7 +125,7 @@ let streamAbort = null
 let refreshTimer = null
 
 const sourceOptions = computed(() =>
-  sources.value.map((item) => ({ label: item.label, value: item.key }))
+  sources.value.map((item) => ({ label: item.label, value: item.key })),
 )
 
 function formatSize(size) {
@@ -287,7 +309,9 @@ onBeforeUnmount(() => {
 
 .stat-card {
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .stat-card.active {

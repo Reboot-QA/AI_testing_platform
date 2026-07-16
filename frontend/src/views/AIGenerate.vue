@@ -2,9 +2,11 @@
   <div>
     <el-row :gutter="20">
       <el-col :span="10">
-        <el-card shadow="never">
+        <el-card>
           <template #header>
-            <span><el-icon><MagicStick /></el-icon> 生成配置</span>
+            <span
+              ><el-icon><MagicStick /></el-icon> 生成配置</span
+            >
           </template>
           <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
             <el-form-item label="项目" prop="project_id">
@@ -34,7 +36,9 @@
               </el-select>
               <div v-if="!providersLoading && !llmProviders.length" class="form-tip">
                 暂无可用模型，请前往
-                <el-button link type="primary" @click="$router.push('/system/settings')">系统管理</el-button>
+                <el-button link type="primary" @click="$router.push('/system/settings')"
+                  >系统管理</el-button
+                >
                 添加配置
               </div>
             </el-form-item>
@@ -81,7 +85,9 @@
               <div v-if="selectableCount" class="req-select-actions">
                 <el-button link type="primary" @click="selectAllRequirements">全选</el-button>
                 <el-button link @click="clearSelectedRequirements">清空</el-button>
-                <span class="req-select-count">已选 {{ selectedSelectableCount }}/{{ selectableCount }}</span>
+                <span class="req-select-count"
+                  >已选 {{ selectedSelectableCount }}/{{ selectableCount }}</span
+                >
               </div>
               <div v-if="form.project_id && !requirements.length" class="form-tip">
                 当前项目暂无需求
@@ -108,13 +114,23 @@
               </el-select>
             </el-form-item>
             <el-form-item>
-              <el-button type="primary" data-assistant="ai_generate.generate_btn" :loading="generating" @click="handleGenerate">
-                <el-icon><MagicStick /></el-icon> {{ generating ? '正在生成，请稍候...' : '开始生成' }}
+              <el-button
+                type="primary"
+                data-assistant="ai_generate.generate_btn"
+                :loading="generating"
+                @click="handleGenerate"
+              >
+                <el-icon><MagicStick /></el-icon>
+                {{ generating ? '正在生成，请稍候...' : '开始生成' }}
               </el-button>
             </el-form-item>
           </el-form>
           <el-alert
-            :title="mockMode ? '当前为 Mock 模式，将使用本地模板生成' : '未配置 API Key 的模型无法生成，请先在系统管理中配置 Key 或开启 Mock 模式'"
+            :title="
+              mockMode
+                ? '当前为 Mock 模式，将使用本地模板生成'
+                : '未配置 API Key 的模型无法生成，请先在系统管理中配置 Key 或开启 Mock 模式'
+            "
             type="info"
             :closable="false"
             show-icon
@@ -123,18 +139,27 @@
       </el-col>
 
       <el-col :span="14">
-        <el-card shadow="never">
+        <el-card>
           <template #header>
             <div class="result-header">
               <span>生成结果</span>
-              <el-tag v-if="lastMode" :type="lastMode === 'llm' ? 'success' : 'warning'" size="small">
+              <el-tag
+                v-if="lastMode"
+                :type="lastMode === 'llm' ? 'success' : 'warning'"
+                size="small"
+              >
                 {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
               </el-tag>
-              <el-tag v-if="lastProviderName" type="info" size="small">{{ lastProviderName }}</el-tag>
+              <el-tag v-if="lastProviderName" type="info" size="small">{{
+                lastProviderName
+              }}</el-tag>
             </div>
           </template>
 
-          <el-empty v-if="!results.length && !generating && !errorMessage" description="配置需求后点击「开始生成」" />
+          <el-empty
+            v-if="!results.length && !generating && !errorMessage"
+            description="配置需求后点击「开始生成」"
+          />
 
           <el-alert
             v-if="errorMessage && !generating"
@@ -150,7 +175,9 @@
             <p class="progress-text">{{ progressMessage }}</p>
             <p v-if="results.length" class="saved-tip">
               已实时写入用例库 {{ results.length }} 条
-              <el-button type="primary" link @click="$router.push('/testcases')">前往用例库查看</el-button>
+              <el-button type="primary" link @click="$router.push('/testcases')"
+                >前往用例库查看</el-button
+              >
             </p>
           </div>
 
@@ -163,11 +190,15 @@
                 :name="item.id"
               >
                 <el-descriptions :column="1" size="small">
-                  <el-descriptions-item label="前置条件">{{ item.preconditions }}</el-descriptions-item>
+                  <el-descriptions-item label="前置条件">{{
+                    item.preconditions
+                  }}</el-descriptions-item>
                   <el-descriptions-item label="步骤">
                     <pre class="pre-text">{{ item.steps }}</pre>
                   </el-descriptions-item>
-                  <el-descriptions-item label="预期结果">{{ item.expected_results }}</el-descriptions-item>
+                  <el-descriptions-item label="预期结果">{{
+                    item.expected_results
+                  }}</el-descriptions-item>
                   <el-descriptions-item label="标签">{{ item.tags }}</el-descriptions-item>
                   <el-descriptions-item label="状态">
                     <el-tag type="warning" size="small">待评审</el-tag>
@@ -176,8 +207,12 @@
               </el-collapse-item>
             </el-collapse>
             <div v-if="!generating" class="result-footer">
-              <el-text type="success">共生成 {{ results.length }} 条用例，已实时保存至用例库</el-text>
-              <el-button type="primary" link @click="$router.push('/testcases')">前往用例库评审 →</el-button>
+              <el-text type="success"
+                >共生成 {{ results.length }} 条用例，已实时保存至用例库</el-text
+              >
+              <el-button type="primary" link @click="$router.push('/testcases')"
+                >前往用例库评审 →</el-button
+              >
             </div>
             <div v-else class="result-footer">
               <el-text type="info">生成中，用例将实时写入用例库...</el-text>
@@ -195,7 +230,10 @@ import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { projectApi, requirementApi, settingsApi } from '@/api'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
-import { registerAssistantHandler, unregisterAssistantHandler } from '@/utils/assistantActionRegistry'
+import {
+  registerAssistantHandler,
+  unregisterAssistantHandler,
+} from '@/utils/assistantActionRegistry'
 
 const aiStore = useAiGenerateStore()
 const {
@@ -247,23 +285,21 @@ const progressPercent = computed(() => {
 const statusMap = { draft: '草稿', approved: '已评审', closed: '已关闭' }
 const statusType = { draft: 'info', approved: 'success', closed: 'warning' }
 const approvedRequirements = computed(() =>
-  requirements.value.filter((r) => r.status === 'approved')
+  requirements.value.filter((r) => r.status === 'approved'),
 )
 const approvedCount = computed(() => approvedRequirements.value.length)
 const selectableCount = computed(() => approvedCount.value)
 const selectableIds = computed(() => approvedRequirements.value.map((r) => r.id))
-const selectedSelectableCount = computed(() =>
-  selectableIds.value.filter((id) => form.requirement_ids.includes(id)).length
+const selectedSelectableCount = computed(
+  () => selectableIds.value.filter((id) => form.requirement_ids.includes(id)).length,
 )
 const allSelectableSelected = computed(
   () =>
-    selectableIds.value.length > 0 &&
-    selectedSelectableCount.value === selectableIds.value.length
+    selectableIds.value.length > 0 && selectedSelectableCount.value === selectableIds.value.length,
 )
 const selectIndeterminate = computed(
   () =>
-    selectedSelectableCount.value > 0 &&
-    selectedSelectableCount.value < selectableIds.value.length
+    selectedSelectableCount.value > 0 && selectedSelectableCount.value < selectableIds.value.length,
 )
 
 function handleSelectAllRequirements(checked) {
@@ -285,7 +321,7 @@ function clearSelectedRequirements() {
 watch(
   () => form.requirement_ids,
   () => fillFromRequirement(),
-  { deep: true }
+  { deep: true },
 )
 
 function fillFromRequirement() {
@@ -353,9 +389,7 @@ async function handleGenerate() {
       .map((id) => requirements.value.find((r) => r.id === id))
       .filter((r) => r && r.status !== 'approved')
     if (blocked.length) {
-      ElMessage.warning(
-        `需求「${blocked.map((r) => r.title).join('、')}」未评审，不能生成用例`
-      )
+      ElMessage.warning(`需求「${blocked.map((r) => r.title).join('、')}」未评审，不能生成用例`)
       return
     }
   }
@@ -392,8 +426,8 @@ onMounted(async () => {
       await loadProviders()
     }
     if (llmProviders.value.length && !form.provider_id) {
-      form.provider_id = llmProviders.value.find((item) => item.is_default)?.id
-        || llmProviders.value[0].id
+      form.provider_id =
+        llmProviders.value.find((item) => item.is_default)?.id || llmProviders.value[0].id
     }
     form.requirement_text = '演示需求：用户可以使用账号密码登录系统，登录成功后进入首页。'
     form.case_type = 'functional'
@@ -415,8 +449,8 @@ onMounted(async () => {
       await loadProviders()
     }
     if (!form.provider_id && llmProviders.value.length) {
-      form.provider_id = llmProviders.value.find((item) => item.is_default)?.id
-        || llmProviders.value[0].id
+      form.provider_id =
+        llmProviders.value.find((item) => item.is_default)?.id || llmProviders.value[0].id
     }
     if (!form.requirement_text.trim()) {
       throw new Error('请先填写需求描述')

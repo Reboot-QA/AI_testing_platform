@@ -2,7 +2,12 @@
   <div class="error-logs">
     <el-row :gutter="16" class="stats-row">
       <el-col v-for="item in categories" :key="item.key" :xs="24" :sm="12">
-        <el-card shadow="never" class="stat-card" :class="{ active: activeCategory === item.key }" @click="switchCategory(item.key)">
+        <el-card
+          shadow="never"
+          class="stat-card"
+          :class="{ active: activeCategory === item.key }"
+          @click="switchCategory(item.key)"
+        >
           <div class="stat-title">{{ item.label }}</div>
           <div class="stat-meta">
             <el-tag :type="item.exists ? 'success' : 'info'" size="small">
@@ -23,11 +28,15 @@
       </el-col>
     </el-row>
 
-    <el-card shadow="never" class="viewer-card">
+    <el-card class="viewer-card">
       <template #header>
         <div class="toolbar">
           <div class="toolbar-left">
-            <el-segmented v-model="activeCategory" :options="categoryOptions" @change="handleCategoryChange" />
+            <el-segmented
+              v-model="activeCategory"
+              :options="categoryOptions"
+              @change="handleCategoryChange"
+            />
             <el-select v-model="lineCount" style="width: 110px" @change="refreshErrors">
               <el-option label="100 条" :value="100" />
               <el-option label="200 条" :value="200" />
@@ -71,7 +80,12 @@
             />
           </div>
           <div class="toolbar-right">
-            <el-switch v-model="liveMode" active-text="实时" inactive-text="静态" @change="handleLiveToggle" />
+            <el-switch
+              v-model="liveMode"
+              active-text="实时"
+              inactive-text="静态"
+              @change="handleLiveToggle"
+            />
             <el-button :loading="loading" @click="refreshErrors">
               <el-icon><Refresh /></el-icon>
               刷新
@@ -85,7 +99,13 @@
         <span v-if="liveMode" class="live-dot">实时监听中</span>
       </div>
 
-      <el-table v-loading="loading" :data="displayItems" stripe class="error-table" empty-text="暂无错误日志">
+      <el-table
+        v-loading="loading"
+        :data="displayItems"
+        stripe
+        class="error-table"
+        empty-text="暂无错误日志"
+      >
         <el-table-column prop="timestamp" label="时间" width="180" show-overflow-tooltip />
         <el-table-column label="类型" width="100">
           <template #default="{ row }">
@@ -96,7 +116,9 @@
         </el-table-column>
         <el-table-column label="级别" width="90">
           <template #default="{ row }">
-            <span :class="`level-${(row.level || 'ERROR').toLowerCase()}`">{{ row.level || 'ERROR' }}</span>
+            <span :class="`level-${(row.level || 'ERROR').toLowerCase()}`">{{
+              row.level || 'ERROR'
+            }}</span>
           </template>
         </el-table-column>
         <el-table-column prop="method" label="方法" width="90">
@@ -300,7 +322,9 @@ onBeforeUnmount(() => {
 
 .stat-card {
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .stat-card.active {
