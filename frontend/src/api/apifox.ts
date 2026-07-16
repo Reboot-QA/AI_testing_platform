@@ -149,6 +149,10 @@ export const apifoxApi = {
 
   importOpenapi: (pid: Id, data: Schemas['ImportRequest']) =>
     post<Schemas['ImportReport']>(`/apifox/projects/${pid}/import/openapi`, data),
+  importDiff: (pid: Id, data: Schemas['ImportRequest']) =>
+    post<Schemas['ImportDiffOut']>(`/apifox/projects/${pid}/import/openapi/diff`, data),
+  importSync: (pid: Id, data: Schemas['ImportSyncRequest']) =>
+    post<Schemas['ImportSyncReport']>(`/apifox/projects/${pid}/import/openapi/sync`, data),
   reorderTree: (pid: Id, data: Schemas['TreeReorderRequest']) =>
     post<any>(`/apifox/projects/${pid}/tree/reorder`, data), // 无 response_model（技术债）
   debugSend: (pid: Id, data: Schemas['DebugRequest']) =>
