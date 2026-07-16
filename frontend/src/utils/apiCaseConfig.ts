@@ -831,8 +831,14 @@ const CONTENT_TYPE_BY_BODY = {
   urlencoded: 'application/x-www-form-urlencoded',
 }
 
+// 始终保证恰好一个末尾空行（与 KvRowsEditor.syncTail 的不变量一致）：
+// 否则编辑器挂载时补空行会改动 form，导致"打开即脏"的未保存误判。
 export function ensureKvRows(rows) {
-  return rows?.length ? rows : [emptyKvRow()]
+  const list = Array.isArray(rows) ? [...rows] : []
+  const last = list[list.length - 1]
+  const lastEmpty = last && !(last.key || '').trim() && !(last.value || '').trim()
+  if (!lastEmpty) list.push(emptyKvRow())
+  return list
 }
 
 export function countActiveKvRows(rows) {
