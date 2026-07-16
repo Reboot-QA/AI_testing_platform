@@ -1,8 +1,8 @@
-"""导入接口 · Params 类型回填 · OpenAPI3(schema.type) / Swagger2(param.type) / 默认回退。"""
+"""导入接口 · Params 类型回填 + 必选参数默认勾选（enabled=required）。"""
 
 import pytest
 
-from app.services.apifox.import_service import _param_type, _rows_from_params
+from app.services.apifox.import_service import _form_rows, _param_type, _rows_from_params
 
 
 @pytest.mark.parametrize(
@@ -29,3 +29,28 @@ def test_rows_from_params_backfills_type():
     rows = _rows_from_params({}, params, "query")
 
     assert [(r.key, r.type) for r in rows] == [("page", "integer"), ("q", "string")]
+
+
+def test_rows_from_params_enabled_only_when_required():
+    params = [
+        {"in": "query", "name": "page", "required": True, "schema": {"type": "integer"}},
+        {"in": "query", "name": "q", "schema": {"type": "string"}},  # 无 required
+        {"in": "query", "name": "size", "required": False, "schema": {"type": "integer"}},
+    ]
+
+    rows = _rows_from_params({}, params, "query")
+
+    assert [(r.key, r.enabled) for r in rows] == [("page", True), ("q", False), ("size", False)]
+
+
+def test_form_rows_enabled_only_when_required():
+    schema = {
+        "type": "object",
+        "required": ["username"],
+        "properties": {"username": {"type": "string"}, "nickname": {"type": "string"}},
+    }
+
+    enabled = {r.key: r.enabled for r in _form_rows({}, schema)}
+
+    assert enabled["username"] is True
+    assert enabled["nickname"] is False

@@ -173,7 +173,7 @@ def _rows_from_params(doc: Dict[str, Any], params: List[Dict[str, Any]], locatio
         rows.append(KvRow(
             key=str(param["name"]),
             value=_param_value(doc, param),
-            enabled=True,
+            enabled=bool(param.get("required", False)),  # 仅必选参数默认勾选
             desc=str(param.get("description") or ""),
             type=_param_type(param),
         ))
@@ -184,8 +184,14 @@ def _form_rows(doc: Dict[str, Any], schema: Optional[Dict[str, Any]]) -> List[Kv
     skeleton = _skeleton(doc, schema)
     if not isinstance(skeleton, dict):
         return []
+    resolved = _resolve_ref(doc, schema, set()) if isinstance(schema, dict) else {}
+    required = set(resolved.get("required") or []) if isinstance(resolved, dict) else set()
     return [
-        KvRow(key=str(k), value=v if isinstance(v, str) else json.dumps(v, ensure_ascii=False))
+        KvRow(
+            key=str(k),
+            value=v if isinstance(v, str) else json.dumps(v, ensure_ascii=False),
+            enabled=str(k) in required,  # 仅必选字段默认勾选
+        )
         for k, v in skeleton.items()
     ]
 
