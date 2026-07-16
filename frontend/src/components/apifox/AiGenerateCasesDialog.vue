@@ -8,6 +8,27 @@
   >
     <div v-if="step === 'config'" class="config">
       <div class="tip">勾选类别与数量，AI 将按接口定义生成用例供你确认后创建。</div>
+      <div class="provider-row">
+        <span class="provider-label">大模型</span>
+        <el-select
+          v-model="providerId"
+          size="small"
+          :loading="providersLoading"
+          :disabled="!llmProviders.length"
+          placeholder="选择大模型"
+          style="flex: 1"
+        >
+          <el-option
+            v-for="p in llmProviders"
+            :key="p.id"
+            :label="formatProviderLabel(p)"
+            :value="p.id"
+          />
+        </el-select>
+      </div>
+      <div v-if="mockMode" class="tip mock-tip">
+        当前为 Mock 模式，将返回样例用例（不调用真实模型）。
+      </div>
       <div v-for="c in categories" :key="c.value" class="cat-row">
         <el-checkbox v-model="c.checked" class="cat-check">{{ c.label }}</el-checkbox>
         <el-input-number
@@ -74,7 +95,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { apifoxApi } from '@/api'
+import { apifoxApi, settingsApi } from '@/api'
 import { categoryLabel } from '@/utils/caseCategory'
 
 const props = defineProps({
@@ -97,6 +118,10 @@ const categories = ref(DEFAULT_CATEGORIES())
 const generated = ref([])
 const selected = ref([])
 const mode = ref('llm')
+const llmProviders = ref([])
+const providersLoading = ref(false)
+const providerId = ref(null)
+const mockMode = ref(false)
 
 const anyChecked = computed(() => categories.value.some((c) => c.checked))
 const selectedCount = computed(() => selected.value.filter(Boolean).length)
@@ -111,8 +136,33 @@ const tagType = (cat) =>
 function open() {
   reset()
   visible.value = true
+  loadProviders()
 }
 defineExpose({ open })
+
+function formatProviderLabel(item) {
+  const tags = []
+  if (item.is_default) tags.push('默认')
+  if (!item.api_key_configured) tags.push('未配置Key')
+  const suffix = tags.length ? ` (${tags.join(' / ')})` : ''
+  return `${item.name}${suffix}`
+}
+
+async function loadProviders() {
+  providersLoading.value = true
+  try {
+    const data = await settingsApi.getLLMOptions()
+    llmProviders.value = data.providers || []
+    mockMode.value = data.mock_mode
+    if (data.active_provider_id) {
+      providerId.value = data.active_provider_id
+    } else if (llmProviders.value.length) {
+      providerId.value = llmProviders.value[0].id
+    }
+  } finally {
+    providersLoading.value = false
+  }
+}
 
 function reset() {
   step.value = 'config'
@@ -145,6 +195,7 @@ async function generate() {
     categories: categories.value
       .filter((c) => c.checked)
       .map((c) => ({ category: c.value, count: c.count })),
+    provider_id: providerId.value ?? undefined,
   }
   loading.value = true
   try {
@@ -199,6 +250,22 @@ async function createSelected() {
   color: var(--ax-text-secondary);
   font-size: 13px;
   margin-bottom: 12px;
+}
+
+.provider-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.provider-label {
+  width: 72px;
+  font-size: 14px;
+}
+
+.mock-tip {
+  color: var(--ax-warning, #e6a23c);
 }
 
 .cat-row {
