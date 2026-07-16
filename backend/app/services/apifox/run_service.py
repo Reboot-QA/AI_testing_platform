@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Generator, List, Optional
 
+import httpx
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -152,6 +153,24 @@ class _RunContext:
         self.iteration = 0  # 数据驱动/循环当前轮次（0 基），落到每个步骤供报告分组
         # 步骤树按 scenario_id 记忆化为快照：数据驱动/循环多轮不再每轮重查步骤表（评审 #4）
         self.step_tree_cache: Dict[int, Dict[Optional[int], List[_StepNode]]] = {}
+        # 登录态跨步骤透传（仅场景开启）：共享 cookie jar + 传递中的 token
+        self.propagate_auth = False
+        self.cookie_jar = httpx.Cookies()
+        self.auth_token: Optional[str] = None
+
+    def reset_auth_state(self) -> None:
+        """每轮迭代（数据驱动/循环）重置登录态，各轮互不串。"""
+        self.cookie_jar = httpx.Cookies()
+        self.auth_token = None
+
+    def propagation_kwargs(self) -> Dict[str, Any]:
+        if not self.propagate_auth:
+            return {}
+        return {"cookie_jar": self.cookie_jar, "auth_token": self.auth_token}
+
+    def absorb_captured_token(self, detail: Dict[str, Any]) -> None:
+        if self.propagate_auth and detail.get("captured_token"):
+            self.auth_token = detail["captured_token"]
 
 
 def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str, Any],
@@ -219,8 +238,10 @@ def _run_case_block(
             status, detail = "failed", {"error_message": "用例所属接口不存在", "method": "", "url": ""}
         else:
             status, detail = engine.execute_case(
-                ctx.db, case, endpoint, ctx.environment, merged, assertions, extracts
+                ctx.db, case, endpoint, ctx.environment, merged, assertions, extracts,
+                **ctx.propagation_kwargs(),
             )
+        ctx.absorb_captured_token(detail)
         ctx.runtime.update(detail.get("extracted") or {})
         if detail.get("scoped"):
             engine.persist_scoped_extracts(
@@ -347,8 +368,9 @@ def _run_http_step(
     status, detail = engine.execute_http_request(
         ctx.db, ctx.run.project_id, config.get("method") or "GET", config.get("path") or "",
         config.get("server_name"), config.get("request_spec") or {}, assertions, extracts,
-        ctx.environment, merged,
+        ctx.environment, merged, **ctx.propagation_kwargs(),
     )
+    ctx.absorb_captured_token(detail)
     ctx.runtime.update(detail.get("extracted") or {})
     if detail.get("scoped"):
         engine.persist_scoped_extracts(
@@ -610,6 +632,8 @@ def iter_scenario_run(
     yield start_event
 
     ctx = _RunContext(db, run, environment, user_id)
+    # 登录态跨步骤透传：run_config 缺字段时默认开（存量场景亦生效）
+    ctx.propagate_auth = bool((engine._loads(scenario.run_config, {}) or {}).get("propagate_auth", True))
     env_vars = engine.resolve_env_vars(db, environment.id if environment else None, user_id)
     global_vars = engine.resolve_global_vars(db, scenario.project_id, user_id)
     started = time.perf_counter()
@@ -618,6 +642,7 @@ def iter_scenario_run(
             ctx.iteration = i
             # 每组数据独立 runtime：数据集行/循环各轮变量互不串（对齐用例数据驱动语义）
             ctx.runtime = dict(injection)
+            ctx.reset_auth_state()  # 每轮独立登录态，与 runtime 同步隔离
             try:
                 yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
             except (_BreakLoop, _ContinueLoop):

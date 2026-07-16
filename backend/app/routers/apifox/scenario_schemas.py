@@ -39,6 +39,8 @@ class ScenarioRunConfig(BaseModel):
     loop_count: int = Field(default=1, ge=1, le=1000)
     # 绑定的项目数据集 id：设置后按数据集每行数据驱动整条场景各跑一遍
     dataset_id: Optional[int] = None
+    # 登录态跨步骤透传：共享 cookie jar + 自动捕获/注入 token；默认开（登录/refresh 免手动提取）
+    propagate_auth: bool = True
 
 
 class ScenarioFolderCreate(BaseModel):
