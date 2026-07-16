@@ -13,8 +13,8 @@
       <el-radio-button value="schedules">定时任务</el-radio-button>
     </el-radio-group>
 
-    <ScenarioPanel v-if="section === 'scenarios'" ref="scenarioPanelRef" class="auto-tests" />
-    <SuitePanel v-else-if="section === 'suites'" ref="suitePanelRef" class="auto-tests" />
+    <ScenarioPanel v-if="section === 'scenarios'" class="auto-tests" />
+    <SuitePanel v-else-if="section === 'suites'" class="auto-tests" />
     <DatasetPanel v-else-if="section === 'datasets'" class="auto-tests" />
     <SchedulePanel v-else-if="section === 'schedules'" />
     <div v-else class="auto-tests">
@@ -45,19 +45,10 @@ const pid = computed(() => route.params.projectId)
 
 const section = ref('cases')
 const selectedEndpointId = ref(null)
-const scenarioPanelRef = ref(null)
-const suitePanelRef = ref(null)
 
-// 切子页(v-if 卸载组件、非路由)前，若场景/套件面板有未保存改动则先过守卫
-async function switchSection(next) {
-  if (next === section.value) return
-  if (section.value === 'scenarios' && scenarioPanelRef.value) {
-    if (!(await scenarioPanelRef.value.confirmLeave())) return
-  }
-  if (section.value === 'suites' && suitePanelRef.value) {
-    if (!(await suitePanelRef.value.confirmLeave())) return
-  }
-  section.value = next
+// 场景/套件已改为多 tab：未保存态存各自 Pinia store，切子页不丢；关 tab/关浏览器时各面板兜底提示
+function switchSection(next) {
+  if (next !== section.value) section.value = next
 }
 
 function onSelectEndpoint(id) {
