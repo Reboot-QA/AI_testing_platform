@@ -15503,6 +15503,11 @@
             "type": "integer",
             "title": "Sort Order"
           },
+          "version": {
+            "type": "integer",
+            "title": "Version",
+            "default": 1
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
@@ -15576,6 +15581,17 @@
               }
             ],
             "title": "Sort Order"
+          },
+          "expected_version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Version"
           }
         },
         "type": "object",

@@ -12,7 +12,7 @@
         :key="s.id"
         class="item"
         :class="{ active: form.id === s.id }"
-        @click="selectSuite(s.id)"
+        @click="onSelectSuite(s.id)"
       >
         <el-icon><Files /></el-icon>
         <span class="item-name">{{ s.name }}</span>
@@ -94,6 +94,8 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import { apifoxApi } from '@/api'
+import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import SuiteRunProgress from '@/components/apifox/SuiteRunProgress.vue'
@@ -110,7 +112,16 @@ const running = ref(false)
 const runEvents = ref([])
 const pickCase = ref(null)
 const pickScenario = ref(null)
-const form = reactive({ id: null, name: '', description: '', items: [] })
+const form = reactive({ id: null, name: '', description: '', items: [], version: 1 })
+
+// 未保存守卫：切套件/切主 tab/关浏览器前，dirty 则提示（与场景一致）
+const guard = useUnsavedGuard({
+  serialize: () =>
+    JSON.stringify({ name: form.name, description: form.description, items: form.items }),
+  save: () => saveSuite(),
+  name: () => form.name,
+})
+defineExpose({ confirmLeave: guard.confirmLeave })
 
 let uid = 0
 const nextUid = () => `si-${uid++}`
@@ -119,15 +130,25 @@ async function loadSuites() {
   suites.value = await apifoxApi.listSuites(pid.value)
 }
 
+// 点选其它套件前先过未保存守卫（与场景 onSelectScenario 一致）
+async function onSelectSuite(sid) {
+  if (sid === form.id) return
+  if (!(await guard.confirmLeave())) return
+  await selectSuite(sid)
+}
+
 async function selectSuite(sid) {
   const s = await apifoxApi.getSuite(sid)
   form.id = s.id
   form.name = s.name
   form.description = s.description || ''
   form.items = (s.items || []).map((it) => ({ ...it, _uid: nextUid() }))
+  form.version = s.version ?? 1
+  guard.markSaved() // 加载后重置未保存基线
 }
 
 async function addSuite() {
+  if (!(await guard.confirmLeave())) return // 当前有未保存改动时先确认
   const { value } = await ElMessageBox.prompt('套件名称', '新建套件', {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
@@ -166,20 +187,45 @@ function onPickScenario(id) {
   pickScenario.value = null
 }
 
+async function doSaveSuite() {
+  const updated = await apifoxApi.updateSuite(form.id, {
+    name: form.name,
+    description: form.description || null,
+    items: form.items.map((it) => ({
+      target_type: it.target_type,
+      target_id: it.target_id,
+      enabled: it.enabled !== false,
+    })),
+    expected_version: form.version,
+  })
+  form.version = updated.version
+  await loadSuites()
+}
+
 async function saveSuite() {
   saving.value = true
   try {
-    await apifoxApi.updateSuite(form.id, {
-      name: form.name,
-      description: form.description || null,
-      items: form.items.map((it) => ({
-        target_type: it.target_type,
-        target_id: it.target_id,
-        enabled: it.enabled !== false,
-      })),
-    })
+    await doSaveSuite()
+    guard.markSaved()
     ElMessage.success('已保存')
-    await loadSuites()
+    return true
+  } catch (e) {
+    if (!isConflict(e)) return false // 非冲突错误已由 api 拦截器提示，不外抛(避免穿透 confirmLeave)
+    let resolved = false
+    await resolveSaveConflict({
+      reload: async () => {
+        await selectSuite(form.id)
+        resolved = true
+      },
+      overwrite: async () => {
+        const latest = await apifoxApi.getSuite(form.id)
+        form.version = latest.version
+        await doSaveSuite()
+        guard.markSaved()
+        resolved = true
+      },
+    })
+    return resolved
   } finally {
     saving.value = false
   }
@@ -200,6 +246,7 @@ async function runSuite() {
 }
 
 async function copySuite(s) {
+  if (!(await guard.confirmLeave())) return // 复制会切到新套件，先确认未保存改动
   const created = await apifoxApi.copySuite(s.id)
   ElMessage.success('已复制')
   await loadSuites()

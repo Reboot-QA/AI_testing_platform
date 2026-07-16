@@ -4551,6 +4551,11 @@ export interface components {
             /** Sort Order */
             sort_order: number;
             /**
+             * Version
+             * @default 1
+             */
+            version: number;
+            /**
              * Created At
              * Format: date-time
              */
@@ -4571,6 +4576,8 @@ export interface components {
             items?: components["schemas"]["SuiteItemIn"][] | null;
             /** Sort Order */
             sort_order?: number | null;
+            /** Expected Version */
+            expected_version?: number | null;
         };
         /** TestCaseBatchDelete */
         TestCaseBatchDelete: {
