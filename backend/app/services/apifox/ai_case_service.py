@@ -70,9 +70,13 @@ def build_endpoint_context(
     return ctx
 
 
+_AUTO_QUANTITY = "数量由你按接口参数个数与错误路径复杂度自行决定（建议 2-6 条，简单接口可更少）"
+
+
 def _category_spec(categories: List[AiGenCategory]) -> str:
     lines = [
-        f"  - {c.category}（{_CATEGORY_LABELS[c.category]}）：{c.count} 条"
+        f"  - {c.category}（{_CATEGORY_LABELS[c.category]}）："
+        f"{f'最多 {c.count} 条' if c.count else _AUTO_QUANTITY}"
         for c in categories
         if c.category in _VALID_CATEGORIES
     ]
@@ -186,6 +190,9 @@ def _build_cases(base_spec: RequestSpec, raw_cases: List[dict]) -> List[CaseCrea
 
 
 # ---------- Mock ----------
+_MOCK_AUTO_COUNT = 3  # 自动模式下 mock 每类的样例条数
+
+
 def _mock_cases(base_spec: RequestSpec, categories: List[AiGenCategory]) -> List[CaseCreate]:
     out: List[CaseCreate] = []
     for cat in categories:
@@ -193,7 +200,7 @@ def _mock_cases(base_spec: RequestSpec, categories: List[AiGenCategory]) -> List
             continue
         label = _CATEGORY_LABELS[cat.category].split("（")[0]
         expected_status = "200" if cat.category == "positive" else "400"
-        for i in range(cat.count):
+        for i in range(cat.count or _MOCK_AUTO_COUNT):
             item = {
                 "name": f"[{label}] 示例用例 {i + 1}",
                 "category": cat.category,

@@ -66,7 +66,7 @@ class CaseCreate(BaseModel):
 
 class AiGenCategory(BaseModel):
     category: Literal["positive", "negative", "boundary", "security"]
-    count: int = Field(ge=1, le=20)
+    count: Optional[int] = Field(default=None, ge=1, le=20)  # None=由 AI 按接口复杂度自动决定
 
 
 class AiGenerateRequest(BaseModel):

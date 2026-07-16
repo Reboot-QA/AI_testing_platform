@@ -2048,7 +2048,7 @@ export interface components {
              */
             category: "positive" | "negative" | "boundary" | "security";
             /** Count */
-            count: number;
+            count?: number | null;
         };
         /** AiGenerateRequest */
         AiGenerateRequest: {

@@ -7,7 +7,9 @@
     @closed="reset"
   >
     <div v-if="step === 'config'" class="config">
-      <div class="tip">勾选类别与数量，AI 将按接口定义生成用例供你确认后创建。</div>
+      <div class="tip">
+        勾选类别，AI 将按接口复杂度自动决定用例数量；需要时可勾「限量」指定每类上限。
+      </div>
       <div class="provider-row">
         <span class="provider-label">大模型</span>
         <el-select
@@ -31,15 +33,18 @@
       </div>
       <div v-for="c in categories" :key="c.value" class="cat-row">
         <el-checkbox v-model="c.checked" class="cat-check">{{ c.label }}</el-checkbox>
+        <el-checkbox v-model="c.limit" :disabled="!c.checked" size="small">限量</el-checkbox>
         <el-input-number
+          v-if="c.limit"
           v-model="c.count"
           :disabled="!c.checked"
           :min="1"
           :max="20"
           size="small"
           controls-position="right"
-          style="width: 110px"
+          style="width: 100px"
         />
+        <span v-else class="auto-hint">自动</span>
         <span class="cat-desc">{{ c.desc }}</span>
       </div>
     </div>
@@ -104,10 +109,38 @@ const props = defineProps({
 const emit = defineEmits(['created'])
 
 const DEFAULT_CATEGORIES = () => [
-  { value: 'positive', label: '正向', desc: '合法输入，预期成功', checked: true, count: 1 },
-  { value: 'negative', label: '逆向', desc: '非法/缺失输入，预期报错', checked: true, count: 2 },
-  { value: 'boundary', label: '边界值', desc: '空/零/超长/临界', checked: true, count: 2 },
-  { value: 'security', label: '安全性', desc: '注入/越权/异常字符', checked: false, count: 1 },
+  {
+    value: 'positive',
+    label: '正向',
+    desc: '合法输入，预期成功',
+    checked: true,
+    limit: false,
+    count: 3,
+  },
+  {
+    value: 'negative',
+    label: '逆向',
+    desc: '非法/缺失输入，预期报错',
+    checked: true,
+    limit: false,
+    count: 3,
+  },
+  {
+    value: 'boundary',
+    label: '边界值',
+    desc: '空/零/超长/临界',
+    checked: true,
+    limit: false,
+    count: 3,
+  },
+  {
+    value: 'security',
+    label: '安全性',
+    desc: '注入/越权/异常字符',
+    checked: false,
+    limit: false,
+    count: 2,
+  },
 ]
 
 const visible = ref(false)
@@ -194,7 +227,7 @@ async function generate() {
   const payload = {
     categories: categories.value
       .filter((c) => c.checked)
-      .map((c) => ({ category: c.value, count: c.count })),
+      .map((c) => ({ category: c.value, count: c.limit ? c.count : undefined })),
     provider_id: providerId.value ?? undefined,
   }
   loading.value = true
@@ -266,6 +299,12 @@ async function createSelected() {
 
 .mock-tip {
   color: var(--ax-warning, #e6a23c);
+}
+
+.auto-hint {
+  width: 100px;
+  font-size: 13px;
+  color: var(--ax-text-placeholder);
 }
 
 .cat-row {

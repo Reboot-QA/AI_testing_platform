@@ -8760,16 +8760,22 @@
             "title": "Category"
           },
           "count": {
-            "type": "integer",
-            "maximum": 20.0,
-            "minimum": 1.0,
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 20.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Count"
           }
         },
         "type": "object",
         "required": [
-          "category",
-          "count"
+          "category"
         ],
         "title": "AiGenCategory"
       },

@@ -185,6 +185,26 @@ def test_mock_cases_respects_category_counts():
     assert [c.category for c in cases] == ["positive", "negative", "negative"]
 
 
+def test_mock_auto_count_uses_default_when_count_none():
+    cats = [AiGenCategory(category="positive")]  # 不指定数量 → 自动
+
+    cases = svc._mock_cases(_spec(), cats)
+
+    assert len(cases) == svc._MOCK_AUTO_COUNT
+
+
+def test_category_spec_auto_wording_when_count_none():
+    spec = svc._category_spec([AiGenCategory(category="boundary")])
+
+    assert "自行决定" in spec and "最多" not in spec
+
+
+def test_category_spec_limit_wording_when_count_set():
+    spec = svc._category_spec([AiGenCategory(category="positive", count=5)])
+
+    assert "最多 5 条" in spec
+
+
 def test_mock_positive_asserts_200_negative_asserts_400():
     cats = [AiGenCategory(category="positive", count=1), AiGenCategory(category="negative", count=1)]
 
