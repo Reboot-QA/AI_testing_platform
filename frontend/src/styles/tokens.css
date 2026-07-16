@@ -16,7 +16,9 @@
   --color-grey-6: #aaaaaa;
 
   /* 品牌 / 中性（收敛散落 hex 的统一入口） */
-  --ax-brand: #1a365d;
+  /* 主色（驱动 EP primary 按钮、链接、激活态及各面板强调色）；
+     左侧深色导航栏为独立硬编码 #1a365d，不随此值变化。 */
+  --ax-brand: #409eff;
   --ax-text: #1e293b;
   --ax-text-secondary: #64748b;
   --ax-text-tertiary: #475569;
