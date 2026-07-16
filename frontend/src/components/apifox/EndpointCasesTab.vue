@@ -7,12 +7,16 @@
           <el-button size="small" @click="aiGenerate">
             <el-icon><MagicStick /></el-icon> AI 生成
           </el-button>
-          <el-button size="small" type="primary" @click="addCase"><el-icon><Plus /></el-icon></el-button>
+          <el-button size="small" type="primary" @click="addCase"
+            ><el-icon><Plus /></el-icon
+          ></el-button>
         </div>
       </div>
 
       <el-radio-group v-model="filter" size="small" class="cat-filter">
-        <el-radio-button v-for="f in CATEGORY_FILTERS" :key="f.value" :value="f.value">{{ f.label }}</el-radio-button>
+        <el-radio-button v-for="f in CATEGORY_FILTERS" :key="f.value" :value="f.value">{{
+          f.label
+        }}</el-radio-button>
       </el-radio-group>
 
       <div
@@ -33,14 +37,27 @@
     <div class="editor">
       <template v-if="form.id">
         <div class="run-bar">
-          <el-button size="small" type="success" :loading="running" @click="runCase">运行</el-button>
+          <el-button size="small" type="success" :loading="running" @click="runCase"
+            >运行</el-button
+          >
           <span class="cat-label">分类</span>
           <el-select v-model="form.category" size="small" style="width: 110px">
-            <el-option v-for="c in CASE_CATEGORIES" :key="c.value" :label="c.label" :value="c.value" />
+            <el-option
+              v-for="c in CASE_CATEGORIES"
+              :key="c.value"
+              :label="c.label"
+              :value="c.value"
+            />
           </el-select>
           <span class="run-hint">环境在顶部选择</span>
         </div>
-        <CaseEditor :form="form" :saving="saving" :scripts="scripts" :datasets="datasets" @save="saveCase" />
+        <CaseEditor
+          :form="form"
+          :saving="saving"
+          :scripts="scripts"
+          :datasets="datasets"
+          @save="saveCase"
+        />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
       <el-empty v-else description="选择或新建一个用例" :image-size="60" />
@@ -75,14 +92,24 @@ const runEvents = ref([])
 const filter = ref('all')
 
 const filteredCases = computed(() =>
-  filter.value === 'all' ? cases.value : cases.value.filter((c) => c.category === filter.value)
+  filter.value === 'all' ? cases.value : cases.value.filter((c) => c.category === filter.value),
 )
 
-const tagType = (cat) => ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' }[cat] || 'info')
+const tagType = (cat) =>
+  ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' })[cat] || 'info'
 
 const form = reactive({
-  id: null, name: '', category: 'other', request_spec: emptySpec(), variables: [], assertions: [], extracts: [],
-  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] }, version: 1,
+  id: null,
+  name: '',
+  category: 'other',
+  request_spec: emptySpec(),
+  variables: [],
+  assertions: [],
+  extracts: [],
+  pre_scripts: [],
+  post_scripts: [],
+  data_drive: { enabled: false, rows: [] },
+  version: 1,
 })
 
 async function loadCases() {
@@ -91,9 +118,15 @@ async function loadCases() {
 
 function emptyCasePayload(name, category) {
   return {
-    name, category, request_spec: emptySpec(), variables: [],
-    data_drive: { enabled: false, rows: [] }, assertions: [], extracts: [],
-    pre_scripts: [], post_scripts: [],
+    name,
+    category,
+    request_spec: emptySpec(),
+    variables: [],
+    data_drive: { enabled: false, rows: [] },
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
   }
 }
 
@@ -107,12 +140,16 @@ function applyCase(c) {
   form.extracts = c.extracts || []
   form.pre_scripts = c.pre_scripts || []
   form.post_scripts = c.post_scripts || []
-  form.data_drive = c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+  form.data_drive =
+    c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
   form.version = c.version ?? 1
 }
 
 async function addCase() {
-  const { value } = await ElMessageBox.prompt('用例名称', '新建用例', { inputPattern: /\S/, inputErrorMessage: '不能为空' })
+  const { value } = await ElMessageBox.prompt('用例名称', '新建用例', {
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   // 当前过滤了某分类时，新建默认归入该分类；「全部」时归「其他」
   const category = filter.value === 'all' ? 'other' : filter.value
   const payload = emptyCasePayload(value, category)
@@ -120,7 +157,9 @@ async function addCase() {
   try {
     const ep = await apifoxApi.getEndpoint(props.endpointId)
     if (ep?.request_spec) payload.request_spec = ep.request_spec
-  } catch { /* 拉取接口失败则用空 spec，不阻塞建用例 */ }
+  } catch {
+    /* 拉取接口失败则用空 spec，不阻塞建用例 */
+  }
   const created = await apifoxApi.createCase(props.endpointId, payload)
   ElMessage.success('已创建')
   await loadCases()
@@ -153,15 +192,23 @@ async function copyCase(c) {
 
 function casePayload() {
   return {
-    name: form.name, category: form.category, request_spec: form.request_spec, variables: form.variables,
-    data_drive: form.data_drive, assertions: form.assertions, extracts: form.extracts,
+    name: form.name,
+    category: form.category,
+    request_spec: form.request_spec,
+    variables: form.variables,
+    data_drive: form.data_drive,
+    assertions: form.assertions,
+    extracts: form.extracts,
     pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
     post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
   }
 }
 
 async function doSaveCase() {
-  const updated = await apifoxApi.updateCase(form.id, { ...casePayload(), expected_version: form.version })
+  const updated = await apifoxApi.updateCase(form.id, {
+    ...casePayload(),
+    expected_version: form.version,
+  })
   form.version = updated.version
   await loadCases()
 }
@@ -190,7 +237,9 @@ async function runCase() {
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId, (e) => runEvents.value.push(e))
+    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId, (e) =>
+      runEvents.value.push(e),
+    )
   } catch (e) {
     ElMessage.error(e.message || '运行失败')
   } finally {
@@ -200,8 +249,11 @@ async function runCase() {
 
 watch(
   () => props.endpointId,
-  () => { form.id = null; loadCases() },
-  { immediate: true }
+  () => {
+    form.id = null
+    loadCases()
+  },
+  { immediate: true },
 )
 
 apifoxApi.listScripts(props.projectId).then((r) => (scripts.value = r))

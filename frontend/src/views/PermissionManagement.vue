@@ -128,7 +128,10 @@ async function handleSave() {
   if (!selectedDepartmentId.value) return
   saving.value = true
   try {
-    const data = await departmentApi.updatePermissions(selectedDepartmentId.value, selectedMenus.value)
+    const data = await departmentApi.updatePermissions(
+      selectedDepartmentId.value,
+      selectedMenus.value,
+    )
     selectedMenus.value = [...data.menu_permissions]
     ElMessage.success('部门菜单授权已保存')
   } finally {

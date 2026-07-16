@@ -31,7 +31,7 @@ request.interceptors.response.use(
     }
     ElMessage.error(typeof msg === 'string' ? msg : JSON.stringify(msg))
     return Promise.reject(error)
-  }
+  },
 )
 
 export const authApi = {
@@ -316,13 +316,15 @@ export const apifoxApi = {
   createEnvVar: (eid, data) => request.post(`/apifox/environments/${eid}/variables`, data),
   updateEnvVar: (vid, data) => request.put(`/apifox/env-variables/${vid}`, data),
   deleteEnvVar: (vid) => request.delete(`/apifox/env-variables/${vid}`),
-  setEnvVarLocal: (vid, local_value) => request.put(`/apifox/env-variables/${vid}/local`, { local_value }),
+  setEnvVarLocal: (vid, local_value) =>
+    request.put(`/apifox/env-variables/${vid}/local`, { local_value }),
 
   listGlobalVars: (pid) => request.get(`/apifox/projects/${pid}/global-variables`),
   createGlobalVar: (pid, data) => request.post(`/apifox/projects/${pid}/global-variables`, data),
   updateGlobalVar: (gid, data) => request.put(`/apifox/global-variables/${gid}`, data),
   deleteGlobalVar: (gid) => request.delete(`/apifox/global-variables/${gid}`),
-  setGlobalVarLocal: (gid, local_value) => request.put(`/apifox/global-variables/${gid}/local`, { local_value }),
+  setGlobalVarLocal: (gid, local_value) =>
+    request.put(`/apifox/global-variables/${gid}/local`, { local_value }),
 
   listCases: (eid) => request.get(`/apifox/endpoints/${eid}/cases`),
   getCase: (cid) => request.get(`/apifox/cases/${cid}`),
@@ -356,7 +358,8 @@ export const apifoxApi = {
   updateScenario: (sid, data) => request.put(`/apifox/scenarios/${sid}`, data),
   deleteScenario: (sid) => request.delete(`/apifox/scenarios/${sid}`),
   listScenarioFolders: (pid) => request.get(`/apifox/projects/${pid}/scenario-folders`),
-  createScenarioFolder: (pid, name) => request.post(`/apifox/projects/${pid}/scenario-folders`, { name }),
+  createScenarioFolder: (pid, name) =>
+    request.post(`/apifox/projects/${pid}/scenario-folders`, { name }),
   renameScenarioFolder: (fid, name) => request.put(`/apifox/scenario-folders/${fid}`, { name }),
   deleteScenarioFolder: (fid) => request.delete(`/apifox/scenario-folders/${fid}`),
 
@@ -452,8 +455,7 @@ function apifoxRunStream(url, environmentId, onEvent, options = {}) {
 }
 
 export const testExecutionApi = {
-  listRuns: (projectId) =>
-    request.get('/test-executions', { params: { project_id: projectId } }),
+  listRuns: (projectId) => request.get('/test-executions', { params: { project_id: projectId } }),
   getRun: (id) => request.get(`/test-executions/${id}`),
   createRun: (data) => request.post('/test-executions', data),
   updateRun: (id, data) => request.put(`/test-executions/${id}`, data),

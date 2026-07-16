@@ -18,7 +18,12 @@
         <div class="row1">
           <el-input v-model="form.name" placeholder="场景名称" style="width: 220px" />
           <el-select v-model="form.priority" style="width: 96px">
-            <el-option v-for="p in PRIORITY_OPTIONS" :key="p.value" :label="`优先级 ${p.label}`" :value="p.value" />
+            <el-option
+              v-for="p in PRIORITY_OPTIONS"
+              :key="p.value"
+              :label="`优先级 ${p.label}`"
+              :value="p.value"
+            />
           </el-select>
           <el-button type="primary" :loading="saving" @click="saveScenario">保存</el-button>
           <el-button type="success" :loading="running" @click="runScenario">运行</el-button>
@@ -26,9 +31,9 @@
         </div>
         <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
         <ScenarioRunConfigBar
-          :datasets="datasets"
           v-model:loop-count="form.run_config.loop_count"
           v-model:dataset-id="form.run_config.dataset_id"
+          :datasets="datasets"
         />
         <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
         <ScenarioStepsEditor
@@ -85,7 +90,12 @@ const serverNames = computed(() => {
 const running = ref(false)
 const runEvents = ref([])
 const form = reactive({
-  id: null, name: '', description: '', priority: 'medium', steps: [], version: 1,
+  id: null,
+  name: '',
+  description: '',
+  priority: 'medium',
+  steps: [],
+  version: 1,
   run_config: { loop_count: 1, dataset_id: null },
 })
 const { folders, loadFolders, createFolder, renameFolder, deleteFolder } = useScenarioFolders(pid)
@@ -129,7 +139,9 @@ async function runScenario() {
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runScenarioStream(form.id, store.currentEnvironmentId, (e) => runEvents.value.push(e))
+    await apifoxApi.runScenarioStream(form.id, store.currentEnvironmentId, (e) =>
+      runEvents.value.push(e),
+    )
   } catch (e) {
     ElMessage.error(e.message || '运行失败')
   } finally {
@@ -149,7 +161,8 @@ function normalizeStep(s) {
     node.children = kids.filter((k) => k.type !== 'else')
     node.elseEnabled = !!elseStep
     node.elseChildren = elseStep ? elseStep.children || [] : []
-    if (!node.config?.condition) node.config = { condition: { left: '', operator: 'eq', right: '' } }
+    if (!node.config?.condition)
+      node.config = { condition: { left: '', operator: 'eq', right: '' } }
   } else if (s.type === 'http') {
     // http 步骤：补全 request_spec 结构供编辑器绑定，保证 assertions/extracts 为数组
     const c = s.config || {}
@@ -167,10 +180,14 @@ function normalizeStep(s) {
 
 // 未保存保护：切换场景/切主 tab/关浏览器前，dirty 则提示
 const guard = useUnsavedGuard({
-  serialize: () => JSON.stringify({
-    name: form.name, description: form.description, priority: form.priority,
-    steps: form.steps, run_config: form.run_config,
-  }),
+  serialize: () =>
+    JSON.stringify({
+      name: form.name,
+      description: form.description,
+      priority: form.priority,
+      steps: form.steps,
+      run_config: form.run_config,
+    }),
   save: () => saveScenario(),
   name: () => form.name,
 })
@@ -232,7 +249,9 @@ function serializeStep(s, depth = 0) {
   if (s.type === 'if') {
     const children = deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
     if (s.elseEnabled) {
-      const elseChildren = deep ? (s.elseChildren || []).map((c) => serializeStep(c, depth + 1)) : []
+      const elseChildren = deep
+        ? (s.elseChildren || []).map((c) => serializeStep(c, depth + 1))
+        : []
       children.push(leafStep({ type: 'else', children: elseChildren }))
     }
     return leafStep({ type: 'if', config: s.config, name: s.name, enabled: s.enabled, children })

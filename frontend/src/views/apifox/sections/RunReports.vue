@@ -43,13 +43,24 @@
     </el-table>
     <el-empty v-if="runs.length === 0" description="暂无运行记录（在自动化测试里运行用例/场景）" />
 
-    <el-drawer v-model="drawerVisible" :title="`运行 #${detail?.id} · ${detail?.target_name || ''}`" size="60%">
+    <el-drawer
+      v-model="drawerVisible"
+      :title="`运行 #${detail?.id} · ${detail?.target_name || ''}`"
+      size="60%"
+    >
       <template v-if="detail">
         <div class="drawer-actions">
           <el-button v-if="parentDetail" link type="primary" class="back-btn" @click="backToParent">
             ← 返回套件报告
           </el-button>
-          <el-dropdown split-button size="small" type="primary" :button-props="{ loading: exporting }" @click="doExport('excel')" @command="doExport">
+          <el-dropdown
+            split-button
+            size="small"
+            type="primary"
+            :button-props="{ loading: exporting }"
+            @click="doExport('excel')"
+            @command="doExport"
+          >
             导出 Excel
             <template #dropdown>
               <el-dropdown-menu>
@@ -65,20 +76,28 @@
         <el-descriptions :column="4" size="small" border class="summary">
           <el-descriptions-item label="状态">{{ statusLabel(detail.status) }}</el-descriptions-item>
           <el-descriptions-item label="通过率">{{ detail.pass_rate }}%</el-descriptions-item>
-          <el-descriptions-item :label="isSuite ? '通过/失败(项)' : '通过/失败'">{{ detail.passed_count }}/{{ detail.failed_count }}</el-descriptions-item>
-          <el-descriptions-item label="耗时">{{ Math.round(detail.duration_ms || 0) }}ms</el-descriptions-item>
+          <el-descriptions-item :label="isSuite ? '通过/失败(项)' : '通过/失败'"
+            >{{ detail.passed_count }}/{{ detail.failed_count }}</el-descriptions-item
+          >
+          <el-descriptions-item label="耗时"
+            >{{ Math.round(detail.duration_ms || 0) }}ms</el-descriptions-item
+          >
         </el-descriptions>
 
         <el-table v-if="isSuite" :data="detail.children" size="small" border @row-click="openChild">
           <el-table-column label="套件项" min-width="200">
             <template #default="{ row }">
-              <el-tag size="small" :type="targetTag(row.target_type)">{{ targetTypeLabel(row.target_type) }}</el-tag>
+              <el-tag size="small" :type="targetTag(row.target_type)">{{
+                targetTypeLabel(row.target_type)
+              }}</el-tag>
               {{ row.target_name }}
             </template>
           </el-table-column>
           <el-table-column label="状态" width="90">
             <template #default="{ row }">
-              <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
+              <el-tag size="small" :type="statusTag(row.status)">{{
+                statusLabel(row.status)
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column label="通过率" width="110">
@@ -88,7 +107,9 @@
             </template>
           </el-table-column>
           <el-table-column label="耗时" width="90">
-            <template #default="{ row }">{{ row.duration_ms != null ? Math.round(row.duration_ms) + 'ms' : '-' }}</template>
+            <template #default="{ row }">{{
+              row.duration_ms != null ? Math.round(row.duration_ms) + 'ms' : '-'
+            }}</template>
           </el-table-column>
         </el-table>
 
@@ -97,76 +118,94 @@
             <div v-if="g.label" class="group-title">{{ g.label }}</div>
             <el-collapse>
               <el-collapse-item v-for="s in g.steps" :key="s.id" :name="s.id">
-            <template #title>
-              <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
-              <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
-              <span class="step-title">
-                {{ s.case_name }}
-                <span v-if="s.method" class="sub"><MethodTag :method="s.method" /> {{ s.url }}</span>
-                <span v-if="s.response_status" class="sub">{{ s.response_status }} · {{ Math.round(s.duration_ms || 0) }}ms</span>
-              </span>
-            </template>
+                <template #title>
+                  <el-icon v-if="s.status === 'passed'" color="var(--ax-success)"
+                    ><CircleCheck
+                  /></el-icon>
+                  <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
+                  <span class="step-title">
+                    {{ s.case_name }}
+                    <span v-if="s.method" class="sub"
+                      ><MethodTag :method="s.method" /> {{ s.url }}</span
+                    >
+                    <span v-if="s.response_status" class="sub"
+                      >{{ s.response_status }} · {{ Math.round(s.duration_ms || 0) }}ms</span
+                    >
+                  </span>
+                </template>
 
-            <div v-if="s.error_message" class="err">{{ s.error_message }}</div>
+                <div v-if="s.error_message" class="err">{{ s.error_message }}</div>
 
-            <el-alert
-              v-for="(w, i) in s.warnings || []"
-              :key="'w' + i"
-              :title="w"
-              type="warning"
-              :closable="false"
-              show-icon
-              class="step-warn"
-            />
+                <el-alert
+                  v-for="(w, i) in s.warnings || []"
+                  :key="'w' + i"
+                  :title="w"
+                  type="warning"
+                  :closable="false"
+                  show-icon
+                  class="step-warn"
+                />
 
-            <template v-if="s.url">
-              <div class="sec-title">实际请求</div>
-              <ActualRequestView
-                :method="s.method"
-                :url="s.url"
-                :headers="s.request_headers"
-                :body="s.request_body"
-              />
-            </template>
+                <template v-if="s.url">
+                  <div class="sec-title">实际请求</div>
+                  <ActualRequestView
+                    :method="s.method"
+                    :url="s.url"
+                    :headers="s.request_headers"
+                    :body="s.request_body"
+                  />
+                </template>
 
-            <template v-if="s.assertion_results.length">
-              <div class="sec-title">断言</div>
-              <div v-for="(a, i) in s.assertion_results" :key="'a' + i" class="line">
-                <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{ a.passed ? '过' : '败' }}</el-tag>
-                {{ a.message }}
-              </div>
-            </template>
+                <template v-if="s.assertion_results.length">
+                  <div class="sec-title">断言</div>
+                  <div v-for="(a, i) in s.assertion_results" :key="'a' + i" class="line">
+                    <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{
+                      a.passed ? '过' : '败'
+                    }}</el-tag>
+                    {{ a.message }}
+                  </div>
+                </template>
 
-            <template v-if="s.contract_result">
-              <div class="sec-title">契约校验</div>
-              <div class="line">
-                <el-tag size="small" :type="s.contract_result.passed ? 'success' : 'danger'">
-                  {{ s.contract_result.passed ? '符合' : '不符' }}
-                </el-tag>
-                {{ s.contract_result.schema_name }} · {{ s.contract_result.message }}
-              </div>
-              <div v-for="(err, i) in s.contract_result.errors" :key="'c' + i" class="line mono">{{ err }}</div>
-            </template>
+                <template v-if="s.contract_result">
+                  <div class="sec-title">契约校验</div>
+                  <div class="line">
+                    <el-tag size="small" :type="s.contract_result.passed ? 'success' : 'danger'">
+                      {{ s.contract_result.passed ? '符合' : '不符' }}
+                    </el-tag>
+                    {{ s.contract_result.schema_name }} · {{ s.contract_result.message }}
+                  </div>
+                  <div
+                    v-for="(err, i) in s.contract_result.errors"
+                    :key="'c' + i"
+                    class="line mono"
+                  >
+                    {{ err }}
+                  </div>
+                </template>
 
-            <template v-if="s.extract_results.length">
-              <div class="sec-title">提取</div>
-              <div v-for="(e, i) in s.extract_results" :key="'e' + i" class="line">
-                <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{ e.passed ? '成' : '败' }}</el-tag>
-                {{ e.var_name }} = {{ e.value || e.message }}（{{ e.scope }}）
-              </div>
-            </template>
+                <template v-if="s.extract_results.length">
+                  <div class="sec-title">提取</div>
+                  <div v-for="(e, i) in s.extract_results" :key="'e' + i" class="line">
+                    <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{
+                      e.passed ? '成' : '败'
+                    }}</el-tag>
+                    {{ e.var_name }} = {{ e.value || e.message }}（{{ e.scope }}）
+                  </div>
+                </template>
 
-            <template v-if="s.script_logs.length">
-              <div class="sec-title">脚本日志</div>
-              <div v-for="(l, i) in s.script_logs" :key="'l' + i" class="line mono">{{ l }}</div>
-            </template>
+                <template v-if="s.script_logs.length">
+                  <div class="sec-title">脚本日志</div>
+                  <div v-for="(l, i) in s.script_logs" :key="'l' + i" class="line mono">
+                    {{ l }}
+                  </div>
+                </template>
 
-            <template v-if="s.response_body">
-              <div class="sec-title">响应体</div>
-              <div class="body-box">
-                <JsonView :data="s.response_body" :deep="3" />
-              </div>
-            </template>
+                <template v-if="s.response_body">
+                  <div class="sec-title">响应体</div>
+                  <div class="body-box">
+                    <JsonView :data="s.response_body" :deep="3" />
+                  </div>
+                </template>
               </el-collapse-item>
             </el-collapse>
           </div>
@@ -191,7 +230,8 @@ const route = useRoute()
 const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
 
-const envName = (id) => (id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-')
+const envName = (id) =>
+  id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-'
 
 const runs = ref([])
 const detail = ref(null)

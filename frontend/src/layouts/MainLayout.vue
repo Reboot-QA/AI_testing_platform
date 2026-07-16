@@ -17,7 +17,11 @@
           <el-icon><DataAnalysis /></el-icon>
           <span>仪表盘</span>
         </el-menu-item>
-        <el-menu-item v-if="userStore.hasPermission('projects')" index="/projects" data-assistant="menu.projects">
+        <el-menu-item
+          v-if="userStore.hasPermission('projects')"
+          index="/projects"
+          data-assistant="menu.projects"
+        >
           <el-icon><Folder /></el-icon>
           <span>项目管理</span>
         </el-menu-item>
@@ -27,11 +31,18 @@
             <el-icon><Document /></el-icon>
             <span>需求管理</span>
           </template>
-          <el-menu-item v-if="userStore.hasPermission('requirement_docs')" index="/requirement-docs">
+          <el-menu-item
+            v-if="userStore.hasPermission('requirement_docs')"
+            index="/requirement-docs"
+          >
             <el-icon><Upload /></el-icon>
             <span>AI分析需求</span>
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('requirements')" index="/requirements" data-assistant="menu.requirements">
+          <el-menu-item
+            v-if="userStore.hasPermission('requirements')"
+            index="/requirements"
+            data-assistant="menu.requirements"
+          >
             <el-icon><Tickets /></el-icon>
             <span>需求点</span>
           </el-menu-item>
@@ -42,11 +53,19 @@
             <el-icon><List /></el-icon>
             <span>用例管理</span>
           </template>
-          <el-menu-item v-if="userStore.hasPermission('ai_generate')" index="/ai-generate" data-assistant="menu.ai_generate">
+          <el-menu-item
+            v-if="userStore.hasPermission('ai_generate')"
+            index="/ai-generate"
+            data-assistant="menu.ai_generate"
+          >
             <el-icon><MagicStick /></el-icon>
             <span>AI生成用例</span>
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('testcases')" index="/testcases" data-assistant="menu.testcases">
+          <el-menu-item
+            v-if="userStore.hasPermission('testcases')"
+            index="/testcases"
+            data-assistant="menu.testcases"
+          >
             <el-icon><Collection /></el-icon>
             <span>用例库</span>
           </el-menu-item>
@@ -74,7 +93,10 @@
           <el-menu-item v-if="userStore.hasPermission('system_logs')" index="/system/logs">
             日志监控
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('system_error_logs')" index="/system/error-logs">
+          <el-menu-item
+            v-if="userStore.hasPermission('system_error_logs')"
+            index="/system/error-logs"
+          >
             错误日志
           </el-menu-item>
         </el-sub-menu>
@@ -90,10 +112,16 @@
           <el-menu-item v-if="userStore.hasPermission('system_users')" index="/system/users">
             用户管理
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('system_departments')" index="/system/departments">
+          <el-menu-item
+            v-if="userStore.hasPermission('system_departments')"
+            index="/system/departments"
+          >
             部门权限
           </el-menu-item>
-          <el-menu-item v-if="userStore.hasPermission('system_permissions')" index="/system/permissions">
+          <el-menu-item
+            v-if="userStore.hasPermission('system_permissions')"
+            index="/system/permissions"
+          >
             权限管理
           </el-menu-item>
         </el-sub-menu>
@@ -104,7 +132,9 @@
       <el-header class="header">
         <span class="page-title">{{ pageTitle }}</span>
         <div class="user-area">
-          <el-tag type="info" size="small">{{ userStore.user?.full_name || userStore.user?.username }}</el-tag>
+          <el-tag type="info" size="small">{{
+            userStore.user?.full_name || userStore.user?.username
+          }}</el-tag>
           <el-button link type="primary" @click="passwordDialogVisible = true">修改密码</el-button>
           <el-button link type="danger" @click="handleLogout">退出</el-button>
         </div>
@@ -128,21 +158,48 @@
     </el-container>
     <AssistantPanel :key="assistantPanelKey" />
 
-    <el-dialog v-model="passwordDialogVisible" title="修改密码" width="420px" @closed="resetPasswordForm">
-      <el-form ref="passwordFormRef" :model="passwordForm" :rules="passwordRules" label-width="90px">
+    <el-dialog
+      v-model="passwordDialogVisible"
+      title="修改密码"
+      width="420px"
+      @closed="resetPasswordForm"
+    >
+      <el-form
+        ref="passwordFormRef"
+        :model="passwordForm"
+        :rules="passwordRules"
+        label-width="90px"
+      >
         <el-form-item label="原密码" prop="old_password">
-          <el-input v-model="passwordForm.old_password" type="password" show-password autocomplete="current-password" />
+          <el-input
+            v-model="passwordForm.old_password"
+            type="password"
+            show-password
+            autocomplete="current-password"
+          />
         </el-form-item>
         <el-form-item label="新密码" prop="new_password">
-          <el-input v-model="passwordForm.new_password" type="password" show-password autocomplete="new-password" />
+          <el-input
+            v-model="passwordForm.new_password"
+            type="password"
+            show-password
+            autocomplete="new-password"
+          />
         </el-form-item>
         <el-form-item label="确认密码" prop="confirm_password">
-          <el-input v-model="passwordForm.confirm_password" type="password" show-password autocomplete="new-password" />
+          <el-input
+            v-model="passwordForm.confirm_password"
+            type="password"
+            show-password
+            autocomplete="new-password"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="passwordDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="passwordSubmitting" @click="handleChangePassword">确定</el-button>
+        <el-button type="primary" :loading="passwordSubmitting" @click="handleChangePassword"
+          >确定</el-button
+        >
       </template>
     </el-dialog>
   </el-container>
@@ -164,23 +221,20 @@ const userStore = useUserStore()
 const aiStore = useAiGenerateStore()
 
 const showRequirementMenu = computed(
-  () =>
-    userStore.hasPermission('requirement_docs') || userStore.hasPermission('requirements')
+  () => userStore.hasPermission('requirement_docs') || userStore.hasPermission('requirements'),
 )
 
 const showTestcaseMenu = computed(
   () =>
     userStore.hasPermission('testcases') ||
     userStore.hasPermission('ai_generate') ||
-    userStore.hasPermission('test_execution')
+    userStore.hasPermission('test_execution'),
 )
 
 const showAutomationMenu = computed(() => userStore.hasPermission('apifox_workbench'))
 
 const showLogMenu = computed(
-  () =>
-    userStore.hasPermission('system_logs') ||
-    userStore.hasPermission('system_error_logs')
+  () => userStore.hasPermission('system_logs') || userStore.hasPermission('system_error_logs'),
 )
 
 const showSystemMenu = computed(
@@ -188,7 +242,7 @@ const showSystemMenu = computed(
     userStore.hasPermission('system_settings') ||
     userStore.hasPermission('system_users') ||
     userStore.hasPermission('system_departments') ||
-    userStore.hasPermission('system_permissions')
+    userStore.hasPermission('system_permissions'),
 )
 
 const activeMenu = computed(() => {
@@ -220,9 +274,7 @@ const defaultOpeneds = computed(() => {
 
 const pageTitle = computed(() => PAGE_TITLES[route.path] || 'AI 质量平台')
 
-const assistantPanelKey = computed(
-  () => userStore.user?.id || userStore.token || 'guest'
-)
+const assistantPanelKey = computed(() => userStore.user?.id || userStore.token || 'guest')
 
 const passwordDialogVisible = ref(false)
 const passwordSubmitting = ref(false)
@@ -291,7 +343,7 @@ function handleLogout() {
 }
 
 .aside {
-  background: #1a365d;
+  background: linear-gradient(180deg, #1a365d 0%, #12294a 100%);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -301,6 +353,55 @@ function handleLogout() {
   flex: 1;
   overflow-y: auto;
   border-right: none;
+  padding: 8px 10px;
+  background: transparent !important;
+  /* 隐藏滚动条（滚轮/触控仍可滚动）——Firefox / 旧 Edge */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+/* 隐藏滚动条——Webkit（Chrome/Edge/Safari） */
+.aside :deep(.el-menu)::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* 菜单项圆角化 + 悬停/选中态更清晰 */
+.aside :deep(.el-menu-item),
+.aside :deep(.el-sub-menu__title) {
+  height: 44px;
+  line-height: 44px;
+  border-radius: var(--ax-radius);
+  margin-bottom: 2px;
+}
+
+.aside :deep(.el-menu-item:hover),
+.aside :deep(.el-sub-menu__title:hover) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #fff !important;
+}
+
+.aside :deep(.el-menu-item.is-active) {
+  background: rgba(66, 153, 225, 0.22) !important;
+  color: #fff !important;
+  font-weight: 600;
+  position: relative;
+}
+
+/* 选中项左侧高亮条 */
+.aside :deep(.el-menu-item.is-active)::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 8px;
+  bottom: 8px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #63b3ed;
+}
+
+.aside :deep(.el-sub-menu .el-menu-item) {
+  min-width: 0;
 }
 
 .logo {
@@ -312,6 +413,7 @@ function handleLogout() {
   color: #fff;
   font-size: 16px;
   font-weight: 600;
+  letter-spacing: 0.5px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   flex-shrink: 0;
 }
@@ -320,15 +422,15 @@ function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
-  border-bottom: 1px solid #e2e8f0;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  background: var(--ax-bg);
+  border-bottom: 1px solid var(--ax-border);
+  box-shadow: var(--ax-shadow-sm);
 }
 
 .page-title {
   font-size: 18px;
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-text);
 }
 
 .user-area {
@@ -338,7 +440,7 @@ function handleLogout() {
 }
 
 .main {
-  background: #f7fafc;
+  background: var(--ax-bg-subtle);
   padding: 20px;
 }
 

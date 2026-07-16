@@ -2,16 +2,36 @@
 import { emptyKvRow } from '@/utils/apiCaseConfig'
 
 export const COMMON_HEADERS = [
-  'Accept', 'Accept-Encoding', 'Accept-Language', 'Authorization', 'Cache-Control',
-  'Connection', 'Content-Type', 'Content-Length', 'Cookie', 'Host', 'Origin',
-  'Referer', 'User-Agent', 'X-Requested-With', 'X-Request-Id', 'If-None-Match',
-  'If-Modified-Since', 'Range', 'Pragma',
+  'Accept',
+  'Accept-Encoding',
+  'Accept-Language',
+  'Authorization',
+  'Cache-Control',
+  'Connection',
+  'Content-Type',
+  'Content-Length',
+  'Cookie',
+  'Host',
+  'Origin',
+  'Referer',
+  'User-Agent',
+  'X-Requested-With',
+  'X-Request-Id',
+  'If-None-Match',
+  'If-Modified-Since',
+  'Range',
+  'Pragma',
 ]
 
 const VALUE_SUGGESTIONS = {
   'content-type': [
-    'application/json', 'application/xml', 'application/x-www-form-urlencoded',
-    'multipart/form-data', 'text/plain', 'text/html', 'application/octet-stream',
+    'application/json',
+    'application/xml',
+    'application/x-www-form-urlencoded',
+    'multipart/form-data',
+    'text/plain',
+    'text/html',
+    'application/octet-stream',
   ],
   accept: ['application/json', 'application/xml', '*/*', 'text/plain', 'text/html'],
   connection: ['keep-alive', 'close'],
@@ -34,7 +54,9 @@ export const COMMON_HEADER_PRESETS = [
   { name: 'X-Requested-With', value: 'XMLHttpRequest' },
 ]
 
-const _defaultByKey = Object.fromEntries(COMMON_HEADER_PRESETS.map((h) => [h.name.toLowerCase(), h.value]))
+const _defaultByKey = Object.fromEntries(
+  COMMON_HEADER_PRESETS.map((h) => [h.name.toLowerCase(), h.value]),
+)
 
 export function headerDefaultValue(key) {
   return _defaultByKey[(key || '').trim().toLowerCase()] || ''

@@ -30,11 +30,43 @@
 
   /* 语义状态色 */
   --ax-success: #16a34a;
+  --ax-warning: #d97706;
   --ax-danger: #dc2626;
+  --ax-info: #64748b;
 
-  /* 尺寸 */
+  /* 品牌梯度（由 --ax-brand 派生，供主题与组件统一取用） */
+  --ax-brand-hover: color-mix(in srgb, var(--ax-brand) 88%, white);
+  --ax-brand-active: color-mix(in srgb, var(--ax-brand) 100%, black 8%);
+  --ax-brand-subtle: color-mix(in srgb, var(--ax-brand) 8%, white);
+
+  /* 尺寸 · 圆角 */
+  --ax-radius-sm: 4px;
   --ax-radius: 6px;
   --ax-radius-lg: 10px;
+  --ax-radius-xl: 14px;
+
+  /* 尺寸 · 间距梯队 */
+  --ax-gap-xs: 4px;
   --ax-gap: 8px;
+  --ax-gap-sm: 12px;
   --ax-gap-lg: 16px;
+  --ax-gap-xl: 24px;
+  --ax-gap-2xl: 32px;
+
+  /* 字号梯队 */
+  --ax-font-xs: 12px;
+  --ax-font-sm: 13px;
+  --ax-font: 14px;
+  --ax-font-md: 16px;
+  --ax-font-lg: 18px;
+  --ax-font-xl: 22px;
+  --ax-font-2xl: 28px;
+
+  /* 阴影梯队 */
+  --ax-shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+  --ax-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  --ax-shadow-lg: 0 8px 24px rgba(15, 23, 42, 0.12);
+
+  /* 过渡 */
+  --ax-transition: 0.2s ease;
 }

@@ -12,7 +12,8 @@ export function useScenarioFolders(pidRef) {
 
   async function createFolder() {
     const { value } = await ElMessageBox.prompt('文件夹名称', '新建场景文件夹', {
-      inputPattern: /\S/, inputErrorMessage: '不能为空',
+      inputPattern: /\S/,
+      inputErrorMessage: '不能为空',
     })
     await apifoxApi.createScenarioFolder(pidRef.value, value.trim())
     ElMessage.success('已创建')
@@ -21,7 +22,9 @@ export function useScenarioFolders(pidRef) {
 
   async function renameFolder(folder) {
     const { value } = await ElMessageBox.prompt('文件夹名称', '重命名', {
-      inputValue: folder.name, inputPattern: /\S/, inputErrorMessage: '不能为空',
+      inputValue: folder.name,
+      inputPattern: /\S/,
+      inputErrorMessage: '不能为空',
     })
     await apifoxApi.renameScenarioFolder(folder.id, value.trim())
     ElMessage.success('已重命名')

@@ -1,5 +1,10 @@
 <template>
-  <el-dialog :model-value="visible" title="调试脚本" width="640px" @update:model-value="$emit('update:visible', $event)">
+  <el-dialog
+    :model-value="visible"
+    title="调试脚本"
+    width="640px"
+    @update:model-value="$emit('update:visible', $event)"
+  >
     <div class="row">
       <span class="lbl">阶段</span>
       <el-radio-group v-model="phase" size="small">
@@ -19,9 +24,20 @@
         <div class="block-title">响应上下文（后置可读）</div>
         <div class="row">
           <span class="lbl">状态码</span>
-          <el-input-number v-model="respStatus" :min="100" :max="599" :controls="false" style="width: 120px" />
+          <el-input-number
+            v-model="respStatus"
+            :min="100"
+            :max="599"
+            :controls="false"
+            style="width: 120px"
+          />
         </div>
-        <el-input v-model="respBody" type="textarea" :rows="3" placeholder="响应体（JSON 文本，选填）" />
+        <el-input
+          v-model="respBody"
+          type="textarea"
+          :rows="3"
+          placeholder="响应体（JSON 文本，选填）"
+        />
       </div>
     </template>
 
@@ -68,13 +84,16 @@ const running = ref(false)
 const result = ref(null)
 
 // 每次打开重置结果，避免看到上次的输出
-watch(() => props.visible, (v) => {
-  if (v) result.value = null
-})
+watch(
+  () => props.visible,
+  (v) => {
+    if (v) result.value = null
+  },
+)
 
 function rowsToObject(rows) {
   return Object.fromEntries(
-    rows.filter((r) => r.key && r.enabled !== false).map((r) => [r.key, r.value ?? ''])
+    rows.filter((r) => r.key && r.enabled !== false).map((r) => [r.key, r.value ?? '']),
   )
 }
 

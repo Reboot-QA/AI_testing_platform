@@ -187,7 +187,9 @@ onMounted(loadData)
 }
 
 @media (max-width: 900px) {
-  .dash-grid { grid-template-columns: 1fr; }
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .card {
@@ -234,7 +236,9 @@ onMounted(loadData)
   border-color: var(--ax-brand);
 }
 
-.plus { font-size: 24px; }
+.plus {
+  font-size: 24px;
+}
 
 .side-col {
   display: flex;

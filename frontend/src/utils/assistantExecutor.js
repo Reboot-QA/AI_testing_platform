@@ -114,9 +114,9 @@ async function executeStep(step, onProgress) {
     case 'click': {
       const el = findElement(step.target)
       const blocked =
-        el.disabled
-        || el.getAttribute('aria-disabled') === 'true'
-        || el.classList.contains('is-disabled')
+        el.disabled ||
+        el.getAttribute('aria-disabled') === 'true' ||
+        el.classList.contains('is-disabled')
       if (blocked) {
         throw new Error(`操作目标暂不可用：${step.target}`)
       }

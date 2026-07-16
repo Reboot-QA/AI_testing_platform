@@ -2,14 +2,14 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-COPY package.json package-lock.json ./
-RUN npm ci
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN corepack enable pnpm && pnpm install --frozen-lockfile
 
 COPY . .
 # 小内存 VPS 可将 NODE_MEMORY_MB 设为 1536；默认 2048（含 Monaco 打包）
 ARG NODE_MEMORY_MB=2048
 ENV NODE_OPTIONS=--max-old-space-size=${NODE_MEMORY_MB}
-RUN npm run build
+RUN pnpm build
 
 FROM nginx:1.27-alpine
 

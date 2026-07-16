@@ -11,6 +11,8 @@ backend/*.db
 
 # 前端构建产物（部署从源码 npm build，不入库）
 frontend/dist/
+frontend/.claude
+frontend/node_modules/
 
 # Python
 __pycache__/

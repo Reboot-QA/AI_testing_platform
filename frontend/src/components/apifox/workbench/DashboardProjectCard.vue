@@ -14,9 +14,13 @@
             <el-dropdown-item command="pin">
               <el-icon><Top /></el-icon> {{ project.pinned ? '取消置顶' : '置顶' }}
             </el-dropdown-item>
-            <el-dropdown-item command="rename"><el-icon><EditPen /></el-icon> 改名</el-dropdown-item>
+            <el-dropdown-item command="rename"
+              ><el-icon><EditPen /></el-icon> 改名</el-dropdown-item
+            >
             <el-dropdown-item v-if="canDelete" command="delete" divided>
-              <span class="del"><el-icon><Delete /></el-icon> 删除项目</span>
+              <span class="del"
+                ><el-icon><Delete /></el-icon> 删除项目</span
+              >
             </el-dropdown-item>
           </el-dropdown-menu>
         </template>
@@ -44,10 +48,13 @@ const emit = defineEmits(['enter', 'rename', 'delete', 'pin'])
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
 const color = computed(() => PALETTE[props.project.id % PALETTE.length])
 const letter = computed(() => (props.project.name || '?').trim().charAt(0).toUpperCase())
-const roleClass = computed(() => ({
-  管理员: 'r-admin',
-  负责人: 'r-owner',
-}[props.project.role] || 'r-member'))
+const roleClass = computed(
+  () =>
+    ({
+      管理员: 'r-admin',
+      负责人: 'r-owner',
+    })[props.project.role] || 'r-member',
+)
 
 // 硬删除仅项目负责人/系统管理员可见（后端同样校验），成员只能改名
 const canDelete = computed(() => ['管理员', '负责人'].includes(props.project.role))

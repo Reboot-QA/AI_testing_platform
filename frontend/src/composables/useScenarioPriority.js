@@ -17,7 +17,7 @@ export function useScenarioPriorityFilter(scenariosRef) {
   const visibleScenarios = computed(() =>
     priorityFilter.value
       ? scenariosRef.value.filter((s) => s.priority === priorityFilter.value)
-      : scenariosRef.value
+      : scenariosRef.value,
   )
   return { priorityFilter, visibleScenarios }
 }
