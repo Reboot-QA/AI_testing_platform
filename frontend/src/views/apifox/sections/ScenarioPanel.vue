@@ -38,6 +38,7 @@
         />
         <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
         <ScenarioStepsEditor
+          ref="stepsEditorRef"
           :rows="form.steps"
           :cases="projectCases"
           :scenarios="scenarios"
@@ -74,6 +75,7 @@ const route = useRoute()
 const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
 
+const stepsEditorRef = ref(null)
 const scenarios = ref([])
 const projectCases = ref([])
 const scripts = ref([])
@@ -264,6 +266,8 @@ function serializeStep(s, depth = 0) {
 }
 
 async function doSaveScenario() {
+  // 先把选中步骤里引用用例的编辑（勾选/params）落库，再存场景结构 —— 整体保存一次搞定
+  await stepsEditorRef.value?.flushDetail?.()
   const updated = await apifoxApi.updateScenario(form.id, {
     name: form.name,
     description: form.description || null,
