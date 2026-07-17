@@ -32,6 +32,9 @@ _ASSERTION_OPERATORS = {
     "eq", "neq", "contains", "not_contains", "gt", "gte", "lt", "lte", "regex", "exists",
 }
 
+# AI 用例生成永远走后台任务，用户不阻塞，给 LLM 更长时间（默认 120s 对复杂接口/多条易超时）
+_LLM_READ_TIMEOUT = 240.0
+
 _SYSTEM_PROMPT = (
     "你是资深接口测试设计专家。根据给定的 HTTP 接口定义，为指定的测试类别设计测试用例。"
     "每条用例需给出请求参数取值与断言。只输出 JSON，不要任何解释文字。"
@@ -295,6 +298,7 @@ async def generate_cases(
         model=llm_config["model"],
         system_prompt=_SYSTEM_PROMPT,
         user_prompt=build_user_prompt(context, categories),
+        read_timeout=_LLM_READ_TIMEOUT,
     )
     try:
         raw_cases = _parse_cases_payload(content)

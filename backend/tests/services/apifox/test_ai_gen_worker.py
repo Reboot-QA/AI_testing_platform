@@ -4,6 +4,8 @@
 用 monkeypatch 强制 mock，隔离 LLM 设置。
 """
 
+import pytest
+
 from app.repositories.apifox import ai_gen_task_repo as repo
 from app.routers.apifox.ai_gen_task_schemas import AiGenTaskCreate
 from app.routers.apifox.case_schemas import AiGenCategory
@@ -78,6 +80,37 @@ def test_run_due_partial_when_some_items_fail(db, make_endpoint, monkeypatch):
 
     db.refresh(task)
     assert task.status == "partial"
+
+
+def test_generate_with_retry_succeeds_on_second_attempt(db, make_endpoint, monkeypatch):
+    from app.routers.apifox.case_schemas import CaseCreate
+    from app.routers.apifox.schemas import RequestSpec
+
+    calls = {"n": 0}
+
+    async def flaky(db, ep, cats, cfg):
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise ValueError("LLM 请求超时")
+        return [CaseCreate(name="c", category="positive", request_spec=RequestSpec())], "llm"
+
+    monkeypatch.setattr(worker.ai_case_service, "generate_cases", flaky)
+    ep = make_endpoint(project_id=1)
+
+    cases, mode = worker._generate_with_retry(db, ep, [], {})
+
+    assert calls["n"] == 2 and cases[0].name == "c"  # 第一次超时，第二次成功
+
+
+def test_generate_with_retry_raises_after_max_attempts(db, make_endpoint, monkeypatch):
+    async def always_fail(db, ep, cats, cfg):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(worker.ai_case_service, "generate_cases", always_fail)
+    ep = make_endpoint(project_id=1)
+
+    with pytest.raises(ValueError):
+        worker._generate_with_retry(db, ep, [], {})
 
 
 def test_reset_running_to_pending_recovers_stuck_tasks(db, make_endpoint):
