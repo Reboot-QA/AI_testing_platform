@@ -2,7 +2,7 @@
 
 from typing import List, Optional
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class NotifyConfigOut(BaseModel):
@@ -19,6 +19,9 @@ class NotifyConfigOut(BaseModel):
     notify_schedule: bool
     notify_run: bool
     notify_aigen: bool
+    # 自动重试（仅定时任务）
+    retry_count: int
+    retry_interval_sec: int
 
 
 class NotifyConfigUpdate(BaseModel):
@@ -35,6 +38,9 @@ class NotifyConfigUpdate(BaseModel):
     notify_schedule: bool = True
     notify_run: bool = True
     notify_aigen: bool = True
+    # 自动重试（仅定时任务）：0=不重试；间隔上限 60s，避免长间隔阻塞单线程调度
+    retry_count: int = Field(default=0, ge=0, le=5)
+    retry_interval_sec: int = Field(default=5, ge=1, le=60)
 
 
 class NotifyChannelResult(BaseModel):
