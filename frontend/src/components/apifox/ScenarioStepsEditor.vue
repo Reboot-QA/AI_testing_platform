@@ -389,7 +389,12 @@ function addStep() {
 
 .add-hint {
   flex: 1;
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.35;
   color: var(--ax-text-placeholder);
+}
+
+.steps-col :deep(.el-empty__description) {
+  font-size: 12px;
 }
 </style>

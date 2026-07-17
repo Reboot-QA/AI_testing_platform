@@ -1,8 +1,9 @@
 <template>
-  <div class="list-panel">
-    <div class="list-toolbar">
-      <span>场景</span>
-      <div class="toolbar-actions">
+  <div class="w-60 border-r border-[var(--ax-border)] overflow-auto pr-2 shrink-0">
+    <!-- 头部工具栏 -->
+    <div class="panel-head">
+      <span class="panel-title">场景</span>
+      <div class="flex items-center gap-1.5">
         <el-select
           v-model="priorityFilter"
           size="small"
@@ -26,13 +27,21 @@
       </div>
     </div>
 
-    <div v-for="grp in groups" :key="grp.key" class="folder-group">
-      <div class="folder-head" :class="{ ungrouped: !grp.folder }">
-        <el-icon><component :is="grp.folder ? 'Folder' : 'Files'" /></el-icon>
-        <span class="folder-name">{{ grp.folder ? grp.folder.name : '未分组' }}</span>
-        <span class="folder-count">{{ grp.scenarios.length }}</span>
+    <!-- 分组列表 -->
+    <div v-for="grp in localGroups" :key="grp.key" class="mb-0.5">
+      <!-- 文件夹 header -->
+      <div class="group-head" :class="grp.folder ? 'group-head--folder' : 'group-head--ungrouped'">
+        <el-icon class="group-head-icon"
+          ><component :is="grp.folder ? 'Folder' : 'Files'"
+        /></el-icon>
+        <span class="group-head-name">
+          {{ grp.folder ? grp.folder.name : '未分组' }}
+        </span>
+        <span class="group-head-count">{{ grp.scenarios.length }}</span>
         <el-dropdown v-if="grp.folder" trigger="click" @command="(c) => onFolderCmd(c, grp.folder)">
-          <el-icon class="folder-more" @click.stop><MoreFilled /></el-icon>
+          <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
+            <MoreFilled />
+          </el-icon>
           <template #dropdown>
             <el-dropdown-menu>
               <el-dropdown-item command="rename">重命名</el-dropdown-item>
@@ -42,39 +51,60 @@
         </el-dropdown>
       </div>
 
-      <div
-        v-for="s in grp.scenarios"
-        :key="s.id"
-        class="item"
-        :class="{ active: s.id === activeId }"
-        @click="$emit('select', s.id)"
+      <!-- 场景行（可拖拽，跨分组移动） -->
+      <VueDraggable
+        :key="`drag-${grp.key}`"
+        v-model="grp.scenarios"
+        :group="{ name: 'scenarios', pull: true, put: true }"
+        handle=".drag-handle"
+        :animation="150"
+        ghost-class="scenario-ghost"
+        :class="grp.scenarios.length === 0 ? 'scenario-drop-empty' : 'scenario-drop'"
+        @end="(e) => onDragEnd(grp, e)"
       >
-        <el-icon><Share /></el-icon>
-        <span class="item-name">{{ s.name }}</span>
-        <el-tag size="small" :type="priorityMeta(s.priority).type">{{
-          priorityMeta(s.priority).label
-        }}</el-tag>
-        <el-tag size="small" type="info">{{ s.step_count }} 步</el-tag>
-        <el-dropdown trigger="click" @command="(fid) => onMoveCmd(fid, s)">
-          <el-icon class="item-more" title="移动到文件夹" @click.stop><Rank /></el-icon>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="__none__" :disabled="s.folder_id == null"
-                >移到未分组</el-dropdown-item
-              >
-              <el-dropdown-item
-                v-for="f in folders"
-                :key="f.id"
-                :command="f.id"
-                :disabled="f.id === s.folder_id"
-              >
-                移到「{{ f.name }}」
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-        <el-button link type="danger" size="small" @click.stop="$emit('del', s)">删</el-button>
-      </div>
+        <div
+          v-for="s in grp.scenarios"
+          :key="s.id"
+          :data-scenario-id="s.id"
+          class="scenario-row group"
+          :class="s.id === activeId ? 'scenario-row--active' : ''"
+          @click="$emit('select', s.id)"
+        >
+          <!-- 拖拽手柄：按住可拖到其他分组 -->
+          <span class="drag-handle" title="按住拖动到其他分组" @click.stop>
+            <el-icon><Rank /></el-icon>
+          </span>
+
+          <!-- 名称（截断 + tooltip 全称） -->
+          <el-tooltip :content="s.name" placement="right" :show-after="600">
+            <span class="scenario-name">{{ s.name }}</span>
+          </el-tooltip>
+
+          <!-- 步数 -->
+          <span class="scenario-meta">{{ s.step_count }} 步</span>
+
+          <!-- 优先级：文字 + 语义色（高=红 / 中=橙 / 低=灰） -->
+          <el-tooltip
+            :content="`优先级：${priorityMeta(s.priority).label}`"
+            placement="right"
+            :show-after="300"
+          >
+            <span
+              class="priority-label shrink-0"
+              :style="{ color: `var(--el-color-${priorityMeta(s.priority).type})` }"
+            >
+              {{ priorityMeta(s.priority).label }}
+            </span>
+          </el-tooltip>
+
+          <!-- 删除：常驻 icon，hover 变红 -->
+          <el-icon class="scenario-del" title="删除场景" @click.stop="$emit('del', s)">
+            <Delete />
+          </el-icon>
+        </div>
+      </VueDraggable>
+
+      <div v-if="grp.scenarios.length === 0" class="empty-hint">拖动场景到此分组</div>
     </div>
 
     <el-empty v-if="scenarios.length === 0" description="暂无场景" :image-size="60" />
@@ -82,7 +112,8 @@
 </template>
 
 <script setup>
-import { computed, toRef } from 'vue'
+import { computed, ref, toRef, watch } from 'vue'
+import { VueDraggable } from 'vue-draggable-plus'
 import {
   PRIORITY_OPTIONS,
   priorityMeta,
@@ -106,7 +137,7 @@ const emit = defineEmits([
 
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
 
-// 按 folder_id 分组：所有文件夹（含空）在前作为移动目标，未分组置底（无内容则隐藏）
+// 按 folder_id 分组：所有文件夹（含空）在前，未分组始终置底作为拖放目标
 const groups = computed(() => {
   const bucket = new Map(props.folders.map((f) => [f.id, []]))
   const ungrouped = []
@@ -119,102 +150,192 @@ const groups = computed(() => {
     folder: f,
     scenarios: bucket.get(f.id),
   }))
-  if (ungrouped.length || props.folders.length === 0) {
-    result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
-  }
+  // 始终保留「未分组」作为跨组拖放目标（即使当前为空）
+  result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
   return result
 })
+
+// 拖拽需要可变数组：从 groups 派生本地可变副本，props 变化时重建
+const localGroups = ref([])
+watch(
+  groups,
+  (g) => {
+    localGroups.value = g.map((grp) => ({ ...grp, scenarios: [...grp.scenarios] }))
+  },
+  { immediate: true },
+)
+
+// 跨分组拖放结束时持久化 folder_id（组内重排后端不支持，忽略）
+function onDragEnd(grp, evt) {
+  if (!evt || evt.from === evt.to) return
+  const id = Number(evt.item?.dataset?.scenarioId)
+  if (!id) return
+  // 仅在目标分组上处理（源分组 onEnd 时条目已移出）
+  if (!grp.scenarios.some((s) => s.id === id)) return
+  const targetFolderId = grp.folder ? grp.folder.id : null
+  const src = props.scenarios.find((s) => s.id === id)
+  if (!src || src.folder_id === targetFolderId) return
+  emit('move', { id, folderId: targetFolderId })
+}
 
 function onFolderCmd(cmd, folder) {
   emit(cmd === 'rename' ? 'rename-folder' : 'delete-folder', folder)
 }
-
-function onMoveCmd(cmd, scenario) {
-  emit('move', { id: scenario.id, folderId: cmd === '__none__' ? null : cmd })
-}
 </script>
 
 <style scoped>
-.list-panel {
-  width: 240px;
-  border-right: 1px solid var(--ax-border);
-  overflow: auto;
-  padding-right: 8px;
-}
-
-.list-toolbar {
+/* 字号阶梯：面板标题 14 > 分组标题 12 > 场景名 12 > 元信息 11 */
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
   margin-bottom: 8px;
 }
 
-.toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-brand);
 }
 
-.folder-head {
+.group-head {
   display: flex;
   align-items: center;
   gap: 6px;
   padding: 5px 6px;
   margin-top: 6px;
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
+  line-height: 1.25;
+}
+
+.group-head--folder {
   color: var(--ax-text-secondary);
 }
 
-.folder-head.ungrouped {
+.group-head--ungrouped {
   color: var(--ax-text-tertiary);
 }
 
-.folder-name {
+.group-head-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.group-head-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.folder-count {
+.group-head-count {
+  flex-shrink: 0;
   font-size: 11px;
+  font-weight: 400;
   color: var(--ax-text-tertiary);
 }
 
-.folder-more {
-  cursor: pointer;
-  color: var(--ax-text-tertiary);
-}
-
-.item {
+.scenario-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px 6px 18px;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
   border-radius: 4px;
   cursor: pointer;
 }
 
-.item:hover {
+.scenario-row:hover {
   background: var(--ax-bg-hover);
 }
 
-.item.active {
+.scenario-row--active {
   background: var(--ax-bg-active);
 }
 
-.item-name {
+.scenario-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ax-text);
 }
 
-.item-more {
+.scenario-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ax-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+  color: var(--ax-text-placeholder);
+  font-size: 13px;
+  opacity: 0.4;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+
+.group:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--ax-brand);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.priority-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.scenario-del {
+  flex-shrink: 0;
+  font-size: 13px;
   cursor: pointer;
-  color: var(--ax-text-tertiary);
+  color: var(--ax-text-placeholder);
+  transition: color 0.15s;
+}
+
+.scenario-del:hover {
+  color: var(--el-color-danger);
+}
+
+.empty-hint {
+  pointer-events: none;
+  padding: 2px 0 2px 28px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ax-text-placeholder);
+}
+
+.scenario-drop {
+  min-height: 8px;
+}
+
+.scenario-drop-empty {
+  min-height: 28px;
+}
+
+:global(.scenario-ghost) {
+  opacity: 0.45;
+  background: var(--ax-bg-hover);
+  border-radius: 4px;
 }
 </style>
