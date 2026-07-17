@@ -221,3 +221,19 @@ def migrate_apifox_run_step_warnings(db: Session) -> None:
     with engine.begin() as conn:
         conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN warnings TEXT"))
     db.expire_all()
+
+
+def migrate_apifox_notify_retry(db: Session) -> None:
+    """apifox_notify_configs 加 retry_count/retry_interval_sec（定时任务失败自动重试，项目级）。"""
+    inspector = inspect(engine)
+    if "apifox_notify_configs" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_notify_configs")}
+    with engine.begin() as conn:
+        if "retry_count" not in cols:
+            conn.execute(text("ALTER TABLE apifox_notify_configs ADD COLUMN retry_count INTEGER NOT NULL DEFAULT 0"))
+        if "retry_interval_sec" not in cols:
+            conn.execute(
+                text("ALTER TABLE apifox_notify_configs ADD COLUMN retry_interval_sec INTEGER NOT NULL DEFAULT 5")
+            )
+    db.expire_all()
