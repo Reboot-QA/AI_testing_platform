@@ -6,7 +6,7 @@
         :key="s.key"
         class="side-item"
         :class="{ active: section === s.key }"
-        @click="section = s.key as 'basic' | 'scripts' | 'notify'"
+        @click="section = s.key as 'basic' | 'scripts' | 'notify' | 'members'"
       >
         <el-icon><component :is="s.icon" /></el-icon>
         <span>{{ s.label }}</span>
@@ -18,7 +18,12 @@
       <div class="basic-form">
         <div class="field">
           <span class="lbl">项目名称</span>
-          <el-input v-model="basicForm.name" placeholder="项目名称" style="max-width: 360px" />
+          <el-input
+            v-model="basicForm.name"
+            :disabled="!isManager"
+            placeholder="项目名称"
+            style="max-width: 360px"
+          />
         </div>
         <div class="field">
           <span class="lbl">描述</span>
@@ -72,6 +77,11 @@
     <div v-else-if="section === 'notify'" class="editor-panel">
       <NotifyConfigPanel :project-id="pid" />
     </div>
+
+    <!-- 成员管理 -->
+    <div v-else-if="section === 'members'" class="editor-panel">
+      <ProjectMembersPanel :project-id="pid" />
+    </div>
   </div>
 </template>
 
@@ -85,6 +95,7 @@ import { projectApi, userApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import ProjectScriptsPanel from '@/components/apifox/ProjectScriptsPanel.vue'
 import NotifyConfigPanel from '@/components/apifox/NotifyConfigPanel.vue'
+import ProjectMembersPanel from '@/components/apifox/ProjectMembersPanel.vue'
 
 const router = useRouter()
 const pid = useRouteParamId()
@@ -92,16 +103,18 @@ const pid = useRouteParamId()
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
 const users = ref<Schemas['UserOut'][]>([])
-// 硬删除仅项目负责人/系统管理员可见（与工作台卡片、后端校验一致）
-const canDelete = computed(() => isAdmin.value || basicForm.owner_id === userStore.user?.id)
+// 项目负责人/系统管理员：可改项目名、删项目、管成员（与后端 is_project_manager 一致）
+const isManager = computed(() => isAdmin.value || basicForm.owner_id === userStore.user?.id)
+const canDelete = isManager
 
-const SECTIONS = [
+const SECTIONS = computed(() => [
   { key: 'basic' as const, label: '基本信息', icon: 'Setting' },
   { key: 'scripts' as const, label: '脚本库', icon: 'Tickets' },
   { key: 'notify' as const, label: '失败通知', icon: 'Bell' },
-]
+  ...(isManager.value ? [{ key: 'members' as const, label: '成员管理', icon: 'User' }] : []),
+])
 
-const section = ref<'basic' | 'scripts' | 'notify'>('basic')
+const section = ref<'basic' | 'scripts' | 'notify' | 'members'>('basic')
 const savingBasic = ref(false)
 const basicForm = reactive({ name: '', description: '', owner_id: null as number | null })
 

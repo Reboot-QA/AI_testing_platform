@@ -156,6 +156,28 @@ class ProjectPageOut(BaseModel):
     page_size: int
 
 
+class ProjectMemberOut(BaseModel):
+    id: int  # 成员记录 id
+    user_id: int
+    username: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    department_name: str = ""
+    created_at: datetime
+
+
+class ProjectMemberAddIn(BaseModel):
+    user_id: int
+
+
+class ProjectMemberCandidateOut(BaseModel):
+    id: int  # 用户 id
+    username: str
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    department_name: str = ""
+
+
 class DepartmentBase(BaseModel):
     name: str
     description: Optional[str] = None
