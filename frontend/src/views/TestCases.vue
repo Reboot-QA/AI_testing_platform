@@ -114,7 +114,9 @@
         </el-table-column>
         <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
         <el-table-column prop="priority" label="优先级" width="80" align="center" />
-        <el-table-column prop="case_type" label="类型" width="90" />
+        <el-table-column prop="case_type" label="类型" width="90">
+          <template #default="{ row }">{{ formatCaseTypeLabel(row.case_type) }}</template>
+        </el-table-column>
         <el-table-column prop="source" label="来源" width="100">
           <template #default="{ row }">
             <el-tag :type="row.source === 'ai_generated' ? 'warning' : ''" size="small">
@@ -214,7 +216,7 @@
             detail.requirement_title || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ detail.priority }}</el-descriptions-item>
-          <el-descriptions-item label="类型">{{ detail.case_type }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{ formatCaseTypeLabel(detail.case_type) }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{
             detail.source === 'ai_generated' ? 'AI生成' : '手动'
           }}</el-descriptions-item>
@@ -282,6 +284,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
 import { formatBeijingTime } from '@/utils/datetime'
+import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
 import {
   registerAssistantHandler,

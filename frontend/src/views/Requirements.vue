@@ -303,7 +303,9 @@
         <el-descriptions :column="1" border>
           <el-descriptions-item label="标题">{{ caseDetail.title }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ caseDetail.priority }}</el-descriptions-item>
-          <el-descriptions-item label="类型">{{ caseDetail.case_type }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{
+            formatCaseTypeLabel(caseDetail.case_type)
+          }}</el-descriptions-item>
           <el-descriptions-item label="来源">
             {{ caseDetail.source === 'ai_generated' ? 'AI生成' : '手动' }}
           </el-descriptions-item>
@@ -332,6 +334,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
 import { formatBeijingTime } from '@/utils/datetime'
+import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
 import {
   registerAssistantHandler,
