@@ -4,6 +4,7 @@
 """
 
 import json
+import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -31,6 +32,8 @@ from app.repositories.apifox import (
 from app.routers.apifox.case_schemas import AssertionRow, ExtractRow
 from app.services.apifox import db_executor
 from app.services.apifox import run_engine as engine
+
+logger = logging.getLogger(__name__)
 
 MAX_WAIT_MS = 60000
 _MAX_DEPTH = 50
@@ -540,6 +543,23 @@ def _start_run(db: Session, project_id: int, target_type: str, target_id: int,
     return run
 
 
+def _notify_run_failure(db: Session, run: ApifoxRun) -> None:
+    """执行失败通知。子运行（有父）不单独通知；定时触发由 schedule_service 通知，避免重复。"""
+    if run.parent_run_id is not None or (run.triggered_by or "").startswith("schedule:"):
+        return
+    from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+
+    try:
+        total = (run.passed_count or 0) + (run.failed_count or 0)
+        detail = (
+            f"{run.target_type}「{run.target_name}」执行失败："
+            f"{run.failed_count}/{total} 失败。运行记录 #{run.id}。"
+        )
+        notify_service.notify_failure(db, run.project_id, "run", f"执行失败：{run.target_name}", detail)
+    except Exception:  # noqa: BLE001 - 通知不影响主流程
+        logger.exception("执行失败通知异常 run=%s", run.id)
+
+
 def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
     run = ctx.run
     run.passed_count = ctx.passed
@@ -549,6 +569,8 @@ def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
     run.pass_rate = round(ctx.passed / ctx.index * 100, 2) if ctx.index else 0.0
     run.finished_at = datetime.utcnow()
     ctx.db.commit()
+    if run.status == "failed":
+        _notify_run_failure(ctx.db, run)
     return {
         "type": "done",
         "run_id": run.id,
@@ -692,6 +714,8 @@ def _finalize_suite(db: Session, run: ApifoxRun, started: float,
     run.pass_rate = round(passed_items / done * 100, 2) if done else 0.0
     run.finished_at = datetime.utcnow()
     db.commit()
+    if run.status == "failed":
+        _notify_run_failure(db, run)
     return {
         "type": "suite_done",
         "run_id": run.id,

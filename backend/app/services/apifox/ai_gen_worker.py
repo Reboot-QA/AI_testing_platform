@@ -78,6 +78,19 @@ def _finalize(db: Session, task: ApifoxAiGenTask) -> None:
         task.status = "succeeded" if ok and not bad else "failed" if bad and not ok else "partial"
     task.finished_at = datetime.utcnow()
     db.commit()
+    if task.status in ("failed", "partial"):
+        _notify_failure(db, task)
+
+
+def _notify_failure(db: Session, task: ApifoxAiGenTask) -> None:
+    from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+
+    try:
+        bad = sum(1 for i in repo.list_items(db, task.id) if i.status == "failed")
+        detail = f"任务 #{task.id}：{task.done_items}/{task.total_items} 个接口，{bad} 个失败。"
+        notify_service.notify_failure(db, task.project_id, "aigen", "AI 生成任务失败", detail)
+    except Exception:  # noqa: BLE001 - 通知不影响主流程
+        logger.exception("AI 生成失败通知异常 task=%s", task.id)
 
 
 def _process_task(db: Session, task: ApifoxAiGenTask) -> None:

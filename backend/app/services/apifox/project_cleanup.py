@@ -24,6 +24,7 @@ from app.models.apifox.endpoint import (
     ApifoxFolder,
 )
 from app.models.apifox.global_param import ApifoxGlobalParam
+from app.models.apifox.notify_config import ApifoxNotifyConfig
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.schedule import ApifoxSchedule
@@ -112,6 +113,8 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     wipe(ApifoxSchedule, ApifoxSchedule.project_id == project_id)
     # 上传文件（Binary body）
     wipe(ApifoxUploadFile, ApifoxUploadFile.project_id == project_id)
+    # 失败通知配置
+    wipe(ApifoxNotifyConfig, ApifoxNotifyConfig.project_id == project_id)
 
 
 def purge_project_all(db: Session, project_id: int) -> None:

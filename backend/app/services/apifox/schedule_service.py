@@ -159,6 +159,23 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
                 task.next_run_at = None
         db.commit()
 
+    if task.last_run_status == "failed":
+        _notify_schedule_failure(db, task)
+
+
+def _notify_schedule_failure(db: Session, task: ApifoxSchedule) -> None:
+    from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+
+    try:
+        detail = f"定时任务「{task.name}」执行失败（{task.target_type}）。"
+        if task.last_run_id:
+            detail += f" 运行记录 #{task.last_run_id}。"
+        notify_service.notify_failure(
+            db, task.project_id, "schedule", f"定时任务失败：{task.name}", detail
+        )
+    except Exception:  # noqa: BLE001 - 通知不影响主流程
+        logger.exception("定时任务失败通知异常 task=%s", task.id)
+
 
 def run_due_apifox_tasks(db: Session) -> None:
     """轮询线程调用：执行所有到期的 apifox 定时任务。单条异常隔离，不中断整批。"""
