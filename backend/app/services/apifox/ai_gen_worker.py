@@ -30,6 +30,20 @@ _worker_thread: threading.Thread | None = None
 _worker_stop = threading.Event()
 
 
+_MAX_LLM_ATTEMPTS = 2  # 生成失败（LLM 超时/网络抖动/偶发格式）自动重试一次
+
+
+def _generate_with_retry(db: Session, endpoint, categories: List[AiGenCategory], llm_config: dict):
+    last_exc: Exception | None = None
+    for attempt in range(1, _MAX_LLM_ATTEMPTS + 1):
+        try:
+            return asyncio.run(ai_case_service.generate_cases(db, endpoint, categories, llm_config))
+        except Exception as exc:  # noqa: BLE001 - 可重试：超时/抖动/LLM 偶发返回
+            last_exc = exc
+            logger.warning("AI 生成 item(endpoint %s) 第 %s 次失败: %s", endpoint.id, attempt, exc)
+    raise last_exc  # type: ignore[misc]
+
+
 def _process_item(
     db: Session,
     item: ApifoxAiGenTaskItem,
@@ -44,9 +58,7 @@ def _process_item(
     item.status = "running"
     db.commit()
     try:
-        cases, _mode = asyncio.run(
-            ai_case_service.generate_cases(db, endpoint, categories, llm_config)
-        )
+        cases, _mode = _generate_with_retry(db, endpoint, categories, llm_config)
         item.result_cases = service.dump_cases(cases)
         item.generated_count = len(cases)
         item.status = "succeeded"
@@ -54,7 +66,7 @@ def _process_item(
     except Exception as exc:  # noqa: BLE001 - 单接口失败隔离，不影响同任务其它接口
         item.status = "failed"
         item.error = str(exc)[:1000]
-        logger.warning("AI 生成任务 item %s 失败: %s", item.id, exc)
+        logger.warning("AI 生成任务 item %s 最终失败: %s", item.id, exc)
 
 
 def _finalize(db: Session, task: ApifoxAiGenTask) -> None:
