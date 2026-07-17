@@ -1,9 +1,23 @@
 import importlib
 import json
+import os
 import subprocess
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.apifox.script_js_runtime import POST_RUNNER, PRE_RUNNER
+
+# JS 脚本预置库目录（Docker 与本地同一相对路径：<backend>/script_libs/node_modules）
+_SCRIPT_LIBS = Path(__file__).resolve().parents[3] / "script_libs" / "node_modules"
+
+
+def _node_env() -> Dict[str, str]:
+    """给 node 子进程注入 NODE_PATH，使脚本能 require/使用预置库（CryptoJS 等）。"""
+    env = dict(os.environ)
+    existing = env.get("NODE_PATH", "")
+    env["NODE_PATH"] = str(_SCRIPT_LIBS) + (os.pathsep + existing if existing else "")
+    return env
+
 
 SAFE_PYTHON_BUILTINS = {
     "True": True,
@@ -147,6 +161,7 @@ def _run_javascript_pre_script(script: str, variables: Dict[str, str]) -> Tuple[
             text=True,
             timeout=5,
             encoding="utf-8",
+            env=_node_env(),
         )
     except FileNotFoundError:
         return variables, [], "JavaScript 脚本需要安装 Node.js 并加入 PATH"
@@ -268,6 +283,7 @@ def _run_javascript_post_script(
             text=True,
             timeout=5,
             encoding="utf-8",
+            env=_node_env(),
         )
     except FileNotFoundError:
         return variables, [], "JavaScript 脚本需要安装 Node.js 并加入 PATH"

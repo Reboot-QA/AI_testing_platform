@@ -121,6 +121,18 @@ function _pmBuild(variables, response, logs) {
     },
   });
 }
+
+// 预置库（对齐 Postman 内置库）：经 NODE_PATH 加载并注入为全局；require('crypto-js') 亦可用。
+// 未安装（如本地无 node_modules）则该全局为 undefined，不影响未用到它的脚本。
+function _loadLibs() {
+  const map = {
+    CryptoJS: 'crypto-js', _: 'lodash', moment: 'moment', uuid: 'uuid',
+    Ajv: 'ajv', cheerio: 'cheerio', xml2js: 'xml2js', chai: 'chai', tv4: 'tv4',
+  };
+  const names = Object.keys(map);
+  const vals = names.map((n) => { try { return require(map[n]); } catch (e) { return undefined; } });
+  return { names, vals };
+}
 """
 
 _PRE_HEAD = r"""
@@ -133,9 +145,10 @@ const console = { log: (...args) => logs.push(args.map((item) => String(item)).j
 
 _PRE_TAIL = r"""
 const pm = _pmBuild(variables, null, logs);
+const _libs = _loadLibs();
 try {
-  const runner = new Function('variables', 'console', 'pm', input.script);
-  runner(variables, console, pm);
+  const runner = new Function('variables', 'console', 'pm', ..._libs.names, input.script);
+  runner(variables, console, pm, ..._libs.vals);
   process.stdout.write(JSON.stringify({ ok: true, variables, logs }));
 } catch (err) {
   process.stdout.write(JSON.stringify({ ok: false, error: String(err), variables, logs }));
@@ -153,9 +166,10 @@ const console = { log: (...args) => logs.push(args.map((item) => String(item)).j
 
 _POST_TAIL = r"""
 const pm = _pmBuild(variables, response, logs);
+const _libs = _loadLibs();
 try {
-  const runner = new Function('variables', 'console', 'response', 'pm', input.script);
-  runner(variables, console, response, pm);
+  const runner = new Function('variables', 'console', 'response', 'pm', ..._libs.names, input.script);
+  runner(variables, console, response, pm, ..._libs.vals);
   process.stdout.write(JSON.stringify({ ok: true, variables, logs }));
 } catch (err) {
   process.stdout.write(JSON.stringify({ ok: false, error: String(err), variables, logs }));
