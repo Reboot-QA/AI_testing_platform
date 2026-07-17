@@ -12,7 +12,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.routers.apifox.schemas import ImportDiffOut, ImportSyncReport
-from app.services.apifox import import_service, import_sync_service
+from app.services.apifox import import_converters, import_service, import_sync_service
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·导入"])
@@ -46,11 +46,14 @@ class ImportReport(BaseModel):
 
 
 def _load_doc(data: ImportRequest) -> Dict[str, Any]:
+    """拉取/取原始内容 → 归一化为 OpenAPI 3.x（支持 OpenAPI/Swagger/Postman/cURL）。"""
     if data.url and data.url.strip():
-        return import_service.fetch_openapi(data.url.strip())
-    if data.content and data.content.strip():
-        return import_service.parse_content(data.content)
-    raise ValueError("请提供 OpenAPI 的 URL 或粘贴 JSON 内容")
+        raw = import_service.fetch_source(data.url.strip())
+    elif data.content and data.content.strip():
+        raw = data.content
+    else:
+        raise ValueError("请提供 URL 或粘贴内容（OpenAPI/Swagger/Postman/cURL）")
+    return import_converters.to_openapi3(raw)
 
 
 @router.post("/projects/{pid}/import/openapi", response_model=ImportReport)

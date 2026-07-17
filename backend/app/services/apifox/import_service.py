@@ -20,6 +20,16 @@ _MAX_SCHEMA_DEPTH = 3
 _MAX_MODEL_DEPTH = 6
 
 
+def fetch_source(url: str) -> str:
+    """拉取 URL 原始文本（多格式归一化前不假设是 JSON）；失败抛 ValueError。"""
+    try:
+        response = httpx.get(url, timeout=10.0, follow_redirects=True)
+        response.raise_for_status()
+        return response.text
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:
+        raise ValueError(f"拉取导入源失败: {exc}")
+
+
 def fetch_openapi(url: str) -> Dict[str, Any]:
     try:
         response = httpx.get(url, timeout=10.0, follow_redirects=True)
