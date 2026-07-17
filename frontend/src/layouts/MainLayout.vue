@@ -6,6 +6,7 @@
         <span>AI 质量平台</span>
       </div>
       <el-menu
+        class="scrollbar-hidden"
         :default-active="activeMenu"
         :default-openeds="defaultOpeneds"
         router
@@ -361,15 +362,6 @@ function handleLogout() {
   border-right: none;
   padding: 8px 10px;
   background: transparent !important;
-  /* 隐藏滚动条（滚轮/触控仍可滚动）——Firefox / 旧 Edge */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-/* 隐藏滚动条——Webkit（Chrome/Edge/Safari） */
-.aside :deep(.el-menu)::-webkit-scrollbar {
-  width: 0;
-  height: 0;
 }
 
 /* 菜单项圆角化 + 悬停/选中态更清晰 */

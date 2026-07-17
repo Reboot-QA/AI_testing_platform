@@ -6,7 +6,7 @@
         :key="s.key"
         class="side-item"
         :class="{ active: section === s.key }"
-        @click="section = s.key as 'basic' | 'scripts'"
+        @click="section = s.key as 'basic' | 'scripts' | 'notify'"
       >
         <el-icon><component :is="s.icon" /></el-icon>
         <span>{{ s.label }}</span>
@@ -67,6 +67,11 @@
 
     <!-- 脚本库 -->
     <ProjectScriptsPanel v-else-if="section === 'scripts'" :project-id="pid" />
+
+    <!-- 失败通知 -->
+    <div v-else-if="section === 'notify'" class="editor-panel">
+      <NotifyConfigPanel :project-id="pid" />
+    </div>
   </div>
 </template>
 
@@ -79,6 +84,7 @@ import type { Schemas } from '@/api/types'
 import { projectApi, userApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import ProjectScriptsPanel from '@/components/apifox/ProjectScriptsPanel.vue'
+import NotifyConfigPanel from '@/components/apifox/NotifyConfigPanel.vue'
 
 const router = useRouter()
 const pid = useRouteParamId()
@@ -92,9 +98,10 @@ const canDelete = computed(() => isAdmin.value || basicForm.owner_id === userSto
 const SECTIONS = [
   { key: 'basic' as const, label: '基本信息', icon: 'Setting' },
   { key: 'scripts' as const, label: '脚本库', icon: 'Tickets' },
+  { key: 'notify' as const, label: '失败通知', icon: 'Bell' },
 ]
 
-const section = ref<'basic' | 'scripts'>('basic')
+const section = ref<'basic' | 'scripts' | 'notify'>('basic')
 const savingBasic = ref(false)
 const basicForm = reactive({ name: '', description: '', owner_id: null as number | null })
 

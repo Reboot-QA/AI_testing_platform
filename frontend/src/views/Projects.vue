@@ -60,7 +60,7 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[...PAGE_SIZE_OPTIONS]"
         layout="total, sizes, prev, pager, next, jumper"
         background
         @current-change="loadData"
@@ -104,6 +104,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { projectApi, type ProjectListParams } from '@/api/project'
 import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
 import type { Project, DateInput } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
 
@@ -120,7 +121,7 @@ const editing = ref<Project | null>(null)
 const formRef = ref<FormInstance>()
 const keyword = ref('')
 const currentPage = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const total = ref(0)
 
 const form = reactive<ProjectForm>({ name: '', description: '' })
