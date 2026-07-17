@@ -227,7 +227,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
@@ -237,6 +237,16 @@ import {
   registerAssistantHandler,
   unregisterAssistantHandler,
 } from '@/utils/assistantActionRegistry'
+import type { LlmProvider, Project, Requirement } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+
+interface GenerateForm {
+  project_id: number | null
+  provider_id: number | null
+  requirement_ids: number[]
+  requirement_text: string
+  case_type: string
+}
 
 const aiStore = useAiGenerateStore()
 const {
@@ -251,14 +261,14 @@ const {
   activeNames,
 } = storeToRefs(aiStore)
 
-const projects = ref([])
-const requirements = ref([])
-const llmProviders = ref([])
+const projects = ref<Project[]>([])
+const requirements = ref<Requirement[]>([])
+const llmProviders = ref<LlmProvider[]>([])
 const providersLoading = ref(false)
 const mockMode = ref(false)
-const formRef = ref()
+const formRef = ref<FormInstance>()
 
-const form = reactive({
+const form = reactive<GenerateForm>({
   project_id: null,
   provider_id: null,
   requirement_ids: [],
@@ -270,12 +280,12 @@ const DEFAULT_GENERATE_COUNT = 5
 const CASES_PER_REQUIREMENT = 3
 const MAX_GENERATE_COUNT = 100
 
-function resolveGenerateCount(requirementIds) {
+function resolveGenerateCount(requirementIds: number[]) {
   if (!requirementIds.length) return DEFAULT_GENERATE_COUNT
   return Math.min(requirementIds.length * CASES_PER_REQUIREMENT, MAX_GENERATE_COUNT)
 }
 
-const rules = {
+const rules: FormRules<GenerateForm> = {
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   provider_id: [{ required: true, message: '请选择大模型', trigger: 'change' }],
 }
@@ -285,8 +295,12 @@ const progressPercent = computed(() => {
   return Math.min(100, Math.round((progressCurrent.value / progressTotal.value) * 100))
 })
 
-const statusMap = { draft: '草稿', approved: '已评审', closed: '已关闭' }
-const statusType = { draft: 'info', approved: 'success', closed: 'warning' }
+const statusMap: Record<string, string> = { draft: '草稿', approved: '已评审', closed: '已关闭' }
+const statusType: Record<string, 'info' | 'success' | 'warning'> = {
+  draft: 'info',
+  approved: 'success',
+  closed: 'warning',
+}
 const approvedRequirements = computed(() =>
   requirements.value.filter((r) => r.status === 'approved'),
 )
@@ -305,7 +319,7 @@ const selectIndeterminate = computed(
     selectedSelectableCount.value > 0 && selectedSelectableCount.value < selectableIds.value.length,
 )
 
-function handleSelectAllRequirements(checked) {
+function handleSelectAllRequirements(checked: boolean) {
   if (checked) {
     form.requirement_ids = [...selectableIds.value]
   } else {
@@ -356,7 +370,7 @@ async function loadRequirements() {
   form.requirement_text = ''
 }
 
-function formatProviderLabel(item) {
+function formatProviderLabel(item: LlmProvider) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -381,13 +395,13 @@ async function loadProviders() {
 }
 
 async function handleGenerate() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   if (!form.requirement_ids.length && !form.requirement_text.trim()) {
     ElMessage.warning('请选择关联需求或输入需求描述')
     return
   }
   if (form.requirement_ids.length) {
-    requirements.value = await requirementApi.list(form.project_id)
+    requirements.value = await requirementApi.list(form.project_id!)
     const blocked = form.requirement_ids
       .map((id) => requirements.value.find((r) => r.id === id))
       .filter((r) => r && r.status !== 'approved')
@@ -406,8 +420,8 @@ async function handleGenerate() {
 
   const generateCount = resolveGenerateCount(form.requirement_ids)
   await aiStore.startGeneration({
-    project_id: form.project_id,
-    provider_id: form.provider_id,
+    project_id: form.project_id!,
+    provider_id: form.provider_id!,
     requirement_ids: form.requirement_ids,
     requirement_text: form.requirement_text,
     case_type: form.case_type,

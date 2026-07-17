@@ -77,8 +77,9 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
+import type { KvRow } from '@/types/apifox'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
 import {
   COMMON_HEADER_PRESETS,
@@ -91,11 +92,17 @@ import {
 
 // rows 为父级 reactive 数组（按引用传入），子组件就地增删改，父级自动响应。
 // suggest='header' 时键/值走 header 常用清单自动补全；其余场景为普通输入。
-const props = defineProps({
-  rows: { type: Array, required: true },
-  suggest: { type: String, default: '' },
-  showType: { type: Boolean, default: false }, // Params 显示参数类型列（string/integer/...）
-})
+const props = withDefaults(
+  defineProps<{
+    rows: KvRow[]
+    suggest?: string
+    showType?: boolean
+  }>(),
+  {
+    suggest: '',
+    showType: false,
+  },
+)
 
 // HTTP 参数类型标注（含 file），语义不同于 useJsonSchema 的 SCHEMA_TYPES，故意不复用
 const PARAM_TYPES = ['string', 'integer', 'number', 'boolean', 'array', 'object', 'file']
@@ -105,12 +112,12 @@ const bulkText = ref('')
 const showCommon = ref(false)
 // 进入批量模式时按 key 快照 desc（说明字段表格里不可见/不可编辑，批量文本也不暴露），
 // 解析回行时找回，避免批量编辑静默清空导入接口的参数说明。
-let descByKey = {}
+let descByKey: Record<string, string> = {}
 // 同理快照 type：批量文本不表达参数类型，回解析时按 key 找回，避免批量编辑静默清空
-let typeByKey = {}
+let typeByKey: Record<string, string> = {}
 
-const isEmptyRow = (r) => !(r.key || '').trim() && !(r.value || '').trim()
-const isTail = (i) => i === props.rows.length - 1 && isEmptyRow(props.rows[i])
+const isEmptyRow = (r: KvRow) => !(r.key || '').trim() && !(r.value || '').trim()
+const isTail = (i: number) => i === props.rows.length - 1 && isEmptyRow(props.rows[i])
 
 // 自动新行：始终保留恰好一个末尾空行（幂等，稳定后不再变更，不会递归死循环）
 function syncTail() {
@@ -127,7 +134,7 @@ function syncTail() {
   }
 }
 
-function del(i) {
+function del(i: number) {
   props.rows.splice(i, 1)
   syncTail()
 }
@@ -157,11 +164,16 @@ function syncFromText() {
   props.rows.splice(0, props.rows.length, ...parsed)
 }
 
-const fetchKeys = (query, cb) => cb(suggestHeaderKeys(query))
-const fetchValues = (row, query, cb) => cb(suggestHeaderValues(row.key, query))
+const fetchKeys = (query: string, cb: (results: Array<Record<string, string>>) => void) =>
+  cb(suggestHeaderKeys(query))
+const fetchValues = (
+  row: KvRow,
+  query: string,
+  cb: (results: Array<Record<string, string>>) => void,
+) => cb(suggestHeaderValues(row.key, query))
 
 // 选中常用 header 时，值为空则自动带上该 header 的默认值（不覆盖已填的值）
-function onKeySelect(row, item) {
+function onKeySelect(row: KvRow, item: { value: string }) {
   if (!(row.value || '').trim()) {
     const def = headerDefaultValue(item.value)
     if (def) row.value = def
@@ -169,10 +181,10 @@ function onKeySelect(row, item) {
 }
 
 // 常用 Header 勾选区：勾选加入启用行（带默认值）、取消移除；已在列表则显示为勾选
-const isPresent = (name) =>
+const isPresent = (name: string) =>
   props.rows.some((r) => (r.key || '').trim().toLowerCase() === name.toLowerCase())
 
-function toggleCommon(h, checked) {
+function toggleCommon(h: (typeof COMMON_HEADER_PRESETS)[number], checked: boolean) {
   const list = props.rows
   if (checked) {
     if (!isPresent(h.name)) {

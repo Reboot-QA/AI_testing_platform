@@ -136,11 +136,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
+import type { SSEEvent } from '@/api/request'
 import { apifoxApi } from '@/api'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
@@ -154,11 +156,11 @@ const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
 const tabsStore = useSuiteTabsStore()
 
-const suites = ref([])
-const projectCases = ref([])
-const scenarios = ref([])
-const pickCase = ref(null)
-const pickScenario = ref(null)
+const suites = ref<Schemas['SuiteBrief'][]>([])
+const projectCases = ref<Schemas['ProjectCaseBrief'][]>([])
+const scenarios = ref<Schemas['ScenarioBrief'][]>([])
+const pickCase = ref<number | null>(null)
+const pickScenario = ref<number | null>(null)
 
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
@@ -174,7 +176,7 @@ async function loadSuites() {
   suites.value = await apifoxApi.listSuites(pid.value)
 }
 
-async function onSelectSuite(sid) {
+async function onSelectSuite(sid: number) {
   try {
     await tabsStore.openSuite(pid.value, sid)
   } catch {
@@ -193,7 +195,7 @@ async function addSuite() {
   await tabsStore.openSuite(pid.value, created.id)
 }
 
-function onPickCase(id) {
+function onPickCase(id: number | null) {
   if (!id || !activeTab.value) return
   const c = projectCases.value.find((x) => x.id === id)
   activeTab.value.form.items.push({
@@ -207,7 +209,7 @@ function onPickCase(id) {
   pickCase.value = null
 }
 
-function onPickScenario(id) {
+function onPickScenario(id: number | null) {
   if (!id || !activeTab.value) return
   const s = scenarios.value.find((x) => x.id === id)
   activeTab.value.form.items.push({
@@ -237,7 +239,7 @@ async function doSaveSuite(tab) {
 }
 
 // 返回 true=已保存(可安全关闭)，false=未保存/用户取消
-async function saveSuite(id) {
+async function saveSuite(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return false
   tab.saving = true
@@ -245,9 +247,9 @@ async function saveSuite(id) {
     await doSaveSuite(tab)
     ElMessage.success('已保存')
     return true
-  } catch (e) {
+  } catch (e: unknown) {
     if (!isConflict(e)) {
-      ElMessage.error(e.message || '保存失败')
+      ElMessage.error((e as Error).message || '保存失败')
       return false
     }
     let resolved = false
@@ -269,21 +271,23 @@ async function saveSuite(id) {
   }
 }
 
-async function runSuite(id) {
+async function runSuite(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return
-  tab.runEvents = []
+  tab.runEvents = [] as SSEEvent[]
   tab.running = true
   try {
-    await apifoxApi.runSuiteStream(id, store.currentEnvironmentId, (e) => tab.runEvents.push(e))
-  } catch (e) {
-    ElMessage.error(e.message || '运行失败')
+    await apifoxApi.runSuiteStream(id, store.currentEnvironmentId, (e: SSEEvent) =>
+      tab.runEvents.push(e),
+    )
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '运行失败')
   } finally {
     tab.running = false
   }
 }
 
-async function onTabRemove(id) {
+async function onTabRemove(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return
   if (!tabsStore.isDirty(tab)) {
@@ -296,14 +300,14 @@ async function onTabRemove(id) {
   tabsStore.closeTab(pid.value, id)
 }
 
-async function copySuite(s) {
+async function copySuite(s: Schemas['SuiteBrief']) {
   const created = await apifoxApi.copySuite(s.id)
   ElMessage.success('已复制')
   await loadSuites()
   await tabsStore.openSuite(pid.value, created.id)
 }
 
-async function delSuite(s) {
+async function delSuite(s: Schemas['SuiteBrief']) {
   await ElMessageBox.confirm(`确认删除套件「${s.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteSuite(s.id)
   tabsStore.closeTab(pid.value, s.id)
@@ -311,7 +315,7 @@ async function delSuite(s) {
   await loadSuites()
 }
 
-function beforeUnloadHandler(e) {
+function beforeUnloadHandler(e: BeforeUnloadEvent) {
   if (tabsStore.hasAnyDirty(pid.value)) {
     e.preventDefault()
     e.returnValue = ''

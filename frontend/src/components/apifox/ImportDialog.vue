@@ -65,25 +65,36 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
 import { apifoxApi } from '@/api'
 import ImportDiffPreview from './ImportDiffPreview.vue'
+import type { ImportDiffView } from './ImportDiffPreview.vue'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  projectId: { type: [String, Number], required: true },
-  defaultAction: { type: String, default: 'import' }, // 'import' | 'update'：打开时初始模式
-})
-const emit = defineEmits(['update:visible', 'imported'])
+const props = withDefaults(
+  defineProps<{
+    visible?: boolean
+    projectId: Id
+    defaultAction?: 'import' | 'update'
+  }>(),
+  {
+    visible: false,
+    defaultAction: 'import',
+  },
+)
+const emit = defineEmits<{
+  'update:visible': [value: boolean]
+  imported: []
+}>()
 
-const action = ref('import')
-const mode = ref('url')
+const action = ref<'import' | 'update'>('import')
+const mode = ref<'url' | 'content'>('url')
 const url = ref('')
 const content = ref('')
 const busy = ref(false)
-const diff = ref(null)
+const diff = ref<ImportDiffView | null>(null)
 const deleteUnreferenced = ref(false)
 
 const tip = computed(() =>

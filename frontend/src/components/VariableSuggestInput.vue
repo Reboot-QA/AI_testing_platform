@@ -44,7 +44,9 @@
           </div>
           <div class="detail-row">
             <span class="detail-label">变量值</span>
-            <span class="detail-value detail-value-mono">{{ previewValue(activeVariable.value) }}</span>
+            <span class="detail-value detail-value-mono">{{
+              previewValue(activeVariable.value)
+            }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">所属</span>
@@ -56,26 +58,55 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import type { InputInstance } from 'element-plus'
+import type { EditorVariable } from '@/types/apifox'
 
-const props = defineProps({
-  modelValue: { type: String, default: '' },
-  variables: { type: Array, default: () => [] },
-  placeholder: { type: String, default: '' },
-  size: { type: String, default: 'small' },
-  type: { type: String, default: 'text' },
-  rows: { type: Number, default: 3 },
-  disabled: { type: Boolean, default: false },
-  showPassword: { type: Boolean, default: false },
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string
+    variables?: EditorVariable[]
+    placeholder?: string
+    size?: '' | 'default' | 'small' | 'large'
+    type?: string
+    rows?: number
+    disabled?: boolean
+    showPassword?: boolean
+  }>(),
+  {
+    modelValue: '',
+    variables: () => [],
+    placeholder: '',
+    size: 'small',
+    type: 'text',
+    rows: 3,
+    disabled: false,
+    showPassword: false,
+  },
+)
 
-const emit = defineEmits(['update:modelValue', 'blur', 'paste'])
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+  blur: [event: FocusEvent]
+  paste: [event: ClipboardEvent]
+}>()
 
-const wrapRef = ref(null)
-const inputRef = ref(null)
+interface PanelStyle {
+  top: string
+  left: string
+  width: string
+}
+
+interface TriggerInfo {
+  start: number
+  filter: string
+}
+
+const wrapRef = ref<HTMLElement | null>(null)
+const inputRef = ref<InputInstance | null>(null)
 const panelVisible = ref(false)
-const panelStyle = ref({ top: '0px', left: '0px', width: '420px' })
+const panelStyle = ref<PanelStyle>({ top: '0px', left: '0px', width: '420px' })
 const filterText = ref('')
 const activeIndex = ref(0)
 const triggerStart = ref(-1)
@@ -94,17 +125,17 @@ watch(
   () => {
     if (panelVisible.value) syncTrigger()
   },
-  { deep: true }
+  { deep: true },
 )
 
-function previewValue(value) {
+function previewValue(value: unknown) {
   const text = String(value ?? '')
   return text.length > 120 ? `${text.slice(0, 120)}...` : text || '（空）'
 }
 
-function getInputEl() {
+function getInputEl(): HTMLInputElement | HTMLTextAreaElement | null {
   const component = inputRef.value
-  return component?.textarea || component?.input || null
+  return component?.textarea ?? component?.input ?? null
 }
 
 function positionPanel() {
@@ -118,7 +149,7 @@ function positionPanel() {
   }
 }
 
-function detectTrigger(text, cursor) {
+function detectTrigger(text: string, cursor: number): TriggerInfo | null {
   const before = text.slice(0, cursor)
   const doubleMatch = before.match(/\{\{([^}]*)$/)
   if (doubleMatch) {
@@ -155,7 +186,7 @@ function syncTrigger() {
   positionPanel()
 }
 
-function onInput(value) {
+function onInput(value: string) {
   emit('update:modelValue', value)
   nextTick(syncTrigger)
 }
@@ -168,14 +199,14 @@ function onFocus() {
   nextTick(syncTrigger)
 }
 
-function onBlur(event) {
+function onBlur(event: FocusEvent) {
   emit('blur', event)
   window.setTimeout(() => {
     panelVisible.value = false
   }, 120)
 }
 
-function onKeydown(event) {
+function onKeydown(event: KeyboardEvent) {
   if (!panelVisible.value || !filteredVariables.value.length) return
   if (event.key === 'ArrowDown') {
     event.preventDefault()
@@ -194,7 +225,7 @@ function onKeydown(event) {
   }
 }
 
-function pickVariable(item) {
+function pickVariable(item: EditorVariable) {
   const el = getInputEl()
   if (!el || triggerStart.value < 0) return
   const text = props.modelValue ?? ''

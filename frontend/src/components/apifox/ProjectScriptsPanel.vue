@@ -48,24 +48,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import ScriptDebugDialog from '@/components/apifox/ScriptDebugDialog.vue'
 
-const props = defineProps({
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{ projectId: Id }>()
 
-const scripts = ref([])
+const scripts = ref<Schemas['ScriptBrief'][]>([])
 const saving = ref(false)
 const debugVisible = ref(false)
 const scriptForm = reactive({
-  id: null,
+  id: null as number | null,
   name: '',
   lang: 'javascript',
   content: '',
@@ -91,7 +91,7 @@ const scriptGuard = useUnsavedGuard({
   name: () => scriptForm.name,
 })
 
-async function selectScript(sid) {
+async function selectScript(sid: Id) {
   const s = await apifoxApi.getScript(sid)
   scriptForm.id = s.id
   scriptForm.name = s.name
@@ -102,7 +102,7 @@ async function selectScript(sid) {
   scriptGuard.markSaved()
 }
 
-async function onSelectScript(id) {
+async function onSelectScript(id: number) {
   if (id === scriptForm.id) return
   if (!(await scriptGuard.confirmLeave())) return
   await selectScript(id)
@@ -165,7 +165,7 @@ async function saveScript() {
   }
 }
 
-async function delScript(s) {
+async function delScript(s: Schemas['ScriptBrief']) {
   await ElMessageBox.confirm(`确认删除脚本「${s.name}」？被用例引用时会被拦截。`, '提示', {
     type: 'warning',
   })

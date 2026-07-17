@@ -72,9 +72,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
+import type { SSEEvent } from '@/api/request'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
@@ -84,29 +87,30 @@ import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 import AiGenerateCasesDialog from '@/components/apifox/AiGenerateCasesDialog.vue'
+import type { CaseEditorForm } from '@/components/apifox/CaseEditor.vue'
 
-const props = defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
 
 const store = useWorkspaceStore()
-const cases = ref([])
-const scripts = ref([])
-const datasets = ref([])
+const cases = ref<Schemas['CaseOut'][]>([])
+const scripts = ref<Schemas['ScriptBrief'][]>([])
+const datasets = ref<Schemas['DatasetBrief'][]>([])
 const saving = ref(false)
 const running = ref(false)
-const runEvents = ref([])
+const runEvents = ref<SSEEvent[]>([])
 const filter = ref('all')
 
 const filteredCases = computed(() =>
   filter.value === 'all' ? cases.value : cases.value.filter((c) => c.category === filter.value),
 )
 
-const tagType = (cat) =>
+const tagType = (cat: string) =>
   ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' })[cat] || 'info'
 
-const form = reactive({
+const form = reactive<CaseEditorForm>({
   id: null,
   name: '',
   category: 'other',
@@ -138,7 +142,7 @@ function emptyCasePayload(name, category) {
   }
 }
 
-function applyCase(c) {
+function applyCase(c: Schemas['CaseOut']) {
   form.id = c.id
   form.name = c.name
   form.category = c.category || 'other'
@@ -174,16 +178,16 @@ async function addCase() {
   applyCase(created)
 }
 
-const aiDialogRef = ref(null)
+const aiDialogRef = ref<InstanceType<typeof AiGenerateCasesDialog> | null>(null)
 function aiGenerate() {
   aiDialogRef.value?.open()
 }
 
-async function selectCase(cid) {
+async function selectCase(cid: Id) {
   applyCase(await apifoxApi.getCase(cid))
 }
 
-async function delCase(c) {
+async function delCase(c: Schemas['CaseOut']) {
   await ElMessageBox.confirm(`确认删除用例「${c.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteCase(c.id)
   if (form.id === c.id) form.id = null
@@ -191,7 +195,7 @@ async function delCase(c) {
   await loadCases()
 }
 
-async function copyCase(c) {
+async function copyCase(c: Schemas['CaseOut']) {
   const created = await apifoxApi.copyCase(c.id)
   ElMessage.success('已复制')
   await loadCases()

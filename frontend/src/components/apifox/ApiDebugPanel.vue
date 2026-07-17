@@ -84,28 +84,43 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 import ActualRequestView from '@/components/apifox/ActualRequestView.vue'
+import type { EndpointEditorForm } from '@/components/apifox/ApiEndpointEditor.vue'
 
-const props = defineProps({
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
-  serverNames: { type: Array, default: () => [] },
-  projectId: { type: [String, Number], required: true },
-  scripts: { type: Array, default: () => [] },
-  schemas: { type: Array, default: () => [] },
-})
-defineEmits(['save'])
+type ScriptBrief = Schemas['ScriptBrief']
+type SchemaBrief = Schemas['SchemaBrief']
+type DebugSendResult = Schemas['DebugResponse']
+
+withDefaults(
+  defineProps<{
+    form: EndpointEditorForm
+    saving?: boolean
+    serverNames?: string[]
+    projectId: Id
+    scripts?: ScriptBrief[]
+    schemas?: SchemaBrief[]
+  }>(),
+  {
+    saving: false,
+    serverNames: () => [],
+    scripts: () => [],
+    schemas: () => [],
+  },
+)
+defineEmits<{ save: [] }>()
 
 const store = useWorkspaceStore()
 const sending = ref(false)
-const resp = ref(null)
+const resp = ref<DebugSendResult | null>(null)
 const respTab = ref('body')
 
 const statusType = computed(() => {
@@ -136,8 +151,8 @@ async function send() {
       response_schema_id: props.form.response_schema_id || null,
     })
     respTab.value = 'body'
-  } catch (e) {
-    ElMessage.error(e.message || '发送失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '发送失败')
   } finally {
     sending.value = false
   }

@@ -31,9 +31,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
+import type { Schemas } from '@/api/types'
+import type { KvRow, RequestSpec } from '@/types/apifox'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
@@ -41,13 +43,37 @@ import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 import DataDriveEditor from '@/components/apifox/DataDriveEditor.vue'
 import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
 
-defineProps({
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
-  scripts: { type: Array, default: () => [] },
-  datasets: { type: Array, default: () => [] },
-})
-defineEmits(['save'])
+type ScriptBrief = Schemas['ScriptBrief']
+type DatasetBrief = Schemas['DatasetBrief']
+
+export interface CaseEditorForm {
+  id?: number | null
+  name: string
+  category?: string
+  request_spec: RequestSpec
+  variables: KvRow[]
+  assertions: Schemas['AssertionRow'][]
+  extracts: Schemas['ExtractRow'][]
+  pre_scripts: Schemas['CaseScriptOut'][]
+  post_scripts: Schemas['CaseScriptOut'][]
+  data_drive: Schemas['DataDrive']
+  version?: number
+}
+
+withDefaults(
+  defineProps<{
+    form: CaseEditorForm
+    saving?: boolean
+    scripts?: ScriptBrief[]
+    datasets?: DatasetBrief[]
+  }>(),
+  {
+    saving: false,
+    scripts: () => [],
+    datasets: () => [],
+  },
+)
+defineEmits<{ save: [] }>()
 
 const route = useRoute()
 const activeTab = ref('request')

@@ -22,16 +22,20 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  running: { type: Array, default: () => [] },
+<script setup lang="ts">
+import type { Schemas } from '@/api/types'
+
+type WorkbenchRunning = Schemas['WorkbenchRunning']
+
+withDefaults(defineProps<{ running?: WorkbenchRunning[] }>(), {
+  running: () => [],
 })
-defineEmits(['open'])
+defineEmits<{ open: [run: WorkbenchRunning] }>()
 
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
-const colorOf = (id) => PALETTE[id % PALETTE.length]
-const letterOf = (name) => (name || '?').trim().charAt(0).toUpperCase()
-const time = (v) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
+const colorOf = (id: number) => PALETTE[id % PALETTE.length]
+const letterOf = (name: string | null | undefined) => (name || '?').trim().charAt(0).toUpperCase()
+const time = (v: string) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
 </script>
 
 <style scoped>

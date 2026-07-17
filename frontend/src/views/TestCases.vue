@@ -275,7 +275,7 @@
   </PageCard>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -288,18 +288,36 @@ import {
   unregisterAssistantHandler,
 } from '@/utils/assistantActionRegistry'
 
-const ALL_PROJECTS = '__all__'
+import {
+  ALL_PROJECTS,
+  type DateInput,
+  type Project,
+  type ProjectFilter,
+  type TestCase,
+  type TestCasePage,
+} from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+import type { UploadInstance, UploadRawFile } from 'element-plus'
 
-function formatTime(value) {
+interface TestCaseForm {
+  title: string
+  priority: string
+  preconditions: string
+  steps: string
+  expected_results: string
+  tags: string
+}
+
+function formatTime(value: DateInput) {
   return formatBeijingTime(value)
 }
 
 const route = useRoute()
-const projects = ref([])
-const testcases = ref([])
-const selectedRows = ref([])
-const selectedIds = ref([])
-const projectId = ref(ALL_PROJECTS)
+const projects = ref<Project[]>([])
+const testcases = ref<TestCase[]>([])
+const selectedRows = ref<TestCase[]>([])
+const selectedIds = ref<number[]>([])
+const projectId = ref<ProjectFilter>(ALL_PROJECTS)
 const filterStatus = ref('')
 const keyword = ref('')
 const currentPage = ref(1)
@@ -313,16 +331,26 @@ const dialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const drawerVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const detail = ref(null)
-const formRef = ref()
-const uploadRef = ref()
-const importFile = ref(null)
+const editing = ref<TestCase | null>(null)
+const detail = ref<TestCase | null>(null)
+const formRef = ref<FormInstance>()
+const uploadRef = ref<UploadInstance>()
+const importFile = ref<UploadRawFile | null>(null)
 
-const reviewMap = { draft: '草稿', pending: '待评审', approved: '已通过', rejected: '已驳回' }
-const reviewType = { draft: 'info', pending: 'warning', approved: 'success', rejected: 'danger' }
+const reviewMap: Record<string, string> = {
+  draft: '草稿',
+  pending: '待评审',
+  approved: '已通过',
+  rejected: '已驳回',
+}
+const reviewType: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
+  draft: 'info',
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+}
 
-const form = reactive({
+const form = reactive<TestCaseForm>({
   title: '',
   priority: 'P1',
   preconditions: '',
@@ -331,7 +359,9 @@ const form = reactive({
   tags: '',
 })
 
-const rules = { title: [{ required: true, message: '请输入标题', trigger: 'blur' }] }
+const rules: FormRules<TestCaseForm> = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+}
 
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
@@ -368,7 +398,8 @@ const batchReviewConfig = {
 }
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  const data = await projectApi.list()
+  projects.value = Array.isArray(data) ? data : data.items
   await loadData()
 }
 
@@ -387,7 +418,7 @@ registerAssistantHandler('testcases.ensureProject', async () => {
 async function loadData() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       page: currentPage.value,
       page_size: pageSize.value,
     }
@@ -396,7 +427,7 @@ async function loadData() {
     }
     if (filterStatus.value) params.review_status = filterStatus.value
     if (keyword.value.trim()) params.keyword = keyword.value.trim()
-    const data = await testcaseApi.list(params)
+    const data = (await testcaseApi.list(params)) as TestCasePage
     testcases.value = data.items || []
     total.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)

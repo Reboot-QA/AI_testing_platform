@@ -215,9 +215,10 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
@@ -230,20 +231,20 @@ const route = useRoute()
 const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
 
-const envName = (id) =>
+const envName = (id: number | null | undefined) =>
   id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-'
 
-const runs = ref([])
-const detail = ref(null)
-const parentDetail = ref(null)
+const runs = ref<Schemas['RunBrief'][]>([])
+const detail = ref<Schemas['RunOut'] | null>(null)
+const parentDetail = ref<Schemas['RunOut'] | null>(null)
 const drawerVisible = ref(false)
 const exporting = ref(false)
 
 const isSuite = computed(() => detail.value?.target_type === 'suite')
 
-const EXPORT_EXT = { excel: 'xlsx', word: 'docx', pdf: 'pdf', json: 'json' }
+const EXPORT_EXT: Record<string, string> = { excel: 'xlsx', word: 'docx', pdf: 'pdf', json: 'json' }
 
-async function doExport(format) {
+async function doExport(format: keyof typeof EXPORT_EXT | string) {
   if (!detail.value) return
   exporting.value = true
   try {
@@ -274,20 +275,20 @@ const stepGroups = computed(() => {
   }))
 })
 
-const targetTypeLabel = (t) => (t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例')
-const targetTag = (t) => (t === 'scenario' ? 'info' : t === 'suite' ? 'primary' : 'success')
+const targetTypeLabel = (t: string) => (t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例')
+const targetTag = (t: string) => (t === 'scenario' ? 'info' : t === 'suite' ? 'primary' : 'success')
 
 async function loadRuns() {
   runs.value = await apifoxApi.listRuns(pid.value)
 }
 
-async function openDetail(row) {
+async function openDetail(row: Schemas['RunBrief']) {
   parentDetail.value = null
   detail.value = await apifoxApi.getRun(row.id)
   drawerVisible.value = true
 }
 
-async function openChild(row) {
+async function openChild(row: Schemas['RunBrief']) {
   parentDetail.value = detail.value
   detail.value = await apifoxApi.getRun(row.id)
 }

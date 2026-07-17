@@ -34,33 +34,88 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { iterationLabel } from '@/utils/iterationLabel'
 
-const props = defineProps({
-  events: { type: Array, default: () => [] },
-  running: { type: Boolean, default: false },
-})
-defineEmits(['clear'])
+interface RunProgressStepEvent {
+  type: 'step'
+  iteration?: number
+  index?: number
+  total?: number
+  case_name?: string
+  status?: string
+  response_status?: number
+  duration_ms?: number | null
+  error_message?: string | null
+}
+
+interface RunProgressStartEvent {
+  type: 'start'
+  run_id?: number
+  iterations?: Record<string, unknown>[]
+}
+
+interface RunProgressDoneEvent {
+  type: 'done'
+  status?: string
+  pass_rate?: number
+  duration_ms?: number | null
+}
+
+interface RunProgressErrorEvent {
+  type: 'error'
+  message?: string
+}
+
+type RunProgressEvent =
+  | RunProgressStepEvent
+  | RunProgressStartEvent
+  | RunProgressDoneEvent
+  | RunProgressErrorEvent
+  | Record<string, unknown>
+
+const props = withDefaults(
+  defineProps<{
+    events?: RunProgressEvent[]
+    running?: boolean
+  }>(),
+  {
+    events: () => [],
+    running: false,
+  },
+)
+defineEmits<{ clear: [] }>()
 
 const route = useRoute()
 const router = useRouter()
 
 // 本次运行的 run_id（start 事件携带）；有则可跳转到「测试报告」定位该次报告
-const runId = computed(() => props.events.find((e) => e.type === 'start')?.run_id)
+const runId = computed(
+  () => props.events.find((e) => e.type === 'start')?.run_id as number | undefined,
+)
 function viewReport() {
   if (!runId.value) return
   router.push(`/apifox/project/${route.params.projectId}/reports?run=${runId.value}`)
 }
 
-const stepEvents = computed(() => props.events.filter((e) => e.type === 'step'))
-const doneEvent = computed(() => props.events.find((e) => e.type === 'done'))
-const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
+const stepEvents = computed(() =>
+  props.events.filter((e): e is RunProgressStepEvent => e.type === 'step'),
+)
+const doneEvent = computed(() =>
+  props.events.find((e): e is RunProgressDoneEvent => e.type === 'done'),
+)
+const errorEvent = computed(() =>
+  props.events.find((e): e is RunProgressErrorEvent => e.type === 'error'),
+)
 
 // 数据驱动/循环多轮：start 事件带 iterations 时按轮次分组展示；单轮为一组无标题（零视觉变化）
-const iterations = computed(() => props.events.find((e) => e.type === 'start')?.iterations || [])
+const iterations = computed(
+  () =>
+    (props.events.find((e) => e.type === 'start') as RunProgressStartEvent | undefined)
+      ?.iterations || [],
+)
 const stepGroups = computed(() => {
   if (iterations.value.length <= 1) return [{ label: '', steps: stepEvents.value }]
   return iterations.value.map((data, i) => ({

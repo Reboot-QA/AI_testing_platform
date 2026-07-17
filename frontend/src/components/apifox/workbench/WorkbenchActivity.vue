@@ -48,14 +48,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { Schemas } from '@/api/types'
 
-const props = defineProps({
-  running: { type: Array, default: () => [] },
-  reports: { type: Array, default: () => [] },
-})
-defineEmits(['open'])
+type WorkbenchRunning = Schemas['WorkbenchRunning']
+type WorkbenchReport = Schemas['WorkbenchReport']
+
+const props = withDefaults(
+  defineProps<{
+    running?: WorkbenchRunning[]
+    reports?: WorkbenchReport[]
+  }>(),
+  {
+    running: () => [],
+    reports: () => [],
+  },
+)
+defineEmits<{ open: [item: WorkbenchRunning | WorkbenchReport] }>()
 
 const activeTab = ref('reports')
 
@@ -68,21 +78,29 @@ watch(
 )
 
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
-const TYPE_LABEL = { scenario: '场景', case: '单接口', suite: '套件' }
-const TYPE_COLOR = { scenario: '#2b6cb0', case: '#2c7a7b', suite: '#6b46c1' }
+const TYPE_LABEL: Record<string, string> = {
+  scenario: '场景',
+  case: '单接口',
+  suite: '套件',
+}
+const TYPE_COLOR: Record<string, string> = {
+  scenario: '#2b6cb0',
+  case: '#2c7a7b',
+  suite: '#6b46c1',
+}
 
-const colorOf = (id) => PALETTE[Number(id) % PALETTE.length]
-const typeColor = (t) => TYPE_COLOR[t] || '#2c5282'
-const typeLabel = (t) => TYPE_LABEL[t] || '用例'
-const letterOf = (name) => (name || '?').trim().charAt(0).toUpperCase()
-const time = (v) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
+const colorOf = (id: number) => PALETTE[id % PALETTE.length]
+const typeColor = (t: string) => TYPE_COLOR[t] || '#2c5282'
+const typeLabel = (t: string) => TYPE_LABEL[t] || '用例'
+const letterOf = (name: string | null | undefined) => (name || '?').trim().charAt(0).toUpperCase()
+const time = (v: string) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
 
-function pillClass(r) {
+function pillClass(r: WorkbenchReport) {
   if (r.status === 'running') return 'run'
   return r.status === 'passed' ? 'ok' : 'bad'
 }
 
-function pillText(r) {
+function pillText(r: WorkbenchReport) {
   if (r.status === 'running') return '运行中'
   const label = r.status === 'passed' ? '通过' : '失败'
   return `${label} ${r.passed_count}/${r.total_count}`

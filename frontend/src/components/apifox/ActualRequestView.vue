@@ -19,18 +19,26 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 
 // 变量替换/认证注入后实际发出的请求（method/url/headers/body），调试结果与运行报告共用
-const props = defineProps({
-  method: { type: String, default: '' },
-  url: { type: String, default: '' },
-  headers: { type: [Object, String], default: () => ({}) },
-  body: { type: String, default: '' },
-})
+const props = withDefaults(
+  defineProps<{
+    method?: string
+    url?: string
+    headers?: Record<string, unknown> | string
+    body?: string
+  }>(),
+  {
+    method: '',
+    url: '',
+    headers: () => ({}),
+    body: '',
+  },
+)
 
 const hasHeaders = computed(() => {
   const h = props.headers

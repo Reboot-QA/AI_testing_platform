@@ -30,7 +30,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
@@ -43,19 +43,19 @@ import SchedulePanel from '@/views/apifox/sections/SchedulePanel.vue'
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
-const section = ref('cases')
-const selectedEndpointId = ref(null)
+const section = ref<'cases' | 'scenarios' | 'suites' | 'datasets' | 'schedules'>('cases')
+const selectedEndpointId = ref<number | null>(null)
 
 // 场景/套件已改为多 tab：未保存态存各自 Pinia store，切子页不丢；关 tab/关浏览器时各面板兜底提示
-function switchSection(next) {
+function switchSection(next: typeof section.value) {
   if (next !== section.value) section.value = next
 }
 
-function onSelectEndpoint(id) {
+function onSelectEndpoint(id: number) {
   selectedEndpointId.value = id
 }
 
-function onDeleted(id) {
+function onDeleted(id: number) {
   if (selectedEndpointId.value === id) selectedEndpointId.value = null
 }
 </script>

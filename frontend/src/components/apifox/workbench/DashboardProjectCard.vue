@@ -42,13 +42,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { Schemas } from '@/api/types'
 
-const props = defineProps({
-  project: { type: Object, required: true },
-})
-const emit = defineEmits(['enter', 'rename', 'delete', 'pin'])
+type WorkbenchProject = Schemas['WorkbenchProject']
+
+const props = defineProps<{ project: WorkbenchProject }>()
+const emit = defineEmits<{
+  enter: [id: number]
+  rename: [project: WorkbenchProject]
+  delete: [project: WorkbenchProject]
+  pin: [project: WorkbenchProject]
+}>()
 
 // 从项目 id 稳定取色，作为卡片左侧标签色条（替代原头像图标）
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
@@ -65,14 +71,14 @@ const roleClass = computed(
 const canDelete = computed(() => ['管理员', '负责人'].includes(props.project.role))
 
 // 标题溢出时才启用 tooltip：进入前实测宽度，避免未截断也弹提示
-const pnRef = ref()
+const pnRef = ref<HTMLElement | null>(null)
 const nameOverflow = ref(false)
 function checkNameOverflow() {
   const el = pnRef.value
   nameOverflow.value = !!el && el.scrollWidth > el.clientWidth
 }
 
-function onCommand(cmd) {
+function onCommand(cmd: 'pin' | 'rename' | 'delete') {
   emit(cmd, props.project)
 }
 </script>

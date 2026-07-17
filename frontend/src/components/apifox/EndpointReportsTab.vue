@@ -35,21 +35,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 
-const props = defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
 
 const store = useWorkspaceStore()
-const rows = ref([])
+const rows = ref<Schemas['RunBrief'][]>([])
 
-const envName = (id) =>
+const envName = (id: number | null | undefined) =>
   id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-'
 
 async function load() {

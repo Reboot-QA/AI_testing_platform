@@ -79,17 +79,18 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { projectApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import type { DashboardStats } from '@/types/common'
 
 const router = useRouter()
 const userStore = useUserStore()
 
 const loading = ref(false)
-const stats = ref({
+const stats = ref<DashboardStats>({
   project_count: 0,
   requirement_count: 0,
   testcase_count: 0,
@@ -97,7 +98,7 @@ const stats = ref({
   pending_review_count: 0,
 })
 
-const tint = (color) => `color-mix(in srgb, ${color} 14%, white)`
+const tint = (color: string) => `color-mix(in srgb, ${color} 14%, white)`
 
 const statCards = computed(() => [
   {
@@ -208,7 +209,7 @@ const features = [
   'OpenAI 兼容 API 接入',
 ]
 
-function goToPage(path) {
+function goToPage(path: string) {
   if (path) router.push(path)
 }
 

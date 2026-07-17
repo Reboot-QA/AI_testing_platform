@@ -53,20 +53,32 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 
-const props = defineProps({
-  environmentId: { type: [String, Number], required: true },
-})
+const props = defineProps<{ environmentId: Id }>()
 
-const databases = ref([])
+type DatabaseOut = Schemas['DatabaseOut']
+
+interface DatabaseForm {
+  id: number | null
+  name: string
+  host: string
+  port: number
+  database: string
+  username: string
+  password: string
+}
+
+const databases = ref<DatabaseOut[]>([])
 const dialogVisible = ref(false)
 const saving = ref(false)
-const testingId = ref(null)
-const form = reactive({
+const testingId = ref<number | null>(null)
+const form = reactive<DatabaseForm>({
   id: null,
   name: '',
   host: '',
@@ -82,7 +94,7 @@ async function load() {
 
 watch(() => props.environmentId, load, { immediate: true })
 
-function openDialog(row) {
+function openDialog(row?: DatabaseOut) {
   Object.assign(form, {
     id: row?.id ?? null,
     name: row?.name ?? '',
@@ -99,7 +111,7 @@ async function save() {
   if (!form.name.trim()) return ElMessage.warning('请填写名称')
   saving.value = true
   try {
-    const payload = {
+    const payload: Schemas['DatabaseCreate'] & { password?: string } = {
       name: form.name,
       host: form.host,
       port: form.port,
@@ -118,7 +130,7 @@ async function save() {
   }
 }
 
-async function testConn(row) {
+async function testConn(row: DatabaseOut) {
   testingId.value = row.id
   try {
     const r = await apifoxApi.testDatabase(row.id)
@@ -129,7 +141,7 @@ async function testConn(row) {
   }
 }
 
-async function delConn(row) {
+async function delConn(row: DatabaseOut) {
   await ElMessageBox.confirm(`确认删除连接「${row.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteDatabase(row.id)
   ElMessage.success('已删除')

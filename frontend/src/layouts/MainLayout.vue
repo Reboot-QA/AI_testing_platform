@@ -200,7 +200,7 @@
   </el-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -209,6 +209,13 @@ import { useUserStore } from '@/stores/user'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
 import { PAGE_TITLES, SUBMENU_INDEX_BY_PATH } from '@/config/menus'
 import AssistantPanel from '@/components/AssistantPanel.vue'
+import type { FormInstance, FormRuleItem, FormRules } from '@/types/element-plus'
+
+interface PasswordForm {
+  old_password: string
+  new_password: string
+  confirm_password: string
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -248,7 +255,7 @@ const activeMenu = computed(() => {
 })
 
 const defaultOpeneds = computed(() => {
-  const open = []
+  const open: string[] = []
   if (
     route.path.startsWith('/system/settings') ||
     route.path.startsWith('/system/users') ||
@@ -273,15 +280,19 @@ const assistantPanelKey = computed(() => userStore.user?.id || userStore.token |
 
 const passwordDialogVisible = ref(false)
 const passwordSubmitting = ref(false)
-const passwordFormRef = ref()
+const passwordFormRef = ref<FormInstance>()
 
-const passwordForm = reactive({
+const passwordForm = reactive<PasswordForm>({
   old_password: '',
   new_password: '',
   confirm_password: '',
 })
 
-const validateConfirmPassword = (_rule, value, callback) => {
+const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (
+  _rule,
+  value,
+  callback,
+) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return
@@ -293,7 +304,7 @@ const validateConfirmPassword = (_rule, value, callback) => {
   callback()
 }
 
-const passwordRules = {
+const passwordRules: FormRules<PasswordForm> = {
   old_password: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   new_password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },

@@ -54,30 +54,37 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { departmentApi } from '@/api'
 import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
+import type { DateInput, Department } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
 
-const departments = ref([])
+interface DepartmentForm {
+  name: string
+  description: string
+}
+
+const departments = ref<Department[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const formRef = ref()
+const editing = ref<Department | null>(null)
+const formRef = ref<FormInstance>()
 
-const form = reactive({
+const form = reactive<DepartmentForm>({
   name: '',
   description: '',
 })
 
-const rules = {
+const rules: FormRules<DepartmentForm> = {
   name: [{ required: true, message: '请输入部门名称', trigger: 'blur' }],
 }
 
-function formatTime(value) {
+function formatTime(value: DateInput) {
   return formatBeijingTime(value)
 }
 
@@ -90,7 +97,7 @@ async function loadData() {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: Department | null = null) {
   editing.value = row
   form.name = row?.name || ''
   form.description = row?.description || ''
@@ -98,7 +105,7 @@ function openDialog(row = null) {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     const payload = {
@@ -119,7 +126,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Department) {
   await ElMessageBox.confirm(
     `确认删除部门「${row.name}」？若部门下仍有用户或项目将无法删除。`,
     '提示',

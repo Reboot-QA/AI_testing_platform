@@ -7,7 +7,13 @@
         <p>管理员已重置您的密码，请先设置新密码后再继续使用系统</p>
       </div>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" @submit.prevent="handleSubmit">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="90px"
+        @submit.prevent="handleSubmit"
+      >
         <el-form-item label="原密码" prop="old_password">
           <el-input
             v-model="form.old_password"
@@ -35,7 +41,13 @@
             placeholder="再次输入新密码"
           />
         </el-form-item>
-        <el-button type="primary" size="large" :loading="submitting" class="submit-btn" @click="handleSubmit">
+        <el-button
+          type="primary"
+          size="large"
+          :loading="submitting"
+          class="submit-btn"
+          @click="handleSubmit"
+        >
           确认修改
         </el-button>
       </el-form>
@@ -47,25 +59,36 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import type { FormInstance, FormRuleItem, FormRules } from '@/types/element-plus'
+
+interface PasswordForm {
+  old_password: string
+  new_password: string
+  confirm_password: string
+}
 
 const router = useRouter()
 const userStore = useUserStore()
-const formRef = ref()
+const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
-const form = reactive({
+const form = reactive<PasswordForm>({
   old_password: '',
   new_password: '',
   confirm_password: '',
 })
 
-const validateConfirmPassword = (_rule, value, callback) => {
+const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (
+  _rule,
+  value,
+  callback,
+) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return
@@ -77,7 +100,7 @@ const validateConfirmPassword = (_rule, value, callback) => {
   callback()
 }
 
-const rules = {
+const rules: FormRules<PasswordForm> = {
   old_password: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   new_password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
@@ -87,7 +110,7 @@ const rules = {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     await authApi.changePassword({

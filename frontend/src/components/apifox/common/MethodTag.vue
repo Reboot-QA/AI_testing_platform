@@ -2,12 +2,12 @@
   <span class="method-tag" :style="{ color }">{{ text }}</span>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { methodConfig } from '@/config/apifoxConfig'
 
-const props = defineProps({
-  method: { type: String, default: 'GET' },
+const props = withDefaults(defineProps<{ method?: string }>(), {
+  method: 'GET',
 })
 
 const cfg = computed(() => methodConfig(props.method))

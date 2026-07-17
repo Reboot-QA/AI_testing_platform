@@ -94,26 +94,34 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
-const datasets = ref([])
+const datasets = ref<Schemas['DatasetBrief'][]>([])
 const saving = ref(false)
 const newCol = ref('')
-const form = reactive({ id: null, name: '', description: '', columns: [], rows: [], version: 1 })
+const form = reactive({
+  id: null as number | null,
+  name: '',
+  description: '',
+  columns: [] as string[],
+  rows: [] as Array<{ values: Record<string, string>; enabled: boolean }>,
+  version: 1,
+})
 
 async function loadDatasets() {
   datasets.value = await apifoxApi.listDatasets(pid.value)
 }
 
-async function selectDataset(did) {
+async function selectDataset(did: number) {
   const d = await apifoxApi.getDataset(did)
   form.id = d.id
   form.name = d.name
@@ -145,14 +153,14 @@ function addColumn() {
   newCol.value = ''
 }
 
-function removeColumn(i) {
+function removeColumn(i: number) {
   const name = form.columns[i]
   form.columns.splice(i, 1)
   form.rows.forEach((r) => delete r.values[name])
 }
 
 function addRow() {
-  const values = {}
+  const values: Record<string, string> = {}
   form.columns.forEach((c) => {
     values[c] = ''
   })
@@ -193,7 +201,7 @@ async function saveDataset() {
   }
 }
 
-async function delDataset(d) {
+async function delDataset(d: Schemas['DatasetBrief']) {
   await ElMessageBox.confirm(`确认删除数据集「${d.name}」？被用例引用时会被拦截。`, '提示', {
     type: 'warning',
   })

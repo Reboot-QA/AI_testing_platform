@@ -13,7 +13,15 @@
       </div>
       <div class="sc-row">
         <span class="sc-label">格式</span>
-        <el-select v-model="field.extra.format" size="small" clearable filterable allow-create placeholder="format" class="sc-fmt">
+        <el-select
+          v-model="field.extra.format"
+          size="small"
+          clearable
+          filterable
+          allow-create
+          placeholder="format"
+          class="sc-fmt"
+        >
           <el-option v-for="f in FORMATS" :key="f" :label="f" :value="f" />
         </el-select>
       </div>
@@ -41,7 +49,10 @@
     </template>
 
     <!-- 枚举：字符串/数值可选值，一行一个 -->
-    <div v-if="field.type === 'string' || field.type === 'integer' || field.type === 'number'" class="sc-row sc-top">
+    <div
+      v-if="field.type === 'string' || field.type === 'integer' || field.type === 'number'"
+      class="sc-row sc-top"
+    >
       <span class="sc-label">枚举</span>
       <el-input
         v-model="enumText"
@@ -66,16 +77,27 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { SchemaField } from '@/types/apifox'
 
-const props = defineProps({
-  field: { type: Object, required: true },
-})
+const props = defineProps<{ field: SchemaField }>()
 
-const FORMATS = ['date-time', 'date', 'time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary']
+const FORMATS = [
+  'date-time',
+  'date',
+  'time',
+  'email',
+  'uri',
+  'uuid',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'byte',
+  'binary',
+]
 
-function boolFlag(key) {
+function boolFlag(key: string) {
   return computed({
     get: () => !!props.field.extra[key],
     set: (v) => {
@@ -89,7 +111,7 @@ const nullable = boolFlag('nullable')
 const uniqueItems = boolFlag('uniqueItems')
 
 // 按字段类型把文本值转回正确 JSON 类型（integer/number→数字、boolean→布尔、其余→字符串）
-function coerce(s) {
+function coerce(s: string) {
   const t = props.field.type
   if (t === 'integer' || t === 'number') {
     const n = Number(s)
@@ -100,7 +122,7 @@ function coerce(s) {
 }
 
 // default/example：文本输入但按类型回写，避免 integer 的 5 被存成 "5"
-function typedField(key) {
+function typedField(key: string) {
   return computed({
     get: () => {
       const v = props.field.extra[key]
@@ -123,7 +145,11 @@ const enumText = computed({
     return Array.isArray(e) ? e.join('\n') : e || ''
   },
   set: (v) => {
-    const arr = String(v).split('\n').map((s) => s.trim()).filter(Boolean).map(coerce)
+    const arr = String(v)
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(coerce)
     if (arr.length) props.field.extra.enum = arr
     else delete props.field.extra.enum
   },

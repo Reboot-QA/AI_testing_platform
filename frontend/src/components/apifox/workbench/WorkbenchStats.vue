@@ -13,15 +13,16 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { Schemas } from '@/api/types'
 
-const props = defineProps({
-  stats: { type: Object, default: () => ({}) },
+const props = withDefaults(defineProps<{ stats?: Schemas['WorkbenchStats'] }>(), {
+  stats: () => ({}) as Schemas['WorkbenchStats'],
 })
 
 // 图标底色：主色 14% 淡调 + 同色图标，与仪表盘统计卡范式一致
-const tint = (color) => `color-mix(in srgb, ${color} 14%, white)`
+const tint = (color: string) => `color-mix(in srgb, ${color} 14%, white)`
 
 const tiles = computed(() => {
   const s = props.stats

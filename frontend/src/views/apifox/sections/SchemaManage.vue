@@ -85,10 +85,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
+import type { SchemaField } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { fieldsToSchema, newField, schemaToFields } from '@/composables/useJsonSchema'
@@ -98,16 +100,22 @@ import SchemaFieldRow from '@/components/apifox/SchemaFieldRow.vue'
 const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
-const schemas = ref([])
+const schemas = ref<Schemas['SchemaBrief'][]>([])
 const filterText = ref('')
 const filteredSchemas = computed(() => {
   const kw = filterText.value.trim().toLowerCase()
   return kw ? schemas.value.filter((s) => (s.name || '').toLowerCase().includes(kw)) : schemas.value
 })
 const saving = ref(false)
-const viewMode = ref('visual')
-const fields = ref([])
-const form = reactive({ id: null, name: '', description: '', json_schema: '{}', version: 1 })
+const viewMode = ref<'visual' | 'source'>('visual')
+const fields = ref<SchemaField[]>([])
+const form = reactive({
+  id: null as number | null,
+  name: '',
+  description: '',
+  json_schema: '{}',
+  version: 1,
+})
 
 // 可被引用的模型：排除当前模型自身（禁自引用）
 const refModels = computed(() => schemas.value.filter((s) => s.id !== form.id))
@@ -127,7 +135,7 @@ async function loadSchemas() {
   schemas.value = await apifoxApi.listSchemas(pid.value)
 }
 
-async function selectSchema(sid) {
+async function selectSchema(sid: number) {
   const s = await apifoxApi.getSchema(sid)
   form.id = s.id
   form.name = s.name
@@ -142,7 +150,7 @@ function syncSourceFromFields() {
   form.json_schema = JSON.stringify(fieldsToSchema(fields.value), null, 2)
 }
 
-function onViewChange(mode) {
+function onViewChange(mode: 'visual' | 'source') {
   if (mode === 'source') {
     syncSourceFromFields()
   } else if (!loadFieldsFromSource()) {
@@ -169,7 +177,7 @@ async function addSchema() {
   await selectSchema(created.id)
 }
 
-async function delSchema(s) {
+async function delSchema(s: Schemas['SchemaBrief']) {
   const warn = s.ref_count
     ? `「${s.name}」被 ${s.ref_count} 处引用（接口契约/其他模型）。需先解除引用才能删除。`
     : `确认删除数据模型「${s.name}」？`

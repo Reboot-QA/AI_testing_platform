@@ -133,29 +133,51 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
+import type { RequestSpec } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { parseCurl } from '@/utils/curlParser'
 import ScenarioStepRow from '@/components/apifox/ScenarioStepRow.vue'
 import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
+import type {
+  ScenarioEditorStep,
+  ScenarioStepSelection,
+} from '@/components/apifox/ScenarioStepRow.vue'
 
-const props = defineProps({
-  rows: { type: Array, required: true },
-  cases: { type: Array, default: () => [] },
-  scenarios: { type: Array, default: () => [] },
-  currentScenarioId: { type: Number, default: null },
-  scripts: { type: Array, default: () => [] },
-  databases: { type: Array, default: () => [] },
-  endpoints: { type: Array, default: () => [] },
-  serverNames: { type: Array, default: () => [] },
-})
+type ProjectCaseBrief = Schemas['ProjectCaseBrief']
+type ScenarioBrief = Schemas['ScenarioBrief']
+type ScriptBrief = Schemas['ScriptBrief']
+type DatabaseOut = Schemas['DatabaseOut']
+type EndpointBrief = Schemas['EndpointBrief']
+
+const props = withDefaults(
+  defineProps<{
+    rows: ScenarioEditorStep[]
+    cases?: ProjectCaseBrief[]
+    scenarios?: ScenarioBrief[]
+    currentScenarioId?: number | null
+    scripts?: ScriptBrief[]
+    databases?: DatabaseOut[]
+    endpoints?: EndpointBrief[]
+    serverNames?: string[]
+  }>(),
+  {
+    cases: () => [],
+    scenarios: () => [],
+    currentScenarioId: null,
+    scripts: () => [],
+    databases: () => [],
+    endpoints: () => [],
+    serverNames: () => [],
+  },
+)
 
 // 供父级（场景整体保存）调用：把当前选中步骤详情里未落库的引用用例编辑一并保存
-const detailRef = ref(null)
+const detailRef = ref<InstanceType<typeof ScenarioStepDetail> | null>(null)
 async function flushDetail() {
   await detailRef.value?.flushCase?.()
 }
@@ -163,7 +185,7 @@ defineExpose({ flushDetail })
 
 let _seq = 0
 // 容器步骤的可嵌套子列表：分组一个，条件(if)两个（then=children / else=elseChildren）
-function stepChildLists(r) {
+function stepChildLists(r: ScenarioEditorStep): ScenarioEditorStep[][] {
   if (r.type === 'group' || r.type === 'loop') {
     if (!Array.isArray(r.children)) r.children = []
     return [r.children]
@@ -176,7 +198,7 @@ function stepChildLists(r) {
   return []
 }
 
-function ensureUids(rows) {
+function ensureUids(rows: ScenarioEditorStep[]) {
   rows.forEach((r) => {
     if (r._uid == null) r._uid = ++_seq
     stepChildLists(r).forEach(ensureUids)
@@ -189,9 +211,9 @@ watch(
 )
 
 // 选中态用共享 reactive（UI 态，非业务数据，显式传 prop，不走 provide/inject）
-const selection = reactive({ uid: null })
+const selection = reactive<ScenarioStepSelection>({ uid: null })
 
-function findByUid(rows, uid) {
+function findByUid(rows: ScenarioEditorStep[], uid: number | null): ScenarioEditorStep | null {
   for (const r of rows) {
     if (r._uid === uid) return r
     for (const list of stepChildLists(r)) {
@@ -203,15 +225,15 @@ function findByUid(rows, uid) {
 }
 const selectedStep = computed(() => findByUid(props.rows, selection.uid))
 
-function removeTop(i) {
+function removeTop(i: number) {
   if (props.rows[i]?._uid === selection.uid) selection.uid = null
   props.rows.splice(i, 1)
 }
 
 const newType = ref('case')
-const pickedCaseId = ref(null)
-const pickedScenarioId = ref(null)
-const pickedEndpointId = ref(null)
+const pickedCaseId = ref<number | null>(null)
+const pickedScenarioId = ref<number | null>(null)
+const pickedEndpointId = ref<number | null>(null)
 const waitMs = ref(500)
 const groupName = ref('')
 const curlVisible = ref(false)
@@ -229,7 +251,17 @@ const canAdd = computed(() => {
   return true
 })
 
-function newHttpStep(over = {}) {
+function newHttpStep(
+  over: Partial<{
+    name: string
+    method: string
+    path: string
+    server_name: string | null
+    request_spec: RequestSpec
+    assertions: Schemas['AssertionRow'][]
+    extracts: Schemas['ExtractRow'][]
+  }> = {},
+): ScenarioEditorStep {
   return {
     type: 'http',
     enabled: true,
