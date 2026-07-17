@@ -5234,28 +5234,6 @@ export interface components {
             /** Projects */
             projects: components["schemas"]["WorkbenchProject"][];
         };
-        /** WorkbenchRunningPageOut */
-        WorkbenchRunningPageOut: {
-            /** Items */
-            items: components["schemas"]["WorkbenchRunning"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-        };
-        /** WorkbenchReportPageOut */
-        WorkbenchReportPageOut: {
-            /** Items */
-            items: components["schemas"]["WorkbenchReport"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-        };
         /** WorkbenchProject */
         WorkbenchProject: {
             /** Id */
@@ -5304,6 +5282,17 @@ export interface components {
              */
             started_at: string;
         };
+        /** WorkbenchReportPageOut */
+        WorkbenchReportPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchReport"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** WorkbenchRunning */
         WorkbenchRunning: {
             /** Run Id */
@@ -5323,6 +5312,17 @@ export interface components {
              * Format: date-time
              */
             started_at: string;
+        };
+        /** WorkbenchRunningPageOut */
+        WorkbenchRunningPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchRunning"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
         };
         /** WorkbenchStats */
         WorkbenchStats: {
@@ -10420,6 +10420,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkbenchOverviewOut"];
+                };
+            };
+        };
+    };
+    workbench_running_api_v1_apifox_workbench_running_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchRunningPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workbench_reports_api_v1_apifox_workbench_reports_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchReportPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
