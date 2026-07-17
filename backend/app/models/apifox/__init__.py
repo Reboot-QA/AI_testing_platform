@@ -14,6 +14,7 @@ from app.models.apifox.endpoint import (
     ApifoxFolder,
 )
 from app.models.apifox.global_param import ApifoxGlobalParam
+from app.models.apifox.notify_config import ApifoxNotifyConfig
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.schedule import ApifoxSchedule
@@ -32,6 +33,7 @@ from app.models.apifox.variable import (
 __all__ = [
     "ApifoxAiGenTask",
     "ApifoxAiGenTaskItem",
+    "ApifoxNotifyConfig",
     "ApifoxFolder",
     "ApifoxEndpoint",
     "ApifoxEndpointAssertion",

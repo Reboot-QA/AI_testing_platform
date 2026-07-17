@@ -106,6 +106,13 @@ export const apifoxApi = {
   retryAiGenTaskItem: (tid: Id, iid: Id) =>
     post<Schemas['AiGenTaskOut']>(`/apifox/ai-gen-tasks/${tid}/items/${iid}/retry`),
 
+  getNotifyConfig: (pid: Id) =>
+    get<Schemas['NotifyConfigOut']>(`/apifox/projects/${pid}/notify-config`),
+  updateNotifyConfig: (pid: Id, data: Schemas['NotifyConfigUpdate']) =>
+    put<Schemas['NotifyConfigOut']>(`/apifox/projects/${pid}/notify-config`, data),
+  testNotifyConfig: (pid: Id) =>
+    post<Schemas['NotifyTestResult']>(`/apifox/projects/${pid}/notify-config/test`),
+
   listSchemas: (pid: Id) => get<Schemas['SchemaBrief'][]>(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid: Id) => get<Schemas['SchemaOut']>(`/apifox/schemas/${sid}`),
   createSchema: (pid: Id, data: Schemas['SchemaCreate']) =>

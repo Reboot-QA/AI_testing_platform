@@ -6018,6 +6018,155 @@
         }
       }
     },
+    "/api/v1/apifox/projects/{pid}/notify-config": {
+      "get": {
+        "tags": [
+          "接口自动化v2·失败通知"
+        ],
+        "summary": "Get Notify Config",
+        "operationId": "get_notify_config_api_v1_apifox_projects__pid__notify_config_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotifyConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "接口自动化v2·失败通知"
+        ],
+        "summary": "Update Notify Config",
+        "operationId": "update_notify_config_api_v1_apifox_projects__pid__notify_config_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyConfigUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotifyConfigOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apifox/projects/{pid}/notify-config/test": {
+      "post": {
+        "tags": [
+          "接口自动化v2·失败通知"
+        ],
+        "summary": "Test Notify Config",
+        "operationId": "test_notify_config_api_v1_apifox_projects__pid__notify_config_test_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NotifyTestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/projects/{pid}/schemas": {
       "get": {
         "tags": [
@@ -13652,6 +13801,253 @@
           "mock_mode"
         ],
         "title": "MockModeUpdate"
+      },
+      "NotifyChannelResult": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "title": "Channel"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "ok"
+        ],
+        "title": "NotifyChannelResult"
+      },
+      "NotifyConfigOut": {
+        "properties": {
+          "email_enabled": {
+            "type": "boolean",
+            "title": "Email Enabled"
+          },
+          "smtp_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Host"
+          },
+          "smtp_port": {
+            "type": "integer",
+            "title": "Smtp Port"
+          },
+          "smtp_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Username"
+          },
+          "mail_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mail From"
+          },
+          "email_recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Email Recipients",
+            "default": []
+          },
+          "smtp_password_set": {
+            "type": "boolean",
+            "title": "Smtp Password Set",
+            "default": false
+          },
+          "telegram_enabled": {
+            "type": "boolean",
+            "title": "Telegram Enabled"
+          },
+          "telegram_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Telegram Chat Ids",
+            "default": []
+          },
+          "telegram_bot_token_set": {
+            "type": "boolean",
+            "title": "Telegram Bot Token Set",
+            "default": false
+          },
+          "notify_schedule": {
+            "type": "boolean",
+            "title": "Notify Schedule"
+          },
+          "notify_run": {
+            "type": "boolean",
+            "title": "Notify Run"
+          },
+          "notify_aigen": {
+            "type": "boolean",
+            "title": "Notify Aigen"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email_enabled",
+          "smtp_port",
+          "telegram_enabled",
+          "notify_schedule",
+          "notify_run",
+          "notify_aigen"
+        ],
+        "title": "NotifyConfigOut"
+      },
+      "NotifyConfigUpdate": {
+        "properties": {
+          "email_enabled": {
+            "type": "boolean",
+            "title": "Email Enabled",
+            "default": false
+          },
+          "smtp_host": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Host"
+          },
+          "smtp_port": {
+            "type": "integer",
+            "title": "Smtp Port",
+            "default": 465
+          },
+          "smtp_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Username"
+          },
+          "smtp_password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Smtp Password"
+          },
+          "mail_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mail From"
+          },
+          "email_recipients": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Email Recipients",
+            "default": []
+          },
+          "telegram_enabled": {
+            "type": "boolean",
+            "title": "Telegram Enabled",
+            "default": false
+          },
+          "telegram_bot_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telegram Bot Token"
+          },
+          "telegram_chat_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Telegram Chat Ids",
+            "default": []
+          },
+          "notify_schedule": {
+            "type": "boolean",
+            "title": "Notify Schedule",
+            "default": true
+          },
+          "notify_run": {
+            "type": "boolean",
+            "title": "Notify Run",
+            "default": true
+          },
+          "notify_aigen": {
+            "type": "boolean",
+            "title": "Notify Aigen",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "NotifyConfigUpdate"
+      },
+      "NotifyTestResult": {
+        "properties": {
+          "results": {
+            "items": {
+              "$ref": "#/components/schemas/NotifyChannelResult"
+            },
+            "type": "array",
+            "title": "Results",
+            "default": []
+          }
+        },
+        "type": "object",
+        "title": "NotifyTestResult"
       },
       "ProjectCaseBrief": {
         "properties": {

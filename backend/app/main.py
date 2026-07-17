@@ -22,6 +22,7 @@ from app.routers import (
 )
 from app.routers import settings as settings_router
 from app.routers.apifox import ai_gen_tasks_router as apifox_ai_gen_tasks_router
+from app.routers.apifox import notify_router as apifox_notify_router
 from app.routers.apifox import cases_router as apifox_cases_router
 from app.routers.apifox import data_models_router as apifox_data_models_router
 from app.routers.apifox import databases_router as apifox_databases_router
@@ -125,6 +126,7 @@ app.include_router(apifox_router, prefix="/api/v1")
 app.include_router(apifox_variables_router, prefix="/api/v1")
 app.include_router(apifox_cases_router, prefix="/api/v1")
 app.include_router(apifox_ai_gen_tasks_router, prefix="/api/v1")
+app.include_router(apifox_notify_router, prefix="/api/v1")
 app.include_router(apifox_data_models_router, prefix="/api/v1")
 app.include_router(apifox_scripts_router, prefix="/api/v1")
 app.include_router(apifox_global_params_router, prefix="/api/v1")

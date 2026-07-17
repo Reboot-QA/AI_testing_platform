@@ -1438,6 +1438,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/notify-config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Notify Config */
+        get: operations["get_notify_config_api_v1_apifox_projects__pid__notify_config_get"];
+        /** Update Notify Config */
+        put: operations["update_notify_config_api_v1_apifox_projects__pid__notify_config_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/projects/{pid}/notify-config/test": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Test Notify Config */
+        post: operations["test_notify_config_api_v1_apifox_projects__pid__notify_config_test_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/projects/{pid}/schemas": {
         parameters: {
             query?: never;
@@ -3784,6 +3819,117 @@ export interface components {
         MockModeUpdate: {
             /** Mock Mode */
             mock_mode: boolean;
+        };
+        /** NotifyChannelResult */
+        NotifyChannelResult: {
+            /** Channel */
+            channel: string;
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error?: string | null;
+        };
+        /** NotifyConfigOut */
+        NotifyConfigOut: {
+            /** Email Enabled */
+            email_enabled: boolean;
+            /** Smtp Host */
+            smtp_host?: string | null;
+            /** Smtp Port */
+            smtp_port: number;
+            /** Smtp Username */
+            smtp_username?: string | null;
+            /** Mail From */
+            mail_from?: string | null;
+            /**
+             * Email Recipients
+             * @default []
+             */
+            email_recipients: string[];
+            /**
+             * Smtp Password Set
+             * @default false
+             */
+            smtp_password_set: boolean;
+            /** Telegram Enabled */
+            telegram_enabled: boolean;
+            /**
+             * Telegram Chat Ids
+             * @default []
+             */
+            telegram_chat_ids: string[];
+            /**
+             * Telegram Bot Token Set
+             * @default false
+             */
+            telegram_bot_token_set: boolean;
+            /** Notify Schedule */
+            notify_schedule: boolean;
+            /** Notify Run */
+            notify_run: boolean;
+            /** Notify Aigen */
+            notify_aigen: boolean;
+        };
+        /** NotifyConfigUpdate */
+        NotifyConfigUpdate: {
+            /**
+             * Email Enabled
+             * @default false
+             */
+            email_enabled: boolean;
+            /** Smtp Host */
+            smtp_host?: string | null;
+            /**
+             * Smtp Port
+             * @default 465
+             */
+            smtp_port: number;
+            /** Smtp Username */
+            smtp_username?: string | null;
+            /** Smtp Password */
+            smtp_password?: string | null;
+            /** Mail From */
+            mail_from?: string | null;
+            /**
+             * Email Recipients
+             * @default []
+             */
+            email_recipients: string[];
+            /**
+             * Telegram Enabled
+             * @default false
+             */
+            telegram_enabled: boolean;
+            /** Telegram Bot Token */
+            telegram_bot_token?: string | null;
+            /**
+             * Telegram Chat Ids
+             * @default []
+             */
+            telegram_chat_ids: string[];
+            /**
+             * Notify Schedule
+             * @default true
+             */
+            notify_schedule: boolean;
+            /**
+             * Notify Run
+             * @default true
+             */
+            notify_run: boolean;
+            /**
+             * Notify Aigen
+             * @default true
+             */
+            notify_aigen: boolean;
+        };
+        /** NotifyTestResult */
+        NotifyTestResult: {
+            /**
+             * Results
+             * @default []
+             */
+            results: components["schemas"]["NotifyChannelResult"][];
         };
         /**
          * ProjectCaseBrief
@@ -9160,6 +9306,103 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiGenTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_notify_config_api_v1_apifox_projects__pid__notify_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_notify_config_api_v1_apifox_projects__pid__notify_config_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyConfigUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyConfigOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    test_notify_config_api_v1_apifox_projects__pid__notify_config_test_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NotifyTestResult"];
                 };
             };
             /** @description Validation Error */
