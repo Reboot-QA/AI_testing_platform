@@ -94,7 +94,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
-import { emptySpec } from '@/utils/apifoxSpec'
+import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { useApiTree, type ApiTreeNode } from '@/composables/useApiTree'
 import ImportDialog from '@/components/apifox/ImportDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
@@ -212,7 +212,8 @@ async function duplicateEndpoint(node: ApiTreeNode) {
     method: e.method,
     path: e.path,
     folder_id: e.folder_id,
-    request_spec: e.request_spec,
+    contract_strict: e.contract_strict ?? false,
+    request_spec: normalizeSpec(e.request_spec) as Schemas['EndpointCreate']['request_spec'],
     description: e.description,
   })
   ElMessage.success('已复制')
@@ -244,7 +245,8 @@ async function addEndpoint() {
     method: 'GET',
     path: '/',
     folder_id: selectedFolderId.value,
-    request_spec: emptySpec(),
+    contract_strict: false,
+    request_spec: emptySpec() as Schemas['EndpointCreate']['request_spec'],
   })
   ElMessage.success('已创建')
   await loadAll()

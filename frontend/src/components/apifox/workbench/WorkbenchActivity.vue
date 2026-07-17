@@ -29,11 +29,11 @@
       <el-tab-pane label="最近报告" name="reports">
         <div v-if="reports.length" class="rows">
           <div v-for="r in reports" :key="r.run_id" class="runrow" @click="$emit('open', r)">
-            <div class="pi" :style="{ background: typeColor(r.target_type) }">
-              {{ typeLabel(r.target_type).charAt(0) }}
+            <div class="pi" :style="{ background: typeColor(r.target_type ?? 'case') }">
+              {{ typeLabel(r.target_type ?? 'case').charAt(0) }}
             </div>
             <div class="mid">
-              <div class="nm">【{{ typeLabel(r.target_type) }}】{{ r.target_name }}</div>
+              <div class="nm">【{{ typeLabel(r.target_type ?? 'case') }}】{{ r.target_name }}</div>
               <div class="sb">
                 {{ r.project_name }} · {{ r.environment_name || '未选环境' }} ·
                 {{ time(r.started_at) }}
@@ -55,17 +55,19 @@ import type { Schemas } from '@/api/types'
 type WorkbenchRunning = Schemas['WorkbenchRunning']
 type WorkbenchReport = Schemas['WorkbenchReport']
 
+type WorkbenchReportItem = WorkbenchReport & { target_type?: string }
+
 const props = withDefaults(
   defineProps<{
     running?: WorkbenchRunning[]
-    reports?: WorkbenchReport[]
+    reports?: WorkbenchReportItem[]
   }>(),
   {
     running: () => [],
     reports: () => [],
   },
 )
-defineEmits<{ open: [item: WorkbenchRunning | WorkbenchReport] }>()
+defineEmits<{ open: [item: WorkbenchRunning | WorkbenchReportItem] }>()
 
 const activeTab = ref('reports')
 
@@ -95,12 +97,12 @@ const typeLabel = (t: string) => TYPE_LABEL[t] || '用例'
 const letterOf = (name: string | null | undefined) => (name || '?').trim().charAt(0).toUpperCase()
 const time = (v: string) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
 
-function pillClass(r: WorkbenchReport) {
+function pillClass(r: WorkbenchReportItem) {
   if (r.status === 'running') return 'run'
   return r.status === 'passed' ? 'ok' : 'bad'
 }
 
-function pillText(r: WorkbenchReport) {
+function pillText(r: WorkbenchReportItem) {
   if (r.status === 'running') return '运行中'
   const label = r.status === 'passed' ? '通过' : '失败'
   return `${label} ${r.passed_count}/${r.total_count}`

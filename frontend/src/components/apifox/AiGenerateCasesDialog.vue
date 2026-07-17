@@ -185,7 +185,7 @@ const canceling = ref(false)
 const categories = ref<AiCategoryOption[]>(DEFAULT_CATEGORIES())
 const selected = ref<boolean[]>([])
 const taskId = ref<number | null>(null)
-const llmProviders = ref<Schemas['LLMProviderOut'][]>([])
+const llmProviders = ref<Schemas['LLMProviderOptionOut'][]>([])
 const providersLoading = ref(false)
 const providerId = ref<number | null>(null)
 const mockMode = ref(false)
@@ -244,7 +244,7 @@ function backToConfig() {
   step.value = 'config'
 }
 
-function formatProviderLabel(item: Schemas['LLMProviderOut']) {
+function formatProviderLabel(item: Schemas['LLMProviderOptionOut']) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -283,9 +283,13 @@ function summarize(g: Schemas['CaseCreate']) {
 }
 
 async function generate() {
-  const cats = categories.value
+  type AiCategory = Schemas['AiGenTaskCreate']['categories'][number]
+  const cats: AiCategory[] = categories.value
     .filter((c) => c.checked)
-    .map((c) => ({ category: c.value, count: c.limit ? c.count : undefined }))
+    .map((c) => ({
+      category: c.value as AiCategory['category'],
+      count: c.limit ? c.count : undefined,
+    }))
   submitting.value = true
   try {
     taskId.value = await store.start(Number(props.projectId), [eid.value], cats, providerId.value)
@@ -299,6 +303,7 @@ async function generate() {
 }
 
 async function cancel() {
+  if (taskId.value == null) return
   canceling.value = true
   try {
     await store.cancel(taskId.value)
@@ -312,7 +317,7 @@ async function cancel() {
 }
 
 async function createSelected() {
-  if (!item.value) return
+  if (!item.value || taskId.value == null) return
   const indexes = generated.value.map((_, i) => i).filter((i) => selected.value[i])
   creating.value = true
   try {

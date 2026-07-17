@@ -259,6 +259,7 @@ async function handleSubmit() {
         full_name: form.full_name,
         email: form.email.trim() || undefined,
         department_id: form.department_id,
+        role: 'tester',
       })
       ElMessage.success('创建成功')
     }

@@ -3,7 +3,7 @@
     <div
       class="step-row"
       :class="{ active: selection.uid === row._uid, disabled: row.enabled === false }"
-      @click.stop="selection.uid = row._uid"
+      @click.stop="selection.uid = row._uid ?? null"
     >
       <el-icon class="drag-handle" title="拖拽排序/移动"><Rank /></el-icon>
       <span class="idx">{{ index + 1 }}</span>
@@ -15,14 +15,14 @@
 
     <div v-if="row.type === 'group'" class="group-body">
       <VueDraggable
-        v-model="row.children"
+        v-model="children"
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
         class="group-drop"
       >
         <ScenarioStepRow
-          v-for="(child, i) in row.children"
+          v-for="(child, i) in children"
           :key="child._uid"
           :row="child"
           :index="i"
@@ -30,23 +30,23 @@
           :scenarios="scenarios"
           :current-scenario-id="currentScenarioId"
           :selection="selection"
-          @remove="row.children.splice(i, 1)"
+          @remove="children.splice(i, 1)"
         />
       </VueDraggable>
-      <div v-if="row.children.length === 0" class="group-empty">拖步骤到此分组内</div>
+      <div v-if="children.length === 0" class="group-empty">拖步骤到此分组内</div>
     </div>
 
     <div v-else-if="row.type === 'if'" class="group-body">
       <div class="branch-label">Then（条件成立）</div>
       <VueDraggable
-        v-model="row.children"
+        v-model="children"
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
         class="group-drop"
       >
         <ScenarioStepRow
-          v-for="(child, i) in row.children"
+          v-for="(child, i) in children"
           :key="child._uid"
           :row="child"
           :index="i"
@@ -54,22 +54,22 @@
           :scenarios="scenarios"
           :current-scenario-id="currentScenarioId"
           :selection="selection"
-          @remove="row.children.splice(i, 1)"
+          @remove="children.splice(i, 1)"
         />
       </VueDraggable>
-      <div v-if="row.children.length === 0" class="group-empty">拖步骤到 Then 分支</div>
+      <div v-if="children.length === 0" class="group-empty">拖步骤到 Then 分支</div>
 
       <template v-if="row.elseEnabled">
         <div class="branch-label">Else（条件不成立）</div>
         <VueDraggable
-          v-model="row.elseChildren"
+          v-model="elseChildren"
           :group="{ name: 'scenario-steps' }"
           handle=".drag-handle"
           :animation="150"
           class="group-drop"
         >
           <ScenarioStepRow
-            v-for="(child, i) in row.elseChildren"
+            v-for="(child, i) in elseChildren"
             :key="child._uid"
             :row="child"
             :index="i"
@@ -77,24 +77,24 @@
             :scenarios="scenarios"
             :current-scenario-id="currentScenarioId"
             :selection="selection"
-            @remove="row.elseChildren.splice(i, 1)"
+            @remove="elseChildren.splice(i, 1)"
           />
         </VueDraggable>
-        <div v-if="row.elseChildren.length === 0" class="group-empty">拖步骤到 Else 分支</div>
+        <div v-if="elseChildren.length === 0" class="group-empty">拖步骤到 Else 分支</div>
       </template>
     </div>
 
     <div v-else-if="row.type === 'loop'" class="group-body">
       <div class="branch-label">循环体</div>
       <VueDraggable
-        v-model="row.children"
+        v-model="children"
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
         class="group-drop"
       >
         <ScenarioStepRow
-          v-for="(child, i) in row.children"
+          v-for="(child, i) in children"
           :key="child._uid"
           :row="child"
           :index="i"
@@ -102,10 +102,10 @@
           :scenarios="scenarios"
           :current-scenario-id="currentScenarioId"
           :selection="selection"
-          @remove="row.children.splice(i, 1)"
+          @remove="children.splice(i, 1)"
         />
       </VueDraggable>
-      <div v-if="row.children.length === 0" class="group-empty">拖步骤到循环体内</div>
+      <div v-if="children.length === 0" class="group-empty">拖步骤到循环体内</div>
     </div>
   </div>
 </template>
@@ -114,7 +114,13 @@
 import { computed } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import type { Schemas } from '@/api/types'
-import type { ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
+import type { HttpStepConfig, ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
+import {
+  ensureElseChildren,
+  ensureIfConfig,
+  ensureLoopConfig,
+  ensureStepChildren,
+} from '@/types/apifox'
 
 defineOptions({ name: 'ScenarioStepRow' })
 
@@ -141,6 +147,20 @@ const props = withDefaults(
 )
 
 defineEmits<{ remove: [] }>()
+
+const children = computed({
+  get: () => ensureStepChildren(props.row),
+  set: (value: ScenarioEditorStep[]) => {
+    props.row.children = value
+  },
+})
+
+const elseChildren = computed({
+  get: () => ensureElseChildren(props.row),
+  set: (value: ScenarioEditorStep[]) => {
+    props.row.elseChildren = value
+  },
+})
 
 const typeLabel = computed(
   () =>
@@ -176,11 +196,11 @@ const typeTag = computed(
 const displayName = computed(() => {
   const row = props.row
   if (row.type === 'if') {
-    const c = row.config?.condition || {}
+    const c = ensureIfConfig(row).condition
     return `如果 ${c.left || '?'} ${c.operator || 'eq'} ${c.operator === 'exists' ? '' : (c.right ?? '')}`.trim()
   }
   if (row.type === 'loop') {
-    const c = row.config || {}
+    const c = ensureLoopConfig(row)
     if (c.mode === 'list') return `遍历 ${c.list_var || '?'}`
     if (c.mode === 'while')
       return `当 ${c.condition?.left || '?'} ${c.condition?.operator || ''} … 时循环`
@@ -189,8 +209,8 @@ const displayName = computed(() => {
   if (row.type === 'break') return '跳出循环'
   if (row.type === 'continue') return '跳过本轮'
   if (row.type === 'http') {
-    const c = row.config || {}
-    return `[${c.method || 'GET'}] ${c.path || row.name || 'HTTP'}`.trim()
+    const c = row.config as HttpStepConfig | undefined
+    return `[${c?.method || 'GET'}] ${c?.path || row.name || 'HTTP'}`.trim()
   }
   if (row.name) return row.name
   if (row.type === 'case') {

@@ -85,7 +85,7 @@ const props = withDefaults(
 )
 defineEmits<{ 'update:visible': [value: boolean] }>()
 
-const phase = ref('pre')
+const phase = ref<'pre' | 'post'>('pre')
 const varRows = ref<KvRow[]>(ensureKvRows([]))
 const respStatus = ref(200)
 const respBody = ref('')

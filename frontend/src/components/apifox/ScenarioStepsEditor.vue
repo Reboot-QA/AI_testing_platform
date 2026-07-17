@@ -143,10 +143,7 @@ import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { parseCurl } from '@/utils/curlParser'
 import ScenarioStepRow from '@/components/apifox/ScenarioStepRow.vue'
 import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
-import type {
-  ScenarioEditorStep,
-  ScenarioStepSelection,
-} from '@/types/apifox'
+import type { ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
 
 type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 type ScenarioBrief = Schemas['ScenarioBrief']
@@ -213,7 +210,10 @@ watch(
 // 选中态用共享 reactive（UI 态，非业务数据，显式传 prop，不走 provide/inject）
 const selection = reactive<ScenarioStepSelection>({ uid: null })
 
-function findByUid(rows: ScenarioEditorStep[], uid: number | null): ScenarioEditorStep | null {
+function findByUid(
+  rows: ScenarioEditorStep[],
+  uid: number | string | null,
+): ScenarioEditorStep | null {
   for (const r of rows) {
     if (r._uid === uid) return r
     for (const list of stepChildLists(r)) {
@@ -281,15 +281,17 @@ function newHttpStep(
 }
 
 async function importFromEndpoint() {
+  const endpointId = pickedEndpointId.value
+  if (endpointId == null) return
   try {
-    const e = await apifoxApi.getEndpoint(pickedEndpointId.value)
+    const e = await apifoxApi.getEndpoint(endpointId)
     props.rows.push(
       newHttpStep({
         name: e.name,
         method: e.method,
         path: e.path,
         server_name: e.server_name,
-        request_spec: e.request_spec,
+        request_spec: normalizeSpec(e.request_spec),
         assertions: e.assertions || [],
         extracts: e.extracts || [],
       }),
@@ -307,7 +309,14 @@ function importFromCurl() {
     ElMessage.error('无法解析，请粘贴以 curl 开头的完整命令')
     return
   }
-  props.rows.push(newHttpStep(parsed))
+  props.rows.push(
+    newHttpStep({
+      name: parsed.name,
+      method: parsed.method,
+      path: parsed.path,
+      request_spec: normalizeSpec(parsed.request_spec),
+    }),
+  )
   curlVisible.value = false
   curlText.value = ''
   newType.value = 'http'
@@ -316,6 +325,7 @@ function importFromCurl() {
 function addStep() {
   if (newType.value === 'case') {
     const c = props.cases.find((x) => x.id === pickedCaseId.value)
+    if (!c) return
     props.rows.push({
       type: 'case',
       ref_case_id: c.id,
@@ -329,6 +339,7 @@ function addStep() {
     props.rows.push({ type: 'wait', wait_ms: waitMs.value, enabled: true, _uid: ++_seq })
   } else if (newType.value === 'scenario') {
     const s = props.scenarios.find((x) => x.id === pickedScenarioId.value)
+    if (!s) return
     props.rows.push({
       type: 'scenario',
       ref_scenario_id: s.id,

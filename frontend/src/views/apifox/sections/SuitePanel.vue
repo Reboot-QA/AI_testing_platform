@@ -35,7 +35,7 @@
           :model-value="activeId"
           type="card"
           class="suite-tabbar"
-          @tab-change="(id) => tabsStore.activate(pid, id)"
+          @tab-change="(id: string | number) => tabsStore.activate(pid, Number(id))"
           @tab-remove="onTabRemove"
         >
           <el-tab-pane v-for="t in tabs" :key="t.id" :name="t.id" closable>
@@ -125,7 +125,7 @@
           </div>
 
           <SuiteRunProgress
-            :events="activeTab.runEvents"
+            :events="activeTab.runEvents as SuiteRunEvent[]"
             :running="activeTab.running"
             @clear="activeTab.runEvents = []"
           />
@@ -142,7 +142,7 @@ import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import type { Schemas } from '@/api/types'
-import type { SSEEvent } from '@/api/request'
+import type { SuiteTab } from '@/stores/suiteTabs'
 import { apifoxApi } from '@/api'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
@@ -150,6 +150,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useSuiteTabsStore } from '@/stores/suiteTabs'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import SuiteRunProgress from '@/components/apifox/SuiteRunProgress.vue'
+
+type SuiteRunEvent = { type: string; [key: string]: unknown }
 
 const pid = useRouteParamId()
 const store = useWorkspaceStore()
@@ -222,11 +224,11 @@ function onPickScenario(id: number | null) {
   pickScenario.value = null
 }
 
-async function doSaveSuite(tab) {
+async function doSaveSuite(tab: SuiteTab) {
   const updated = await apifoxApi.updateSuite(tab.id, {
     name: tab.form.name,
     description: tab.form.description || null,
-    items: tab.form.items.map((it) => ({
+    items: tab.form.items.map((it: SuiteTab['form']['items'][number]) => ({
       target_type: it.target_type,
       target_id: it.target_id,
       enabled: it.enabled !== false,
@@ -273,11 +275,11 @@ async function saveSuite(id: number) {
 async function runSuite(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return
-  tab.runEvents = [] as SSEEvent[]
+  tab.runEvents = [] as SuiteRunEvent[]
   tab.running = true
   try {
-    await apifoxApi.runSuiteStream(id, store.currentEnvironmentId, (e: SSEEvent) =>
-      tab.runEvents.push(e),
+    await apifoxApi.runSuiteStream(id, store.currentEnvironmentId ?? undefined, (e) =>
+      tab.runEvents.push(e as SuiteRunEvent),
     )
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || '运行失败')

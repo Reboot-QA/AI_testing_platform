@@ -38,7 +38,11 @@
           {{ grp.folder ? grp.folder.name : '未分组' }}
         </span>
         <span class="group-head-count">{{ grp.scenarios.length }}</span>
-        <el-dropdown v-if="grp.folder" trigger="click" @command="(c) => onFolderCmd(c, grp.folder)">
+        <el-dropdown
+          v-if="grp.folder"
+          trigger="click"
+          @command="(c: 'rename' | 'delete') => onFolderCmd(c, grp.folder!)"
+        >
           <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
             <MoreFilled />
           </el-icon>
@@ -155,17 +159,20 @@ const emit = defineEmits<{
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
 
 // 按 folder_id 分组：所有文件夹（含空）在前，未分组始终置底作为拖放目标
-const groups = computed(() => {
-  const bucket = new Map(props.folders.map((f) => [f.id, []]))
-  const ungrouped = []
+const groups = computed((): ScenarioGroup[] => {
+  const bucket = new Map<number, ScenarioBrief[]>(
+    props.folders.map((f) => [f.id, [] as ScenarioBrief[]]),
+  )
+  const ungrouped: ScenarioBrief[] = []
   for (const s of visibleScenarios.value) {
-    if (s.folder_id != null && bucket.has(s.folder_id)) bucket.get(s.folder_id).push(s)
+    const list = s.folder_id != null ? bucket.get(s.folder_id) : undefined
+    if (list) list.push(s)
     else ungrouped.push(s)
   }
-  const result = props.folders.map((f) => ({
+  const result: ScenarioGroup[] = props.folders.map((f) => ({
     key: `f${f.id}`,
     folder: f,
-    scenarios: bucket.get(f.id),
+    scenarios: bucket.get(f.id) ?? [],
   }))
   // 始终保留「未分组」作为跨组拖放目标（即使当前为空）
   result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
@@ -202,7 +209,8 @@ function onDragEnd(grp: ScenarioGroup, evt: ScenarioDragEndEvent) {
 }
 
 function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
-  emit(cmd === 'rename' ? 'rename-folder' : 'delete-folder', folder)
+  if (cmd === 'rename') emit('rename-folder', folder)
+  else emit('delete-folder', folder)
 }
 </script>
 

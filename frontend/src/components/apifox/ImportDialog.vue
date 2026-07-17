@@ -72,6 +72,16 @@ import type { Id } from '@/api/request'
 import { apifoxApi } from '@/api'
 import ImportDiffPreview from './ImportDiffPreview.vue'
 import type { ImportDiffView } from './ImportDiffPreview.vue'
+import type { Schemas } from '@/api/types'
+
+function normalizeDiff(raw: Schemas['ImportDiffOut']): ImportDiffView {
+  return {
+    ...raw,
+    added: raw.added ?? [],
+    changed: raw.changed ?? [],
+    removed: raw.removed ?? [],
+  }
+}
 
 const props = withDefaults(
   defineProps<{
@@ -157,7 +167,7 @@ async function doImport() {
 async function doPreview() {
   busy.value = true
   try {
-    diff.value = await apifoxApi.importDiff(props.projectId, payload())
+    diff.value = normalizeDiff(await apifoxApi.importDiff(props.projectId, payload()))
     rememberUrl()
   } finally {
     busy.value = false
@@ -175,7 +185,7 @@ async function doApply() {
       `同步完成：新增 ${report.added}、更新 ${report.updated}、删除 ${report.deleted}、` +
         `保留(被引用) ${report.kept_referenced}、新增数据模型 ${report.schemas_created}`,
     )
-    if (report.warnings.length) {
+    if (report.warnings?.length) {
       await ElMessageBox.alert(report.warnings.join('\n'), '以下被引用接口未删除，请处理', {
         type: 'warning',
       })

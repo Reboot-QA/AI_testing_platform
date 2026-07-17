@@ -232,12 +232,14 @@ import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { projectApi, requirementApi, settingsApi } from '@/api'
+import { unwrapProjectList } from '@/api/project'
+import type { Schemas } from '@/api/types'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
 } from '@/utils/assistantActionRegistry'
-import type { LlmProvider, Project, Requirement } from '@/types/common'
+import type { Project, Requirement } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
 
 interface GenerateForm {
@@ -263,7 +265,7 @@ const {
 
 const projects = ref<Project[]>([])
 const requirements = ref<Requirement[]>([])
-const llmProviders = ref<LlmProvider[]>([])
+const llmProviders = ref<Schemas['LLMProviderOptionOut'][]>([])
 const providersLoading = ref(false)
 const mockMode = ref(false)
 const formRef = ref<FormInstance>()
@@ -356,7 +358,7 @@ function fillFromRequirement() {
 }
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
   if (projects.value.length) {
     form.project_id = projects.value[0].id
     loadRequirements()
@@ -370,7 +372,7 @@ async function loadRequirements() {
   form.requirement_text = ''
 }
 
-function formatProviderLabel(item: LlmProvider) {
+function formatProviderLabel(item: Schemas['LLMProviderOptionOut']) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -404,7 +406,7 @@ async function handleGenerate() {
     requirements.value = await requirementApi.list(form.project_id!)
     const blocked = form.requirement_ids
       .map((id) => requirements.value.find((r) => r.id === id))
-      .filter((r) => r && r.status !== 'approved')
+      .filter((r): r is Requirement => !!r && r.status !== 'approved')
     if (blocked.length) {
       ElMessage.warning(`需求「${blocked.map((r) => r.title).join('、')}」未评审，不能生成用例`)
       return

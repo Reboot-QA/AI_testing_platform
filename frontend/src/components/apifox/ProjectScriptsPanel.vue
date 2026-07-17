@@ -125,6 +125,7 @@ async function addScript() {
 }
 
 async function doSaveScript() {
+  if (scriptForm.id == null) return
   const updated = await apifoxApi.updateScript(scriptForm.id, {
     name: scriptForm.name,
     lang: scriptForm.lang,
@@ -145,13 +146,15 @@ async function saveScript() {
     return true
   } catch (e) {
     if (!isConflict(e)) return false // 非冲突错误已由 api 拦截器提示
+    if (scriptForm.id == null) return false
     let resolved = false
     await resolveSaveConflict({
       reload: async () => {
-        await selectScript(scriptForm.id)
+        await selectScript(scriptForm.id!)
         resolved = true
       },
       overwrite: async () => {
+        if (scriptForm.id == null) return
         const latest = await apifoxApi.getScript(scriptForm.id)
         scriptForm.version = latest.version
         await doSaveScript()

@@ -129,8 +129,8 @@
         </el-table-column>
         <el-table-column prop="review_status" label="评审" width="100">
           <template #default="{ row }">
-            <el-tag :type="reviewType[row.review_status]" size="small">
-              {{ reviewMap[row.review_status] || row.review_status }}
+            <el-tag :type="reviewType[row.review_status as ReviewStatus]" size="small">
+              {{ reviewMap[row.review_status as ReviewStatus] || row.review_status }}
             </el-tag>
           </template>
         </el-table-column>
@@ -216,12 +216,14 @@
             detail.requirement_title || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ detail.priority }}</el-descriptions-item>
-          <el-descriptions-item label="类型">{{ formatCaseTypeLabel(detail.case_type) }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{
+            formatCaseTypeLabel(detail.case_type)
+          }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{
             detail.source === 'ai_generated' ? 'AI生成' : '手动'
           }}</el-descriptions-item>
           <el-descriptions-item label="评审状态">{{
-            reviewMap[detail.review_status]
+            reviewMap[detail.review_status as ReviewStatus]
           }}</el-descriptions-item>
           <el-descriptions-item label="前置条件">{{
             detail.preconditions || '-'
@@ -491,11 +493,15 @@ async function handleSubmit() {
   await formRef.value?.validate()
   submitting.value = true
   try {
-    const payload = { ...form, project_id: projectId.value, case_type: 'functional' }
     if (editing.value) {
       await testcaseApi.update(editing.value.id, form)
       ElMessage.success('更新成功')
     } else {
+      if (typeof projectId.value !== 'number') {
+        ElMessage.warning('请选择具体项目')
+        return
+      }
+      const payload = { ...form, project_id: projectId.value, case_type: 'functional' }
       await testcaseApi.create(payload)
       ElMessage.success('创建成功')
     }
@@ -512,7 +518,7 @@ async function review(row: TestCase, status: ReviewStatus) {
   loadData()
 }
 
-async function handleDelete(id) {
+async function handleDelete(id: number) {
   await testcaseApi.delete(id)
   ElMessage.success('删除成功')
   loadData()
@@ -532,7 +538,9 @@ function groupRowsByProject(rows: TestCase[]) {
   return groups
 }
 
-async function handleBatchReview(status: Extract<ReviewStatus, 'pending' | 'approved' | 'rejected'>) {
+async function handleBatchReview(
+  status: Extract<ReviewStatus, 'pending' | 'approved' | 'rejected'>,
+) {
   const countMap = {
     pending: batchSubmitCount.value,
     approved: batchApproveCount.value,

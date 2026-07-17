@@ -194,6 +194,7 @@ async function delSchema(s: Schemas['SchemaBrief']) {
 }
 
 async function saveSchema() {
+  if (form.id == null) return
   if (viewMode.value === 'visual') {
     syncSourceFromFields()
   }
@@ -211,9 +212,10 @@ async function saveSchema() {
     if (!isConflict(e)) return // 非冲突错误已由 api 拦截器提示
     await resolveSaveConflict({
       reload: async () => {
-        await selectSchema(form.id)
+        if (form.id != null) await selectSchema(form.id)
       },
       overwrite: async () => {
+        if (form.id == null) return
         const latest = await apifoxApi.getSchema(form.id)
         form.version = latest.version
         await doSaveSchema()
@@ -225,6 +227,7 @@ async function saveSchema() {
 }
 
 async function doSaveSchema() {
+  if (form.id == null) return
   const updated = await apifoxApi.updateSchema(form.id, {
     name: form.name,
     description: form.description || null,

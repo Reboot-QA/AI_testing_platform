@@ -136,7 +136,7 @@ async function send() {
       method: props.form.method,
       path: props.form.path,
       server_name: props.form.server_name,
-      request_spec: props.form.request_spec,
+      request_spec: props.form.request_spec as Schemas['DebugRequest']['request_spec'],
       environment_id: store.currentEnvironmentId,
       assertions: props.form.assertions || [],
       extracts: props.form.extracts || [],

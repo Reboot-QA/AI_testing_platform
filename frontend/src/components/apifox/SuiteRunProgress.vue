@@ -63,6 +63,7 @@ interface SuiteRunEvent {
   status?: string
   passed_count?: number
   failed_count?: number
+  pass_rate?: number
   duration_ms?: number | null
   error_message?: string | null
   message?: string

@@ -159,8 +159,9 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { TableInstance, UploadFile } from 'element-plus'
 import { projectApi, requirementApi, settingsApi } from '@/api'
+import { unwrapProjectList } from '@/api/project'
 import type { Schemas } from '@/api/types'
-import type { LlmProvider, Project } from '@/types/common'
+import type { Project } from '@/types/common'
 
 type ExtractedRequirement = Schemas['ExtractedRequirement']
 
@@ -181,7 +182,7 @@ interface ExtractStreamEvent {
 
 const router = useRouter()
 const projects = ref<Project[]>([])
-const llmProviders = ref<LlmProvider[]>([])
+const llmProviders = ref<Schemas['LLMProviderOptionOut'][]>([])
 const projectId = ref<number | null>(null)
 const providerId = ref<number | null>(null)
 const providersLoading = ref(false)
@@ -213,7 +214,7 @@ const progressPercent = computed(() => {
   return 100
 })
 
-function formatProviderLabel(item: LlmProvider) {
+function formatProviderLabel(item: Schemas['LLMProviderOptionOut']) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -222,7 +223,7 @@ function formatProviderLabel(item: LlmProvider) {
 }
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
   if (projects.value.length && !projectId.value) {
     projectId.value = projects.value[0].id
   }
@@ -266,7 +267,7 @@ function toggleSelectAll() {
   if (allSelected.value) {
     tableRef.value.clearSelection()
   } else {
-    extracted.value.forEach((row) => tableRef.value.toggleRowSelection(row, true))
+    extracted.value.forEach((row) => tableRef.value?.toggleRowSelection(row, true))
   }
 }
 
@@ -295,7 +296,7 @@ async function handleExtract() {
     await requirementApi.extractFromDocumentStream(
       projectId.value,
       selectedFile.value,
-      providerId.value,
+      providerId.value ?? undefined,
       async (event: ExtractStreamEvent) => {
         if (event.type === 'status') {
           progressMessage.value = event.message || ''

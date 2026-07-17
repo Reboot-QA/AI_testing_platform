@@ -14,6 +14,18 @@ export type ProjectPageOut = {
   page_size: number
 }
 
+export function isProjectPage(
+  data: Schemas['ProjectOut'][] | ProjectPageOut,
+): data is ProjectPageOut {
+  return !Array.isArray(data)
+}
+
+export function unwrapProjectList(
+  data: Schemas['ProjectOut'][] | ProjectPageOut,
+): Schemas['ProjectOut'][] {
+  return isProjectPage(data) ? data.items : data
+}
+
 export const projectApi = {
   list: (params: ProjectListParams = {}) =>
     get<Schemas['ProjectOut'][] | ProjectPageOut>('/projects', {

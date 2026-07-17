@@ -71,7 +71,7 @@
           <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
           <ScenarioStepsEditor
             ref="stepsEditorRef"
-            :rows="activeTab.form.steps"
+            :rows="activeTab.form.steps as ScenarioEditorStep[]"
             :cases="projectCases"
             :scenarios="scenarios"
             :current-scenario-id="activeTab.id"
@@ -81,7 +81,7 @@
             :server-names="serverNames"
           />
           <RunProgress
-            :events="activeTab.runEvents"
+            :events="activeTab.runEvents as RunProgressEvent[]"
             :running="activeTab.running"
             @clear="activeTab.runEvents = []"
           />
@@ -98,7 +98,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
-import type { SSEEvent } from '@/api/request'
+import type { ScenarioEditorStep } from '@/types/apifox'
+import type { ScenarioTab } from '@/stores/scenarioTabs'
 import { apifoxApi } from '@/api'
 import { serializeStep } from '@/utils/scenarioSteps'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
@@ -111,6 +112,8 @@ import ScenarioListPanel from '@/components/apifox/ScenarioListPanel.vue'
 import ScenarioRunConfigBar from '@/components/apifox/ScenarioRunConfigBar.vue'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
+
+type RunProgressEvent = { type: string; [key: string]: unknown }
 
 const pid = useRouteParamId()
 const store = useWorkspaceStore()
@@ -179,13 +182,14 @@ async function onSelectScenario(id: number) {
 
 // 切 tab 前先把当前 tab 内嵌用例的编辑落库（flushDetail 带脏检查，未改动不发请求）——
 // 避免切 tab 因 :key 重挂载 ScenarioStepDetail 静默丢弃用例编辑
-async function onTabChange(id: number) {
+async function onTabChange(id: string | number) {
+  const tabId = Number(id)
   try {
     await stepsEditorRef.value?.flushDetail?.()
   } catch {
     /* flush 失败（含冲突取消）不阻断切 tab */
   }
-  tabsStore.activate(pid.value, id)
+  tabsStore.activate(pid.value, tabId)
 }
 
 async function addScenario() {
@@ -193,7 +197,11 @@ async function addScenario() {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
   })
-  const created = await apifoxApi.createScenario(pid.value, { name: value, steps: [] })
+  const created = await apifoxApi.createScenario(pid.value, {
+    name: value,
+    priority: 'medium',
+    steps: [],
+  })
   ElMessage.success('已创建')
   await loadScenarios()
   await tabsStore.openScenario(pid.value, created.id)
@@ -202,11 +210,11 @@ async function addScenario() {
 async function runScenario(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return
-  tab.runEvents = [] as SSEEvent[]
+  tab.runEvents = [] as RunProgressEvent[]
   tab.running = true
   try {
-    await apifoxApi.runScenarioStream(id, store.currentEnvironmentId, (e: SSEEvent) =>
-      tab.runEvents.push(e),
+    await apifoxApi.runScenarioStream(id, store.currentEnvironmentId ?? undefined, (e) =>
+      tab.runEvents.push(e as RunProgressEvent),
     )
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || '运行失败')
@@ -215,14 +223,14 @@ async function runScenario(id: number) {
   }
 }
 
-async function doSaveScenario(tab) {
+async function doSaveScenario(tab: ScenarioTab) {
   // 先把选中步骤里引用用例的编辑（勾选/params）落库，再存场景结构 —— 整体保存一次搞定。
   // 仅当保存的是当前激活 tab 时才 flush（stepsEditorRef 指向激活 tab 的编辑器；关闭非激活 tab 时其编辑器未挂载）
   if (tab.id === activeId.value) await stepsEditorRef.value?.flushDetail?.()
   const updated = await apifoxApi.updateScenario(tab.id, {
     name: tab.form.name,
     description: tab.form.description || null,
-    priority: tab.form.priority,
+    priority: tab.form.priority as 'medium' | 'high' | 'low',
     steps: tab.form.steps.map(serializeStep),
     run_config: {
       loop_count: tab.form.run_config.loop_count || 1,
