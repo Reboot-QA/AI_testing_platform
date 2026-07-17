@@ -42,6 +42,7 @@
 
     <ScriptDebugDialog
       v-model:visible="debugVisible"
+      :project-id="projectId"
       :lang="scriptForm.lang"
       :content="scriptForm.content"
     />

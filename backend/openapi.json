@@ -6571,6 +6571,166 @@
         ]
       }
     },
+    "/api/v1/apifox/projects/{pid}/script-debug-presets": {
+      "get": {
+        "tags": [
+          "接口自动化v2·脚本库"
+        ],
+        "summary": "List Debug Presets",
+        "operationId": "list_debug_presets_api_v1_apifox_projects__pid__script_debug_presets_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DebugPresetOut"
+                  },
+                  "title": "Response List Debug Presets Api V1 Apifox Projects  Pid  Script Debug Presets Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "接口自动化v2·脚本库"
+        ],
+        "summary": "Save Debug Preset",
+        "operationId": "save_debug_preset_api_v1_apifox_projects__pid__script_debug_presets_put",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DebugPresetIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DebugPresetOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apifox/projects/{pid}/script-debug-presets/{preset_id}": {
+      "delete": {
+        "tags": [
+          "接口自动化v2·脚本库"
+        ],
+        "summary": "Delete Debug Preset",
+        "operationId": "delete_debug_preset_api_v1_apifox_projects__pid__script_debug_presets__preset_id__delete",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "preset_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Preset Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/scripts/{sid}": {
       "get": {
         "tags": [
@@ -11222,6 +11382,87 @@
         },
         "type": "object",
         "title": "DatasetUpdate"
+      },
+      "DebugPresetIn": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "pre",
+              "post"
+            ],
+            "title": "Phase",
+            "default": "pre"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Variables"
+          },
+          "response_status": {
+            "type": "integer",
+            "title": "Response Status",
+            "default": 200
+          },
+          "response_body": {
+            "type": "string",
+            "title": "Response Body",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "DebugPresetIn"
+      },
+      "DebugPresetOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "phase": {
+            "type": "string",
+            "title": "Phase"
+          },
+          "variables": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object",
+            "title": "Variables"
+          },
+          "response_status": {
+            "type": "integer",
+            "title": "Response Status"
+          },
+          "response_body": {
+            "type": "string",
+            "title": "Response Body"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "phase",
+          "response_status",
+          "response_body"
+        ],
+        "title": "DebugPresetOut"
       },
       "DebugRequest": {
         "properties": {
