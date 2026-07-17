@@ -7,8 +7,15 @@
           <el-icon><Plus /></el-icon>
         </el-button>
       </div>
+      <el-input
+        v-model="filterText"
+        size="small"
+        clearable
+        placeholder="搜索模型名称"
+        class="schema-search"
+      />
       <div
-        v-for="s in schemas"
+        v-for="s in filteredSchemas"
         :key="s.id"
         class="schema-item"
         :class="{ active: form.id === s.id }"
@@ -16,19 +23,33 @@
       >
         <el-icon><Document /></el-icon>
         <span class="schema-name">{{ s.name }}</span>
-        <el-tag v-if="s.ref_count" size="small" type="info" title="被引用数（接口契约 + 模型 $ref）">
+        <el-tag
+          v-if="s.ref_count"
+          size="small"
+          type="info"
+          title="被引用数（接口契约 + 模型 $ref）"
+        >
           {{ s.ref_count }}
         </el-tag>
         <el-button link type="danger" size="small" @click.stop="delSchema(s)">删</el-button>
       </div>
-      <el-empty v-if="schemas.length === 0" description="暂无数据模型" :image-size="60" />
+      <el-empty
+        v-if="filteredSchemas.length === 0"
+        :description="schemas.length ? '无匹配的数据模型' : '暂无数据模型'"
+        :image-size="60"
+      />
     </div>
 
     <div class="editor-panel">
       <template v-if="form.id">
         <div class="row1">
           <el-input v-model="form.name" placeholder="模型名称" style="width: 220px" />
-          <el-tag v-if="currentRefCount" size="small" type="warning" title="被引用，改名会被后端拦截">
+          <el-tag
+            v-if="currentRefCount"
+            size="small"
+            type="warning"
+            title="被引用，改名会被后端拦截"
+          >
             被 {{ currentRefCount }} 处引用
           </el-tag>
           <el-radio-group v-model="viewMode" size="small" @change="onViewChange">
@@ -37,11 +58,7 @@
           </el-radio-group>
           <el-button type="primary" :loading="saving" @click="saveSchema">保存</el-button>
         </div>
-        <el-input
-          v-model="form.description"
-          placeholder="描述（选填）"
-          class="desc-input"
-        />
+        <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
         <div v-if="viewMode === 'visual'" class="schema-fields">
           <div class="sf-head">
             <span class="h-name">字段名</span>
@@ -82,6 +99,11 @@ const route = useRoute()
 const pid = computed(() => route.params.projectId)
 
 const schemas = ref([])
+const filterText = ref('')
+const filteredSchemas = computed(() => {
+  const kw = filterText.value.trim().toLowerCase()
+  return kw ? schemas.value.filter((s) => (s.name || '').toLowerCase().includes(kw)) : schemas.value
+})
 const saving = ref(false)
 const viewMode = ref('visual')
 const fields = ref([])
@@ -232,6 +254,10 @@ onMounted(async () => {
   justify-content: space-between;
   font-weight: 600;
   color: var(--ax-brand);
+  margin-bottom: 8px;
+}
+
+.schema-search {
   margin-bottom: 8px;
 }
 

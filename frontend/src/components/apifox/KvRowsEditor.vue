@@ -18,7 +18,7 @@
 
     <!-- 表格模式：自动新行 + header 名/值自动补全 -->
     <template v-else>
-      <div v-for="(row, i) in rows" :key="i" class="kv-row">
+      <div v-for="(row, i) in rows" :key="i" class="kv-row" :class="{ 'kv-row-off': !row.enabled }">
         <el-checkbox v-model="row.enabled" />
         <el-autocomplete
           v-if="suggest === 'header'"
@@ -207,6 +207,14 @@ watch(
 </script>
 
 <style scoped>
+/* 未勾选行置灰：直观表示不会带上；勾选框保持清晰可点 */
+.kv-row-off {
+  opacity: 0.5;
+}
+.kv-row-off :deep(.el-checkbox) {
+  opacity: 1;
+}
+
 .kv-bar {
   margin-bottom: 4px;
 }

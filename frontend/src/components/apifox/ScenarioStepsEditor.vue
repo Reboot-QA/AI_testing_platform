@@ -52,7 +52,14 @@
             :value="ep.id"
           />
         </el-select>
-        <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
+        <el-select
+          v-if="newType === 'case'"
+          v-model="pickedCaseId"
+          size="small"
+          placeholder="选择接口用例"
+          style="flex: 1"
+          filterable
+        >
           <el-option
             v-for="c in cases"
             :key="c.id"
@@ -60,20 +67,45 @@
             :value="c.id"
           />
         </el-select>
-        <el-input-number v-else-if="newType === 'wait'" v-model="waitMs" size="small" :min="1" :step="100" style="width: 130px" />
-        <el-select v-else-if="newType === 'scenario'" v-model="pickedScenarioId" size="small" placeholder="选择子场景" style="flex: 1" filterable>
+        <el-input-number
+          v-else-if="newType === 'wait'"
+          v-model="waitMs"
+          size="small"
+          :min="1"
+          :step="100"
+          style="width: 130px"
+        />
+        <el-select
+          v-else-if="newType === 'scenario'"
+          v-model="pickedScenarioId"
+          size="small"
+          placeholder="选择子场景"
+          style="flex: 1"
+          filterable
+        >
           <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
-        <el-input v-else-if="newType === 'group'" v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
-        <span v-else-if="newType === 'break' || newType === 'continue'" class="add-hint">添加后拖入循环体内</span>
+        <el-input
+          v-else-if="newType === 'group'"
+          v-model="groupName"
+          size="small"
+          placeholder="分组名称"
+          style="flex: 1"
+        />
+        <span v-else-if="newType === 'break' || newType === 'continue'" class="add-hint"
+          >添加后拖入循环体内</span
+        >
         <span v-else class="add-hint">添加后在右侧配置</span>
-        <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
+        <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep"
+          >+ 添加</el-button
+        >
       </div>
     </div>
 
     <div class="detail-col">
       <ScenarioStepDetail
         v-if="selectedStep"
+        ref="detailRef"
         :key="selectedStep._uid"
         :step="selectedStep"
         :cases="cases"
@@ -122,6 +154,13 @@ const props = defineProps({
   serverNames: { type: Array, default: () => [] },
 })
 
+// 供父级（场景整体保存）调用：把当前选中步骤详情里未落库的引用用例编辑一并保存
+const detailRef = ref(null)
+async function flushDetail() {
+  await detailRef.value?.flushCase?.()
+}
+defineExpose({ flushDetail })
+
 let _seq = 0
 // 容器步骤的可嵌套子列表：分组一个，条件(if)两个（then=children / else=elseChildren）
 function stepChildLists(r) {
@@ -144,7 +183,10 @@ function ensureUids(rows) {
   })
 }
 onMounted(() => ensureUids(props.rows))
-watch(() => props.rows.length, () => ensureUids(props.rows))
+watch(
+  () => props.rows.length,
+  () => ensureUids(props.rows),
+)
 
 // 选中态用共享 reactive（UI 态，非业务数据，显式传 prop，不走 provide/inject）
 const selection = reactive({ uid: null })
@@ -176,7 +218,7 @@ const curlVisible = ref(false)
 const curlText = ref('')
 
 const availableScenarios = computed(() =>
-  props.scenarios.filter((s) => s.id !== props.currentScenarioId)
+  props.scenarios.filter((s) => s.id !== props.currentScenarioId),
 )
 
 const canAdd = computed(() => {
@@ -189,13 +231,19 @@ const canAdd = computed(() => {
 
 function newHttpStep(over = {}) {
   return {
-    type: 'http', enabled: true, name: over.name || 'HTTP 请求', _uid: ++_seq,
+    type: 'http',
+    enabled: true,
+    name: over.name || 'HTTP 请求',
+    _uid: ++_seq,
     config: {
-      name: over.name || '', method: over.method || 'GET', path: over.path || '',
+      name: over.name || '',
+      method: over.method || 'GET',
+      path: over.path || '',
       server_name: over.server_name || null,
       // 统一归一化请求结构，两个导入路径与空步骤保持一致的形状
       request_spec: normalizeSpec(over.request_spec || emptySpec()),
-      assertions: over.assertions || [], extracts: over.extracts || [],
+      assertions: over.assertions || [],
+      extracts: over.extracts || [],
     },
   }
 }
@@ -203,11 +251,17 @@ function newHttpStep(over = {}) {
 async function importFromEndpoint() {
   try {
     const e = await apifoxApi.getEndpoint(pickedEndpointId.value)
-    props.rows.push(newHttpStep({
-      name: e.name, method: e.method, path: e.path, server_name: e.server_name,
-      request_spec: e.request_spec,
-      assertions: e.assertions || [], extracts: e.extracts || [],
-    }))
+    props.rows.push(
+      newHttpStep({
+        name: e.name,
+        method: e.method,
+        path: e.path,
+        server_name: e.server_name,
+        request_spec: e.request_spec,
+        assertions: e.assertions || [],
+        extracts: e.extracts || [],
+      }),
+    )
     pickedEndpointId.value = null
     newType.value = 'http'
   } catch {
@@ -231,8 +285,12 @@ function addStep() {
   if (newType.value === 'case') {
     const c = props.cases.find((x) => x.id === pickedCaseId.value)
     props.rows.push({
-      type: 'case', ref_case_id: c.id, enabled: true,
-      case_name: c.name, endpoint_method: c.endpoint_method, _uid: ++_seq,
+      type: 'case',
+      ref_case_id: c.id,
+      enabled: true,
+      case_name: c.name,
+      endpoint_method: c.endpoint_method,
+      _uid: ++_seq,
     })
     pickedCaseId.value = null
   } else if (newType.value === 'wait') {
@@ -240,25 +298,40 @@ function addStep() {
   } else if (newType.value === 'scenario') {
     const s = props.scenarios.find((x) => x.id === pickedScenarioId.value)
     props.rows.push({
-      type: 'scenario', ref_scenario_id: s.id, enabled: true, scenario_name: s.name, _uid: ++_seq,
+      type: 'scenario',
+      ref_scenario_id: s.id,
+      enabled: true,
+      scenario_name: s.name,
+      _uid: ++_seq,
     })
     pickedScenarioId.value = null
   } else if (newType.value === 'group') {
     props.rows.push({
-      type: 'group', name: groupName.value || '分组', enabled: true, children: [], _uid: ++_seq,
+      type: 'group',
+      name: groupName.value || '分组',
+      enabled: true,
+      children: [],
+      _uid: ++_seq,
     })
     groupName.value = ''
   } else if (newType.value === 'if') {
     props.rows.push({
-      type: 'if', enabled: true, _uid: ++_seq,
+      type: 'if',
+      enabled: true,
+      _uid: ++_seq,
       config: { condition: { left: '', operator: 'eq', right: '' } },
-      children: [], elseEnabled: false, elseChildren: [],
+      children: [],
+      elseEnabled: false,
+      elseChildren: [],
     })
   } else if (newType.value === 'break' || newType.value === 'continue') {
     props.rows.push({ type: newType.value, enabled: true, _uid: ++_seq })
   } else if (newType.value === 'db') {
     props.rows.push({
-      type: 'db', enabled: true, name: '数据库操作', _uid: ++_seq,
+      type: 'db',
+      enabled: true,
+      name: '数据库操作',
+      _uid: ++_seq,
       config: { connection_id: null, sql: '', extracts: [] },
     })
   } else if (newType.value === 'http') {
@@ -269,10 +342,18 @@ function addStep() {
     curlVisible.value = true
   } else {
     props.rows.push({
-      type: 'loop', enabled: true, _uid: ++_seq, children: [],
+      type: 'loop',
+      enabled: true,
+      _uid: ++_seq,
+      children: [],
       config: {
-        mode: 'count', count: 1, list_var: '', item_var: 'item', index_var: 'index',
-        max_iterations: 10, condition: { left: '', operator: 'eq', right: '' },
+        mode: 'count',
+        count: 1,
+        list_var: '',
+        item_var: 'item',
+        index_var: 'index',
+        max_iterations: 10,
+        condition: { left: '', operator: 'eq', right: '' },
       },
     })
   }

@@ -17,8 +17,10 @@
       </el-table-column>
       <el-table-column label="操作" width="150" align="center">
         <template #default="{ row }">
-          <el-button link size="small" :loading="testingId === row.id" @click="testConn(row)">测试</el-button>
-          <el-button link size="small" @click="openDialog(row)">编辑</el-button>
+          <el-button link size="small" :loading="testingId === row.id" @click="testConn(row)"
+            >测试</el-button
+          >
+          <el-button link type="primary" size="small" @click="openDialog(row)">编辑</el-button>
           <el-button link type="danger" size="small" @click="delConn(row)">删</el-button>
         </template>
       </el-table-column>
@@ -29,7 +31,9 @@
       <el-form label-width="80px">
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
         <el-form-item label="Host"><el-input v-model="form.host" /></el-form-item>
-        <el-form-item label="端口"><el-input-number v-model="form.port" :min="1" :max="65535" /></el-form-item>
+        <el-form-item label="端口"
+          ><el-input-number v-model="form.port" :min="1" :max="65535"
+        /></el-form-item>
         <el-form-item label="数据库"><el-input v-model="form.database" /></el-form-item>
         <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
         <el-form-item label="密码">
@@ -62,7 +66,15 @@ const databases = ref([])
 const dialogVisible = ref(false)
 const saving = ref(false)
 const testingId = ref(null)
-const form = reactive({ id: null, name: '', host: '', port: 3306, database: '', username: '', password: '' })
+const form = reactive({
+  id: null,
+  name: '',
+  host: '',
+  port: 3306,
+  database: '',
+  username: '',
+  password: '',
+})
 
 async function load() {
   databases.value = props.environmentId ? await apifoxApi.listDatabases(props.environmentId) : []

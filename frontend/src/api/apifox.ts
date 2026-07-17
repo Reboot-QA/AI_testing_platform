@@ -69,6 +69,20 @@ export const apifoxApi = {
     put<Schemas['CaseOut']>(`/apifox/cases/${cid}`, data),
   deleteCase: (cid: Id) => del<any>(`/apifox/cases/${cid}`),
   copyCase: (cid: Id) => post<Schemas['CaseOut']>(`/apifox/cases/${cid}/copy`),
+  aiGenerateCases: (eid: Id, data: Schemas['AiGenerateRequest']) =>
+    post<Schemas['AiGenerateResult']>(`/apifox/endpoints/${eid}/cases/ai-generate`, data, {
+      timeout: 120000, // LLM 生成耗时长，覆盖默认 60s，与功能用例生成/需求抽取一致
+    }),
+
+  // AI 生成任务化：建任务即返回，前端轮询进度（治超时/非阻塞/可恢复）
+  createAiGenTask: (pid: Id, data: Schemas['AiGenTaskCreate']) =>
+    post<Schemas['AiGenTaskOut']>(`/apifox/projects/${pid}/ai-gen-tasks`, data),
+  getAiGenTask: (tid: Id) => get<Schemas['AiGenTaskOut']>(`/apifox/ai-gen-tasks/${tid}`),
+  listActiveAiGenTasks: (pid: Id) =>
+    get<Schemas['AiGenTaskBrief'][]>(`/apifox/projects/${pid}/ai-gen-tasks/active`),
+  cancelAiGenTask: (tid: Id) => post<Schemas['AiGenTaskOut']>(`/apifox/ai-gen-tasks/${tid}/cancel`),
+  applyAiGenTaskItem: (tid: Id, iid: Id, data: Schemas['AiGenApplyRequest']) =>
+    post<Schemas['AiGenApplyResult']>(`/apifox/ai-gen-tasks/${tid}/items/${iid}/apply`, data),
 
   listSchemas: (pid: Id) => get<Schemas['SchemaBrief'][]>(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid: Id) => get<Schemas['SchemaOut']>(`/apifox/schemas/${sid}`),

@@ -1,3 +1,4 @@
+from app.routers.apifox.ai_gen_tasks import router as ai_gen_tasks_router
 from app.routers.apifox.cases import router as cases_router
 from app.routers.apifox.data_models import router as data_models_router
 from app.routers.apifox.databases import router as databases_router
@@ -18,6 +19,7 @@ from app.routers.apifox.workbench import router as workbench_router
 __all__ = [
     "router",
     "variables_router",
+    "ai_gen_tasks_router",
     "cases_router",
     "data_models_router",
     "scripts_router",

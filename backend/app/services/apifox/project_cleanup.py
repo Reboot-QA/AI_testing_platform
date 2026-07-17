@@ -12,6 +12,7 @@ from app.models.api_automation import (
     ApiTestStepResult,
     ApiTestSuite,
 )
+from app.models.apifox.ai_gen_task import ApifoxAiGenTask, ApifoxAiGenTaskItem
 from app.models.apifox.case import ApifoxCaseAssertion, ApifoxCaseExtract, ApifoxEndpointCase
 from app.models.apifox.data_model import ApifoxSchema
 from app.models.apifox.database_conn import ApifoxEnvironmentDatabase
@@ -50,6 +51,7 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     suite_ids = select(ApifoxSuite.id).where(ApifoxSuite.project_id == project_id)
     dataset_ids = select(ApifoxDataset.id).where(ApifoxDataset.project_id == project_id)
     case_ids = select(ApifoxEndpointCase.id).where(ApifoxEndpointCase.project_id == project_id)
+    aigen_task_ids = select(ApifoxAiGenTask.id).where(ApifoxAiGenTask.project_id == project_id)
     ep_ids = select(ApifoxEndpoint.id).where(ApifoxEndpoint.project_id == project_id)
     env_ids = select(ApifoxEnvironment.id).where(ApifoxEnvironment.project_id == project_id)
     envvar_ids = select(ApifoxEnvironmentVariable.id).where(
@@ -75,6 +77,9 @@ def purge_project_apifox(db: Session, project_id: int) -> None:
     # 场景
     wipe(ApifoxScenarioStep, ApifoxScenarioStep.scenario_id.in_(scen_ids))
     wipe(ApifoxScenario, ApifoxScenario.project_id == project_id)
+    # AI 生成任务（子项先于主表）
+    wipe(ApifoxAiGenTaskItem, ApifoxAiGenTaskItem.task_id.in_(aigen_task_ids))
+    wipe(ApifoxAiGenTask, ApifoxAiGenTask.project_id == project_id)
     # 用例及其处理器
     wipe(ApifoxCaseAssertion, ApifoxCaseAssertion.case_id.in_(case_ids))
     wipe(ApifoxCaseExtract, ApifoxCaseExtract.case_id.in_(case_ids))

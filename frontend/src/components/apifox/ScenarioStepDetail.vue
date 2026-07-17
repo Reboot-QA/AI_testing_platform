@@ -12,7 +12,13 @@
     <template v-if="step.type === 'case'">
       <div class="sd-field">
         <span class="sd-label">引用用例</span>
-        <el-select v-model="step.ref_case_id" filterable size="small" style="flex: 1" @change="onCaseChange">
+        <el-select
+          v-model="step.ref_case_id"
+          filterable
+          size="small"
+          style="flex: 1"
+          @change="onCaseChange"
+        >
           <el-option
             v-for="c in cases"
             :key="c.id"
@@ -44,7 +50,13 @@
 
     <div v-else-if="step.type === 'scenario'" class="sd-field">
       <span class="sd-label">子场景</span>
-      <el-select v-model="step.ref_scenario_id" filterable size="small" style="flex: 1" @change="onScenarioChange">
+      <el-select
+        v-model="step.ref_scenario_id"
+        filterable
+        size="small"
+        style="flex: 1"
+        @change="onScenarioChange"
+      >
         <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
       </el-select>
     </div>
@@ -68,7 +80,11 @@
 
     <div v-else-if="step.type === 'break' || step.type === 'continue'" class="sd-field">
       <span class="sd-label">说明</span>
-      <span class="sd-hint">{{ step.type === 'break' ? '立即跳出所在循环，不再执行后续轮次' : '跳过循环体剩余步骤，直接进入下一轮' }}</span>
+      <span class="sd-hint">{{
+        step.type === 'break'
+          ? '立即跳出所在循环，不再执行后续轮次'
+          : '跳过循环体剩余步骤，直接进入下一轮'
+      }}</span>
     </div>
 
     <template v-else-if="step.type === 'db'">
@@ -103,23 +119,42 @@
         <span class="sd-label">提取变量</span>
         <div class="db-extracts">
           <div v-for="(ex, i) in dbExtracts" :key="i" class="db-ex">
-            <el-input v-model="ex.var_name" size="small" placeholder="变量名" style="width: 120px" />
+            <el-input
+              v-model="ex.var_name"
+              size="small"
+              placeholder="变量名"
+              style="width: 120px"
+            />
             <span class="db-ex-arrow">← 列</span>
-            <el-input v-model="ex.column" size="small" placeholder="结果列名" style="width: 120px" />
+            <el-input
+              v-model="ex.column"
+              size="small"
+              placeholder="结果列名"
+              style="width: 120px"
+            />
             <el-select v-model="ex.scope" size="small" style="width: 96px">
               <el-option label="临时" value="temporary" />
               <el-option label="环境" value="environment" />
               <el-option label="全局" value="global" />
             </el-select>
-            <el-button link type="danger" size="small" @click="dbExtracts.splice(i, 1)">删</el-button>
+            <el-button link type="danger" size="small" @click="dbExtracts.splice(i, 1)"
+              >删</el-button
+            >
           </div>
-          <el-button link type="primary" size="small" @click="addDbExtract">+ 提取（取查询结果首行的列）</el-button>
+          <el-button link type="primary" size="small" @click="addDbExtract"
+            >+ 提取（取查询结果首行的列）</el-button
+          >
         </div>
       </div>
     </template>
 
     <template v-else-if="step.type === 'http'">
-      <ApiEndpointEditor :form="step.config" show-meta :server-names="serverNames" :project-id="route.params.projectId" />
+      <ApiEndpointEditor
+        :form="step.config"
+        show-meta
+        :server-names="serverNames"
+        :project-id="route.params.projectId"
+      />
       <div class="sd-field sd-field-top">
         <span class="sd-label">断言</span>
         <div class="http-proc"><AssertionsEditor :rows="step.config.assertions" /></div>
@@ -174,7 +209,9 @@ function addDbExtract() {
 }
 
 // config.condition 由 normalizeStep(加载)/addStep(新建) 保证存在；此处纯读取，不在 computed 里改 props
-const ifCondition = computed(() => props.step.config?.condition ?? { left: '', operator: 'eq', right: '' })
+const ifCondition = computed(
+  () => props.step.config?.condition ?? { left: '', operator: 'eq', right: '' },
+)
 // loop 的 config 由 addStep 初始化好全部字段，此处纯读取
 const loopConfig = computed(() => props.step.config ?? { mode: 'count', count: 1 })
 
@@ -184,13 +221,24 @@ function onElseToggle(enabled) {
 
 const savingCase = ref(false)
 const caseForm = reactive({
-  id: null, name: '', request_spec: null, variables: [], assertions: [], extracts: [],
-  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] }, version: 1,
+  id: null,
+  name: '',
+  request_spec: null,
+  variables: [],
+  assertions: [],
+  extracts: [],
+  pre_scripts: [],
+  post_scripts: [],
+  data_drive: { enabled: false, rows: [] },
+  version: 1,
 })
 
 const availableScenarios = computed(() =>
-  props.scenarios.filter((s) => s.id !== props.currentScenarioId)
+  props.scenarios.filter((s) => s.id !== props.currentScenarioId),
 )
+
+// 加载/保存时的内容快照，用于整体保存时判断引用用例是否真被编辑过（脏检查）
+let caseSnapshot = ''
 
 function applyCase(c) {
   caseForm.id = c.id
@@ -201,8 +249,10 @@ function applyCase(c) {
   caseForm.extracts = c.extracts || []
   caseForm.pre_scripts = c.pre_scripts || []
   caseForm.post_scripts = c.post_scripts || []
-  caseForm.data_drive = c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+  caseForm.data_drive =
+    c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
   caseForm.version = c.version ?? 1
+  caseSnapshot = JSON.stringify(caseFormPayload())
 }
 
 async function loadCase(id) {
@@ -216,8 +266,10 @@ async function loadCase(id) {
 // 选中步骤（uid）或引用用例变化 → 重载内嵌用例
 watch(
   () => (props.step.type === 'case' ? [props.step._uid, props.step.ref_case_id] : null),
-  () => { if (props.step.type === 'case') loadCase(props.step.ref_case_id) },
-  { immediate: true }
+  () => {
+    if (props.step.type === 'case') loadCase(props.step.ref_case_id)
+  },
+  { immediate: true },
 )
 
 function onCaseChange(id) {
@@ -235,8 +287,12 @@ function onScenarioChange(id) {
 
 function caseFormPayload() {
   return {
-    name: caseForm.name, request_spec: caseForm.request_spec, variables: caseForm.variables,
-    data_drive: caseForm.data_drive, assertions: caseForm.assertions, extracts: caseForm.extracts,
+    name: caseForm.name,
+    request_spec: caseForm.request_spec,
+    variables: caseForm.variables,
+    data_drive: caseForm.data_drive,
+    assertions: caseForm.assertions,
+    extracts: caseForm.extracts,
     pre_scripts: caseForm.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
     post_scripts: caseForm.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
   }
@@ -244,17 +300,17 @@ function caseFormPayload() {
 
 async function doSaveCase() {
   const updated = await apifoxApi.updateCase(caseForm.id, {
-    ...caseFormPayload(), expected_version: caseForm.version,
+    ...caseFormPayload(),
+    expected_version: caseForm.version,
   })
   caseForm.version = updated.version
   props.step.case_name = caseForm.name // 同步步骤显示名
+  caseSnapshot = JSON.stringify(caseFormPayload()) // 保存后即为干净态
 }
 
-async function saveCase() {
-  savingCase.value = true
+async function saveCaseWithConflict() {
   try {
     await doSaveCase()
-    ElMessage.success('用例已保存')
   } catch (e) {
     if (!isConflict(e)) throw e
     await resolveSaveConflict({
@@ -265,10 +321,28 @@ async function saveCase() {
         await doSaveCase()
       },
     })
+  }
+}
+
+async function saveCase() {
+  savingCase.value = true
+  try {
+    await saveCaseWithConflict()
+    ElMessage.success('用例已保存')
   } finally {
     savingCase.value = false
   }
 }
+
+// 供场景整体保存调用：选中的是引用用例步骤且确有编辑（脏检查）时，才落库——
+// 避免对未改动的共享用例做无意义写入 + version 自增 + 误触发并发 409
+async function flushCase() {
+  if (props.step.type !== 'case' || !caseForm.id) return
+  if (JSON.stringify(caseFormPayload()) === caseSnapshot) return
+  await saveCaseWithConflict()
+}
+
+defineExpose({ flushCase })
 </script>
 
 <style scoped>

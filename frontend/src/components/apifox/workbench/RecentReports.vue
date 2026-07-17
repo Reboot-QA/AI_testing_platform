@@ -5,14 +5,12 @@
     </div>
     <div v-if="reports.length" class="rows">
       <div v-for="r in reports" :key="r.run_id" class="runrow" @click="$emit('open', r)">
-        <div class="pi" :style="{ background: colorOf(r.project_id) }">
-          {{ letterOf(r.project_name) }}
+        <div class="pi" :style="{ background: colorOf(r.target_type) }">
+          {{ typeLabel(r.target_type).charAt(0) }}
         </div>
         <div class="mid">
-          <div class="nm">{{ r.target_name }}</div>
-          <div class="sb">
-            {{ r.project_name }} · {{ r.environment_name || '未选环境' }} · {{ time(r.started_at) }}
-          </div>
+          <div class="nm">【{{ typeLabel(r.target_type) }}】{{ r.target_name }}</div>
+          <div class="sb">{{ r.environment_name || '未选环境' }} · {{ time(r.started_at) }}</div>
         </div>
         <span class="pill" :class="pillClass(r)">{{ pillText(r) }}</span>
       </div>
@@ -27,10 +25,11 @@ defineProps({
 })
 defineEmits(['open'])
 
-// 与 RunningAutomations 一致的项目取色/首字母/时间格式，保证右栏两卡观感统一
-const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
-const colorOf = (id) => PALETTE[id % PALETTE.length]
-const letterOf = (name) => (name || '?').trim().charAt(0).toUpperCase()
+// 测试类型：场景/单接口/套件（对齐自动化测试各模块），色块与首字按类型区分
+const TYPE_LABEL = { scenario: '场景', case: '单接口', suite: '套件' }
+const TYPE_COLOR = { scenario: '#2b6cb0', case: '#2c7a7b', suite: '#6b46c1' }
+const typeLabel = (t) => TYPE_LABEL[t] || '用例'
+const colorOf = (t) => TYPE_COLOR[t] || '#2c5282'
 const time = (v) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
 
 function pillClass(r) {

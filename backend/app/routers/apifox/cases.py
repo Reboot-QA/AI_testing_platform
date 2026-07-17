@@ -15,15 +15,19 @@ from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.user import User
 from app.repositories.apifox import case_repo, endpoint_repo
 from app.routers.apifox.case_schemas import (
+    AiGenerateRequest,
+    AiGenerateResult,
     CaseBrief,
     CaseCreate,
     CaseOut,
     CaseUpdate,
     ProjectCaseBrief,
 )
+from app.services.apifox import ai_case_service
 from app.services.apifox import case_service as service
 from app.services.apifox.errors import ConflictError
 from app.services.project_access_service import get_accessible_project
+from app.services.settings_service import get_effective_llm_config
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·用例"])
 
@@ -70,6 +74,22 @@ def create_case(
         return service.create_case(db, endpoint.project_id, endpoint.id, data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/endpoints/{eid}/cases/ai-generate", response_model=AiGenerateResult)
+async def ai_generate_cases(
+    eid: int,
+    data: AiGenerateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    endpoint = _endpoint_checked(db, eid, user)
+    llm_config = get_effective_llm_config(db, data.provider_id)
+    try:
+        cases, mode = await ai_case_service.generate_cases(db, endpoint, data.categories, llm_config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return AiGenerateResult(mode=mode, cases=cases)
 
 
 @router.get("/cases/{cid}", response_model=CaseOut)

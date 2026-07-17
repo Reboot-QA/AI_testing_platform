@@ -16,7 +16,7 @@ from app.services.apifox import scenario_service as svc
 def stub_execute_case(monkeypatch):
     """execute_case 桩：回 passed + 最小 detail，不发网络请求。"""
 
-    def _fake(db, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
         return "passed", {
             "method": endpoint.method,
             "url": endpoint.path,
@@ -198,7 +198,7 @@ def test_branch_steps_depth_is_if_depth_plus_one(db, make_case, stub_execute_cas
 def test_runtime_extraction_drives_branch(db, make_case, monkeypatch):
     setter, then_c = make_case(name="setter"), make_case(name="THEN")
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         extracted = {"flag": "go"} if case.name == "setter" else {}
         return "passed", {"method": endpoint.method, "url": endpoint.path,
                           "extracted": extracted, "scoped": []}
@@ -240,7 +240,7 @@ def test_list_loop_injects_item_each_round(db, make_case, monkeypatch):
     setup, body = make_case(name="setup"), make_case(name="body")
     seen = []
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         extracted = {"items": '["x", "y"]'} if case.name == "setup" else {}
         if case.name == "body":
             seen.append(variables.get("it"))
@@ -294,7 +294,7 @@ def test_while_always_true_capped_at_max_iterations(db, make_case, stub_execute_
 def test_while_counter_flips_stops_at_threshold(db, make_case, monkeypatch):
     init, inc = make_case(name="init"), make_case(name="inc")
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         if case.name == "init":
             extracted = {"i": "0"}
         else:
@@ -338,7 +338,7 @@ def test_nested_loop_index_var_is_scoped_not_leaked(db, make_case, monkeypatch):
     inner_body, recorder = make_case(name="inner"), make_case(name="rec")
     seen = []
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         if case.name == "rec":
             seen.append(variables.get("index"))
         return "passed", {"method": endpoint.method, "url": endpoint.path,
@@ -402,7 +402,7 @@ def test_continue_skips_rest_of_body_but_runs_all_rounds(db, make_case, stub_exe
 def test_break_inside_if_triggers_only_on_matching_round(db, make_case, monkeypatch):
     body = make_case(name="body")
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         cur = int(variables.get("i", "0"))
         return "passed", {"method": endpoint.method, "url": endpoint.path,
                           "extracted": {"i": str(cur + 1)}, "scoped": []}
@@ -464,7 +464,7 @@ def test_loop_var_restored_after_break(db, make_case, monkeypatch):
     body, after = make_case(name="body"), make_case(name="after")
     seen = []
 
-    def _fake(db_, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db_, case, endpoint, environment, variables, assertions, extracts, **_):
         if case.name == "after":
             seen.append(variables.get("index"))
         return "passed", {"method": endpoint.method, "url": endpoint.path,

@@ -19,6 +19,7 @@ from app.routers.apifox.suite_schemas import (
     SuiteOut,
     SuiteUpdate,
 )
+from app.services.apifox import versioning
 
 VALID_TARGET_TYPES = {"case", "scenario"}
 
@@ -80,6 +81,7 @@ def _out(db: Session, suite: ApifoxSuite) -> SuiteOut:
         description=suite.description,
         items=[_item_out(db, it) for it in repo.list_items(db, suite.id)],
         sort_order=suite.sort_order,
+        version=suite.version,
         created_at=suite.created_at,
         updated_at=suite.updated_at,
     )
@@ -140,6 +142,8 @@ def copy_suite(db: Session, suite: ApifoxSuite) -> SuiteOut:
 
 
 def update_suite(db: Session, suite: ApifoxSuite, data: SuiteUpdate) -> SuiteOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxSuite, suite, data.expected_version)
     if data.name is not None:
         suite.name = data.name
     if "description" in data.model_fields_set:

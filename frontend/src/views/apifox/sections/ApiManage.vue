@@ -78,6 +78,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { useApiTabsStore } from '@/stores/apiTabs'
 import { useProjectScripts } from '@/composables/useProjectScripts'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
@@ -97,6 +98,9 @@ const schemas = ref([])
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
 const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
+
+// 路由级未保存守卫：切路由/切项目/退出前，有未保存改动则确认
+useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
 
 const serverNames = computed(() => {
   const names = new Set()
@@ -121,12 +125,18 @@ async function onSelectEndpoint(id) {
 
 function endpointPayload(form) {
   return {
-    name: form.name, method: form.method, path: form.path, server_name: form.server_name,
-    description: form.description, request_spec: form.request_spec,
-    assertions: form.assertions, extracts: form.extracts,
+    name: form.name,
+    method: form.method,
+    path: form.path,
+    server_name: form.server_name,
+    description: form.description,
+    request_spec: form.request_spec,
+    assertions: form.assertions,
+    extracts: form.extracts,
     pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
     post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    response_schema_id: form.response_schema_id, contract_strict: form.contract_strict,
+    response_schema_id: form.response_schema_id,
+    contract_strict: form.contract_strict,
   }
 }
 
@@ -137,7 +147,8 @@ async function saveEndpoint(id) {
   tab.saving = true
   try {
     const updated = await apifoxApi.updateEndpoint(tab.id, {
-      ...endpointPayload(tab.form), expected_version: tab.version,
+      ...endpointPayload(tab.form),
+      expected_version: tab.version,
     })
     tabsStore.afterSave(pid.value, tab.id, updated)
     treePanel.value?.reload()
@@ -158,7 +169,8 @@ async function saveEndpoint(id) {
         const latest = await apifoxApi.getEndpoint(tab.id)
         tab.version = latest.version
         const updated = await apifoxApi.updateEndpoint(tab.id, {
-          ...endpointPayload(tab.form), expected_version: tab.version,
+          ...endpointPayload(tab.form),
+          expected_version: tab.version,
         })
         tabsStore.afterSave(pid.value, tab.id, updated)
         treePanel.value?.reload()
