@@ -125,14 +125,23 @@ const selectedPreset = ref<string | null>(null)
 
 function loadPresets() {
   try {
-    presets.value = JSON.parse(localStorage.getItem(PRESET_KEY) || '[]')
+    const parsed = JSON.parse(localStorage.getItem(PRESET_KEY) || '[]')
+    presets.value = Array.isArray(parsed) ? parsed : []
   } catch {
     presets.value = []
   }
 }
 
-function persistPresets() {
-  localStorage.setItem(PRESET_KEY, JSON.stringify(presets.value))
+// localStorage 为唯一事实来源：写成功才更新内存，写失败明确报错，避免"看似已保存实则没落盘"
+function writePresets(next: DebugPreset[]): boolean {
+  try {
+    localStorage.setItem(PRESET_KEY, JSON.stringify(next))
+    presets.value = next
+    return true
+  } catch {
+    ElMessage.error('保存预设失败：浏览器本地存储不可用（隐私模式或存储已满）')
+    return false
+  }
 }
 
 function applyPreset(name: string | null) {
@@ -161,18 +170,18 @@ async function savePreset() {
     respStatus: respStatus.value,
     respBody: respBody.value,
   }
-  const idx = presets.value.findIndex((x) => x.name === name)
-  if (idx >= 0) presets.value[idx] = preset
-  else presets.value.push(preset)
-  persistPresets()
+  const exists = presets.value.some((x) => x.name === name)
+  const next = exists
+    ? presets.value.map((x) => (x.name === name ? preset : x))
+    : [...presets.value, preset]
+  if (!writePresets(next)) return
   selectedPreset.value = name
   ElMessage.success('已保存预设')
 }
 
 function deletePreset() {
-  presets.value = presets.value.filter((x) => x.name !== selectedPreset.value)
-  persistPresets()
-  selectedPreset.value = null
+  if (writePresets(presets.value.filter((x) => x.name !== selectedPreset.value)))
+    selectedPreset.value = null
 }
 
 onMounted(loadPresets)
