@@ -28,6 +28,7 @@ from app.services.apifox.migration import (
 )
 from app.services.apifox.scheduler import init_schedules_on_startup
 from app.services.permission_service import migrate_all_user_permissions
+from app.services.project_migration import migrate_project_members_columns
 from app.services.seed import seed_demo_data
 from app.services.settings_service import init_llm_settings_from_env
 from app.services.user_migration import migrate_user_must_change_password, migrate_user_optional_email
@@ -61,6 +62,7 @@ def run_bootstrap() -> None:
         ("迁移场景文件夹列", migrate_apifox_scenario_folder),
         ("迁移运行步骤告警列", migrate_apifox_run_step_warnings),
         ("迁移失败通知重试列", migrate_apifox_notify_retry),
+        ("迁移项目成员列", migrate_project_members_columns),
         ("写入演示数据", seed_demo_data),
         ("加载 LLM 配置", init_llm_settings_from_env),
         ("迁移菜单权限", migrate_all_user_permissions),
