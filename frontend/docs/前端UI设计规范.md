@@ -178,7 +178,7 @@ import PageCard from '@/components/PageCard.vue'
 ```
 
 ### 4.3 分页
-- 统一 `background`，`layout="total, sizes, prev, pager, next, jumper"`，`:page-sizes="[10,20,50,100]"`。
+- 统一 `background`，`layout="total, sizes, prev, pager, next, jumper"`，`:page-sizes="[20,40,80,100]"`。
 - 分页栏右对齐（`.pagination-bar`）。
 
 ---
@@ -258,7 +258,7 @@ import PageCard from '@/components/PageCard.vue'
         v-model:current-page="page"
         v-model:page-size="pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[20, 40, 80, 100]"
         layout="total, sizes, prev, pager, next, jumper"
         background
         @current-change="load"

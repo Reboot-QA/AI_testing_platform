@@ -6,6 +6,7 @@ import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 
 import './styles/tokens.css'
+import './styles/scrollbar.css'
 import './styles/element-theme.css'
 import './styles/tailwind.css'
 import './styles/layout.css'

@@ -154,7 +154,7 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[...PAGE_SIZE_OPTIONS]"
         layout="total, sizes, prev, pager, next, jumper"
         background
         @current-change="loadData"
@@ -337,6 +337,7 @@ import type { ProjectPageOut } from '@/api/project'
 import { formatBeijingTime } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
@@ -378,7 +379,7 @@ const filterStatus = ref('')
 const keyword = ref('')
 const batchStatus = ref('')
 const currentPage = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const total = ref(0)
 const loading = ref(false)
 const exporting = ref(false)
