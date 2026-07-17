@@ -1601,6 +1601,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/script-debug-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Debug Presets */
+        get: operations["list_debug_presets_api_v1_apifox_projects__pid__script_debug_presets_get"];
+        /** Save Debug Preset */
+        put: operations["save_debug_preset_api_v1_apifox_projects__pid__script_debug_presets_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/projects/{pid}/script-debug-presets/{preset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Debug Preset */
+        delete: operations["delete_debug_preset_api_v1_apifox_projects__pid__script_debug_presets__preset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/scripts/{sid}": {
         parameters: {
             query?: never;
@@ -2955,6 +2990,48 @@ export interface components {
             sort_order?: number | null;
             /** Expected Version */
             expected_version?: number | null;
+        };
+        /** DebugPresetIn */
+        DebugPresetIn: {
+            /** Name */
+            name: string;
+            /**
+             * Phase
+             * @default pre
+             * @enum {string}
+             */
+            phase: "pre" | "post";
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+            /**
+             * Response Status
+             * @default 200
+             */
+            response_status: number;
+            /**
+             * Response Body
+             * @default
+             */
+            response_body: string;
+        };
+        /** DebugPresetOut */
+        DebugPresetOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Phase */
+            phase: string;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+            /** Response Status */
+            response_status: number;
+            /** Response Body */
+            response_body: string;
         };
         /** DebugRequest */
         DebugRequest: {
@@ -9906,6 +9983,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScriptDebugOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_debug_presets_api_v1_apifox_projects__pid__script_debug_presets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebugPresetOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_debug_preset_api_v1_apifox_projects__pid__script_debug_presets_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebugPresetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebugPresetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_debug_preset_api_v1_apifox_projects__pid__script_debug_presets__preset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+                preset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

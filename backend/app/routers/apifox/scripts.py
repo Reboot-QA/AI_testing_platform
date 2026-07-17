@@ -11,6 +11,8 @@ from app.models.apifox.script import ApifoxScript
 from app.models.user import User
 from app.repositories.apifox import script_repo as repo
 from app.routers.apifox.script_schemas import (
+    DebugPresetIn,
+    DebugPresetOut,
     ScriptBrief,
     ScriptCreate,
     ScriptDebugIn,
@@ -18,6 +20,7 @@ from app.routers.apifox.script_schemas import (
     ScriptOut,
     ScriptUpdate,
 )
+from app.services.apifox import script_debug_preset_service as preset_service
 from app.services.apifox import script_service as service
 from app.services.apifox.errors import ConflictError
 from app.services.project_access_service import get_accessible_project
@@ -58,6 +61,31 @@ def debug_script(data: ScriptDebugIn, user: User = Depends(get_current_user)):
         return service.debug_script(data)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# 调试预设：项目级共享（成员皆可用，跟随项目/跨设备）
+@router.get("/projects/{pid}/script-debug-presets", response_model=List[DebugPresetOut])
+def list_debug_presets(pid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    get_accessible_project(db, pid, user)
+    return preset_service.list_presets(db, pid)
+
+
+@router.put("/projects/{pid}/script-debug-presets", response_model=DebugPresetOut)
+def save_debug_preset(
+    pid: int, data: DebugPresetIn, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    get_accessible_project(db, pid, user)
+    return preset_service.upsert_preset(db, pid, data, user.id)
+
+
+@router.delete("/projects/{pid}/script-debug-presets/{preset_id}")
+def delete_debug_preset(
+    pid: int, preset_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    get_accessible_project(db, pid, user)
+    if not preset_service.delete_preset(db, pid, preset_id):
+        raise HTTPException(status_code=404, detail="预设不存在")
+    return {"message": "预设已删除"}
 
 
 @router.get("/scripts/{sid}", response_model=ScriptOut)

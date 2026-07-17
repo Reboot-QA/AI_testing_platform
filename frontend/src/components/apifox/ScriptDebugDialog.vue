@@ -24,7 +24,7 @@
         style="width: 220px"
         @change="applyPreset"
       >
-        <el-option v-for="p in presets" :key="p.name" :label="p.name" :value="p.name" />
+        <el-option v-for="p in presets" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
       <el-button size="small" @click="savePreset">保存当前输入</el-button>
       <el-button v-if="selectedPreset" size="small" text type="danger" @click="deletePreset"
@@ -83,6 +83,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
 import type { KvRow } from '@/types/apifox'
 import { apifoxApi } from '@/api'
@@ -92,6 +93,7 @@ import JsonView from '@/components/apifox/common/JsonView.vue'
 
 const props = withDefaults(
   defineProps<{
+    projectId: Id
     visible?: boolean
     lang?: string
     content?: string
@@ -111,46 +113,27 @@ const respBody = ref('')
 const running = ref(false)
 const result = ref<Schemas['ScriptDebugOut'] | null>(null)
 
-// 调试输入预设（本浏览器保存，供下次复用）
-interface DebugPreset {
-  name: string
-  phase: 'pre' | 'post'
-  variables: Record<string, string>
-  respStatus: number
-  respBody: string
-}
-const PRESET_KEY = 'apifox:scriptDebugPresets'
-const presets = ref<DebugPreset[]>([])
-const selectedPreset = ref<string | null>(null)
+// 调试输入预设（项目级共享，存服务端，成员皆可用、跨设备）
+const presets = ref<Schemas['DebugPresetOut'][]>([])
+const selectedPreset = ref<number | null>(null)
 
-function loadPresets() {
+async function loadPresets() {
   try {
-    const parsed = JSON.parse(localStorage.getItem(PRESET_KEY) || '[]')
-    presets.value = Array.isArray(parsed) ? parsed : []
+    presets.value = await apifoxApi.listDebugPresets(props.projectId)
   } catch {
     presets.value = []
   }
 }
 
-// localStorage 为唯一事实来源：写成功才更新内存，写失败明确报错，避免"看似已保存实则没落盘"
-function writePresets(next: DebugPreset[]): boolean {
-  try {
-    localStorage.setItem(PRESET_KEY, JSON.stringify(next))
-    presets.value = next
-    return true
-  } catch {
-    ElMessage.error('保存预设失败：浏览器本地存储不可用（隐私模式或存储已满）')
-    return false
-  }
-}
-
-function applyPreset(name: string | null) {
-  const p = presets.value.find((x) => x.name === name)
+function applyPreset(id: number | null) {
+  const p = presets.value.find((x) => x.id === id)
   if (!p) return
-  phase.value = p.phase
-  varRows.value = ensureKvRows(Object.entries(p.variables).map(([key, value]) => ({ key, value })))
-  respStatus.value = p.respStatus
-  respBody.value = p.respBody
+  phase.value = p.phase === 'post' ? 'post' : 'pre'
+  varRows.value = ensureKvRows(
+    Object.entries(p.variables || {}).map(([key, value]) => ({ key, value })),
+  )
+  respStatus.value = p.response_status
+  respBody.value = p.response_body
 }
 
 async function savePreset() {
@@ -162,35 +145,36 @@ async function savePreset() {
       inputErrorMessage: '不能为空',
     },
   )
-  const name = value.trim()
-  const preset: DebugPreset = {
-    name,
+  const saved = await apifoxApi.saveDebugPreset(props.projectId, {
+    name: value.trim(),
     phase: phase.value,
     variables: rowsToObject(varRows.value),
-    respStatus: respStatus.value,
-    respBody: respBody.value,
-  }
-  const exists = presets.value.some((x) => x.name === name)
-  const next = exists
-    ? presets.value.map((x) => (x.name === name ? preset : x))
-    : [...presets.value, preset]
-  if (!writePresets(next)) return
-  selectedPreset.value = name
+    response_status: respStatus.value,
+    response_body: respBody.value,
+  })
+  await loadPresets()
+  selectedPreset.value = saved.id
   ElMessage.success('已保存预设')
 }
 
-function deletePreset() {
-  if (writePresets(presets.value.filter((x) => x.name !== selectedPreset.value)))
-    selectedPreset.value = null
+async function deletePreset() {
+  if (selectedPreset.value == null) return
+  await apifoxApi.deleteDebugPreset(props.projectId, selectedPreset.value)
+  selectedPreset.value = null
+  await loadPresets()
+  ElMessage.success('已删除预设')
 }
 
 onMounted(loadPresets)
 
-// 每次打开重置结果，避免看到上次的输出
+// 打开时重置结果并刷新预设（共享数据，可能被他人更新）
 watch(
   () => props.visible,
   (v) => {
-    if (v) result.value = null
+    if (v) {
+      result.value = null
+      loadPresets()
+    }
   },
 )
 
