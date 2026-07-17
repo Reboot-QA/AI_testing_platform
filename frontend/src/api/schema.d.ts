@@ -2227,6 +2227,18 @@ export interface components {
             status: string;
             /** Mode */
             mode?: string | null;
+            /** Target */
+            target?: string | null;
+            /**
+             * Categories
+             * @default []
+             */
+            categories: string[];
+            /**
+             * Generated Total
+             * @default 0
+             */
+            generated_total: number;
             /** Total Items */
             total_items: number;
             /** Done Items */
@@ -2236,6 +2248,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
         };
         /** AiGenTaskCreate */
         AiGenTaskCreate: {
@@ -2282,6 +2296,13 @@ export interface components {
             mode?: string | null;
             /** Provider Id */
             provider_id?: number | null;
+            /**
+             * Categories
+             * @default []
+             */
+            categories: components["schemas"]["AiGenCategory"][];
+            /** Creator Name */
+            creator_name?: string | null;
             /** Total Items */
             total_items: number;
             /** Done Items */

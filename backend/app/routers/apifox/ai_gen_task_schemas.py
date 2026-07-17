@@ -32,6 +32,8 @@ class AiGenTaskOut(BaseModel):
     status: str
     mode: Optional[str] = None
     provider_id: Optional[int] = None
+    categories: List[AiGenCategory] = []  # 生成时选的类别配置（含数量），详情信息区展示
+    creator_name: Optional[str] = None
     total_items: int
     done_items: int
     error: Optional[str] = None
@@ -44,9 +46,13 @@ class AiGenTaskBrief(BaseModel):
     id: int
     status: str
     mode: Optional[str] = None  # llm|mock，跑起来才定
+    target: Optional[str] = None  # 单接口任务=method+path；批量为空（前端展示"批量·N接口"）
+    categories: List[str] = []  # 选中的类别值（positive/negative/...），列表摘要用
+    generated_total: int = 0  # 该任务已生成用例总数（Σ 各接口）
     total_items: int
     done_items: int
     created_at: datetime
+    finished_at: Optional[datetime] = None
 
 
 class AiGenTaskPageOut(BaseModel):
