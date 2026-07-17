@@ -78,6 +78,43 @@ def test_parse_malformed_raises():
         svc._parse_cases_payload("这不是 JSON")
 
 
+def test_parse_salvages_objects_when_missing_comma():
+    # LLM 漏了对象间逗号 → 整体解析失败，救回两个完整用例
+    content = '{"cases":[{"name":"a","category":"positive"} {"name":"b","category":"negative"}]}'
+
+    cases = svc._parse_cases_payload(content)
+
+    assert [c["name"] for c in cases] == ["a", "b"]
+
+
+def test_parse_salvages_complete_cases_from_truncated_tail():
+    # 末尾被 max_tokens 截断 → 丢弃未闭合的最后一个，保留前面完整的
+    content = '{"cases":[{"name":"a","category":"positive"},{"name":"b","categ'
+
+    cases = svc._parse_cases_payload(content)
+
+    assert [c["name"] for c in cases] == ["a"]
+
+
+def test_parse_salvage_ignores_braces_inside_strings():
+    content = '{"cases":[{"name":"含 {大括号} 的名","category":"positive"} {"name":"b"}]}'
+
+    cases = svc._parse_cases_payload(content)
+
+    assert cases[0]["name"] == "含 {大括号} 的名" and len(cases) == 2
+
+
+def test_parse_salvage_maps_to_valid_cases_end_to_end():
+    # 救回的畸形 JSON 能继续走 _build_cases 构造成用例
+    from app.routers.apifox.schemas import RequestSpec
+
+    content = '{"cases":[{"name":"缺逗号用例","category":"positive"} {"name":"用例2"}]}'
+    raw = svc._parse_cases_payload(content)
+    built = svc._build_cases(RequestSpec(), raw)
+
+    assert [c.name for c in built] == ["缺逗号用例", "用例2"]
+
+
 # ---------- 参数填值 ----------
 def test_apply_kv_overrides_existing_key():
     rows = [KvRow(key="page", value="", enabled=False)]
