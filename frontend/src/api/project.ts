@@ -40,4 +40,14 @@ export const projectApi = {
   // 保存当前用户的置顶/排序偏好（items 按展示顺序：[{ project_id, pinned }]）
   savePreferences: (items: Schemas['ProjectPrefOrderIn']['items']) =>
     put<any>('/projects/preferences/order', { items }),
+  // 项目成员（显式授权，管理需项目负责人/系统管理员）
+  listMembers: (id: Id) => get<Schemas['ProjectMemberOut'][]>(`/projects/${id}/members`),
+  memberCandidates: (id: Id, keyword?: string) =>
+    get<Schemas['ProjectMemberCandidateOut'][]>(`/projects/${id}/member-candidates`, {
+      params: keyword ? { keyword } : undefined,
+    }),
+  addMember: (id: Id, userId: number) =>
+    post<Schemas['ProjectMemberOut']>(`/projects/${id}/members`, { user_id: userId }),
+  removeMember: (id: Id, userId: number) =>
+    del<{ message: string }>(`/projects/${id}/members/${userId}`),
 }

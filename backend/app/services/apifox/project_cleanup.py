@@ -39,6 +39,7 @@ from app.models.apifox.variable import (
     ApifoxGlobalVariable,
     ApifoxGlobalVarLocal,
 )
+from app.models.project_member import ProjectMember
 from app.models.requirement import Requirement
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.testcase import TestCase
@@ -147,7 +148,8 @@ def purge_project_all(db: Session, project_id: int) -> None:
     # 用例（引用需求）→ 需求
     wipe(TestCase, TestCase.project_id == project_id)
     wipe(Requirement, Requirement.project_id == project_id)
-    # 用户置顶/排序偏好
+    # 用户置顶/排序偏好、项目成员授权
     wipe(UserProjectPref, UserProjectPref.project_id == project_id)
+    wipe(ProjectMember, ProjectMember.project_id == project_id)
     # apifox 全套
     purge_project_apifox(db, project_id)
