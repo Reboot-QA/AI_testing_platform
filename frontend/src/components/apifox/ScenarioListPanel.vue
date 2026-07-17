@@ -216,7 +216,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 }
 
 .panel-title {
-  font-size: 14px;
+  font-size: var(--ax-font);
   font-weight: 600;
   line-height: 1.25;
   color: var(--ax-brand);
@@ -228,7 +228,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
   gap: 6px;
   padding: 5px 6px;
   margin-top: 6px;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   font-weight: 600;
   line-height: 1.25;
 }
@@ -243,7 +243,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 
 .group-head-icon {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
 }
 
 .group-head-name {
@@ -256,7 +256,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 
 .group-head-count {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--ax-font-xs);
   font-weight: 400;
   color: var(--ax-text-tertiary);
 }
@@ -284,7 +284,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--ax-font-sm);
   font-weight: 400;
   line-height: 1.35;
   color: var(--ax-text);
@@ -292,7 +292,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 
 .scenario-meta {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--ax-font-xs);
   line-height: 1;
   color: var(--ax-text-placeholder);
   font-variant-numeric: tabular-nums;
@@ -303,7 +303,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
   align-items: center;
   cursor: grab;
   color: var(--ax-text-placeholder);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   opacity: 0.4;
   transition:
     opacity 0.15s,
@@ -324,13 +324,13 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 
 .priority-label {
   flex-shrink: 0;
-  font-size: 11px;
+  font-size: var(--ax-font-xs);
   line-height: 1;
 }
 
 .scenario-del {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   cursor: pointer;
   color: var(--ax-text-placeholder);
   transition: color 0.15s;
@@ -343,7 +343,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 .empty-hint {
   pointer-events: none;
   padding: 2px 0 2px 28px;
-  font-size: 11px;
+  font-size: var(--ax-font-xs);
   line-height: 1.35;
   color: var(--ax-text-placeholder);
 }

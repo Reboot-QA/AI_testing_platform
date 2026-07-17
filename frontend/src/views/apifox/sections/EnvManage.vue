@@ -1,8 +1,8 @@
 <template>
   <div class="env-manage">
     <div class="list-panel">
-      <div class="list-toolbar">
-        <span>环境</span>
+      <div class="panel-head">
+        <span class="panel-title">环境</span>
         <el-button size="small" type="primary" @click="addEnv">
           <el-icon><Plus /></el-icon>
         </el-button>
@@ -273,24 +273,31 @@ onMounted(async () => {
 <style scoped>
 .env-manage {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 220px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .list-panel {
   width: 240px;
+  flex-shrink: 0;
   border-right: 1px solid var(--ax-border);
   overflow: auto;
   padding-right: 8px;
 }
 
-.list-toolbar {
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
   margin-bottom: 8px;
+}
+
+.panel-title {
+  font-size: var(--ax-font);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-brand);
 }
 
 .env-item {
@@ -318,9 +325,11 @@ onMounted(async () => {
 
 .env-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--ax-font-sm);
 }
 
 .env-ops {
@@ -351,7 +360,7 @@ onMounted(async () => {
 
 .base-label {
   flex-shrink: 0;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 

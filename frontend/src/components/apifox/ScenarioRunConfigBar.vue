@@ -44,7 +44,6 @@
 
 <script setup lang="ts">
 import type { Schemas } from '@/api/types'
-import type { Id } from '@/api/request'
 
 type DatasetBrief = Schemas['DatasetBrief']
 

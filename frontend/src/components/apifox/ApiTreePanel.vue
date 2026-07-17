@@ -287,11 +287,11 @@ onMounted(reloadAll)
 
 <style scoped>
 .tree-panel {
-  width: 300px;
+  width: 280px;
   flex-shrink: 0;
   border-right: 1px solid var(--ax-border);
   overflow: auto;
-  padding-right: 8px;
+  padding-right: var(--ax-gap);
 }
 
 .tree-toolbar {
@@ -341,7 +341,7 @@ onMounted(reloadAll)
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   font-weight: 700;
   color: var(--ax-text-tertiary);
   padding: 4px 8px;
@@ -353,7 +353,7 @@ onMounted(reloadAll)
   padding: 6px 8px 6px 26px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 
@@ -369,7 +369,7 @@ onMounted(reloadAll)
 
 .schema-empty {
   padding: 4px 8px 4px 26px;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   color: var(--ax-text-placeholder);
 }
 </style>

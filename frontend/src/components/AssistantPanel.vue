@@ -34,12 +34,7 @@
             </div>
           </div>
 
-          <div
-            v-for="msg in messages"
-            :key="msg.id"
-            class="message-row"
-            :class="msg.role"
-          >
+          <div v-for="msg in messages" :key="msg.id" class="message-row" :class="msg.role">
             <div class="bubble">
               <div v-if="msg.content" v-html="formatContent(msg.content)" />
               <div v-if="msg.actions?.length" class="action-card">
@@ -50,27 +45,35 @@
                   </li>
                 </ul>
                 <div v-if="msg.executionLogs?.length" class="exec-logs">
-                  <div v-for="(log, logIndex) in msg.executionLogs" :key="logIndex" class="exec-log">
+                  <div
+                    v-for="(log, logIndex) in msg.executionLogs"
+                    :key="logIndex"
+                    class="exec-log"
+                  >
                     <el-icon v-if="log.status === 'done'" color="#38a169"><CircleCheck /></el-icon>
-                    <el-icon v-else-if="log.status === 'error'" color="#e53e3e"><CircleClose /></el-icon>
+                    <el-icon v-else-if="log.status === 'error'" color="#e53e3e"
+                      ><CircleClose
+                    /></el-icon>
                     <el-icon v-else class="spin"><Loading /></el-icon>
                     <span>{{ log.label }}</span>
                   </div>
                 </div>
                 <div v-if="msg.actionStatus === 'pending'" class="action-buttons">
                   <el-button size="small" @click="cancelPlan(msg.id)">取消</el-button>
-                  <el-button size="small" type="primary" @click="runPlan(msg.id)">确认执行</el-button>
+                  <el-button size="small" type="primary" @click="runPlan(msg.id)"
+                    >确认执行</el-button
+                  >
                 </div>
                 <div v-else-if="msg.actionStatus === 'done'" class="action-done">操作已完成</div>
-                <div v-else-if="msg.actionStatus === 'error'" class="action-error">{{ msg.actionError }}</div>
+                <div v-else-if="msg.actionStatus === 'error'" class="action-error">
+                  {{ msg.actionError }}
+                </div>
               </div>
             </div>
           </div>
 
           <div v-if="loading" class="message-row assistant">
-            <div class="bubble typing">
-              <span></span><span></span><span></span>
-            </div>
+            <div class="bubble typing"><span></span><span></span><span></span></div>
           </div>
         </div>
 
@@ -257,7 +260,7 @@ function scrollToBottom() {
 
 watch(
   () => messages.value.length,
-  () => scrollToBottom()
+  () => scrollToBottom(),
 )
 
 watch(
@@ -268,7 +271,7 @@ watch(
     } else if (token && !prev) {
       prepareAssistantForSessionStart()
     }
-  }
+  },
 )
 
 onMounted(() => {
@@ -393,7 +396,8 @@ async function streamChat(question: string, options: StreamChatOptions = {}) {
         if (!assistantMessage) return
 
         if (event.type === 'meta') {
-          modeLabel.value = event.mode === 'mock' ? 'Mock 模式' : event.provider_name || event.model || '大模型'
+          modeLabel.value =
+            event.mode === 'mock' ? 'Mock 模式' : event.provider_name || event.model || '大模型'
         } else if (event.type === 'plan') {
           assistantMessage.actions = event.actions || []
           if (event.actions?.length) {
@@ -409,7 +413,7 @@ async function streamChat(question: string, options: StreamChatOptions = {}) {
           throw new Error(event.message || '助手回复失败')
         }
       },
-      { signal: abortController.value.signal }
+      { signal: abortController.value.signal },
     )
   } catch (error: unknown) {
     if (error instanceof DOMException && error.name === 'AbortError') return
@@ -427,7 +431,11 @@ async function streamChat(question: string, options: StreamChatOptions = {}) {
       assistantMessage.content = '暂无回复，请稍后重试。'
     }
     scrollToBottom()
-    if (shouldAutoExecute && assistantMessage?.actionStatus === 'pending' && assistantMessage.actions?.length) {
+    if (
+      shouldAutoExecute &&
+      assistantMessage?.actionStatus === 'pending' &&
+      assistantMessage.actions?.length
+    ) {
       await runPlan(assistantId, { resetAfterSuccess: true })
     }
   }
@@ -559,7 +567,9 @@ function sendSuggestion(item: Suggestion) {
   box-shadow: 0 10px 28px rgba(49, 130, 206, 0.45);
   cursor: inherit;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 }
 
 .fab-avatar {
@@ -697,7 +707,9 @@ function sendSuggestion(item: Suggestion) {
   color: #2d3748;
   font-size: 13px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
 }
 
 .suggestion-btn:hover:not(:disabled) {
@@ -801,8 +813,12 @@ function sendSuggestion(item: Suggestion) {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .typing {
@@ -879,7 +895,9 @@ function sendSuggestion(item: Suggestion) {
 
 .assistant-slide-enter-active,
 .assistant-slide-leave-active {
-  transition: transform 0.25s ease, opacity 0.25s ease;
+  transition:
+    transform 0.25s ease,
+    opacity 0.25s ease;
 }
 
 .assistant-slide-enter-from,

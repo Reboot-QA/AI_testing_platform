@@ -288,7 +288,11 @@ const passwordForm = reactive<PasswordForm>({
   confirm_password: '',
 })
 
-const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
+const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (
+  _rule,
+  value,
+  callback,
+) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return

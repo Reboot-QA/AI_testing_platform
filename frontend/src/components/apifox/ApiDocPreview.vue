@@ -27,7 +27,9 @@
         <pre class="raw">{{ spec.body.graphql_query }}</pre>
         <pre v-if="spec.body.graphql_variables" class="raw">{{ spec.body.graphql_variables }}</pre>
       </template>
-      <div v-else-if="spec.body.type === 'binary'" class="raw">{{ spec.body.file_name || '（未选择文件）' }}</div>
+      <div v-else-if="spec.body.type === 'binary'" class="raw">
+        {{ spec.body.file_name || '（未选择文件）' }}
+      </div>
       <ParamTable v-else :rows="rows(spec.body.form)" />
     </section>
     <section v-if="spec.cookies && rows(spec.cookies).length">
@@ -39,11 +41,7 @@
       <div class="auth">类型：{{ spec.auth.type }}</div>
     </section>
 
-    <el-empty
-      v-if="isEmpty"
-      description="该接口暂无请求参数配置"
-      :image-size="60"
-    />
+    <el-empty v-if="isEmpty" description="该接口暂无请求参数配置" :image-size="60" />
   </div>
 </template>
 

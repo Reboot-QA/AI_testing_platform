@@ -229,14 +229,17 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 <style scoped>
 .api-manage {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 220px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .editor-panel {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .endpoint-tabbar :deep(.el-tabs__header) {
@@ -249,7 +252,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 
 .dirty-dot {
   color: var(--ax-warning);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .empty-cards {
@@ -273,7 +276,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
   border-radius: var(--ax-radius-lg);
   background: var(--ax-bg-subtle);
   color: var(--ax-text-secondary);
-  font-size: 14px;
+  font-size: var(--ax-font);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -284,6 +287,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 }
 
 .ec-icon {
-  font-size: 30px;
+  font-size: var(--ax-font-2xl);
 }
 </style>

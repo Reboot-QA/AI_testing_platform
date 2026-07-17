@@ -7,7 +7,13 @@
         <p>管理员已重置您的密码，请先设置新密码后再继续使用系统</p>
       </div>
 
-      <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" @submit.prevent="handleSubmit">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        label-width="90px"
+        @submit.prevent="handleSubmit"
+      >
         <el-form-item label="原密码" prop="old_password">
           <el-input
             v-model="form.old_password"
@@ -35,7 +41,13 @@
             placeholder="再次输入新密码"
           />
         </el-form-item>
-        <el-button type="primary" size="large" :loading="submitting" class="submit-btn" @click="handleSubmit">
+        <el-button
+          type="primary"
+          size="large"
+          :loading="submitting"
+          class="submit-btn"
+          @click="handleSubmit"
+        >
           确认修改
         </el-button>
       </el-form>
@@ -72,7 +84,11 @@ const form = reactive<PasswordForm>({
   confirm_password: '',
 })
 
-const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
+const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (
+  _rule,
+  value,
+  callback,
+) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return

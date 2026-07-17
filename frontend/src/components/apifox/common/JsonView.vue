@@ -37,7 +37,9 @@ const parsed = computed(() => {
 })
 
 const isJson = computed(() => parsed.value !== null && typeof parsed.value === 'object')
-const text = computed(() => (typeof props.data === 'string' ? props.data : JSON.stringify(props.data)))
+const text = computed(() =>
+  typeof props.data === 'string' ? props.data : JSON.stringify(props.data),
+)
 </script>
 
 <style scoped>

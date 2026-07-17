@@ -92,7 +92,9 @@ const route = useRoute()
 const router = useRouter()
 
 // 本次运行的 run_id（start 事件携带）；有则可跳转到「测试报告」定位该次报告
-const runId = computed(() => props.events.find((e) => e.type === 'start')?.run_id as number | undefined)
+const runId = computed(
+  () => props.events.find((e) => e.type === 'start')?.run_id as number | undefined,
+)
 function viewReport() {
   if (!runId.value) return
   router.push(`/apifox/project/${route.params.projectId}/reports?run=${runId.value}`)
@@ -110,7 +112,9 @@ const errorEvent = computed(() =>
 
 // 数据驱动/循环多轮：start 事件带 iterations 时按轮次分组展示；单轮为一组无标题（零视觉变化）
 const iterations = computed(
-  () => (props.events.find((e) => e.type === 'start') as RunProgressStartEvent | undefined)?.iterations || [],
+  () =>
+    (props.events.find((e) => e.type === 'start') as RunProgressStartEvent | undefined)
+      ?.iterations || [],
 )
 const stepGroups = computed(() => {
   if (iterations.value.length <= 1) return [{ label: '', steps: stepEvents.value }]

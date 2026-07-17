@@ -169,7 +169,7 @@ async function send() {
 
 .hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .resp {
@@ -191,12 +191,12 @@ async function send() {
 
 .meta {
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .err {
   color: var(--ax-danger);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .resp-box {
@@ -209,7 +209,7 @@ async function send() {
 }
 
 .line {
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   padding: 3px 0;
 }
 

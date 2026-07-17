@@ -61,7 +61,9 @@ async function loadParams() {
 
 async function addParam() {
   await apifoxApi.createGlobalParam(props.projectId, {
-    location: newParam.location, key: newParam.key.trim(), value: newParam.value,
+    location: newParam.location,
+    key: newParam.key.trim(),
+    value: newParam.value,
   })
   newParam.key = ''
   newParam.value = ''
@@ -70,7 +72,10 @@ async function addParam() {
 
 async function updateParam(row: Schemas['GlobalParamOut']) {
   await apifoxApi.updateGlobalParam(row.id, {
-    location: row.location, key: row.key, value: row.value, enabled: row.enabled,
+    location: row.location,
+    key: row.key,
+    value: row.value,
+    enabled: row.enabled,
   })
   await loadParams()
 }

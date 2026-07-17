@@ -1,8 +1,8 @@
 <template>
   <div class="schema-manage">
     <div class="list-panel">
-      <div class="list-toolbar">
-        <span>数据模型</span>
+      <div class="panel-head">
+        <span class="panel-title">数据模型</span>
         <el-button size="small" type="primary" @click="addSchema">
           <el-icon><Plus /></el-icon>
         </el-button>
@@ -23,15 +23,15 @@
       >
         <el-icon><Document /></el-icon>
         <span class="schema-name">{{ s.name }}</span>
-        <el-tag
+        <el-tooltip
           v-if="s.ref_count"
-          size="small"
-          type="info"
-          title="被引用数（接口契约 + 模型 $ref）"
+          content="被引用数（接口契约 + 模型 $ref）"
+          placement="right"
+          :show-after="400"
         >
-          {{ s.ref_count }}
-        </el-tag>
-        <el-button link type="danger" size="small" @click.stop="delSchema(s)">删</el-button>
+          <span class="schema-ref">{{ s.ref_count }}</span>
+        </el-tooltip>
+        <el-icon class="schema-del" title="删除模型" @click.stop="delSchema(s)"><Delete /></el-icon>
       </div>
       <el-empty
         v-if="filteredSchemas.length === 0"
@@ -245,24 +245,31 @@ onMounted(async () => {
 <style scoped>
 .schema-manage {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 220px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .list-panel {
   width: 260px;
+  flex-shrink: 0;
   border-right: 1px solid var(--ax-border);
   overflow: auto;
-  padding-right: 8px;
+  padding-right: var(--ax-gap);
 }
 
-.list-toolbar {
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  margin-bottom: var(--ax-gap);
+}
+
+.panel-title {
+  font-size: var(--ax-font);
   font-weight: 600;
+  line-height: 1.25;
   color: var(--ax-brand);
-  margin-bottom: 8px;
 }
 
 .schema-search {
@@ -288,9 +295,38 @@ onMounted(async () => {
 
 .schema-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--ax-font-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ax-text);
+}
+
+.schema-ref {
+  flex-shrink: 0;
+  font-size: var(--ax-font-xs);
+  line-height: 1;
+  color: var(--ax-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.schema-del {
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  cursor: pointer;
+  color: var(--ax-text-placeholder);
+  transition: color 0.15s;
+}
+
+.schema-del:hover {
+  color: var(--el-color-danger);
+}
+
+.list-panel :deep(.el-empty__description) {
+  font-size: var(--ax-font-xs);
 }
 
 .editor-panel {
@@ -320,7 +356,7 @@ onMounted(async () => {
   padding-bottom: 6px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--ax-border);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   color: var(--ax-text-secondary);
 }
 
