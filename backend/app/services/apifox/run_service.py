@@ -522,6 +522,14 @@ def _run_if_block(
     yield from _run_steps(ctx, by_parent, branch, total, env_vars, global_vars, depth + 1)
 
 
+def recover_orphan_runs(db: Session) -> None:
+    """启动回收：卡在 running 的运行必是上次进程中途被杀残留（SSE 运行不跨重启），标记为失败。"""
+    n = run_repo.mark_running_interrupted(db)
+    if n:
+        db.commit()
+        logger.info("启动回收：%s 个残留 running 运行标记为失败", n)
+
+
 def _start_run(db: Session, project_id: int, target_type: str, target_id: int,
                target_name: str, environment: Optional[ApifoxEnvironment],
                triggered_by: str, total: int, parent_run_id: Optional[int] = None) -> ApifoxRun:
