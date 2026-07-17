@@ -71,10 +71,11 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
-import type { EndpointEditorForm } from '@/components/apifox/ApiEndpointEditor.vue'
+import type { EndpointEditorForm } from '@/types/apifox'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useApiTabsStore } from '@/stores/apiTabs'
@@ -87,9 +88,8 @@ import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
 import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 
-const route = useRoute()
 const router = useRouter()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 const store = useWorkspaceStore()
 const tabsStore = useApiTabsStore()
 

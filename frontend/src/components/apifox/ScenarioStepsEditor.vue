@@ -146,7 +146,7 @@ import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
 import type {
   ScenarioEditorStep,
   ScenarioStepSelection,
-} from '@/components/apifox/ScenarioStepRow.vue'
+} from '@/types/apifox'
 
 type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 type ScenarioBrief = Schemas['ScenarioBrief']

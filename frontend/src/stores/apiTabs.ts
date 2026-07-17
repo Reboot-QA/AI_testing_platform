@@ -2,25 +2,11 @@ import { defineStore } from 'pinia'
 import { apifoxApi } from '@/api'
 import type { Schemas } from '@/api/types'
 import { normalizeSpec } from '@/utils/apifoxSpec'
-import type { RequestSpec } from '@/types/apifox'
+import type { EndpointForm } from '@/types/apifox'
 
 type Endpoint = Schemas['EndpointOut']
 
-export interface EndpointForm {
-  id: number
-  name: string
-  method: string
-  path: string
-  server_name: string | null
-  description: string
-  request_spec: RequestSpec
-  assertions: unknown[]
-  extracts: unknown[]
-  pre_scripts: unknown[]
-  post_scripts: unknown[]
-  response_schema_id: number | null
-  contract_strict: boolean
-}
+export type { EndpointForm } from '@/types/apifox'
 
 export interface ApiTab {
   id: number

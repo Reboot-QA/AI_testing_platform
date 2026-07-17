@@ -11,7 +11,7 @@ import type { Id } from '@/api/request'
 import { apifoxApi } from '@/api'
 import { normalizeSpec } from '@/utils/apifoxSpec'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
-import type { ApiDocPreviewForm } from '@/components/apifox/ApiDocPreview.vue'
+import type { ApiDocPreviewForm } from '@/types/apifox'
 
 const props = defineProps<{ endpointId: Id }>()
 

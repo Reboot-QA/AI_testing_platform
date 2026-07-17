@@ -86,7 +86,11 @@ models/apifox/     # SQLAlchemy 模型，表前缀 apifox_
 
 - **API 层集中在 `src/api/index.ts`**（axios 单实例，baseURL `/api/v1`，自动带 token，401 跳登录，响应拦截器直接返回 `response.data`）。注意：`/apifox/` 路径的 409 不弹全局错误，由调用方配合 `composables/useSaveConflict.ts` 处理保存冲突。
 - 路由守卫：`src/router/index.ts`，每个路由 `meta.permission` 对应后端菜单权限。
-- **`src/` 业务代码统一 TypeScript**（`.ts`）；禁止新增 `.js` 源文件。Vue SFC 的 `<script setup lang="ts">` 为后续阶段。
+- **`src/` 业务代码统一 TypeScript**（`.ts`）；禁止新增 `.js` 源文件。Vue SFC 统一使用 `<script setup lang="ts">`。
+- **TS 约定：**
+  1. 路由动态参数（如 `projectId`）统一用 `useRouteParamId()`（`composables/useRouteParamId.ts`），禁止直接解构 `route.params`。
+  2. script 中引用 props 必须 `const props = defineProps/withDefaults(...)`；template 可直接用 prop 名。
+  3. Apifox UI 类型放 `types/apifox.ts`；API 实体类型用 `Schemas['XxxOut']`（`api/types`），勿从 `.vue` 文件 export type。
 - apifox 前端：`views/apifox/ProjectWorkspace.vue` 是项目工作区外壳（顶部 tab 切 `views/apifox/sections/` 下各面板），可复用组件在 `components/apifox/`。
 - 代码编辑器统一用 Monaco（`@guolao/vue-monaco-editor`，本地 worker 无 CDN）；design token / Apifox 配色在 `src/styles/`。
 - Pinia stores：`user`（登录态/权限）、`workspace`（当前项目）、`apiTabs`、`aiGenerate`。

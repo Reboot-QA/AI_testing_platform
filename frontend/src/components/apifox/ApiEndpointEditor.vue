@@ -170,7 +170,7 @@ import { ElMessage } from 'element-plus'
 import type { UploadRawFile } from 'element-plus'
 import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
-import type { RequestSpec } from '@/types/apifox'
+import type { EndpointEditorForm, RequestSpec } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
@@ -181,20 +181,7 @@ import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 type ScriptBrief = Schemas['ScriptBrief']
 type SchemaBrief = Schemas['SchemaBrief']
 
-export interface EndpointEditorForm {
-  method: string
-  path: string
-  name: string
-  server_name?: string | null
-  request_spec: RequestSpec
-  description?: string | null
-  response_schema_id?: number | null
-  contract_strict?: boolean
-  assertions?: Schemas['AssertionRow'][]
-  extracts?: Schemas['ExtractRow'][]
-  pre_scripts?: Schemas['CaseScriptOut'][]
-  post_scripts?: Schemas['CaseScriptOut'][]
-}
+export type { EndpointEditorForm } from '@/types/apifox'
 
 const props = withDefaults(
   defineProps<{

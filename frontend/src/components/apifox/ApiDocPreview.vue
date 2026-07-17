@@ -48,17 +48,9 @@
 <script setup lang="ts">
 import { computed, h, type VNode } from 'vue'
 import { ElTable, ElTableColumn } from 'element-plus'
-import type { KvRow, RequestSpec } from '@/types/apifox'
+import type { ApiDocPreviewForm, KvRow, RequestSpec } from '@/types/apifox'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
-
-export interface ApiDocPreviewForm {
-  method: string
-  path?: string
-  name?: string
-  description?: string
-  request_spec?: RequestSpec
-}
 
 const props = defineProps<{ form: ApiDocPreviewForm }>()
 

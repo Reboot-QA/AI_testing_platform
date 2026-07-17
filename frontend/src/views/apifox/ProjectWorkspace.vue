@@ -43,6 +43,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { projectApi } from '@/api'
@@ -62,7 +63,7 @@ const sections = [
 ] as const
 
 const projects = ref<Schemas['ProjectOut'][]>([])
-const projectId = computed(() => route.params.projectId as string)
+const projectId = useRouteParamId()
 const activeTab = computed(() => route.path.split('/').pop())
 
 function currentTab(): string {

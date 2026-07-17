@@ -7,7 +7,7 @@
 
     <el-tabs v-model="activeTab">
       <el-tab-pane label="请求" name="request">
-        <ApiEndpointEditor :form="form" :show-meta="false" :project-id="route.params.projectId" />
+        <ApiEndpointEditor :form="form" :show-meta="false" :project-id="pid" />
       </el-tab-pane>
       <el-tab-pane label="用例变量" name="variables">
         <KvRowsEditor :rows="form.variables" />
@@ -33,7 +33,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import type { Schemas } from '@/api/types'
 import type { KvRow, RequestSpec } from '@/types/apifox'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
@@ -75,7 +75,7 @@ withDefaults(
 )
 defineEmits<{ save: [] }>()
 
-const route = useRoute()
+const pid = useRouteParamId()
 const activeTab = ref('request')
 </script>
 

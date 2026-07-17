@@ -138,7 +138,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
 import type { Schemas } from '@/api/types'
@@ -151,8 +151,7 @@ import { useSuiteTabsStore } from '@/stores/suiteTabs'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import SuiteRunProgress from '@/components/apifox/SuiteRunProgress.vue'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 const store = useWorkspaceStore()
 const tabsStore = useSuiteTabsStore()
 

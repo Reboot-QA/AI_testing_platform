@@ -31,8 +31,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref } from 'vue'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
 import ScenarioPanel from '@/views/apifox/sections/ScenarioPanel.vue'
@@ -40,8 +40,7 @@ import SuitePanel from '@/views/apifox/sections/SuitePanel.vue'
 import DatasetPanel from '@/views/apifox/sections/DatasetPanel.vue'
 import SchedulePanel from '@/views/apifox/sections/SchedulePanel.vue'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 
 const section = ref<'cases' | 'scenarios' | 'suites' | 'datasets' | 'schedules'>('cases')
 const selectedEndpointId = ref<number | null>(null)
