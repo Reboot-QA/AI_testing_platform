@@ -38,6 +38,18 @@ def test_blank_password_keeps_existing(db):
     assert cfg.smtp_password == "secret"  # 留空=保留原密钥
 
 
+def test_retry_fields_default_and_round_trip(db):
+    _update(db)  # 未传重试字段
+
+    out = notify_service.config_out(notify_service.notify_repo.get_by_project(db, PID))
+    assert out.retry_count == 0 and out.retry_interval_sec == 5  # 默认不重试
+
+    _update(db, retry_count=2, retry_interval_sec=15)
+
+    out = notify_service.config_out(notify_service.notify_repo.get_by_project(db, PID))
+    assert out.retry_count == 2 and out.retry_interval_sec == 15
+
+
 # ---------- 触发门控 ----------
 def test_notify_failure_noop_without_config(db):
     notify_service.notify_failure(db, 999, "run", "t", "d")  # 无配置，不应抛异常

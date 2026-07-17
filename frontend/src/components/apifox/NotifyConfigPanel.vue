@@ -12,6 +12,25 @@
     </div>
 
     <div class="block">
+      <div class="block-title">自动重试（仅定时任务）</div>
+      <div class="field">
+        <span class="lbl">重试次数</span>
+        <el-input-number v-model="form.retry_count" :min="0" :max="5" controls-position="right" />
+        <span class="sub-hint">0=不重试，最多 5 次；失败自动重跑，全部失败才通知</span>
+      </div>
+      <div class="field">
+        <span class="lbl">重试间隔</span>
+        <el-input-number
+          v-model="form.retry_interval_sec"
+          :min="1"
+          :max="60"
+          controls-position="right"
+        />
+        <span class="sub-hint">秒；调度单线程串行，间隔越长越占用调度</span>
+      </div>
+    </div>
+
+    <div class="block">
       <div class="block-title">
         <el-switch v-model="form.email_enabled" /> <span>邮件（SMTP）</span>
       </div>
@@ -121,6 +140,8 @@ const form = reactive({
   notify_schedule: true,
   notify_run: true,
   notify_aigen: true,
+  retry_count: 0,
+  retry_interval_sec: 5,
   email_enabled: false,
   smtp_host: '',
   smtp_port: 465,
@@ -142,6 +163,8 @@ const payload = computed<Schemas['NotifyConfigUpdate']>(() => {
     notify_schedule: form.notify_schedule,
     notify_run: form.notify_run,
     notify_aigen: form.notify_aigen,
+    retry_count: form.retry_count,
+    retry_interval_sec: form.retry_interval_sec,
     email_enabled: form.email_enabled,
     smtp_host: form.smtp_host || null,
     smtp_port: form.smtp_port,
@@ -163,6 +186,8 @@ async function load() {
     form.notify_schedule = c.notify_schedule
     form.notify_run = c.notify_run
     form.notify_aigen = c.notify_aigen
+    form.retry_count = c.retry_count
+    form.retry_interval_sec = c.retry_interval_sec
     form.email_enabled = c.email_enabled
     form.smtp_host = c.smtp_host || ''
     form.smtp_port = c.smtp_port
@@ -241,6 +266,11 @@ onMounted(load)
   width: 80px;
   font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
+}
+
+.sub-hint {
+  font-size: var(--ax-font-xs);
+  color: var(--ax-text-placeholder);
 }
 
 .test-results {

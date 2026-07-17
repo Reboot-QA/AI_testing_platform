@@ -3869,6 +3869,10 @@ export interface components {
             notify_run: boolean;
             /** Notify Aigen */
             notify_aigen: boolean;
+            /** Retry Count */
+            retry_count: number;
+            /** Retry Interval Sec */
+            retry_interval_sec: number;
         };
         /** NotifyConfigUpdate */
         NotifyConfigUpdate: {
@@ -3922,6 +3926,16 @@ export interface components {
              * @default true
              */
             notify_aigen: boolean;
+            /**
+             * Retry Count
+             * @default 0
+             */
+            retry_count: number;
+            /**
+             * Retry Interval Sec
+             * @default 5
+             */
+            retry_interval_sec: number;
         };
         /** NotifyTestResult */
         NotifyTestResult: {

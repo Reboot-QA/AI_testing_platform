@@ -39,6 +39,10 @@ class ApifoxNotifyConfig(Base):
     notify_run: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     notify_aigen: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
 
+    # 自动重试（仅定时任务）：失败后重跑 retry_count 次、每次间隔 retry_interval_sec 秒，全部失败才通知
+    retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    retry_interval_sec: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
