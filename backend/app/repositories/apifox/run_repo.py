@@ -1,5 +1,6 @@
 """Apifox 运行记录 · 数据访问层。不含业务校验；提交时机由 run_service 控制（流式逐步落库）。"""
 
+from datetime import datetime
 from typing import List, Optional
 
 from sqlalchemy import select
@@ -58,3 +59,22 @@ def add(db: Session, obj):
     db.add(obj)
     db.flush()
     return obj
+
+
+def mark_running_interrupted(db: Session) -> int:
+    """把卡在 running 的运行标记为 failed（启动回收：SSE 运行不跨重启，running 必是上次进程被杀残留）。"""
+    runs = db.query(ApifoxRun).filter(ApifoxRun.status == "running").all()
+    if not runs:
+        return 0
+    now = datetime.utcnow()
+    run_ids = [r.id for r in runs]
+    for r in runs:
+        r.status = "failed"
+        if r.finished_at is None:
+            r.finished_at = now
+        total = (r.passed_count or 0) + (r.failed_count or 0)
+        r.pass_rate = round((r.passed_count or 0) / total * 100, 2) if total else 0.0
+    db.query(ApifoxRunStep).filter(
+        ApifoxRunStep.run_id.in_(run_ids), ApifoxRunStep.status == "running"
+    ).update({ApifoxRunStep.status: "failed"}, synchronize_session=False)
+    return len(runs)
