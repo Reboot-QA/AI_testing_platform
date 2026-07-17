@@ -75,6 +75,38 @@ def test_pm_response_to_have_status():
     assert out.variables["ok"] == "1"
 
 
+# ---------- 空实现的命名空间不崩（回归 bug：pm.cookies.get → reading 'get'） ----------
+def test_pm_cookies_request_info_stubs_do_not_crash():
+    content = (
+        "variables['c'] = String(pm.cookies.get('sid'));\n"
+        "variables['h'] = String(pm.request.headers.get('X'));\n"
+        "variables['it'] = String(pm.info.iteration);"
+    )
+
+    out = _debug(phase="post", content=content, response_body="{}", response_status=200)
+
+    assert out.status == "passed"
+    assert out.variables["c"] == "undefined"
+    assert out.variables["h"] == "undefined"
+    assert out.variables["it"] == "0"
+
+
+# ---------- 未实现命名空间给清晰报错，而非晦涩 TypeError ----------
+def test_pm_unknown_namespace_clear_error():
+    out = _debug(phase="post", content="pm.sendRequest('x')", response_body="{}", response_status=200)
+
+    assert out.status == "failed"
+    assert "暂不支持 pm.sendRequest" in (out.error_message or "")
+
+
+# ---------- 前置脚本用 pm.response 给清晰提示 ----------
+def test_pm_response_in_pre_clear_error():
+    out = _debug(phase="pre", content="pm.variables.set('x', pm.response.json().a)")
+
+    assert out.status == "failed"
+    assert "仅后置脚本可用" in (out.error_message or "")
+
+
 # ---------- 回归：原生 variables/console API 不受影响 ----------
 def test_native_variables_api_still_works():
     out = _debug(phase="pre", content="variables['k'] = 'v'; console.log('hi')", variables={})
