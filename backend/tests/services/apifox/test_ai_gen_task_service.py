@@ -182,6 +182,41 @@ def test_list_tasks_page_paginates(db, make_endpoint):
     assert len(page2.items) == 1  # 倒序、第二页剩 1 条
 
 
+def test_list_tasks_page_single_endpoint_target_and_categories(db, make_endpoint):
+    ep = make_endpoint(project_id=1, method="GET", path="/users")
+    cats = [AiGenCategory(category="positive", count=1), AiGenCategory(category="boundary")]
+    task = service.create_task(db, 1, 1, AiGenTaskCreate(endpoint_ids=[ep.id], categories=cats))
+    repo.list_items(db, task.id)[0].generated_count = 5
+    db.commit()
+
+    brief = service.list_tasks_page(db, 1, page=1, page_size=20).items[0]
+
+    assert brief.target == "GET /users"  # 单接口显示具体接口
+    assert brief.categories == ["positive", "boundary"]
+    assert brief.generated_total == 5
+
+
+def test_list_tasks_page_batch_target_none(db, make_endpoint):
+    e1 = make_endpoint(project_id=1, path="/a")
+    e2 = make_endpoint(project_id=1, path="/b")
+    service.create_task(db, 1, 1, _create([e1.id, e2.id]))
+
+    brief = service.list_tasks_page(db, 1, page=1, page_size=20).items[0]
+
+    assert brief.target is None and brief.total_items == 2  # 批量无单一 target
+
+
+def test_task_out_includes_categories_and_creator(db, make_endpoint):
+    ep = make_endpoint(project_id=1)
+    cats = [AiGenCategory(category="positive", count=2)]
+    task = service.create_task(db, 1, 1, AiGenTaskCreate(endpoint_ids=[ep.id], categories=cats))
+
+    out = service.task_out(db, task)
+
+    assert [c.category for c in out.categories] == ["positive"]
+    assert out.categories[0].count == 2
+
+
 def test_retry_item_resets_failed_item_and_task(db, make_endpoint):
     ep = make_endpoint(project_id=1)
     task = service.create_task(db, 1, 1, _create([ep.id]))

@@ -21,6 +21,16 @@ def get_item(db: Session, item_id: int) -> Optional[ApifoxAiGenTaskItem]:
     return db.query(ApifoxAiGenTaskItem).filter(ApifoxAiGenTaskItem.id == item_id).first()
 
 
+def list_items_by_task_ids(db: Session, task_ids: List[int]) -> List[ApifoxAiGenTaskItem]:
+    if not task_ids:
+        return []
+    return (
+        db.query(ApifoxAiGenTaskItem)
+        .filter(ApifoxAiGenTaskItem.task_id.in_(task_ids))
+        .all()
+    )
+
+
 def list_items(db: Session, task_id: int) -> List[ApifoxAiGenTaskItem]:
     return (
         db.query(ApifoxAiGenTaskItem)

@@ -10,6 +10,7 @@ from typing import List, Optional
 from sqlalchemy.orm import Session
 
 from app.models.apifox.ai_gen_task import ApifoxAiGenTask, ApifoxAiGenTaskItem
+from app.models.user import User
 from app.repositories.apifox import ai_gen_task_repo as repo
 from app.repositories.apifox import endpoint_repo
 from app.routers.apifox.ai_gen_task_schemas import (
@@ -90,6 +91,13 @@ def _item_out(db: Session, item: ApifoxAiGenTaskItem) -> AiGenTaskItemOut:
     )
 
 
+def _creator_name(db: Session, created_by: Optional[int]) -> Optional[str]:
+    if not created_by:
+        return None
+    user = db.query(User).filter(User.id == created_by).first()
+    return (user.full_name or user.username) if user else None
+
+
 def task_out(db: Session, task: ApifoxAiGenTask) -> AiGenTaskOut:
     return AiGenTaskOut(
         id=task.id,
@@ -97,6 +105,8 @@ def task_out(db: Session, task: ApifoxAiGenTask) -> AiGenTaskOut:
         status=task.status,
         mode=task.mode,
         provider_id=task.provider_id,
+        categories=load_categories(task.categories),
+        creator_name=_creator_name(db, task.created_by),
         total_items=task.total_items,
         done_items=task.done_items,
         error=task.error,
@@ -106,10 +116,17 @@ def task_out(db: Session, task: ApifoxAiGenTask) -> AiGenTaskOut:
     )
 
 
-def _brief(task: ApifoxAiGenTask) -> AiGenTaskBrief:
+def _brief(
+    task: ApifoxAiGenTask,
+    target: Optional[str] = None,
+    categories: Optional[List[str]] = None,
+    generated_total: int = 0,
+) -> AiGenTaskBrief:
     return AiGenTaskBrief(
         id=task.id, status=task.status, mode=task.mode,
-        total_items=task.total_items, done_items=task.done_items, created_at=task.created_at,
+        target=target, categories=categories or [], generated_total=generated_total,
+        total_items=task.total_items, done_items=task.done_items,
+        created_at=task.created_at, finished_at=task.finished_at,
     )
 
 
@@ -117,9 +134,31 @@ def list_active(db: Session, project_id: int) -> List[AiGenTaskBrief]:
     return [_brief(t) for t in repo.list_active_tasks(db, project_id)]
 
 
+def _task_target(db: Session, task: ApifoxAiGenTask, items: List[ApifoxAiGenTaskItem]) -> Optional[str]:
+    """单接口任务→该接口 method+path；批量→None（前端展示"批量·N接口"）。"""
+    if task.total_items != 1 or not items:
+        return None
+    endpoint = endpoint_repo.get_endpoint(db, items[0].endpoint_id)
+    return f"{endpoint.method} {endpoint.path}" if endpoint else "(接口已删除)"
+
+
 def list_tasks_page(db: Session, project_id: int, page: int, page_size: int) -> AiGenTaskPageOut:
+    tasks = repo.list_project_tasks_page(db, project_id, page, page_size)
+    items_by_task: dict[int, List[ApifoxAiGenTaskItem]] = {}
+    for it in repo.list_items_by_task_ids(db, [t.id for t in tasks]):
+        items_by_task.setdefault(it.task_id, []).append(it)
+
+    briefs = []
+    for t in tasks:
+        its = items_by_task.get(t.id, [])
+        briefs.append(_brief(
+            t,
+            target=_task_target(db, t, its),
+            categories=[c.category for c in load_categories(t.categories)],
+            generated_total=sum(i.generated_count for i in its),
+        ))
     return AiGenTaskPageOut(
-        items=[_brief(t) for t in repo.list_project_tasks_page(db, project_id, page, page_size)],
+        items=briefs,
         total=repo.count_project_tasks(db, project_id),
         page=page,
         page_size=page_size,

@@ -1,5 +1,28 @@
 <template>
   <div class="progress">
+    <div v-if="task" class="task-info">
+      <div class="ti-row">
+        <span class="ti-k">目标</span><span class="ti-v">{{ targetText }}</span>
+      </div>
+      <div class="ti-row">
+        <span class="ti-k">类别</span><span class="ti-v">{{ categoryConfig }}</span>
+      </div>
+      <div class="ti-row">
+        <span class="ti-k">模型</span><span class="ti-v">{{ modeText }}</span>
+      </div>
+      <div class="ti-row">
+        <span class="ti-k">创建</span>
+        <span class="ti-v">{{ task.creator_name || '-' }} · {{ fmt(task.created_at) }}</span>
+      </div>
+      <div class="ti-row">
+        <span class="ti-k">完成</span>
+        <span class="ti-v"
+          >{{ task.finished_at ? fmt(task.finished_at) : '--'
+          }}<span v-if="durationText"> · 耗时 {{ durationText }}</span></span
+        >
+      </div>
+    </div>
+
     <div class="overall">
       <el-progress
         :percentage="percent"
@@ -80,6 +103,33 @@ const items = computed<Item[]>(() => task.value?.items || [])
 const running = computed(
   () => !!task.value && !['succeeded', 'partial', 'failed', 'canceled'].includes(task.value.status),
 )
+
+// ---------- 详情信息区 ----------
+const targetText = computed(() => {
+  const t = task.value
+  if (!t) return ''
+  if (t.total_items === 1 && t.items[0])
+    return `${t.items[0].endpoint_method} ${t.items[0].endpoint_name}`
+  return `批量 · ${t.total_items} 接口`
+})
+const categoryConfig = computed(
+  () =>
+    (task.value?.categories || [])
+      .map((c) => `${categoryLabel(c.category)}（${c.count ? '限量 ' + c.count : '自动'}）`)
+      .join(' · ') || '-',
+)
+const modeText = computed(() =>
+  task.value?.mode === 'mock' ? 'Mock' : task.value?.mode === 'llm' ? 'LLM' : '-',
+)
+const durationText = computed(() => {
+  const t = task.value
+  if (!t?.finished_at || !t?.created_at) return ''
+  const ms = new Date(t.finished_at).getTime() - new Date(t.created_at).getTime()
+  if (ms <= 0) return ''
+  const s = Math.round(ms / 1000)
+  return s < 60 ? `${s} 秒` : `${Math.floor(s / 60)} 分 ${s % 60} 秒`
+})
+const fmt = (t: string): string => (t ? t.slice(0, 16).replace('T', ' ') : '')
 
 const expanded = ref<number[]>([])
 const selected = reactive<Record<number, boolean[]>>({})
@@ -189,6 +239,32 @@ async function retry(it: Item): Promise<void> {
 </script>
 
 <style scoped>
+.task-info {
+  border: 1px solid var(--ax-border);
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin-bottom: 12px;
+  background: var(--ax-bg-subtle);
+}
+
+.ti-row {
+  display: flex;
+  gap: 8px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.ti-k {
+  width: 40px;
+  flex-shrink: 0;
+  color: var(--ax-text-secondary);
+}
+
+.ti-v {
+  color: var(--ax-text);
+  min-width: 0;
+}
+
 .overall {
   margin-bottom: 12px;
 }
