@@ -327,28 +327,39 @@ def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[st
 
 
 def count_new_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
-    """只读统计 components/schemas 中的新增数量（供 diff 预览，不写库）。"""
+    """只读统计 components/schemas 中的新增数量（供 diff 预览，不写库）。
+
+    与 import_schemas 一致：大小写不敏感去重 + 文档内变体也只计一次，预览数=实际新建数。
+    """
     components_schemas = (doc.get("components") or {}).get("schemas") or {}
     if not isinstance(components_schemas, dict):
         return 0
-    existing_names = {s.name for s in schema_repo.list_schemas(db, project_id)}
-    return sum(
-        1
-        for name, sd in components_schemas.items()
-        if isinstance(sd, dict) and str(name)[:200] not in existing_names
-    )
+    existing_lower = {s.name.lower() for s in schema_repo.list_schemas(db, project_id)}
+    seen: set[str] = set()
+    count = 0
+    for name, sd in components_schemas.items():
+        key = str(name)[:200].lower()
+        if isinstance(sd, dict) and key not in existing_lower and key not in seen:
+            seen.add(key)
+            count += 1
+    return count
 
 
 def import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
-    """把 components/schemas 导入为数据模型（同名去重不覆盖；$ref 就地展开）。"""
+    """把 components/schemas 导入为数据模型（同名去重不覆盖；$ref 就地展开）。
+
+    去重**大小写不敏感**：对齐 MySQL 唯一索引 (project_id, name) 的 ci 语义，
+    避免文档里 `Foo`/`foo` 或库中已有大小写变体时撞 Duplicate entry。
+    """
     components_schemas = (doc.get("components") or {}).get("schemas") or {}
     if not isinstance(components_schemas, dict):
         return 0
-    existing_names = {s.name for s in schema_repo.list_schemas(db, project_id)}
+    existing_lower = {s.name.lower() for s in schema_repo.list_schemas(db, project_id)}
     schemas_created = 0
     for name, schema_def in components_schemas.items():
         safe_name = str(name)[:200]
-        if not isinstance(schema_def, dict) or safe_name in existing_names:
+        key = safe_name.lower()
+        if not isinstance(schema_def, dict) or key in existing_lower:
             continue
         expanded = _expand_schema(doc, schema_def)
         schema_repo.add(db, ApifoxSchema(
@@ -357,6 +368,6 @@ def import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
             json_schema=json.dumps(expanded, ensure_ascii=False, indent=2),
             description=schema_def.get("description"),
         ))
-        existing_names.add(safe_name)
+        existing_lower.add(key)
         schemas_created += 1
     return schemas_created
