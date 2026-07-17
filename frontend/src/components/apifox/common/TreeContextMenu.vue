@@ -1,12 +1,7 @@
 <template>
   <teleport to="body">
     <ul v-if="visible" class="tree-ctx" :style="{ left: x + 'px', top: y + 'px' }">
-      <li
-        v-for="it in items"
-        :key="it.key"
-        :class="{ danger: it.danger }"
-        @click="pick(it.key)"
-      >
+      <li v-for="it in items" :key="it.key" :class="{ danger: it.danger }" @click="pick(it.key)">
         {{ it.label }}
       </li>
     </ul>
@@ -55,7 +50,7 @@ watch(
   (v) => {
     if (v) document.addEventListener('click', onDocClick)
     else document.removeEventListener('click', onDocClick)
-  }
+  },
 )
 
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))

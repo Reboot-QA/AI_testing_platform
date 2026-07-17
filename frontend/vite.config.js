@@ -35,7 +35,8 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5173,
     proxy: {
-      '/api': {
+      // 必须用 /api/ 而非 /api，否则 /apifox 等前端路由会被误代理到后端
+      '/api/': {
         target: 'http://43.160.226.39:8000',
         changeOrigin: true,
         timeout: 0,

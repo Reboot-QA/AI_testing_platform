@@ -7,12 +7,20 @@
       </el-tag>
       <span class="s-name">{{ row.script_name || `脚本#${row.script_id}` }}</span>
       <el-button link size="small" :disabled="i === 0" @click="move(i, -1)">↑</el-button>
-      <el-button link size="small" :disabled="i === rows.length - 1" @click="move(i, 1)">↓</el-button>
+      <el-button link size="small" :disabled="i === rows.length - 1" @click="move(i, 1)"
+        >↓</el-button
+      >
       <el-button link type="danger" size="small" @click="rows.splice(i, 1)">移除</el-button>
     </div>
 
     <div class="add-row">
-      <el-select v-model="pickedId" size="small" placeholder="从脚本库选择" style="width: 220px" filterable>
+      <el-select
+        v-model="pickedId"
+        size="small"
+        placeholder="从脚本库选择"
+        style="width: 220px"
+        filterable
+      >
         <el-option
           v-for="s in availableScripts"
           :key="s.id"
@@ -20,7 +28,9 @@
           :value="s.id"
         />
       </el-select>
-      <el-button size="small" type="primary" :disabled="!pickedId" @click="addRef">+ 添加</el-button>
+      <el-button size="small" type="primary" :disabled="!pickedId" @click="addRef"
+        >+ 添加</el-button
+      >
       <span class="tip">脚本属于项目脚本库（项目设置里维护），此处仅引用</span>
     </div>
   </div>
@@ -46,7 +56,7 @@ const props = withDefaults(
 const pickedId = ref<number | null>(null)
 
 const availableScripts = computed(() =>
-  props.scripts.filter((s) => !props.rows.some((r) => r.script_id === s.id))
+  props.scripts.filter((s) => !props.rows.some((r) => r.script_id === s.id)),
 )
 
 function addRef() {

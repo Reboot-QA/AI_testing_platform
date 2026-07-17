@@ -23,17 +23,17 @@
             <span class="pill run">运行中</span>
           </div>
         </div>
-        <el-empty v-else description="当前没有正在运行的自动化" :image-size="48" />
+        <el-empty v-else description="当前没有正在运行的自动化" :image-size="40" />
       </el-tab-pane>
 
       <el-tab-pane label="最近报告" name="reports">
         <div v-if="reports.length" class="rows">
           <div v-for="r in reports" :key="r.run_id" class="runrow" @click="$emit('open', r)">
-            <div class="pi" :style="{ background: colorOf(r.project_id) }">
-              {{ letterOf(r.project_name) }}
+            <div class="pi" :style="{ background: typeColor(r.target_type) }">
+              {{ typeLabel(r.target_type).charAt(0) }}
             </div>
             <div class="mid">
-              <div class="nm">{{ r.target_name }}</div>
+              <div class="nm">【{{ typeLabel(r.target_type) }}】{{ r.target_name }}</div>
               <div class="sb">
                 {{ r.project_name }} · {{ r.environment_name || '未选环境' }} ·
                 {{ time(r.started_at) }}
@@ -42,20 +42,20 @@
             <span class="pill" :class="pillClass(r)">{{ pillText(r) }}</span>
           </div>
         </div>
-        <el-empty v-else description="暂无运行记录" :image-size="48" />
+        <el-empty v-else description="暂无运行记录" :image-size="40" />
       </el-tab-pane>
     </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import type { Schemas } from '@/api/types'
 
 type WorkbenchRunning = Schemas['WorkbenchRunning']
 type WorkbenchReport = Schemas['WorkbenchReport']
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     running?: WorkbenchRunning[]
     reports?: WorkbenchReport[]
@@ -67,10 +67,31 @@ withDefaults(
 )
 defineEmits<{ open: [item: WorkbenchRunning | WorkbenchReport] }>()
 
-const activeTab = ref('running')
+const activeTab = ref('reports')
+
+watch(
+  () => props.running.length,
+  (n) => {
+    if (n > 0) activeTab.value = 'running'
+  },
+  { immediate: true },
+)
 
 const PALETTE = ['#2c5282', '#2b6cb0', '#2c7a7b', '#6b46c1', '#b83280', '#c05621', '#2f855a']
+const TYPE_LABEL: Record<string, string> = {
+  scenario: '场景',
+  case: '单接口',
+  suite: '套件',
+}
+const TYPE_COLOR: Record<string, string> = {
+  scenario: '#2b6cb0',
+  case: '#2c7a7b',
+  suite: '#6b46c1',
+}
+
 const colorOf = (id: number) => PALETTE[id % PALETTE.length]
+const typeColor = (t: string) => TYPE_COLOR[t] || '#2c5282'
+const typeLabel = (t: string) => TYPE_LABEL[t] || '用例'
 const letterOf = (name: string | null | undefined) => (name || '?').trim().charAt(0).toUpperCase()
 const time = (v: string) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
 
@@ -95,20 +116,33 @@ function pillText(r: WorkbenchReport) {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: hidden;
 }
 
 .activity-tabs {
-  --el-tabs-header-height: 44px;
+  --el-tabs-header-height: 40px;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .activity-tabs :deep(.el-tabs__header) {
   margin: 0;
   padding: 0 8px;
   border-bottom: 1px solid var(--ax-border);
+  flex: none;
 }
 
 .activity-tabs :deep(.el-tabs__content) {
+  flex: 1;
+  min-height: 0;
   padding: 0;
+}
+
+.activity-tabs :deep(.el-tab-pane) {
+  height: 100%;
+  overflow-y: auto;
 }
 
 .tab-label {
@@ -131,15 +165,14 @@ function pillText(r: WorkbenchReport) {
 }
 
 .rows {
-  max-height: 420px;
-  overflow-y: auto;
+  min-height: 0;
 }
 
 .runrow {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px 16px;
+  gap: 10px;
+  padding: 9px 14px;
   border-bottom: 1px solid var(--ax-border);
   cursor: pointer;
 }
@@ -153,13 +186,13 @@ function pillText(r: WorkbenchReport) {
 }
 
 .pi {
-  width: 30px;
-  height: 30px;
+  width: 28px;
+  height: 28px;
   border-radius: 6px;
   display: grid;
   place-items: center;
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   flex: none;
 }
@@ -171,6 +204,7 @@ function pillText(r: WorkbenchReport) {
 
 .nm {
   font-weight: 600;
+  font-size: 13px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -178,16 +212,16 @@ function pillText(r: WorkbenchReport) {
 
 .sb {
   color: var(--ax-text-tertiary);
-  font-size: 12px;
+  font-size: 11.5px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .pill {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
-  padding: 2px 9px;
+  padding: 2px 8px;
   border-radius: 20px;
   white-space: nowrap;
   flex: none;

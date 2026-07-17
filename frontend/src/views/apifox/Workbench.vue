@@ -46,10 +46,11 @@
         </div>
       </div>
 
-      <div class="side-col">
-        <RunningAutomations :running="overview.running" @open="openReports" />
-        <RecentReports :reports="overview.recent_reports" @open="openReports" />
-      </div>
+      <WorkbenchActivity
+        :running="overview.running"
+        :reports="overview.recent_reports"
+        @open="openReports"
+      />
     </div>
 
     <el-dialog v-model="createVisible" title="新建项目" width="480px">
@@ -79,8 +80,7 @@ import type { Schemas } from '@/api/types'
 import { apifoxApi, projectApi } from '@/api'
 import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
 import DashboardProjectCard from '@/components/apifox/workbench/DashboardProjectCard.vue'
-import RunningAutomations from '@/components/apifox/workbench/RunningAutomations.vue'
-import RecentReports from '@/components/apifox/workbench/RecentReports.vue'
+import WorkbenchActivity from '@/components/apifox/workbench/WorkbenchActivity.vue'
 
 const router = useRouter()
 
@@ -190,16 +190,32 @@ onMounted(loadData)
 </script>
 
 <style scoped>
+/* 撑满可视区域：顶栏 60px + main 上下 padding 40px */
+.workbench {
+  height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .dash-grid {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1.6fr 1fr;
-  gap: 16px;
-  align-items: start;
+  gap: 12px;
+  align-items: stretch;
 }
 
 @media (max-width: 900px) {
   .dash-grid {
     grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
+
+  .workbench {
+    overflow: auto;
   }
 }
 
@@ -210,13 +226,21 @@ onMounted(loadData)
   box-shadow: var(--ax-shadow-sm);
 }
 
+.projects-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .card-h {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
+  padding: 10px 14px;
   border-bottom: 1px solid var(--ax-border);
   font-weight: 600;
+  flex: none;
 }
 
 .card-title {
@@ -230,13 +254,16 @@ onMounted(loadData)
 }
 
 .projgrid-wrap {
-  padding: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 10px 12px;
 }
 
 .projgrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 10px;
 }
 
 .projcard.newcard {
@@ -246,10 +273,10 @@ onMounted(loadData)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   color: var(--ax-text-tertiary);
   cursor: pointer;
-  min-height: 118px;
+  min-height: 92px;
   font-size: 13px;
   transition: all var(--ax-transition);
 }
@@ -261,12 +288,12 @@ onMounted(loadData)
 }
 
 .plus {
-  width: 40px;
-  height: 40px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  font-size: 20px;
+  font-size: 18px;
   color: var(--ax-brand);
   background: var(--ax-brand-subtle);
   transition: all var(--ax-transition);
@@ -275,11 +302,5 @@ onMounted(loadData)
 .projcard.newcard:hover .plus {
   background: var(--ax-brand);
   color: #fff;
-}
-
-.side-col {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
 }
 </style>

@@ -18,7 +18,7 @@ const color = computed(() => cfg.value.color)
 <style scoped>
 .method-tag {
   font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   font-weight: 700;
   letter-spacing: 0.3px;
 }

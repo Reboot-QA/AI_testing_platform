@@ -1,14 +1,15 @@
 <template>
-  <div>
-    <el-row :gutter="20">
-      <el-col :span="10">
-        <el-card>
-          <template #header>
-            <span
-              ><el-icon><MagicStick /></el-icon> 生成配置</span
-            >
-          </template>
-          <el-form ref="formRef" :model="form" :rules="rules" label-width="100px">
+  <div class="ai-generate">
+    <div class="gen-grid">
+      <!-- 左侧：生成配置 -->
+      <div class="panel config-panel">
+        <div class="panel-h">
+          <span class="panel-title"
+            ><el-icon><MagicStick /></el-icon> 生成配置</span
+          >
+        </div>
+        <div class="panel-body">
+          <el-form ref="formRef" :model="form" :rules="rules" label-width="88px" class="gen-form">
             <el-form-item label="项目" prop="project_id">
               <el-select
                 v-model="form.project_id"
@@ -103,7 +104,7 @@
                 v-model="form.requirement_text"
                 data-assistant="ai_generate.requirement_text"
                 type="textarea"
-                :rows="8"
+                :rows="6"
                 placeholder="输入需求描述，或选择上方关联需求自动填充"
               />
             </el-form-item>
@@ -127,7 +128,9 @@
               </el-button>
             </el-form-item>
           </el-form>
+
           <el-alert
+            class="mode-alert"
             :title="
               mockMode
                 ? '当前为 Mock 模式，将使用本地模板生成'
@@ -137,30 +140,29 @@
             :closable="false"
             show-icon
           />
-        </el-card>
-      </el-col>
+        </div>
+      </div>
 
-      <el-col :span="14">
-        <el-card>
-          <template #header>
-            <div class="result-header">
-              <span>生成结果</span>
-              <el-tag
-                v-if="lastMode"
-                :type="lastMode === 'llm' ? 'success' : 'warning'"
-                size="small"
-              >
-                {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
-              </el-tag>
-              <el-tag v-if="lastProviderName" type="info" size="small">{{
-                lastProviderName
-              }}</el-tag>
-            </div>
-          </template>
+      <!-- 右侧：生成结果 -->
+      <div class="panel result-panel">
+        <div class="panel-h">
+          <span class="panel-title">生成结果</span>
+          <div class="result-tags">
+            <el-tag v-if="lastMode" :type="lastMode === 'llm' ? 'success' : 'warning'" size="small">
+              {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
+            </el-tag>
+            <el-tag v-if="lastProviderName" type="info" size="small">{{ lastProviderName }}</el-tag>
+            <el-tag v-if="results.length" type="primary" size="small"
+              >{{ results.length }} 条</el-tag
+            >
+          </div>
+        </div>
 
+        <div class="panel-body result-body">
           <el-empty
             v-if="!results.length && !generating && !errorMessage"
             description="配置需求后点击「开始生成」"
+            :image-size="72"
           />
 
           <el-alert
@@ -173,7 +175,7 @@
           />
 
           <div v-if="generating" class="stream-progress">
-            <el-progress :percentage="progressPercent" :stroke-width="10" />
+            <el-progress :percentage="progressPercent" :stroke-width="8" striped striped-flow />
             <p class="progress-text">{{ progressMessage }}</p>
             <p v-if="results.length" class="saved-tip">
               已实时写入用例库 {{ results.length }} 条
@@ -191,38 +193,37 @@
                 :title="`[${item.priority}] ${item.title}`"
                 :name="item.id"
               >
-                <el-descriptions :column="1" size="small">
+                <el-descriptions :column="1" size="small" border>
                   <el-descriptions-item label="前置条件">{{
-                    item.preconditions
+                    item.preconditions || '—'
                   }}</el-descriptions-item>
                   <el-descriptions-item label="步骤">
                     <pre class="pre-text">{{ item.steps }}</pre>
                   </el-descriptions-item>
                   <el-descriptions-item label="预期结果">{{
-                    item.expected_results
+                    item.expected_results || '—'
                   }}</el-descriptions-item>
-                  <el-descriptions-item label="标签">{{ item.tags }}</el-descriptions-item>
+                  <el-descriptions-item label="标签">{{ item.tags || '—' }}</el-descriptions-item>
                   <el-descriptions-item label="状态">
                     <el-tag type="warning" size="small">待评审</el-tag>
                   </el-descriptions-item>
                 </el-descriptions>
               </el-collapse-item>
             </el-collapse>
-            <div v-if="!generating" class="result-footer">
-              <el-text type="success"
-                >共生成 {{ results.length }} 条用例，已实时保存至用例库</el-text
-              >
-              <el-button type="primary" link @click="$router.push('/testcases')"
-                >前往用例库评审 →</el-button
-              >
-            </div>
-            <div v-else class="result-footer">
-              <el-text type="info">生成中，用例将实时写入用例库...</el-text>
-            </div>
           </div>
-        </el-card>
-      </el-col>
-    </el-row>
+
+          <div v-if="results.length" class="result-footer">
+            <el-text v-if="!generating" type="success"
+              >共生成 {{ results.length }} 条用例，已实时保存至用例库</el-text
+            >
+            <el-text v-else type="info">生成中，用例将实时写入用例库...</el-text>
+            <el-button v-if="!generating" type="primary" link @click="$router.push('/testcases')"
+              >前往用例库评审 →</el-button
+            >
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -492,61 +493,167 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.result-header {
+.ai-generate {
+  height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.gen-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 2fr 3fr;
+  gap: var(--ax-gap-sm);
+}
+
+.panel {
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  background: var(--ax-bg);
+  box-shadow: var(--ax-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.panel-h {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--ax-gap);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ax-border);
+  flex: none;
+}
+
+.panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ax-font);
+  font-weight: 600;
+  color: var(--ax-text);
+}
+
+.panel-title .el-icon {
+  color: var(--ax-brand);
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.config-panel .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-gap-sm);
+}
+
+.gen-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.gen-form :deep(.el-form-item__label) {
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text-secondary);
+}
+
+.mode-alert {
+  flex: none;
+  margin-top: auto;
+}
+
+.result-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.result-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.result-body :deep(.el-empty) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .result-list {
-  max-height: 600px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
+.result-list :deep(.el-collapse-item__header) {
+  font-size: var(--ax-font-sm);
+  font-weight: 600;
+  height: 40px;
+  line-height: 40px;
+}
+
+.result-list :deep(.el-collapse-item__content) {
+  font-size: var(--ax-font-sm);
+  padding-bottom: 12px;
+}
+
 .result-footer {
-  margin-top: 16px;
+  flex: none;
+  margin-top: var(--ax-gap-sm);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  padding-top: 10px;
+  border-top: 1px solid var(--ax-border);
 }
 
 .pre-text {
   white-space: pre-wrap;
   font-family: inherit;
   margin: 0;
+  font-size: var(--ax-font-sm);
+  line-height: 1.5;
 }
 
 .form-tip {
-  margin-top: 6px;
-  color: #909399;
-  font-size: 13px;
+  margin-top: 4px;
+  color: var(--ax-text-tertiary);
+  font-size: var(--ax-font-xs);
 }
 
 .req-select-header {
   padding: 4px 12px 8px;
-  border-bottom: 1px solid #ebeef5;
+  border-bottom: 1px solid var(--ax-border);
 }
 
 .req-select-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-top: 6px;
+  gap: var(--ax-gap);
+  margin-top: 4px;
 }
 
 .req-select-count {
-  color: #909399;
-  font-size: 12px;
+  color: var(--ax-text-tertiary);
+  font-size: var(--ax-font-xs);
 }
 
 .req-option {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ax-gap-sm);
 }
 
 .req-option-title {
@@ -554,6 +661,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--ax-font-sm);
 }
 
 .req-option-tags {
@@ -564,22 +672,35 @@ onUnmounted(() => {
 }
 
 .stream-progress {
-  margin-bottom: 16px;
+  flex: none;
+  margin-bottom: var(--ax-gap-sm);
 }
 
 .error-alert {
-  margin-bottom: 16px;
+  flex: none;
+  margin-bottom: var(--ax-gap-sm);
 }
 
 .progress-text {
-  margin: 10px 0 0;
-  color: #606266;
-  font-size: 13px;
+  margin: 8px 0 0;
+  color: var(--ax-text-secondary);
+  font-size: var(--ax-font-sm);
 }
 
 .saved-tip {
-  margin: 8px 0 0;
-  color: #67c23a;
-  font-size: 13px;
+  margin: 6px 0 0;
+  color: var(--ax-success);
+  font-size: var(--ax-font-sm);
+}
+
+@media (max-width: 960px) {
+  .ai-generate {
+    overflow: auto;
+  }
+
+  .gen-grid {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
 }
 </style>

@@ -13,7 +13,15 @@
       </div>
       <div class="sc-row">
         <span class="sc-label">格式</span>
-        <el-select v-model="field.extra.format" size="small" clearable filterable allow-create placeholder="format" class="sc-fmt">
+        <el-select
+          v-model="field.extra.format"
+          size="small"
+          clearable
+          filterable
+          allow-create
+          placeholder="format"
+          class="sc-fmt"
+        >
           <el-option v-for="f in FORMATS" :key="f" :label="f" :value="f" />
         </el-select>
       </div>
@@ -41,7 +49,10 @@
     </template>
 
     <!-- 枚举：字符串/数值可选值，一行一个 -->
-    <div v-if="field.type === 'string' || field.type === 'integer' || field.type === 'number'" class="sc-row sc-top">
+    <div
+      v-if="field.type === 'string' || field.type === 'integer' || field.type === 'number'"
+      class="sc-row sc-top"
+    >
       <span class="sc-label">枚举</span>
       <el-input
         v-model="enumText"
@@ -72,7 +83,19 @@ import type { SchemaField } from '@/types/apifox'
 
 const props = defineProps<{ field: SchemaField }>()
 
-const FORMATS = ['date-time', 'date', 'time', 'email', 'uri', 'uuid', 'hostname', 'ipv4', 'ipv6', 'byte', 'binary']
+const FORMATS = [
+  'date-time',
+  'date',
+  'time',
+  'email',
+  'uri',
+  'uuid',
+  'hostname',
+  'ipv4',
+  'ipv6',
+  'byte',
+  'binary',
+]
 
 function boolFlag(key: string) {
   return computed({
@@ -122,7 +145,11 @@ const enumText = computed({
     return Array.isArray(e) ? e.join('\n') : e || ''
   },
   set: (v) => {
-    const arr = String(v).split('\n').map((s) => s.trim()).filter(Boolean).map(coerce)
+    const arr = String(v)
+      .split('\n')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(coerce)
     if (arr.length) props.field.extra.enum = arr
     else delete props.field.extra.enum
   },

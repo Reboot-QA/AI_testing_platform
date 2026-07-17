@@ -152,7 +152,7 @@
               <h4>{{ currentCase.case_title }}</h4>
               <div class="case-tags">
                 <el-tag size="small">{{ currentCase.case_priority }}</el-tag>
-                <el-tag size="small" type="info">{{ currentCase.case_type }}</el-tag>
+                <el-tag size="small" type="info">{{ formatCaseTypeLabel(currentCase.case_type) }}</el-tag>
                 <el-tag :type="resultType[currentCase.result]" size="small">
                   {{ resultLabel[currentCase.result] }}
                 </el-tag>
@@ -312,7 +312,9 @@
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
         <el-table-column prop="priority" label="优先级" width="80" />
-        <el-table-column prop="case_type" label="类型" width="90" />
+        <el-table-column prop="case_type" label="类型" width="90">
+          <template #default="{ row }">{{ formatCaseTypeLabel(row.case_type) }}</template>
+        </el-table-column>
       </el-table>
       <el-empty v-else description="请先选择项目与需求点，系统将自动加载关联用例" />
 
@@ -370,6 +372,7 @@ import type { TableInstance } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
 import type { Schemas } from '@/api/types'
 import { formatBeijingTime } from '@/utils/datetime'
+import { formatCaseTypeLabel } from '@/utils/caseType'
 import type { DateInput, Project, Requirement, TestCase } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
 

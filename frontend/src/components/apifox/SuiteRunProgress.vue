@@ -21,14 +21,18 @@
       <el-icon v-if="item.status === 'running'" class="is-loading" color="var(--ax-warning)">
         <Loading />
       </el-icon>
-      <el-icon v-else-if="item.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
+      <el-icon v-else-if="item.status === 'passed'" color="var(--ax-success)"
+        ><CircleCheck
+      /></el-icon>
       <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
       <span class="rp-type">{{ item.target_type === 'scenario' ? '场景' : '用例' }}</span>
       <span class="rp-name">{{ item.index }}/{{ total }} {{ item.target_name }}</span>
       <span v-if="item.passed_count != null" class="rp-meta">
         {{ item.passed_count }}/{{ (item.passed_count || 0) + (item.failed_count || 0) }} 步
       </span>
-      <span v-if="item.duration_ms != null" class="rp-meta">{{ Math.round(item.duration_ms) }}ms</span>
+      <span v-if="item.duration_ms != null" class="rp-meta"
+        >{{ Math.round(item.duration_ms) }}ms</span
+      >
       <span v-if="item.error_message" class="rp-err">{{ item.error_message }}</span>
     </div>
 

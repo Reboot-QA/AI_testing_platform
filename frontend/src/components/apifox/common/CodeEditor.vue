@@ -112,6 +112,6 @@ defineExpose({ format })
   justify-content: center;
   height: 100%;
   color: var(--ax-text-placeholder);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
 }
 </style>

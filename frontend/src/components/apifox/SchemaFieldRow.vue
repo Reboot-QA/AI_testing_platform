@@ -29,13 +29,20 @@
       <el-option v-for="m in models" :key="m.id" :label="m.name" :value="m.name" />
     </el-select>
 
-    <el-checkbox v-if="!isItem" v-model="field.required" size="small" class="f-req">必填</el-checkbox>
+    <el-checkbox v-if="!isItem" v-model="field.required" size="small" class="f-req"
+      >必填</el-checkbox
+    >
 
     <el-input v-model="field.description" size="small" placeholder="说明" class="f-desc" />
 
     <el-popover v-if="showConstraints" trigger="click" :width="300" placement="bottom-end">
       <template #reference>
-        <el-button link size="small" :type="hasConstraints ? 'primary' : ''" title="高级约束（枚举/正则/范围/示例等）">
+        <el-button
+          link
+          size="small"
+          :type="hasConstraints ? 'primary' : ''"
+          title="高级约束（枚举/正则/范围/示例等）"
+        >
           约束<span v-if="hasConstraints" class="c-dot">●</span>
         </el-button>
       </template>

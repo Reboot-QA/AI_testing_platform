@@ -143,7 +143,10 @@ import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { parseCurl } from '@/utils/curlParser'
 import ScenarioStepRow from '@/components/apifox/ScenarioStepRow.vue'
 import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
-import type { ScenarioEditorStep, ScenarioStepSelection } from '@/components/apifox/ScenarioStepRow.vue'
+import type {
+  ScenarioEditorStep,
+  ScenarioStepSelection,
+} from '@/components/apifox/ScenarioStepRow.vue'
 
 type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 type ScenarioBrief = Schemas['ScenarioBrief']
@@ -248,15 +251,17 @@ const canAdd = computed(() => {
   return true
 })
 
-function newHttpStep(over: Partial<{
-  name: string
-  method: string
-  path: string
-  server_name: string | null
-  request_spec: RequestSpec
-  assertions: Schemas['AssertionRow'][]
-  extracts: Schemas['ExtractRow'][]
-}> = {}): ScenarioEditorStep {
+function newHttpStep(
+  over: Partial<{
+    name: string
+    method: string
+    path: string
+    server_name: string | null
+    request_spec: RequestSpec
+    assertions: Schemas['AssertionRow'][]
+    extracts: Schemas['ExtractRow'][]
+  }> = {},
+): ScenarioEditorStep {
   return {
     type: 'http',
     enabled: true,
@@ -390,8 +395,9 @@ function addStep() {
 <style scoped>
 .steps-editor {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 340px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .steps-col {
@@ -416,12 +422,12 @@ function addStep() {
 
 .add-hint {
   flex: 1;
-  font-size: 11px;
+  font-size: var(--ax-font-xs);
   line-height: 1.35;
   color: var(--ax-text-placeholder);
 }
 
 .steps-col :deep(.el-empty__description) {
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 </style>

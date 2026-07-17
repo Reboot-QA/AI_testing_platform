@@ -44,7 +44,9 @@
           </div>
           <div class="detail-row">
             <span class="detail-label">变量值</span>
-            <span class="detail-value detail-value-mono">{{ previewValue(activeVariable.value) }}</span>
+            <span class="detail-value detail-value-mono">{{
+              previewValue(activeVariable.value)
+            }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">所属</span>
@@ -123,7 +125,7 @@ watch(
   () => {
     if (panelVisible.value) syncTrigger()
   },
-  { deep: true }
+  { deep: true },
 )
 
 function previewValue(value: unknown) {

@@ -121,7 +121,9 @@ export interface ScenarioStepSelection {
   uid: number | null
 }
 
-export interface ScenarioEditorStep extends Schemas['StepOut'] {
+type StepOut = Schemas['StepOut']
+
+export type ScenarioEditorStep = StepOut & {
   _uid?: number
   elseChildren?: ScenarioEditorStep[]
   elseEnabled?: boolean

@@ -31,7 +31,9 @@
         <el-icon><Delete /></el-icon>
       </el-button>
     </div>
-    <el-button link type="primary" size="small" @click="rows.push(emptyRow())">+ 添加断言</el-button>
+    <el-button link type="primary" size="small" @click="rows.push(emptyRow())"
+      >+ 添加断言</el-button
+    >
   </div>
 </template>
 

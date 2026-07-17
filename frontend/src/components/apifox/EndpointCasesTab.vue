@@ -275,8 +275,9 @@ apifoxApi.listDatasets(props.projectId).then((r) => (datasets.value = r))
 <style scoped>
 .cases-panel {
   display: flex;
-  gap: 12px;
-  height: calc(100vh - 360px);
+  gap: var(--ax-gap-sm);
+  height: 100%;
+  min-height: 0;
 }
 
 .list {
@@ -343,12 +344,12 @@ apifoxApi.listDatasets(props.projectId).then((r) => (datasets.value = r))
 }
 
 .cat-label {
-  font-size: 13px;
+  font-size: var(--ax-font);
   color: var(--ax-text-secondary);
 }
 
 .run-hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 </style>

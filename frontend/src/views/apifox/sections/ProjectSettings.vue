@@ -148,8 +148,9 @@ onMounted(() => {
 <style scoped>
 .proj-settings {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 220px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .side-panel {
@@ -197,7 +198,7 @@ onMounted(() => {
 .lbl {
   flex-shrink: 0;
   width: 72px;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
   padding-top: 6px;
 }
@@ -228,7 +229,7 @@ onMounted(() => {
 }
 
 .dz-desc {
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   color: var(--ax-text-secondary);
   margin-top: 2px;
 }

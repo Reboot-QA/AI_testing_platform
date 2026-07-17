@@ -166,8 +166,11 @@ function syncFromText() {
 
 const fetchKeys = (query: string, cb: (results: Array<Record<string, string>>) => void) =>
   cb(suggestHeaderKeys(query))
-const fetchValues = (row: KvRow, query: string, cb: (results: Array<Record<string, string>>) => void) =>
-  cb(suggestHeaderValues(row.key, query))
+const fetchValues = (
+  row: KvRow,
+  query: string,
+  cb: (results: Array<Record<string, string>>) => void,
+) => cb(suggestHeaderValues(row.key, query))
 
 // 选中常用 header 时，值为空则自动带上该 header 的默认值（不覆盖已填的值）
 function onKeySelect(row: KvRow, item: { value: string }) {
