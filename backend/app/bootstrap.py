@@ -26,6 +26,7 @@ from app.services.apifox.migration import (
     migrate_apifox_scenario_step_tree,
     migrate_apifox_schedule_cron,
 )
+from app.services.apifox.run_service import recover_orphan_runs
 from app.services.apifox.scheduler import init_schedules_on_startup
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.project_migration import migrate_project_members_columns
@@ -68,6 +69,7 @@ def run_bootstrap() -> None:
         ("迁移菜单权限", migrate_all_user_permissions),
         ("初始化定时任务", init_schedules_on_startup),
         ("恢复残留AI生成任务", init_ai_gen_tasks_on_startup),
+        ("回收残留运行", lambda db: recover_orphan_runs(db)),
     ]
 
     import app.models  # noqa: F401
