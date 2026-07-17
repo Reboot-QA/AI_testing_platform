@@ -60,16 +60,26 @@ function _pmResponseTo(resp) {
   return to;
 }
 
-function _pmBuild(variables, response, logs) {
-  const bag = (b) => ({
+function _pmBag(b) {
+  return {
     get: (k) => b[k],
     set: (k, v) => { b[k] = v == null ? '' : String(v); },
     has: (k) => Object.prototype.hasOwnProperty.call(b, k),
     unset: (k) => { delete b[k]; },
     toObject: () => Object.assign({}, b),
     clear: () => { Object.keys(b).forEach((k) => delete b[k]); },
+  };
+}
+
+// 前置脚本无响应上下文：任何访问都给清晰报错，而非晦涩的 undefined 崩溃
+function _pmNoResponse() {
+  return new Proxy({}, {
+    get() { throw new Error('pm.response 仅后置脚本可用（前置脚本没有响应上下文）'); },
   });
-  const vars = bag(variables);
+}
+
+function _pmBuild(variables, response, logs) {
+  const vars = _pmBag(variables);
   const pm = {
     variables: vars,
     environment: vars,
@@ -80,6 +90,11 @@ function _pmBuild(variables, response, logs) {
       try { fn(); logs.push('✓ ' + name); }
       catch (e) { logs.push('✗ ' + name + ' | ' + (e && e.message ? e.message : String(e))); }
     },
+    // 本平台脚本无真实请求/cookie 上下文：给空实现，读取返回空（与 Postman "不存在"语义一致，脚本不崩）
+    cookies: { get: () => undefined, has: () => false },
+    request: { headers: { get: () => undefined }, method: '', url: '', body: undefined },
+    info: { requestName: '', requestId: '', iteration: 0, iterationCount: 0 },
+    iterationData: _pmBag({}),
   };
   if (response) {
     const rawHeaders = response.headers || {};
@@ -94,8 +109,17 @@ function _pmBuild(variables, response, logs) {
     };
     resp.to = _pmResponseTo(resp);
     pm.response = resp;
+  } else {
+    pm.response = _pmNoResponse();
   }
-  return pm;
+  // 未实现的 pm.X 给清晰报错，避免 "Cannot read properties of undefined (reading ...)"
+  return new Proxy(pm, {
+    get(target, prop) {
+      if (typeof prop === 'symbol' || prop in target) return target[prop];
+      throw new Error('本平台脚本暂不支持 pm.' + String(prop)
+        + '（支持 variables/environment/globals/response(后置)/cookies/request/test/expect 等）');
+    },
+  });
 }
 """
 
