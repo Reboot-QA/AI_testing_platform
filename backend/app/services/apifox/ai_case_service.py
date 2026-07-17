@@ -101,21 +101,77 @@ def build_user_prompt(context: str, categories: List[AiGenCategory]) -> str:
 
 
 # ---------- 解析 LLM 响应 → CaseCreate ----------
+def _salvage_case_objects(text: str) -> List[dict]:
+    """LLM JSON 畸形/被截断时，逐个救回完整的用例对象。
+
+    从 cases 数组内起扫，括号配平（string-aware，忽略字符串内的花括号）提取每个平衡的
+    顶层对象；缺逗号→各自仍平衡照样提取，尾部被截断→丢弃未闭合的最后一个。
+    """
+    key = text.find('"cases"')
+    bracket = text.find("[", key) if key >= 0 else text.find("[")
+    scan = text[bracket + 1:] if bracket >= 0 else text
+
+    objects: List[dict] = []
+    depth = 0
+    start = -1
+    in_string = False
+    escape = False
+    for i, ch in enumerate(scan):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+        elif ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}" and depth > 0:
+            depth -= 1
+            if depth == 0 and start >= 0:
+                try:
+                    obj = json.loads(scan[start:i + 1])
+                except json.JSONDecodeError:
+                    obj = None
+                if isinstance(obj, dict):
+                    objects.append(obj)
+                start = -1
+    return objects
+
+
 def _parse_cases_payload(content: str) -> List[dict]:
     text = content.strip()
     if text.startswith("```"):
         text = text.split("```", 2)[1] if "```" in text[3:] else text.strip("`")
         text = text[4:] if text.lower().startswith("json") else text
     text = text.strip()
+
+    data: Any = None
     try:
         data = json.loads(text)  # 优先整体解析：兼容顶层对象与顶层数组
     except json.JSONDecodeError:
-        start, end = text.find("{"), text.rfind("}")  # 兜底：从内嵌文本里截取对象
-        if start < 0 or end <= start:
-            raise
-        data = json.loads(text[start : end + 1])
-    cases = data.get("cases") if isinstance(data, dict) else data
-    return [c for c in cases if isinstance(c, dict)] if isinstance(cases, list) else []
+        start, end = text.find("{"), text.rfind("}")  # 再试：截取首尾大括号
+        if 0 <= start < end:
+            try:
+                data = json.loads(text[start:end + 1])
+            except json.JSONDecodeError:
+                data = None
+
+    if data is not None:
+        cases = data.get("cases") if isinstance(data, dict) else data
+        if isinstance(cases, list):
+            return [c for c in cases if isinstance(c, dict)]  # 可能为空，交上层判断
+
+    # 兜底：整体解析失败（LLM 输出畸形/截断）时逐个救回完整用例，避免整批丢弃
+    salvaged = _salvage_case_objects(text)
+    if salvaged:
+        return salvaged
+    raise ValueError("LLM 返回不含可解析的用例 JSON")
 
 
 def _apply_kv(rows: List[KvRow], values: Any) -> None:
