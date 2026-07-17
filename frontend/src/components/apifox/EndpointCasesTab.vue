@@ -95,7 +95,7 @@ const props = defineProps<{
 }>()
 
 const store = useWorkspaceStore()
-const cases = ref<Schemas['CaseOut'][]>([])
+const cases = ref<Schemas['CaseBrief'][]>([])
 const scripts = ref<Schemas['ScriptBrief'][]>([])
 const datasets = ref<Schemas['DatasetBrief'][]>([])
 const saving = ref(false)
@@ -120,7 +120,7 @@ const form = reactive<CaseEditorForm>({
   extracts: [],
   pre_scripts: [],
   post_scripts: [],
-  data_drive: { enabled: false, rows: [] },
+  data_drive: { enabled: false, source: 'inline', rows: [] },
   version: 1,
 })
 
@@ -128,13 +128,13 @@ async function loadCases() {
   cases.value = props.endpointId ? await apifoxApi.listCases(props.endpointId) : []
 }
 
-function emptyCasePayload(name, category) {
+function emptyCasePayload(name: string, category: string): Schemas['CaseCreate'] {
   return {
     name,
     category,
-    request_spec: emptySpec(),
+    request_spec: emptySpec() as Schemas['CaseCreate']['request_spec'],
     variables: [],
-    data_drive: { enabled: false, rows: [] },
+    data_drive: { enabled: false, source: 'inline', rows: [] },
     assertions: [],
     extracts: [],
     pre_scripts: [],
@@ -153,7 +153,9 @@ function applyCase(c: Schemas['CaseOut']) {
   form.pre_scripts = c.pre_scripts || []
   form.post_scripts = c.post_scripts || []
   form.data_drive =
-    c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+    c.data_drive?.enabled !== undefined
+      ? c.data_drive
+      : { enabled: false, source: 'inline', rows: [] }
   form.version = c.version ?? 1
 }
 
@@ -168,7 +170,8 @@ async function addCase() {
   // 带入接口默认参数：新用例继承接口已配置的 params/headers/body/auth，不从空白开始
   try {
     const ep = await apifoxApi.getEndpoint(props.endpointId)
-    if (ep?.request_spec) payload.request_spec = ep.request_spec
+    if (ep?.request_spec)
+      payload.request_spec = normSpec(ep.request_spec) as Schemas['CaseCreate']['request_spec']
   } catch {
     /* 拉取接口失败则用空 spec，不阻塞建用例 */
   }
@@ -187,7 +190,7 @@ async function selectCase(cid: Id) {
   applyCase(await apifoxApi.getCase(cid))
 }
 
-async function delCase(c: Schemas['CaseOut']) {
+async function delCase(c: Schemas['CaseBrief']) {
   await ElMessageBox.confirm(`确认删除用例「${c.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteCase(c.id)
   if (form.id === c.id) form.id = null
@@ -195,7 +198,7 @@ async function delCase(c: Schemas['CaseOut']) {
   await loadCases()
 }
 
-async function copyCase(c: Schemas['CaseOut']) {
+async function copyCase(c: Schemas['CaseBrief']) {
   const created = await apifoxApi.copyCase(c.id)
   ElMessage.success('已复制')
   await loadCases()
@@ -217,10 +220,11 @@ function casePayload() {
 }
 
 async function doSaveCase() {
+  if (form.id == null) return
   const updated = await apifoxApi.updateCase(form.id, {
     ...casePayload(),
     expected_version: form.version,
-  })
+  } as Schemas['CaseUpdate'])
   form.version = updated.version
   await loadCases()
 }
@@ -230,11 +234,13 @@ async function saveCase() {
   try {
     await doSaveCase()
     ElMessage.success('已保存')
-  } catch (e) {
+  } catch (e: unknown) {
     if (!isConflict(e)) throw e
+    if (form.id == null) return
     await resolveSaveConflict({
-      reload: () => selectCase(form.id),
+      reload: () => selectCase(form.id!),
       overwrite: async () => {
+        if (form.id == null) return
         const latest = await apifoxApi.getCase(form.id)
         form.version = latest.version
         await doSaveCase()
@@ -246,14 +252,16 @@ async function saveCase() {
 }
 
 async function runCase() {
+  if (form.id == null) return
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId, (e) =>
+    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId ?? undefined, (e) =>
       runEvents.value.push(e),
     )
-  } catch (e) {
-    ElMessage.error(e.message || '运行失败')
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '运行失败'
+    ElMessage.error(msg)
   } finally {
     running.value = false
   }

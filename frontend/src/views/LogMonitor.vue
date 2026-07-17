@@ -253,7 +253,7 @@ function handleLiveToggle(enabled: boolean) {
 function switchSource(source: string) {
   if (activeSource.value === source) return
   activeSource.value = source
-  handleSourceChange(source)
+  handleSourceChange()
 }
 
 function handleSourceChange() {

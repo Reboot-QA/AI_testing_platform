@@ -152,7 +152,9 @@
               <h4>{{ currentCase.case_title }}</h4>
               <div class="case-tags">
                 <el-tag size="small">{{ currentCase.case_priority }}</el-tag>
-                <el-tag size="small" type="info">{{ formatCaseTypeLabel(currentCase.case_type) }}</el-tag>
+                <el-tag size="small" type="info">{{
+                  formatCaseTypeLabel(currentCase.case_type)
+                }}</el-tag>
                 <el-tag :type="resultType[currentCase.result]" size="small">
                   {{ resultLabel[currentCase.result] }}
                 </el-tag>
@@ -370,6 +372,7 @@ import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { TableInstance } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
+import { unwrapProjectList } from '@/api/project'
 import type { Schemas } from '@/api/types'
 import { formatBeijingTime } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
@@ -471,8 +474,9 @@ const filteredCases = computed(() => {
 })
 
 const currentCaseIndex = computed(() => {
-  if (!currentCase.value || !executingRun.value?.cases) return -1
-  return executingRun.value.cases.findIndex((item) => item.id === currentCase.value.id)
+  const caseId = currentCase.value?.id
+  if (caseId == null || !executingRun.value?.cases) return -1
+  return executingRun.value.cases.findIndex((item) => item.id === caseId)
 })
 
 const prevCase = computed(() => {
@@ -509,7 +513,7 @@ function runProgress(run: TestRunSummary | TestRunDetail | null) {
 }
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
   if (projects.value.length && !projectId.value) {
     projectId.value = projects.value[0].id
     await handleProjectChange()
@@ -649,7 +653,7 @@ async function loadAvailableCases() {
     await nextTick()
     if (caseTableRef.value) {
       caseTableRef.value.clearSelection()
-      availableCases.value.forEach((row) => caseTableRef.value.toggleRowSelection(row, true))
+      availableCases.value.forEach((row) => caseTableRef.value?.toggleRowSelection(row, true))
     }
   } finally {
     casesLoading.value = false
@@ -676,7 +680,7 @@ function toggleSelectAll() {
     caseTableRef.value.clearSelection()
     selectedCaseIds.value = []
   } else {
-    availableCases.value.forEach((row) => caseTableRef.value.toggleRowSelection(row, true))
+    availableCases.value.forEach((row) => caseTableRef.value?.toggleRowSelection(row, true))
     selectedCaseIds.value = availableCases.value.map((item) => item.id)
   }
 }

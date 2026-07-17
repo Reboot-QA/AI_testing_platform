@@ -38,7 +38,11 @@
           {{ grp.folder ? grp.folder.name : '未分组' }}
         </span>
         <span class="group-head-count">{{ grp.scenarios.length }}</span>
-        <el-dropdown v-if="grp.folder" trigger="click" @command="(c) => onFolderCmd(c, grp.folder)">
+        <el-dropdown
+          v-if="grp.folder"
+          trigger="click"
+          @command="(c: 'rename' | 'delete') => onFolderCmd(c, grp.folder!)"
+        >
           <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
             <MoreFilled />
           </el-icon>
@@ -55,12 +59,13 @@
       <VueDraggable
         :key="`drag-${grp.key}`"
         v-model="grp.scenarios"
+        :data-gkey="grp.key"
         :group="{ name: 'scenarios', pull: true, put: true }"
         handle=".drag-handle"
         :animation="150"
         ghost-class="scenario-ghost"
         :class="grp.scenarios.length === 0 ? 'scenario-drop-empty' : 'scenario-drop'"
-        @end="(e) => onDragEnd(grp, e)"
+        @end="onDragEnd"
       >
         <div
           v-for="s in grp.scenarios"
@@ -145,7 +150,7 @@ const props = withDefaults(
 const emit = defineEmits<{
   select: [id: number]
   del: [scenario: ScenarioBrief]
-  move: [payload: { id: number; folderId: number | null }]
+  reorder: [items: Schemas['ScenarioReorderRequest']['items']]
   'new-scenario': []
   'new-folder': []
   'rename-folder': [folder: ScenarioFolderOut]
@@ -155,17 +160,20 @@ const emit = defineEmits<{
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
 
 // 按 folder_id 分组：所有文件夹（含空）在前，未分组始终置底作为拖放目标
-const groups = computed(() => {
-  const bucket = new Map(props.folders.map((f) => [f.id, []]))
-  const ungrouped = []
+const groups = computed((): ScenarioGroup[] => {
+  const bucket = new Map<number, ScenarioBrief[]>(
+    props.folders.map((f) => [f.id, [] as ScenarioBrief[]]),
+  )
+  const ungrouped: ScenarioBrief[] = []
   for (const s of visibleScenarios.value) {
-    if (s.folder_id != null && bucket.has(s.folder_id)) bucket.get(s.folder_id).push(s)
+    const list = s.folder_id != null ? bucket.get(s.folder_id) : undefined
+    if (list) list.push(s)
     else ungrouped.push(s)
   }
-  const result = props.folders.map((f) => ({
+  const result: ScenarioGroup[] = props.folders.map((f) => ({
     key: `f${f.id}`,
     folder: f,
-    scenarios: bucket.get(f.id),
+    scenarios: bucket.get(f.id) ?? [],
   }))
   // 始终保留「未分组」作为跨组拖放目标（即使当前为空）
   result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
@@ -182,27 +190,36 @@ watch(
   { immediate: true },
 )
 
-// 跨分组拖放结束时持久化 folder_id（组内重排后端不支持，忽略）
+// 拖放结束：快照重编号受影响的组（组内=源=目标 1 组；跨组=源+目标 2 组），交后端批量落库
 interface ScenarioDragEndEvent {
-  from?: HTMLElement
-  to?: HTMLElement
-  item?: HTMLElement & { dataset?: { scenarioId?: string } }
+  from?: HTMLElement & { dataset?: { gkey?: string } }
+  to?: HTMLElement & { dataset?: { gkey?: string } }
 }
 
-function onDragEnd(grp: ScenarioGroup, evt: ScenarioDragEndEvent) {
-  if (!evt || evt.from === evt.to) return
-  const id = Number(evt.item?.dataset?.scenarioId)
-  if (!id) return
-  // 仅在目标分组上处理（源分组 onEnd 时条目已移出）
-  if (!grp.scenarios.some((s) => s.id === id)) return
-  const targetFolderId = grp.folder ? grp.folder.id : null
-  const src = props.scenarios.find((s) => s.id === id)
-  if (!src || src.folder_id === targetFolderId) return
-  emit('move', { id, folderId: targetFolderId })
+// 组内 index 即 sort_order（组内相对序，前端按 folder 分组，跨组重叠无妨）
+function groupSnapshot(grp: ScenarioGroup): Schemas['ScenarioReorderRequest']['items'] {
+  return grp.scenarios.map((s, i) => ({
+    id: s.id,
+    folder_id: grp.folder ? grp.folder.id : null,
+    sort_order: i,
+  }))
+}
+
+function onDragEnd(evt: ScenarioDragEndEvent) {
+  const fromKey = evt.from?.dataset?.gkey
+  const toKey = evt.to?.dataset?.gkey
+  // 能识别到源/目标组就只发这两组；否则全量兜底（仍正确，只是多发几条）
+  const affected =
+    fromKey && toKey
+      ? localGroups.value.filter((g) => g.key === fromKey || g.key === toKey)
+      : localGroups.value
+  const items = affected.flatMap(groupSnapshot)
+  if (items.length) emit('reorder', items)
 }
 
 function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
-  emit(cmd === 'rename' ? 'rename-folder' : 'delete-folder', folder)
+  if (cmd === 'rename') emit('rename-folder', folder)
+  else emit('delete-folder', folder)
 }
 </script>
 

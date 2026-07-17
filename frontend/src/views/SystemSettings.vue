@@ -137,6 +137,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { settingsApi } from '@/api'
+import type { Schemas } from '@/api/types'
 import PageCard from '@/components/PageCard.vue'
 import type { LlmProvider } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
@@ -191,7 +192,7 @@ async function loadSettings() {
   try {
     const data = await settingsApi.getLLM()
     settings.mock_mode = data.mock_mode
-    settings.active_provider_id = data.active_provider_id
+    settings.active_provider_id = data.active_provider_id ?? null
     providers.value = data.providers || []
   } finally {
     loading.value = false
@@ -203,7 +204,7 @@ async function handleMockChange(value: boolean) {
   try {
     const data = await settingsApi.updateMockMode(value)
     settings.mock_mode = data.mock_mode
-    settings.active_provider_id = data.active_provider_id
+    settings.active_provider_id = data.active_provider_id ?? null
     providers.value = data.providers || []
     ElMessage.success(value ? '已开启 Mock 模式' : '已关闭 Mock 模式')
   } catch {
@@ -237,8 +238,8 @@ function openDialog(row: LlmProvider | null = null) {
   dialogVisible.value = true
 }
 
-function buildPayload() {
-  const payload: Record<string, unknown> = {
+function buildPayload(): Schemas['LLMProviderCreate'] {
+  const payload: Schemas['LLMProviderCreate'] = {
     name: form.name,
     api_base: form.api_base,
     model: form.model,

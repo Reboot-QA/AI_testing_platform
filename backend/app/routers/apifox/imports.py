@@ -1,9 +1,11 @@
 """Apifox · OpenAPI 导入 / 更新同步路由（项目作用域）。"""
 
+import logging
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -14,6 +16,15 @@ from app.services.apifox import import_service, import_sync_service
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·导入"])
+logger = logging.getLogger(__name__)
+
+# 外部 OpenAPI 文档结构不可控：解析畸形字段的结构性异常兜底为 422（含诊断），避免裸 500
+_DOC_STRUCTURE_ERRORS = (KeyError, TypeError, AttributeError, IndexError)
+
+
+def _doc_error(pid: int, action: str, exc: Exception) -> HTTPException:
+    logger.exception("OpenAPI %s 解析失败 pid=%s", action, pid)
+    return HTTPException(status_code=422, detail=f"OpenAPI 文档解析失败：{type(exc).__name__}: {exc}")
 
 
 class ImportRequest(BaseModel):
@@ -54,6 +65,13 @@ def import_openapi(
         report = import_service.import_openapi(db, pid, _load_doc(data))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except IntegrityError:
+        db.rollback()
+        logger.exception("OpenAPI 导入唯一约束冲突 pid=%s", pid)
+        raise HTTPException(status_code=409, detail="导入的接口或数据模型存在重名，请检查后重试")
+    except _DOC_STRUCTURE_ERRORS as exc:
+        db.rollback()
+        raise _doc_error(pid, "导入", exc)
     return ImportReport(**report)
 
 
@@ -70,6 +88,8 @@ def import_openapi_diff(
         return import_sync_service.compute_diff(db, pid, _load_doc(data))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except _DOC_STRUCTURE_ERRORS as exc:
+        raise _doc_error(pid, "更新预览", exc)
 
 
 @router.post("/projects/{pid}/import/openapi/sync", response_model=ImportSyncReport)
@@ -85,3 +105,10 @@ def import_openapi_sync(
         return import_sync_service.apply_sync(db, pid, _load_doc(data), data.delete_unreferenced)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except IntegrityError:
+        db.rollback()
+        logger.exception("OpenAPI 更新同步唯一约束冲突 pid=%s", pid)
+        raise HTTPException(status_code=409, detail="导入的接口或数据模型存在重名，请检查后重试")
+    except _DOC_STRUCTURE_ERRORS as exc:
+        db.rollback()
+        raise _doc_error(pid, "更新同步", exc)

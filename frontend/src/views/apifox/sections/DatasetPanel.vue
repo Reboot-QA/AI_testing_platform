@@ -167,6 +167,7 @@ function addRow() {
 }
 
 async function doSaveDataset() {
+  if (form.id == null) return
   const updated = await apifoxApi.updateDataset(form.id, {
     name: form.name,
     description: form.description || null,
@@ -179,6 +180,8 @@ async function doSaveDataset() {
 }
 
 async function saveDataset() {
+  if (form.id == null) return
+  const datasetId = form.id
   saving.value = true
   try {
     await doSaveDataset()
@@ -187,10 +190,10 @@ async function saveDataset() {
     if (!isConflict(e)) return // 非冲突错误已由 api 拦截器提示
     await resolveSaveConflict({
       reload: async () => {
-        await selectDataset(form.id)
+        await selectDataset(datasetId)
       },
       overwrite: async () => {
-        const latest = await apifoxApi.getDataset(form.id)
+        const latest = await apifoxApi.getDataset(datasetId)
         form.version = latest.version
         await doSaveDataset()
       },

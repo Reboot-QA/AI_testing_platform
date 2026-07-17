@@ -12,8 +12,26 @@ function runStream(
   return streamSSE(`${url}${query}`, { signal: options.signal, onEvent })
 }
 
+export type WorkbenchRunningPageOut = {
+  items: Schemas['WorkbenchRunning'][]
+  total: number
+  page: number
+  page_size: number
+}
+
+export type WorkbenchReportPageOut = {
+  items: Schemas['WorkbenchReport'][]
+  total: number
+  page: number
+  page_size: number
+}
+
 export const apifoxApi = {
   workbenchOverview: () => get<Schemas['WorkbenchOverviewOut']>('/apifox/workbench/overview'),
+  workbenchRunning: (params: { page?: number; page_size?: number } = {}) =>
+    get<WorkbenchRunningPageOut>('/apifox/workbench/running', { params }),
+  workbenchReports: (params: { page?: number; page_size?: number } = {}) =>
+    get<WorkbenchReportPageOut>('/apifox/workbench/reports', { params }),
 
   listFolders: (pid: Id) => get<Schemas['FolderOut'][]>(`/apifox/projects/${pid}/folders`),
   createFolder: (pid: Id, data: Schemas['FolderCreate']) =>
@@ -113,6 +131,8 @@ export const apifoxApi = {
   listProjectCases: (pid: Id) =>
     get<Schemas['ProjectCaseBrief'][]>(`/apifox/projects/${pid}/cases`),
   listScenarios: (pid: Id) => get<Schemas['ScenarioBrief'][]>(`/apifox/projects/${pid}/scenarios`),
+  reorderScenarios: (pid: Id, data: Schemas['ScenarioReorderRequest']) =>
+    post<{ message: string }>(`/apifox/projects/${pid}/scenarios/reorder`, data),
   getScenario: (sid: Id) => get<Schemas['ScenarioOut']>(`/apifox/scenarios/${sid}`),
   createScenario: (pid: Id, data: Schemas['ScenarioCreate']) =>
     post<Schemas['ScenarioOut']>(`/apifox/projects/${pid}/scenarios`, data),

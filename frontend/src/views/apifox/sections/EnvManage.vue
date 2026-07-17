@@ -93,7 +93,10 @@
           @delete="onDelete"
           @set-local="onSetLocal"
         />
-        <EnvDatabasesPanel v-if="selected.type === 'env'" :environment-id="selected.id" />
+        <EnvDatabasesPanel
+          v-if="selected.type === 'env' && selected.id != null"
+          :environment-id="selected.id"
+        />
       </template>
     </div>
   </div>
@@ -143,11 +146,13 @@ function syncEnvDetail() {
 }
 
 async function saveBaseUrl() {
+  if (selected.id == null) return
   await apifoxApi.updateEnvironment(selected.id, { base_url: baseUrl.value })
   await loadEnvs()
 }
 
 async function addServer() {
+  if (selected.id == null) return
   try {
     await apifoxApi.createEnvServer(selected.id, {
       name: newServer.name.trim(),
@@ -178,7 +183,8 @@ async function delServer(s: Schemas['ServerOut']) {
 }
 
 async function reloadVars() {
-  if (selected.type === 'env') vars.value = await apifoxApi.listEnvVars(selected.id)
+  if (selected.type === 'env' && selected.id != null)
+    vars.value = await apifoxApi.listEnvVars(selected.id)
   else vars.value = await apifoxApi.listGlobalVars(pid.value)
 }
 
@@ -205,7 +211,7 @@ async function addEnv() {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
   })
-  await apifoxApi.createEnvironment(pid.value, { name: value })
+  await apifoxApi.createEnvironment(pid.value, { name: value, is_default: false })
   ElMessage.success('已创建')
   await loadEnvs()
 }

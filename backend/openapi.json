@@ -6961,6 +6961,61 @@
         }
       }
     },
+    "/api/v1/apifox/projects/{pid}/scenarios/reorder": {
+      "post": {
+        "tags": [
+          "接口自动化v2·场景"
+        ],
+        "summary": "Reorder Scenarios",
+        "operationId": "reorder_scenarios_api_v1_apifox_projects__pid__scenarios_reorder_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/scenarios/{sid}": {
       "get": {
         "tags": [
@@ -8001,6 +8056,128 @@
             "OAuth2PasswordBearer": []
           }
         ]
+      }
+    },
+    "/api/v1/apifox/workbench/running": {
+      "get": {
+        "tags": [
+          "接口自动化v2·工作台"
+        ],
+        "summary": "Workbench Running",
+        "operationId": "workbench_running_api_v1_apifox_workbench_running_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbenchRunningPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apifox/workbench/reports": {
+      "get": {
+        "tags": [
+          "接口自动化v2·工作台"
+        ],
+        "summary": "Workbench Reports",
+        "operationId": "workbench_reports_api_v1_apifox_workbench_reports_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbenchReportPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/apifox/projects/{pid}/suites": {
@@ -14737,6 +14914,52 @@
         ],
         "title": "ScenarioOut"
       },
+      "ScenarioReorderItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sort_order"
+        ],
+        "title": "ScenarioReorderItem"
+      },
+      "ScenarioReorderRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioReorderItem"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ScenarioReorderRequest"
+      },
       "ScenarioRunConfig": {
         "properties": {
           "loop_count": {
@@ -17345,28 +17568,12 @@
             },
             "type": "array",
             "title": "Projects"
-          },
-          "running": {
-            "items": {
-              "$ref": "#/components/schemas/WorkbenchRunning"
-            },
-            "type": "array",
-            "title": "Running"
-          },
-          "recent_reports": {
-            "items": {
-              "$ref": "#/components/schemas/WorkbenchReport"
-            },
-            "type": "array",
-            "title": "Recent Reports"
           }
         },
         "type": "object",
         "required": [
           "stats",
-          "projects",
-          "running",
-          "recent_reports"
+          "projects"
         ],
         "title": "WorkbenchOverviewOut"
       },
@@ -17427,6 +17634,10 @@
             "type": "string",
             "title": "Project Name"
           },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
           "target_name": {
             "type": "string",
             "title": "Target Name"
@@ -17476,6 +17687,7 @@
           "run_id",
           "project_id",
           "project_name",
+          "target_type",
           "target_name",
           "status",
           "passed_count",
@@ -17483,6 +17695,37 @@
           "started_at"
         ],
         "title": "WorkbenchReport"
+      },
+      "WorkbenchReportPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbenchReport"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "WorkbenchReportPageOut"
       },
       "WorkbenchRunning": {
         "properties": {
@@ -17533,6 +17776,37 @@
           "started_at"
         ],
         "title": "WorkbenchRunning"
+      },
+      "WorkbenchRunningPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbenchRunning"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "WorkbenchRunningPageOut"
       },
       "WorkbenchStats": {
         "properties": {

@@ -131,16 +131,16 @@
       <!-- 接口级处理器（与用例级合并叠加）；用例编辑器内不显示（用例有自己的处理器 tab） -->
       <template v-if="showProcessors">
         <el-tab-pane label="前置操作" name="pre">
-          <ScriptRefsEditor :rows="form.pre_scripts" :scripts="scripts" />
+          <ScriptRefsEditor :rows="form.pre_scripts ?? []" :scripts="scripts" />
         </el-tab-pane>
         <el-tab-pane label="后置操作" name="post">
-          <ScriptRefsEditor :rows="form.post_scripts" :scripts="scripts" />
+          <ScriptRefsEditor :rows="form.post_scripts ?? []" :scripts="scripts" />
         </el-tab-pane>
         <el-tab-pane label="断言" name="assertions">
-          <AssertionsEditor :rows="form.assertions" />
+          <AssertionsEditor :rows="form.assertions ?? []" />
         </el-tab-pane>
         <el-tab-pane label="提取" name="extracts">
-          <ExtractsEditor :rows="form.extracts" />
+          <ExtractsEditor :rows="form.extracts ?? []" />
         </el-tab-pane>
         <el-tab-pane label="响应契约" name="contract">
           <div class="contract-row">
@@ -170,7 +170,7 @@ import { ElMessage } from 'element-plus'
 import type { UploadRawFile } from 'element-plus'
 import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
-import type { EndpointEditorForm, RequestSpec } from '@/types/apifox'
+import type { RequestSpecHolderForm } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
@@ -181,11 +181,11 @@ import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 type ScriptBrief = Schemas['ScriptBrief']
 type SchemaBrief = Schemas['SchemaBrief']
 
-export type { EndpointEditorForm } from '@/types/apifox'
+export type { EndpointEditorForm, RequestSpecHolderForm } from '@/types/apifox'
 
 const props = withDefaults(
   defineProps<{
-    form: EndpointEditorForm
+    form: RequestSpecHolderForm
     saving?: boolean
     showMeta?: boolean
     serverNames?: string[]

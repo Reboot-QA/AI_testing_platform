@@ -79,7 +79,9 @@ function checkNameOverflow() {
 }
 
 function onCommand(cmd: 'pin' | 'rename' | 'delete') {
-  emit(cmd, props.project)
+  if (cmd === 'pin') emit('pin', props.project)
+  else if (cmd === 'rename') emit('rename', props.project)
+  else emit('delete', props.project)
 }
 </script>
 

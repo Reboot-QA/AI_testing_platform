@@ -46,6 +46,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
+import { unwrapProjectList } from '@/api/project'
 import { projectApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -84,7 +85,7 @@ function backToWorkbench() {
 }
 
 onMounted(async () => {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
 })
 
 watch(

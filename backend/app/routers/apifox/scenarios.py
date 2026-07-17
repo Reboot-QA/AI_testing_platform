@@ -18,6 +18,7 @@ from app.routers.apifox.scenario_schemas import (
     ScenarioFolderOut,
     ScenarioFolderUpdate,
     ScenarioOut,
+    ScenarioReorderRequest,
     ScenarioUpdate,
 )
 from app.services.apifox import scenario_folder_service as folder_service
@@ -77,6 +78,18 @@ def delete_scenario_folder(fid: int, db: Session = Depends(get_db), user: User =
 def list_scenarios(pid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     get_accessible_project(db, pid, user)
     return service.list_scenarios(db, pid)
+
+
+@router.post("/projects/{pid}/scenarios/reorder")
+def reorder_scenarios(
+    pid: int, data: ScenarioReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    get_accessible_project(db, pid, user)
+    try:
+        service.reorder_scenarios(db, pid, data.items)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"message": "已保存排序"}
 
 
 @router.post("/projects/{pid}/scenarios", response_model=ScenarioOut)

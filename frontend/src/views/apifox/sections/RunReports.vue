@@ -156,9 +156,9 @@
                   />
                 </template>
 
-                <template v-if="s.assertion_results.length">
+                <template v-if="(s.assertion_results || []).length">
                   <div class="sec-title">断言</div>
-                  <div v-for="(a, i) in s.assertion_results" :key="'a' + i" class="line">
+                  <div v-for="(a, i) in s.assertion_results || []" :key="'a' + i" class="line">
                     <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{
                       a.passed ? '过' : '败'
                     }}</el-tag>
@@ -183,9 +183,9 @@
                   </div>
                 </template>
 
-                <template v-if="s.extract_results.length">
+                <template v-if="(s.extract_results || []).length">
                   <div class="sec-title">提取</div>
-                  <div v-for="(e, i) in s.extract_results" :key="'e' + i" class="line">
+                  <div v-for="(e, i) in s.extract_results || []" :key="'e' + i" class="line">
                     <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{
                       e.passed ? '成' : '败'
                     }}</el-tag>
@@ -193,9 +193,9 @@
                   </div>
                 </template>
 
-                <template v-if="s.script_logs.length">
+                <template v-if="(s.script_logs || []).length">
                   <div class="sec-title">脚本日志</div>
-                  <div v-for="(l, i) in s.script_logs" :key="'l' + i" class="line mono">
+                  <div v-for="(l, i) in s.script_logs || []" :key="'l' + i" class="line mono">
                     {{ l }}
                   </div>
                 </template>
@@ -303,7 +303,10 @@ onMounted(async () => {
   await loadRuns()
   // 从运行进度「查看测试报告」跳转而来：自动打开对应 run 的报告
   const runId = route.query.run
-  if (runId) await openDetail({ id: Number(runId) })
+  if (runId) {
+    detail.value = await apifoxApi.getRun(Number(runId))
+    drawerVisible.value = true
+  }
 })
 </script>
 

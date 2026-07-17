@@ -64,6 +64,7 @@ async function addParam() {
     location: newParam.location,
     key: newParam.key.trim(),
     value: newParam.value,
+    enabled: true,
   })
   newParam.key = ''
   newParam.value = ''

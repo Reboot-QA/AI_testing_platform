@@ -1,6 +1,7 @@
 """Apifox 工作台 · 业务层（组装跨项目概览：统计磁贴 / 我的项目 / 运行中 / 最近报告）。"""
 
 from datetime import datetime
+from typing import Dict, List, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -9,8 +10,6 @@ from app.models.user import User
 from app.repositories.apifox import workbench_repo
 from app.services import user_project_pref_service
 from app.services.project_access_service import accessible_projects_query, is_admin
-
-_RECENT_REPORTS_LIMIT = 10
 
 
 def _today_start() -> datetime:
@@ -27,24 +26,62 @@ def _role_of(project: Project, user: User) -> str:
     return "成员"
 
 
-def get_overview(db: Session, user: User) -> dict:
+def _project_context(db: Session, user: User) -> Tuple[List[Project], List[int], Dict[int, str], Dict[int, str]]:
     projects = accessible_projects_query(db, user).all()
     project_ids = [p.id for p in projects]
     project_name = {p.id: p.name for p in projects}
+    env_names = workbench_repo.environment_names(db, project_ids)
+    return projects, project_ids, project_name, env_names
+
+
+def _running_out(runs, project_name: Dict[int, str], env_names: Dict[int, str]) -> List[dict]:
+    return [
+        {
+            "run_id": r.id,
+            "project_id": r.project_id,
+            "project_name": project_name.get(r.project_id, ""),
+            "target_type": r.target_type,
+            "target_name": r.target_name,
+            "environment_name": env_names.get(r.environment_id),
+            "started_at": r.started_at,
+        }
+        for r in runs
+    ]
+
+
+def _report_out(runs, project_name: Dict[int, str], env_names: Dict[int, str]) -> List[dict]:
+    return [
+        {
+            "run_id": r.id,
+            "project_id": r.project_id,
+            "project_name": project_name.get(r.project_id, ""),
+            "target_type": r.target_type,
+            "target_name": r.target_name,
+            "environment_name": env_names.get(r.environment_id),
+            "status": r.status,
+            "passed_count": r.passed_count,
+            "total_count": r.total_count,
+            "pass_rate": r.pass_rate,
+            "started_at": r.started_at,
+        }
+        for r in runs
+    ]
+
+
+def get_overview(db: Session, user: User) -> dict:
+    projects, project_ids, project_name, env_names = _project_context(db, user)
 
     endpoint_cnt = workbench_repo.count_endpoints(db, project_ids)
     scenario_cnt = workbench_repo.count_scenarios(db, project_ids)
     case_cnt = workbench_repo.count_cases(db, project_ids)
-    env_names = workbench_repo.environment_names(db, project_ids)
-    running = workbench_repo.list_running(db, project_ids)
-    recent = workbench_repo.recent_runs(db, project_ids, _RECENT_REPORTS_LIMIT)
+    running_count = workbench_repo.count_running(db, project_ids)
     passed_sum, total_sum = workbench_repo.today_totals(db, project_ids, _today_start())
 
     stats = {
         "project_count": len(projects),
         "endpoint_count": sum(endpoint_cnt.values()),
         "scenario_count": sum(scenario_cnt.values()),
-        "running_count": len(running),
+        "running_count": running_count,
         "today_pass_rate": round(passed_sum / total_sum * 100, 1) if total_sum else None,
     }
 
@@ -61,38 +98,31 @@ def get_overview(db: Session, user: User) -> dict:
     ]
     project_cards = user_project_pref_service.order_cards(db, user.id, project_cards)
 
-    running_out = [
-        {
-            "run_id": r.id,
-            "project_id": r.project_id,
-            "project_name": project_name.get(r.project_id, ""),
-            "target_type": r.target_type,
-            "target_name": r.target_name,
-            "environment_name": env_names.get(r.environment_id),
-            "started_at": r.started_at,
-        }
-        for r in running
-    ]
-
-    recent_out = [
-        {
-            "run_id": r.id,
-            "project_id": r.project_id,
-            "project_name": project_name.get(r.project_id, ""),
-            "target_name": r.target_name,
-            "environment_name": env_names.get(r.environment_id),
-            "status": r.status,
-            "passed_count": r.passed_count,
-            "total_count": r.total_count,
-            "pass_rate": r.pass_rate,
-            "started_at": r.started_at,
-        }
-        for r in recent
-    ]
-
     return {
         "stats": stats,
         "projects": project_cards,
-        "running": running_out,
-        "recent_reports": recent_out,
+    }
+
+
+def list_running_page(db: Session, user: User, page: int, page_size: int) -> dict:
+    _, project_ids, project_name, env_names = _project_context(db, user)
+    total = workbench_repo.count_running(db, project_ids)
+    runs = workbench_repo.list_running_page(db, project_ids, page, page_size)
+    return {
+        "items": _running_out(runs, project_name, env_names),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+    }
+
+
+def list_reports_page(db: Session, user: User, page: int, page_size: int) -> dict:
+    _, project_ids, project_name, env_names = _project_context(db, user)
+    total = workbench_repo.count_runs(db, project_ids)
+    runs = workbench_repo.recent_runs_page(db, project_ids, page, page_size)
+    return {
+        "items": _report_out(runs, project_name, env_names),
+        "total": total,
+        "page": page,
+        "page_size": page_size,
     }

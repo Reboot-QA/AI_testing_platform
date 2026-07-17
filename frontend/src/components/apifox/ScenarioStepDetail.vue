@@ -91,7 +91,7 @@
       <div class="sd-field">
         <span class="sd-label">数据库连接</span>
         <el-select
-          v-model="step.config.connection_id"
+          v-model="dbConfig.connection_id"
           size="small"
           filterable
           placeholder="选择连接（当前环境内）"
@@ -111,7 +111,7 @@
       <div class="sd-field sd-field-top">
         <span class="sd-label">SQL</span>
         <div class="db-sql">
-          <CodeEditor v-model="step.config.sql" language="sql" height="140px" />
+          <CodeEditor v-model="dbConfig.sql" language="sql" height="140px" />
           <span class="sd-hint">{{ sqlHint }}</span>
         </div>
       </div>
@@ -150,18 +150,18 @@
 
     <template v-else-if="step.type === 'http'">
       <ApiEndpointEditor
-        :form="step.config"
+        :form="httpConfig"
         show-meta
         :server-names="serverNames"
         :project-id="pid"
       />
       <div class="sd-field sd-field-top">
         <span class="sd-label">断言</span>
-        <div class="http-proc"><AssertionsEditor :rows="step.config.assertions" /></div>
+        <div class="http-proc"><AssertionsEditor :rows="httpConfig.assertions" /></div>
       </div>
       <div class="sd-field sd-field-top">
         <span class="sd-label">提取</span>
-        <div class="http-proc"><ExtractsEditor :rows="step.config.extracts" /></div>
+        <div class="http-proc"><ExtractsEditor :rows="httpConfig.extracts" /></div>
       </div>
     </template>
   </div>
@@ -171,11 +171,12 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 import type { ScenarioEditorStep } from '@/types/apifox'
+import { ensureDbConfig, ensureHttpConfig, ensureIfConfig, ensureLoopConfig } from '@/types/apifox'
 import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
-import { normalizeSpec } from '@/utils/apifoxSpec'
+import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
@@ -215,23 +216,23 @@ const pid = useRouteParamId()
 const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
 
 // db 步骤 config 由 addStep 初始化；防御性保证 extracts 为数组
-const dbExtracts = computed(() => {
-  if (props.step.type !== 'db') return []
-  if (!props.step.config) props.step.config = { connection_id: null, sql: '', extracts: [] }
-  if (!Array.isArray(props.step.config.extracts)) props.step.config.extracts = []
-  return props.step.config.extracts
+const dbConfig = computed(() => {
+  if (props.step.type !== 'db') return ensureDbConfig({ type: 'db', enabled: true })
+  return ensureDbConfig(props.step)
 })
+
+const dbExtracts = computed(() => dbConfig.value.extracts)
 
 function addDbExtract() {
   dbExtracts.value.push({ var_name: '', column: '', scope: 'temporary' })
 }
 
-// config.condition 由 normalizeStep(加载)/addStep(新建) 保证存在；此处纯读取，不在 computed 里改 props
-const ifCondition = computed(
-  () => props.step.config?.condition ?? { left: '', operator: 'eq', right: '' },
-)
-// loop 的 config 由 addStep 初始化好全部字段，此处纯读取
-const loopConfig = computed(() => props.step.config ?? { mode: 'count', count: 1 })
+const ifCondition = computed(() => ensureIfConfig(props.step).condition)
+const loopConfig = computed(() => ensureLoopConfig(props.step))
+const httpConfig = computed(() => {
+  if (props.step.type !== 'http') return ensureHttpConfig({ type: 'http', enabled: true })
+  return ensureHttpConfig(props.step)
+})
 
 function onElseToggle(enabled: boolean) {
   if (enabled && !Array.isArray(props.step.elseChildren)) props.step.elseChildren = []
@@ -241,13 +242,13 @@ const savingCase = ref(false)
 const caseForm = reactive<CaseEditorForm>({
   id: null,
   name: '',
-  request_spec: null,
+  request_spec: emptySpec(),
   variables: [],
   assertions: [],
   extracts: [],
   pre_scripts: [],
   post_scripts: [],
-  data_drive: { enabled: false, rows: [] },
+  data_drive: { enabled: false, source: 'inline', rows: [] },
   version: 1,
 })
 
@@ -268,7 +269,9 @@ function applyCase(c: Schemas['CaseOut']) {
   caseForm.pre_scripts = c.pre_scripts || []
   caseForm.post_scripts = c.post_scripts || []
   caseForm.data_drive =
-    c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+    c.data_drive?.enabled !== undefined
+      ? c.data_drive
+      : { enabled: false, source: 'inline', rows: [] }
   caseForm.version = c.version ?? 1
   caseSnapshot = JSON.stringify(caseFormPayload())
 }
@@ -317,16 +320,18 @@ function caseFormPayload() {
 }
 
 async function doSaveCase() {
+  if (caseForm.id == null) return
   const updated = await apifoxApi.updateCase(caseForm.id, {
     ...caseFormPayload(),
     expected_version: caseForm.version,
-  })
+  } as Schemas['CaseUpdate'])
   caseForm.version = updated.version
   props.step.case_name = caseForm.name // 同步步骤显示名
   caseSnapshot = JSON.stringify(caseFormPayload()) // 保存后即为干净态
 }
 
 async function saveCaseWithConflict() {
+  if (caseForm.id == null) return
   try {
     await doSaveCase()
   } catch (e) {
@@ -334,6 +339,7 @@ async function saveCaseWithConflict() {
     await resolveSaveConflict({
       reload: () => loadCase(caseForm.id),
       overwrite: async () => {
+        if (caseForm.id == null) return
         const latest = await apifoxApi.getCase(caseForm.id)
         caseForm.version = latest.version
         await doSaveCase()

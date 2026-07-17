@@ -1,5 +1,5 @@
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 
-export type { FormInstance, FormRules }
+export type { FormInstance, FormRules, FormItemRule }
 
-export type FormRuleItem = NonNullable<FormRules[string]>[number]
+export type FormRuleItem = FormItemRule

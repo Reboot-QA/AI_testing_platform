@@ -113,6 +113,7 @@ async function save() {
   try {
     const payload: Schemas['DatabaseCreate'] & { password?: string } = {
       name: form.name,
+      db_type: 'mysql',
       host: form.host,
       port: form.port,
       database: form.database,

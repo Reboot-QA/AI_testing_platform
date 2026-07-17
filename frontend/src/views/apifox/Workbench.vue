@@ -47,8 +47,8 @@
       </div>
 
       <WorkbenchActivity
-        :running="overview.running"
-        :reports="overview.recent_reports"
+        ref="activityRef"
+        :running-count="overview.stats.running_count ?? 0"
         @open="openReports"
       />
     </div>
@@ -85,11 +85,10 @@ import WorkbenchActivity from '@/components/apifox/workbench/WorkbenchActivity.v
 const router = useRouter()
 
 const loading = ref(false)
+const activityRef = ref<{ refresh: () => Promise<void> } | null>(null)
 const overview = reactive<Schemas['WorkbenchOverviewOut']>({
   stats: {} as Schemas['WorkbenchStats'],
   projects: [],
-  running: [],
-  recent_reports: [],
 })
 
 const createVisible = ref(false)
@@ -105,6 +104,7 @@ async function loadData() {
   try {
     const data = await apifoxApi.workbenchOverview()
     Object.assign(overview, data)
+    await activityRef.value?.refresh()
   } catch {
     // 全局响应拦截器已提示错误；此处仅避免 onMounted 未捕获的 rejection
   } finally {

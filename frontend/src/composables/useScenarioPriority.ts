@@ -24,9 +24,11 @@ export function priorityMeta(p: ScenarioPriority | null | undefined): PriorityOp
   return PRIORITY_OPTIONS.find((o) => o.value === p) || PRIORITY_OPTIONS[1]
 }
 
-export function useScenarioPriorityFilter(scenariosRef: Ref<ScenarioWithPriority[]>): {
+export function useScenarioPriorityFilter<T extends ScenarioWithPriority>(
+  scenariosRef: Ref<T[]>,
+): {
   priorityFilter: Ref<string>
-  visibleScenarios: ComputedRef<ScenarioWithPriority[]>
+  visibleScenarios: ComputedRef<T[]>
 } {
   const priorityFilter = ref('')
   const visibleScenarios = computed(() =>

@@ -242,22 +242,24 @@ function openDialog(row?: Schemas['ScheduleOut']) {
   dialogVisible.value = true
 }
 
-function buildPayload() {
-  const p = {
+function buildPayload(): Schemas['ScheduleCreate'] {
+  const p: Schemas['ScheduleCreate'] = {
     name: form.name,
     target_type: form.target_type,
-    target_id: form.target_id,
+    target_id: form.target_id!,
     environment_id: form.environment_id,
     schedule_type: form.schedule_type,
+    run_time: runTime.value,
     enabled: form.enabled,
   }
   if (form.schedule_type === 'interval') {
     p.interval_minutes = form.interval_minutes
+    p.run_time = null
   } else if (form.schedule_type === 'cron') {
     p.cron_expr = form.cron_expr.trim()
-  } else {
-    p.run_time = runTime.value
-    if (form.schedule_type === 'weekly') p.week_day = form.week_day
+    p.run_time = null
+  } else if (form.schedule_type === 'weekly') {
+    p.week_day = form.week_day
   }
   return p
 }

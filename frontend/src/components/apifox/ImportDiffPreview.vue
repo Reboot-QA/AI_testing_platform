@@ -33,8 +33,8 @@
               {{ c }}
             </el-tag>
           </div>
-          <div v-if="e.affected_cases.length" class="affected">
-            引用该接口的用例（不会自动改动，请自查）：{{ e.affected_cases.join('、') }}
+          <div v-if="(e.affected_cases?.length ?? 0) > 0" class="affected">
+            引用该接口的用例（不会自动改动，请自查）：{{ e.affected_cases?.join('、') }}
           </div>
         </div>
       </el-collapse-item>
@@ -54,9 +54,15 @@
           </div>
           <div v-for="cref in e.references" :key="cref.case_id" class="ref-warn">
             用例「{{ cref.case_name }}」被
-            <template v-if="cref.scenarios.length">场景 {{ cref.scenarios.join('、') }}</template>
-            <template v-if="cref.scenarios.length && cref.suites.length"> 和 </template>
-            <template v-if="cref.suites.length">套件 {{ cref.suites.join('、') }}</template>
+            <template v-if="(cref.scenarios?.length ?? 0) > 0"
+              >场景 {{ cref.scenarios?.join('、') }}</template
+            >
+            <template v-if="(cref.scenarios?.length ?? 0) > 0 && (cref.suites?.length ?? 0) > 0">
+              和
+            </template>
+            <template v-if="(cref.suites?.length ?? 0) > 0"
+              >套件 {{ cref.suites?.join('、') }}</template
+            >
             引用，请先处理引用后再手动删除。
           </div>
         </div>

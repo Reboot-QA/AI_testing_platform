@@ -20,11 +20,9 @@
 </template>
 
 <script setup lang="ts">
-export interface ConditionConfig {
-  left: string
-  operator: string
-  right: string
-}
+import type { ConditionConfig } from '@/types/apifox'
+
+export type { ConditionConfig } from '@/types/apifox'
 
 const OPERATORS = [
   { value: 'eq', label: '等于' },

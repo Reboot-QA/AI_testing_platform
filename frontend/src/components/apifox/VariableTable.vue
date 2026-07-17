@@ -91,7 +91,12 @@ const newKey = ref('')
 const newVal = ref('')
 
 function addVar() {
-  emit('create', { key: newKey.value.trim(), remote_value: newVal.value })
+  emit('create', {
+    key: newKey.value.trim(),
+    remote_value: newVal.value,
+    is_secret: false,
+    enabled: true,
+  })
   newKey.value = ''
   newVal.value = ''
 }

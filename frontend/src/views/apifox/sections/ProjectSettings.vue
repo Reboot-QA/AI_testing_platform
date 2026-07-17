@@ -6,7 +6,7 @@
         :key="s.key"
         class="side-item"
         :class="{ active: section === s.key }"
-        @click="section = s.key"
+        @click="section = s.key as 'basic' | 'scripts'"
       >
         <el-icon><component :is="s.icon" /></el-icon>
         <span>{{ s.label }}</span>
@@ -90,8 +90,8 @@ const users = ref<Schemas['UserOut'][]>([])
 const canDelete = computed(() => isAdmin.value || basicForm.owner_id === userStore.user?.id)
 
 const SECTIONS = [
-  { key: 'basic', label: '基本信息', icon: 'Setting' },
-  { key: 'scripts', label: '脚本库', icon: 'Tickets' },
+  { key: 'basic' as const, label: '基本信息', icon: 'Setting' },
+  { key: 'scripts' as const, label: '脚本库', icon: 'Tickets' },
 ]
 
 const section = ref<'basic' | 'scripts'>('basic')
@@ -113,8 +113,11 @@ async function loadUsers() {
 async function saveBasic() {
   savingBasic.value = true
   try {
-    const payload = { name: basicForm.name, description: basicForm.description || null }
-    if (isAdmin.value) payload.owner_id = basicForm.owner_id // 仅管理员可变更负责人
+    const payload: Schemas['ProjectUpdate'] = {
+      name: basicForm.name,
+      description: basicForm.description || null,
+    }
+    if (isAdmin.value) payload.owner_id = basicForm.owner_id
     await projectApi.update(pid.value, payload)
     ElMessage.success('已保存')
   } finally {

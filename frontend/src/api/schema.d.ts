@@ -1605,6 +1605,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/scenarios/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reorder Scenarios */
+        post: operations["reorder_scenarios_api_v1_apifox_projects__pid__scenarios_reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/scenarios/{sid}": {
         parameters: {
             query?: never;
@@ -1882,6 +1899,40 @@ export interface paths {
         };
         /** Workbench Overview */
         get: operations["workbench_overview_api_v1_apifox_workbench_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/workbench/running": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workbench Running */
+        get: operations["workbench_running_api_v1_apifox_workbench_running_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/workbench/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workbench Reports */
+        get: operations["workbench_reports_api_v1_apifox_workbench_reports_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4262,6 +4313,20 @@ export interface components {
              */
             updated_at: string;
         };
+        /** ScenarioReorderItem */
+        ScenarioReorderItem: {
+            /** Id */
+            id: number;
+            /** Folder Id */
+            folder_id?: number | null;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** ScenarioReorderRequest */
+        ScenarioReorderRequest: {
+            /** Items */
+            items: components["schemas"]["ScenarioReorderItem"][];
+        };
         /** ScenarioRunConfig */
         ScenarioRunConfig: {
             /**
@@ -5168,10 +5233,6 @@ export interface components {
             stats: components["schemas"]["WorkbenchStats"];
             /** Projects */
             projects: components["schemas"]["WorkbenchProject"][];
-            /** Running */
-            running: components["schemas"]["WorkbenchRunning"][];
-            /** Recent Reports */
-            recent_reports: components["schemas"]["WorkbenchReport"][];
         };
         /** WorkbenchProject */
         WorkbenchProject: {
@@ -5201,6 +5262,8 @@ export interface components {
             project_id: number;
             /** Project Name */
             project_name: string;
+            /** Target Type */
+            target_type: string;
             /** Target Name */
             target_name: string;
             /** Environment Name */
@@ -5218,6 +5281,17 @@ export interface components {
              * Format: date-time
              */
             started_at: string;
+        };
+        /** WorkbenchReportPageOut */
+        WorkbenchReportPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchReport"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
         };
         /** WorkbenchRunning */
         WorkbenchRunning: {
@@ -5238,6 +5312,17 @@ export interface components {
              * Format: date-time
              */
             started_at: string;
+        };
+        /** WorkbenchRunningPageOut */
+        WorkbenchRunningPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchRunning"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
         };
         /** WorkbenchStats */
         WorkbenchStats: {
@@ -9659,6 +9744,41 @@ export interface operations {
             };
         };
     };
+    reorder_scenarios_api_v1_apifox_projects__pid__scenarios_reorder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_scenario_api_v1_apifox_scenarios__sid__get: {
         parameters: {
             query?: never;
@@ -10300,6 +10420,70 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkbenchOverviewOut"];
+                };
+            };
+        };
+    };
+    workbench_running_api_v1_apifox_workbench_running_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchRunningPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workbench_reports_api_v1_apifox_workbench_reports_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchReportPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

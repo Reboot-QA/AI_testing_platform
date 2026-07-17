@@ -321,7 +321,7 @@ function resetPasswordForm() {
 }
 
 async function handleChangePassword() {
-  await passwordFormRef.value.validate()
+  await passwordFormRef.value?.validate()
   passwordSubmitting.value = true
   try {
     await authApi.changePassword({

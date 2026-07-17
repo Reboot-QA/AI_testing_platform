@@ -24,11 +24,14 @@ def fetch_openapi(url: str) -> Dict[str, Any]:
     try:
         response = httpx.get(url, timeout=10.0, follow_redirects=True)
         response.raise_for_status()
-        return response.json()
-    except httpx.HTTPError as exc:
+        doc = response.json()
+    except (httpx.HTTPError, httpx.InvalidURL) as exc:  # InvalidURL 不属于 HTTPError
         raise ValueError(f"拉取 OpenAPI 失败: {exc}")
     except json.JSONDecodeError:
         raise ValueError("URL 返回内容不是合法 JSON")
+    if not isinstance(doc, dict):  # URL 可能返回 JSON 数组/字符串
+        raise ValueError("URL 返回内容不是 OpenAPI 文档（应为 JSON 对象）")
+    return doc
 
 
 def parse_content(content: str) -> Dict[str, Any]:
@@ -42,6 +45,8 @@ def parse_content(content: str) -> Dict[str, Any]:
 
 
 def validate_openapi(doc: Dict[str, Any]) -> None:
+    if not isinstance(doc, dict):
+        raise ValueError("OpenAPI 文档必须是 JSON 对象")
     version = str(doc.get("openapi") or "")
     if not version.startswith("3"):
         raise ValueError("仅支持 OpenAPI 3.x（缺少 openapi: 3.x 声明）")
@@ -168,6 +173,8 @@ def _param_type(param: Dict[str, Any]) -> str:
 def _rows_from_params(doc: Dict[str, Any], params: List[Dict[str, Any]], location: str) -> List[KvRow]:
     rows: List[KvRow] = []
     for param in params or []:
+        if not isinstance(param, dict):  # 畸形文档里 parameters 可能混入非对象项
+            continue
         if param.get("in") != location or not param.get("name"):
             continue
         rows.append(KvRow(
@@ -198,19 +205,26 @@ def _form_rows(doc: Dict[str, Any], schema: Optional[Dict[str, Any]]) -> List[Kv
 
 def _body_spec(doc: Dict[str, Any], request_body: Optional[Dict[str, Any]]) -> BodySpec:
     content = (request_body or {}).get("content") or {}
-    if "application/json" in content:
-        media = content["application/json"]
+    if not isinstance(content, dict):
+        return BodySpec()
+
+    def _media(key: str) -> Dict[str, Any]:
+        media = content.get(key)
+        return media if isinstance(media, dict) else {}
+
+    if isinstance(content.get("application/json"), dict):
+        media = _media("application/json")
         example = media.get("example")
         if example is None:
             example = _skeleton(doc, media.get("schema"))
         raw = json.dumps(example, ensure_ascii=False, indent=2) if example is not None else ""
         return BodySpec(type="json", raw=raw)
-    if "application/x-www-form-urlencoded" in content:
+    if isinstance(content.get("application/x-www-form-urlencoded"), dict):
         return BodySpec(type="urlencoded",
-                        form=_form_rows(doc, content["application/x-www-form-urlencoded"].get("schema")))
-    if "multipart/form-data" in content:
+                        form=_form_rows(doc, _media("application/x-www-form-urlencoded").get("schema")))
+    if isinstance(content.get("multipart/form-data"), dict):
         return BodySpec(type="form-data",
-                        form=_form_rows(doc, content["multipart/form-data"].get("schema")))
+                        form=_form_rows(doc, _media("multipart/form-data").get("schema")))
     return BodySpec()
 
 
@@ -313,28 +327,39 @@ def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[st
 
 
 def count_new_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
-    """只读统计 components/schemas 中的新增数量（供 diff 预览，不写库）。"""
+    """只读统计 components/schemas 中的新增数量（供 diff 预览，不写库）。
+
+    与 import_schemas 一致：大小写不敏感去重 + 文档内变体也只计一次，预览数=实际新建数。
+    """
     components_schemas = (doc.get("components") or {}).get("schemas") or {}
     if not isinstance(components_schemas, dict):
         return 0
-    existing_names = {s.name for s in schema_repo.list_schemas(db, project_id)}
-    return sum(
-        1
-        for name, sd in components_schemas.items()
-        if isinstance(sd, dict) and str(name)[:200] not in existing_names
-    )
+    existing_lower = {s.name.lower() for s in schema_repo.list_schemas(db, project_id)}
+    seen: set[str] = set()
+    count = 0
+    for name, sd in components_schemas.items():
+        key = str(name)[:200].lower()
+        if isinstance(sd, dict) and key not in existing_lower and key not in seen:
+            seen.add(key)
+            count += 1
+    return count
 
 
 def import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
-    """把 components/schemas 导入为数据模型（同名去重不覆盖；$ref 就地展开）。"""
+    """把 components/schemas 导入为数据模型（同名去重不覆盖；$ref 就地展开）。
+
+    去重**大小写不敏感**：对齐 MySQL 唯一索引 (project_id, name) 的 ci 语义，
+    避免文档里 `Foo`/`foo` 或库中已有大小写变体时撞 Duplicate entry。
+    """
     components_schemas = (doc.get("components") or {}).get("schemas") or {}
     if not isinstance(components_schemas, dict):
         return 0
-    existing_names = {s.name for s in schema_repo.list_schemas(db, project_id)}
+    existing_lower = {s.name.lower() for s in schema_repo.list_schemas(db, project_id)}
     schemas_created = 0
     for name, schema_def in components_schemas.items():
         safe_name = str(name)[:200]
-        if not isinstance(schema_def, dict) or safe_name in existing_names:
+        key = safe_name.lower()
+        if not isinstance(schema_def, dict) or key in existing_lower:
             continue
         expanded = _expand_schema(doc, schema_def)
         schema_repo.add(db, ApifoxSchema(
@@ -343,6 +368,6 @@ def import_schemas(db: Session, project_id: int, doc: Dict[str, Any]) -> int:
             json_schema=json.dumps(expanded, ensure_ascii=False, indent=2),
             description=schema_def.get("description"),
         ))
-        existing_names.add(safe_name)
+        existing_lower.add(key)
         schemas_created += 1
     return schemas_created

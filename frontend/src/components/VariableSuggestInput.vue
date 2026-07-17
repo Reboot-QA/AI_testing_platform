@@ -14,7 +14,7 @@
       @keyup="onKeyup"
       @blur="onBlur"
       @focus="onFocus"
-      @paste="(event) => emit('paste', event)"
+      @paste="(event: ClipboardEvent) => emit('paste', event)"
     />
 
     <Teleport to="body">

@@ -27,14 +27,17 @@
           placeholder="键"
           size="small"
           class="kv-key"
-          @select="(item) => onKeySelect(row, item)"
+          @select="(item: { value: string }) => onKeySelect(row, item)"
         />
         <el-input v-else v-model="row.key" placeholder="键" size="small" class="kv-key" />
 
         <el-autocomplete
           v-if="suggest === 'header'"
           v-model="row.value"
-          :fetch-suggestions="(qs, cb) => fetchValues(row, qs, cb)"
+          :fetch-suggestions="
+            (qs: string, cb: (results: Array<Record<string, string>>) => void) =>
+              fetchValues(row, qs, cb)
+          "
           placeholder="值"
           size="small"
           class="kv-val"
@@ -46,7 +49,7 @@
           :model-value="row.type || 'string'"
           size="small"
           class="kv-type"
-          @update:model-value="(v) => (row.type = v)"
+          @update:model-value="(v: string) => (row.type = v)"
         >
           <el-option v-for="t in PARAM_TYPES" :key="t" :label="t" :value="t" />
         </el-select>
@@ -67,7 +70,7 @@
             v-for="h in COMMON_HEADER_PRESETS"
             :key="h.name"
             :model-value="isPresent(h.name)"
-            @change="(v) => toggleCommon(h, v)"
+            @change="(v: boolean) => toggleCommon(h, v)"
           >
             {{ h.name }}<span v-if="h.value" class="common-def"> : {{ h.value }}</span>
           </el-checkbox>

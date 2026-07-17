@@ -108,8 +108,8 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusType[row.status]" size="small">{{
-              statusMap[row.status] || row.status
+            <el-tag :type="statusType[row.status as RequirementStatus]" size="small">{{
+              statusMap[row.status as RequirementStatus] || row.status
             }}</el-tag>
           </template>
         </el-table-column>
@@ -268,8 +268,8 @@
         </el-table-column>
         <el-table-column prop="review_status" label="评审" width="90">
           <template #default="{ row }">
-            <el-tag :type="reviewType[row.review_status]" size="small">
-              {{ reviewMap[row.review_status] || row.review_status }}
+            <el-tag :type="reviewType[row.review_status as ReviewStatus]" size="small">
+              {{ reviewMap[row.review_status as ReviewStatus] || row.review_status }}
             </el-tag>
           </template>
         </el-table-column>
@@ -310,7 +310,7 @@
             {{ caseDetail.source === 'ai_generated' ? 'AI生成' : '手动' }}
           </el-descriptions-item>
           <el-descriptions-item label="评审状态">
-            {{ reviewMap[caseDetail.review_status] || caseDetail.review_status }}
+            {{ reviewMap[caseDetail.review_status as ReviewStatus] || caseDetail.review_status }}
           </el-descriptions-item>
           <el-descriptions-item label="前置条件">{{
             caseDetail.preconditions || '-'
@@ -406,7 +406,11 @@ const typeMap: Record<string, string> = {
   security: '安全',
 }
 const sourceMap: Record<string, string> = { manual: '手动', ai_document: '文档解析' }
-const statusMap: Record<RequirementStatus, string> = { draft: '草稿', approved: '已评审', closed: '已关闭' }
+const statusMap: Record<RequirementStatus, string> = {
+  draft: '草稿',
+  approved: '已评审',
+  closed: '已关闭',
+}
 const statusType: Record<RequirementStatus, 'info' | 'success' | 'warning'> = {
   draft: 'info',
   approved: 'success',
@@ -472,7 +476,7 @@ async function loadData() {
     if (keyword.value.trim()) {
       params.keyword = keyword.value.trim()
     }
-    const data = (await requirementApi.list(null, params)) as RequirementPage
+    const data = (await requirementApi.list(undefined, params)) as RequirementPage
     requirements.value = data.items || []
     total.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
@@ -599,6 +603,10 @@ async function handleSubmit() {
       })
       ElMessage.success('更新成功')
     } else {
+      if (typeof projectId.value !== 'number') {
+        ElMessage.warning('请选择具体项目')
+        return
+      }
       await requirementApi.create({
         project_id: projectId.value,
         title: form.title,

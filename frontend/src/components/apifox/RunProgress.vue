@@ -93,9 +93,10 @@ const router = useRouter()
 const pid = useRouteParamId()
 
 // 本次运行的 run_id（start 事件携带）；有则可跳转到「测试报告」定位该次报告
-const runId = computed(
-  () => props.events.find((e) => e.type === 'start')?.run_id as number | undefined,
-)
+const runId = computed(() => {
+  const start = props.events.find((e): e is RunProgressStartEvent => e.type === 'start')
+  return start?.run_id
+})
 function viewReport() {
   if (!runId.value) return
   router.push(`/apifox/project/${pid.value}/reports?run=${runId.value}`)
