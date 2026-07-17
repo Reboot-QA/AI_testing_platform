@@ -100,6 +100,20 @@ export const useApifoxAiGenerateStore = defineStore('apifoxAiGenerate', {
       return result
     },
 
+    // 打开某任务详情：拉全量存入 map（供 AiGenTaskProgress 读），未终态则轮询
+    async loadTask(taskId: number): Promise<TaskOut> {
+      const task = await apifoxApi.getAiGenTask(taskId)
+      this.tasks[taskId] = task
+      if (!isTerminal(task.status)) this.ensurePolling()
+      return task
+    },
+
+    // 重试某失败接口：任务复位 pending，重新轮询
+    async retryItem(taskId: number, itemId: number): Promise<void> {
+      this.tasks[taskId] = await apifoxApi.retryAiGenTaskItem(taskId, itemId)
+      this.ensurePolling()
+    },
+
     // 进项目工作区时恢复进行中的任务（刷新/重登后不丢进度）
     async resumeActive(projectId: number): Promise<void> {
       const briefs = await apifoxApi.listActiveAiGenTasks(projectId)

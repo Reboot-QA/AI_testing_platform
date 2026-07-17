@@ -5,7 +5,7 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -19,6 +19,7 @@ from app.routers.apifox.ai_gen_task_schemas import (
     AiGenTaskBrief,
     AiGenTaskCreate,
     AiGenTaskOut,
+    AiGenTaskPageOut,
 )
 from app.services.apifox import ai_gen_task_service as service
 from app.services.project_access_service import get_accessible_project
@@ -65,6 +66,18 @@ def list_active_ai_gen_tasks(
     return service.list_active(db, pid)
 
 
+@router.get("/projects/{pid}/ai-gen-tasks", response_model=AiGenTaskPageOut)
+def list_ai_gen_tasks(
+    pid: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    get_accessible_project(db, pid, user)
+    return service.list_tasks_page(db, pid, page, page_size)
+
+
 @router.get("/ai-gen-tasks/{tid}", response_model=AiGenTaskOut)
 def get_ai_gen_task(tid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _task_checked(db, tid, user)
@@ -95,3 +108,16 @@ def apply_ai_gen_task_item(
         return service.apply_item(db, item, data.indexes)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ai-gen-tasks/{tid}/items/{iid}/retry", response_model=AiGenTaskOut)
+def retry_ai_gen_task_item(
+    tid: int, iid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    task = _task_checked(db, tid, user)
+    item = _item_checked(db, tid, iid, user)
+    try:
+        task = service.retry_item(db, task, item)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return service.task_out(db, task)

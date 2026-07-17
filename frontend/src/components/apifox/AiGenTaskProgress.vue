@@ -50,8 +50,9 @@
             </div>
           </template>
         </div>
-        <div v-else-if="it.status === 'failed'" class="item-msg err">
-          {{ it.error || '生成失败' }}
+        <div v-else-if="it.status === 'failed'" class="item-fail">
+          <span class="item-msg err">{{ it.error || '生成失败' }}</span>
+          <el-button size="small" :loading="retrying[it.id]" @click="retry(it)">重试</el-button>
         </div>
         <div v-else class="item-msg">{{ statusText(it) }}…</div>
       </el-collapse-item>
@@ -83,6 +84,7 @@ const running = computed(
 const expanded = ref<number[]>([])
 const selected = reactive<Record<number, boolean[]>>({})
 const applying = reactive<Record<number, boolean>>({})
+const retrying = reactive<Record<number, boolean>>({})
 
 const percent = computed(() => {
   const t = task.value
@@ -172,6 +174,18 @@ async function apply(it: Item): Promise<void> {
     applying[it.id] = false
   }
 }
+
+async function retry(it: Item): Promise<void> {
+  retrying[it.id] = true
+  try {
+    await store.retryItem(Number(props.taskId), it.id)
+    ElMessage.info(`${it.endpoint_name}：已重新排队生成`)
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '重试失败')
+  } finally {
+    retrying[it.id] = false
+  }
+}
 </script>
 
 <style scoped>
@@ -236,6 +250,14 @@ async function apply(it: Item): Promise<void> {
 .item-msg {
   color: var(--ax-text-secondary);
   font-size: 13px;
+  padding: 4px 0;
+}
+
+.item-fail {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 4px 0;
 }
 
