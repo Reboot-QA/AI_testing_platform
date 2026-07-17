@@ -19,6 +19,7 @@ from app.models.apifox.run import ApifoxRun, ApifoxRunStep
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
 from app.models.apifox.schedule import ApifoxSchedule
 from app.models.apifox.script import ApifoxCaseScript, ApifoxEndpointScript, ApifoxScript
+from app.models.apifox.script_debug_preset import ApifoxScriptDebugPreset
 from app.models.apifox.suite import ApifoxSuite, ApifoxSuiteItem
 from app.models.apifox.upload_file import ApifoxUploadFile
 from app.models.apifox.variable import (
@@ -55,6 +56,7 @@ __all__ = [
     "ApifoxScript",
     "ApifoxCaseScript",
     "ApifoxEndpointScript",
+    "ApifoxScriptDebugPreset",
     "ApifoxGlobalParam",
     "ApifoxScenario",
     "ApifoxScenarioStep",

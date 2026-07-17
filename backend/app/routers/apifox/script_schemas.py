@@ -24,6 +24,23 @@ class ScriptDebugOut(BaseModel):
     error_message: Optional[str] = None
 
 
+class DebugPresetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    phase: Literal["pre", "post"] = "pre"
+    variables: Dict[str, str] = Field(default_factory=dict)
+    response_status: int = 200
+    response_body: str = ""
+
+
+class DebugPresetOut(BaseModel):
+    id: int
+    name: str
+    phase: str
+    variables: Dict[str, str] = Field(default_factory=dict)
+    response_status: int
+    response_body: str
+
+
 class ScriptCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     lang: str = "javascript"  # javascript | python
