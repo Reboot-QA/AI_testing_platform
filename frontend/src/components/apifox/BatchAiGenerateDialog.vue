@@ -5,10 +5,10 @@
     width="720px"
     :close-on-click-modal="false"
   >
-    <!-- 配置 -->
-    <div v-if="step === 'config'" class="config">
+    <div class="config">
       <div class="tip">
-        选择接口并勾选类别，AI 按各接口复杂度批量生成用例。生成在后台进行，可关闭弹窗做其他事。
+        选择接口并勾选类别，AI 按各接口复杂度批量生成用例。提交后在后台生成，进度与结果请到「AI
+        生成」标签页查看。
       </div>
       <AiGenConfigFields
         v-model="providerId"
@@ -43,30 +43,15 @@
       </div>
     </div>
 
-    <!-- 进度 / 结果 -->
-    <div v-else class="result">
-      <AiGenTaskProgress v-if="taskId" :task-id="taskId" @applied="onApplied" />
-    </div>
-
     <template #footer>
-      <template v-if="step === 'config'">
-        <el-button @click="visible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="submitting"
-          :disabled="!anyChecked || !checked.length"
-          @click="generate"
-          >生成（{{ checked.length }} 个接口）</el-button
-        >
-      </template>
-      <template v-else-if="generating">
-        <el-button @click="visible = false">关闭（后台继续）</el-button>
-        <el-button :loading="canceling" @click="cancel">取消生成</el-button>
-      </template>
-      <template v-else>
-        <el-button @click="backToConfig">再次生成</el-button>
-        <el-button type="primary" @click="visible = false">完成</el-button>
-      </template>
+      <el-button @click="visible = false">取消</el-button>
+      <el-button
+        type="primary"
+        :loading="submitting"
+        :disabled="!anyChecked || !checked.length"
+        @click="generate"
+        >生成（{{ checked.length }} 个接口）</el-button
+      >
     </template>
   </el-dialog>
 </template>
@@ -79,11 +64,9 @@ import { apifoxApi } from '@/api'
 import { useAiGenConfig } from '@/composables/useAiGenConfig'
 import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
 import AiGenConfigFields from '@/components/apifox/AiGenConfigFields.vue'
-import AiGenTaskProgress from '@/components/apifox/AiGenTaskProgress.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 
 const props = defineProps<{ projectId: string | number }>()
-const emit = defineEmits<{ applied: [number] }>()
 
 type Endpoint = Schemas['EndpointBrief']
 
@@ -101,19 +84,11 @@ const {
 } = useAiGenConfig()
 
 const visible = ref(false)
-const step = ref<'config' | 'result'>('config')
 const submitting = ref(false)
-const canceling = ref(false)
-const taskId = ref<number | null>(null)
 const endpoints = ref<Endpoint[]>([])
 const endpointsLoading = ref(false)
 const epKeyword = ref('')
 const checked = ref<number[]>([])
-
-const task = computed(() => (taskId.value ? store.taskById(taskId.value) : undefined))
-const generating = computed(
-  () => !!task.value && !['succeeded', 'partial', 'failed', 'canceled'].includes(task.value.status),
-)
 
 const filteredEndpoints = computed<Endpoint[]>(() => {
   const kw = epKeyword.value.trim().toLowerCase()
@@ -145,57 +120,32 @@ async function loadEndpoints() {
 }
 
 function open() {
-  step.value = 'config'
   resetCategories()
   checked.value = []
   epKeyword.value = ''
   submitting.value = false
-  canceling.value = false
   loadProviders()
   loadEndpoints()
-  // 会话内若已有进行中的批量任务，重开时回到进度视图
-  if (taskId.value && store.taskById(taskId.value)) step.value = 'result'
   visible.value = true
 }
 defineExpose({ open })
 
-function backToConfig() {
-  taskId.value = null
-  step.value = 'config'
-}
-
 async function generate() {
   submitting.value = true
   try {
-    taskId.value = await store.start(
+    await store.start(
       Number(props.projectId),
       checked.value.slice(),
       buildCategoriesPayload(),
       providerId.value,
     )
-    step.value = 'result'
+    ElMessage.success('已提交批量生成，请到「AI 生成」标签页查看进度与结果')
+    visible.value = false
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || 'AI 生成任务创建失败')
   } finally {
     submitting.value = false
   }
-}
-
-async function cancel() {
-  if (taskId.value === null) return
-  canceling.value = true
-  try {
-    await store.cancel(taskId.value)
-    ElMessage.info('已取消生成')
-  } catch (e: unknown) {
-    ElMessage.error((e as Error).message || '取消失败')
-  } finally {
-    canceling.value = false
-  }
-}
-
-function onApplied(endpointId: number) {
-  emit('applied', endpointId)
 }
 </script>
 
