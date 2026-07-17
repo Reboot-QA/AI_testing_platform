@@ -11,6 +11,11 @@
     />
 
     <div class="editor-panel">
+      <div class="panel-toolbar">
+        <el-button size="small" @click="batchAiRef?.open()">
+          <el-icon><MagicStick /></el-icon> 批量 AI 生成
+        </el-button>
+      </div>
       <template v-if="tabs.length">
         <el-tabs
           :model-value="activeId"
@@ -66,6 +71,8 @@
         </div>
       </div>
     </div>
+
+    <BatchAiGenerateDialog ref="batchAiRef" :project-id="pid" />
   </div>
 </template>
 
@@ -86,14 +93,18 @@ import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
 import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
+import BatchAiGenerateDialog from '@/components/apifox/BatchAiGenerateDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
+import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
 
 const router = useRouter()
 const pid = useRouteParamId()
 const store = useWorkspaceStore()
 const tabsStore = useApiTabsStore()
+const aiGenStore = useApifoxAiGenerateStore()
 
 const treePanel = ref<InstanceType<typeof ApiTreePanel> | null>(null)
+const batchAiRef = ref<InstanceType<typeof BatchAiGenerateDialog> | null>(null)
 const { scripts, loadScripts } = useProjectScripts(pid)
 const schemas = ref<Schemas['SchemaBrief'][]>([])
 
@@ -227,6 +238,7 @@ function beforeUnloadHandler(e: BeforeUnloadEvent) {
 onMounted(() => {
   loadScripts()
   loadSchemas()
+  aiGenStore.resumeActive(Number(pid.value)).catch(() => {}) // 刷新/重登后恢复进行中的 AI 生成任务
   window.addEventListener('beforeunload', beforeUnloadHandler)
 })
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHandler))
@@ -246,6 +258,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
   min-width: 0;
   display: flex;
   flex-direction: column;
+}
+
+.panel-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  margin-bottom: 8px;
 }
 
 .endpoint-tabbar :deep(.el-tabs__header) {
