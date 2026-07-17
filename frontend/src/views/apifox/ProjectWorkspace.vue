@@ -59,6 +59,7 @@ const sections = [
   { key: 'datamodels', label: '数据模型' },
   { key: 'tests', label: '自动化测试' },
   { key: 'reports', label: '测试报告' },
+  { key: 'ai-jobs', label: 'AI 生成' },
   { key: 'environments', label: '环境' },
   { key: 'settings', label: '项目设置' },
 ] as const

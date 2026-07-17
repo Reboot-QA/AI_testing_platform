@@ -98,9 +98,13 @@ export const apifoxApi = {
   getAiGenTask: (tid: Id) => get<Schemas['AiGenTaskOut']>(`/apifox/ai-gen-tasks/${tid}`),
   listActiveAiGenTasks: (pid: Id) =>
     get<Schemas['AiGenTaskBrief'][]>(`/apifox/projects/${pid}/ai-gen-tasks/active`),
+  listAiGenTasks: (pid: Id, params: { page?: number; page_size?: number } = {}) =>
+    get<Schemas['AiGenTaskPageOut']>(`/apifox/projects/${pid}/ai-gen-tasks`, { params }),
   cancelAiGenTask: (tid: Id) => post<Schemas['AiGenTaskOut']>(`/apifox/ai-gen-tasks/${tid}/cancel`),
   applyAiGenTaskItem: (tid: Id, iid: Id, data: Schemas['AiGenApplyRequest']) =>
     post<Schemas['AiGenApplyResult']>(`/apifox/ai-gen-tasks/${tid}/items/${iid}/apply`, data),
+  retryAiGenTaskItem: (tid: Id, iid: Id) =>
+    post<Schemas['AiGenTaskOut']>(`/apifox/ai-gen-tasks/${tid}/items/${iid}/retry`),
 
   listSchemas: (pid: Id) => get<Schemas['SchemaBrief'][]>(`/apifox/projects/${pid}/schemas`),
   getSchema: (sid: Id) => get<Schemas['SchemaOut']>(`/apifox/schemas/${sid}`),

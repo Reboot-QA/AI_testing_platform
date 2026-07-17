@@ -5681,6 +5681,74 @@
             }
           }
         }
+      },
+      "get": {
+        "tags": [
+          "接口自动化v2·AI生成任务"
+        ],
+        "summary": "List Ai Gen Tasks",
+        "operationId": "list_ai_gen_tasks_api_v1_apifox_projects__pid__ai_gen_tasks_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiGenTaskPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/apifox/projects/{pid}/ai-gen-tasks/active": {
@@ -5877,6 +5945,62 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiGenApplyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apifox/ai-gen-tasks/{tid}/items/{iid}/retry": {
+      "post": {
+        "tags": [
+          "接口自动化v2·AI生成任务"
+        ],
+        "summary": "Retry Ai Gen Task Item",
+        "operationId": "retry_ai_gen_task_item_api_v1_apifox_ai_gen_tasks__tid__items__iid__retry_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tid"
+            }
+          },
+          {
+            "name": "iid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Iid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiGenTaskOut"
                 }
               }
             }
@@ -9275,6 +9399,17 @@
             "type": "string",
             "title": "Status"
           },
+          "mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
           "total_items": {
             "type": "integer",
             "title": "Total Items"
@@ -9489,6 +9624,37 @@
           "created_at"
         ],
         "title": "AiGenTaskOut"
+      },
+      "AiGenTaskPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AiGenTaskBrief"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "AiGenTaskPageOut"
       },
       "AiGenerateRequest": {
         "properties": {
