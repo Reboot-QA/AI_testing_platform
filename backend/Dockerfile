@@ -10,11 +10,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     TZ=Asia/Shanghai
 
 # 海外 VPS 构建时常见 DNS 解析失败：注入公共 DNS 并重试 apt（不安装 fonts-noto-cjk，PDF 用 reportlab 内置字体）
+# nodejs：脚本库调试/执行 JavaScript 前后置脚本用（后端容器无 node，前端只在构建时用）
 RUN set -ux; \
     printf 'nameserver 8.8.8.8\nnameserver 1.1.1.1\nnameserver 208.67.222.222\n' > /etc/resolv.conf; \
     apt_ok=0; \
     for i in 1 2 3 4 5; do \
-      if apt-get update && apt-get install -y --no-install-recommends tzdata ca-certificates; then \
+      if apt-get update && apt-get install -y --no-install-recommends tzdata ca-certificates nodejs; then \
         apt_ok=1; \
         break; \
       fi; \
