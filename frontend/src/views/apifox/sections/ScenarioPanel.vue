@@ -372,7 +372,9 @@ onMounted(async () => {
 }
 
 .steps-title {
+  font-size: 14px;
   font-weight: 600;
+  line-height: 1.35;
   color: var(--ax-brand);
   margin-bottom: 10px;
 }

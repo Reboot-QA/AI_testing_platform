@@ -1,15 +1,8 @@
 <template>
   <div class="w-60 border-r border-[var(--ax-border)] overflow-auto pr-2 shrink-0">
     <!-- 头部工具栏 -->
-    <div class="flex items-center justify-between font-semibold text-[var(--ax-brand)] mb-2">
-      <div class="flex items-center gap-1">
-        <span>场景</span>
-        <el-tooltip content="按住场景左侧手柄可拖动到其他分组" placement="right">
-          <el-icon class="text-xs text-[var(--ax-text-placeholder)] cursor-default">
-            <QuestionFilled />
-          </el-icon>
-        </el-tooltip>
-      </div>
+    <div class="panel-head">
+      <span class="panel-title">场景</span>
       <div class="flex items-center gap-1.5">
         <el-select
           v-model="priorityFilter"
@@ -37,15 +30,14 @@
     <!-- 分组列表 -->
     <div v-for="grp in localGroups" :key="grp.key" class="mb-0.5">
       <!-- 文件夹 header -->
-      <div
-        class="flex items-center gap-1.5 px-1.5 py-[5px] mt-1.5 text-[12.5px] font-semibold"
-        :class="grp.folder ? 'text-[var(--ax-text-secondary)]' : 'text-[var(--ax-text-tertiary)]'"
-      >
-        <el-icon><component :is="grp.folder ? 'Folder' : 'Files'" /></el-icon>
-        <span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap">
+      <div class="group-head" :class="grp.folder ? 'group-head--folder' : 'group-head--ungrouped'">
+        <el-icon class="group-head-icon"
+          ><component :is="grp.folder ? 'Folder' : 'Files'"
+        /></el-icon>
+        <span class="group-head-name">
           {{ grp.folder ? grp.folder.name : '未分组' }}
         </span>
-        <span class="text-[11px] text-[var(--ax-text-tertiary)]">{{ grp.scenarios.length }}</span>
+        <span class="group-head-count">{{ grp.scenarios.length }}</span>
         <el-dropdown v-if="grp.folder" trigger="click" @command="(c) => onFolderCmd(c, grp.folder)">
           <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
             <MoreFilled />
@@ -61,66 +53,58 @@
 
       <!-- 场景行（可拖拽，跨分组移动） -->
       <VueDraggable
+        :key="`drag-${grp.key}`"
         v-model="grp.scenarios"
-        :group="{ name: 'scenarios' }"
+        :group="{ name: 'scenarios', pull: true, put: true }"
         handle=".drag-handle"
         :animation="150"
-        class="min-h-[8px]"
-        @add="(e) => onDrop(grp, e)"
+        ghost-class="scenario-ghost"
+        :class="grp.scenarios.length === 0 ? 'scenario-drop-empty' : 'scenario-drop'"
+        @end="(e) => onDragEnd(grp, e)"
       >
         <div
           v-for="s in grp.scenarios"
           :key="s.id"
-          class="group flex items-center gap-2 pl-2 pr-1.5 py-1.5 rounded cursor-pointer"
-          :class="s.id === activeId ? 'bg-[var(--ax-bg-active)]' : 'hover:bg-[var(--ax-bg-hover)]'"
+          :data-scenario-id="s.id"
+          class="scenario-row group"
+          :class="s.id === activeId ? 'scenario-row--active' : ''"
           @click="$emit('select', s.id)"
         >
-          <!-- 拖拽抓手（默认淡，hover 提亮） -->
-          <el-icon
-            class="drag-handle shrink-0 cursor-grab text-[var(--ax-text-placeholder)] opacity-40 group-hover:opacity-100 hover:!text-[var(--ax-brand)] transition"
-            title="拖动到其他分组"
-            @click.stop
-          >
-            <DCaret />
-          </el-icon>
-
-          <!-- 优先级：小圆点（颜色区分高/中/低） -->
-          <span
-            class="shrink-0 w-2 h-2 rounded-full"
-            :style="{ background: `var(--el-color-${priorityMeta(s.priority).type})` }"
-            :title="`优先级：${priorityMeta(s.priority).label}`"
-          />
+          <!-- 拖拽手柄：按住可拖到其他分组 -->
+          <span class="drag-handle" title="按住拖动到其他分组" @click.stop>
+            <el-icon><Rank /></el-icon>
+          </span>
 
           <!-- 名称（截断 + tooltip 全称） -->
           <el-tooltip :content="s.name" placement="right" :show-after="600">
-            <span class="flex-1 min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-sm">
-              {{ s.name }}
+            <span class="scenario-name">{{ s.name }}</span>
+          </el-tooltip>
+
+          <!-- 步数 -->
+          <span class="scenario-meta">{{ s.step_count }} 步</span>
+
+          <!-- 优先级：文字 + 语义色（高=红 / 中=橙 / 低=灰） -->
+          <el-tooltip
+            :content="`优先级：${priorityMeta(s.priority).label}`"
+            placement="right"
+            :show-after="300"
+          >
+            <span
+              class="priority-label shrink-0"
+              :style="{ color: `var(--el-color-${priorityMeta(s.priority).type})` }"
+            >
+              {{ priorityMeta(s.priority).label }}
             </span>
           </el-tooltip>
 
-          <!-- 步数（纯文字） -->
-          <span class="shrink-0 text-[11px] text-[var(--ax-text-placeholder)] tabular-nums">
-            {{ s.step_count }} 步
-          </span>
-
           <!-- 删除：常驻 icon，hover 变红 -->
-          <el-icon
-            class="shrink-0 cursor-pointer text-[var(--ax-text-placeholder)] hover:!text-[var(--el-color-danger)] transition-colors"
-            title="删除场景"
-            @click.stop="$emit('del', s)"
-          >
+          <el-icon class="scenario-del" title="删除场景" @click.stop="$emit('del', s)">
             <Delete />
           </el-icon>
         </div>
       </VueDraggable>
 
-      <!-- 空分组：提示可拖入 -->
-      <div
-        v-if="grp.scenarios.length === 0"
-        class="pl-7 py-1 text-[11px] text-[var(--ax-text-placeholder)]"
-      >
-        拖动场景到此分组
-      </div>
+      <div v-if="grp.scenarios.length === 0" class="empty-hint">拖动场景到此分组</div>
     </div>
 
     <el-empty v-if="scenarios.length === 0" description="暂无场景" :image-size="60" />
@@ -153,7 +137,7 @@ const emit = defineEmits([
 
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
 
-// 按 folder_id 分组：所有文件夹（含空）在前作为移动目标，未分组置底（无内容则隐藏）
+// 按 folder_id 分组：所有文件夹（含空）在前，未分组始终置底作为拖放目标
 const groups = computed(() => {
   const bucket = new Map(props.folders.map((f) => [f.id, []]))
   const ungrouped = []
@@ -166,9 +150,8 @@ const groups = computed(() => {
     folder: f,
     scenarios: bucket.get(f.id),
   }))
-  if (ungrouped.length || props.folders.length === 0) {
-    result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
-  }
+  // 始终保留「未分组」作为跨组拖放目标（即使当前为空）
+  result.push({ key: 'ungrouped', folder: null, scenarios: ungrouped })
   return result
 })
 
@@ -182,16 +165,177 @@ watch(
   { immediate: true },
 )
 
-// 拖入某分组：仅当跨分组时持久化 folder_id（组内重排后端不支持排序，忽略）
-function onDrop(grp, evt) {
-  const moved = grp.scenarios[evt.newIndex]
-  if (!moved) return
+// 跨分组拖放结束时持久化 folder_id（组内重排后端不支持，忽略）
+function onDragEnd(grp, evt) {
+  if (!evt || evt.from === evt.to) return
+  const id = Number(evt.item?.dataset?.scenarioId)
+  if (!id) return
+  // 仅在目标分组上处理（源分组 onEnd 时条目已移出）
+  if (!grp.scenarios.some((s) => s.id === id)) return
   const targetFolderId = grp.folder ? grp.folder.id : null
-  if (moved.folder_id === targetFolderId) return
-  emit('move', { id: moved.id, folderId: targetFolderId })
+  const src = props.scenarios.find((s) => s.id === id)
+  if (!src || src.folder_id === targetFolderId) return
+  emit('move', { id, folderId: targetFolderId })
 }
 
 function onFolderCmd(cmd, folder) {
   emit(cmd === 'rename' ? 'rename-folder' : 'delete-folder', folder)
 }
 </script>
+
+<style scoped>
+/* 字号阶梯：面板标题 14 > 分组标题 12 > 场景名 12 > 元信息 11 */
+.panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-brand);
+}
+
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 6px;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.group-head--folder {
+  color: var(--ax-text-secondary);
+}
+
+.group-head--ungrouped {
+  color: var(--ax-text-tertiary);
+}
+
+.group-head-icon {
+  flex-shrink: 0;
+  font-size: 13px;
+}
+
+.group-head-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-head-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--ax-text-tertiary);
+}
+
+.scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 6px 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.scenario-row:hover {
+  background: var(--ax-bg-hover);
+}
+
+.scenario-row--active {
+  background: var(--ax-bg-active);
+}
+
+.scenario-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ax-text);
+}
+
+.scenario-meta {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ax-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.drag-handle {
+  display: inline-flex;
+  align-items: center;
+  cursor: grab;
+  color: var(--ax-text-placeholder);
+  font-size: 13px;
+  opacity: 0.4;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+
+.group:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  color: var(--ax-brand);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.priority-label {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.scenario-del {
+  flex-shrink: 0;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--ax-text-placeholder);
+  transition: color 0.15s;
+}
+
+.scenario-del:hover {
+  color: var(--el-color-danger);
+}
+
+.empty-hint {
+  pointer-events: none;
+  padding: 2px 0 2px 28px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--ax-text-placeholder);
+}
+
+.scenario-drop {
+  min-height: 8px;
+}
+
+.scenario-drop-empty {
+  min-height: 28px;
+}
+
+:global(.scenario-ghost) {
+  opacity: 0.45;
+  background: var(--ax-bg-hover);
+  border-radius: 4px;
+}
+</style>
