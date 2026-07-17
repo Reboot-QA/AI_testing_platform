@@ -332,7 +332,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 
 .dirty-dot {
   color: var(--ax-warning);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .row1 {
@@ -344,7 +344,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 
 .run-hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .desc-input {
@@ -352,7 +352,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 }
 
 .steps-title {
-  font-size: 14px;
+  font-size: var(--ax-font);
   font-weight: 600;
   line-height: 1.35;
   color: var(--ax-brand);

@@ -114,7 +114,7 @@
         </el-table-column>
         <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
         <el-table-column prop="priority" label="优先级" width="80" align="center" />
-        <el-table-column prop="case_type" label="类型" width="90" />
+        <el-table-column prop="case_type" label="类型" width="96" />
         <el-table-column prop="source" label="来源" width="100">
           <template #default="{ row }">
             <el-tag :type="row.source === 'ai_generated' ? 'warning' : ''" size="small">

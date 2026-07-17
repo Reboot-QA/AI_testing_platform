@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="auto-tests-root">
     <el-radio-group
       :model-value="section"
       size="small"
@@ -61,18 +61,28 @@ function onDeleted(id) {
 </script>
 
 <style scoped>
+.auto-tests-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .section-switch {
-  margin-bottom: 12px;
+  margin-bottom: var(--ax-gap-sm);
+  flex: none;
 }
 
 .auto-tests {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 260px);
+  gap: var(--ax-gap-lg);
+  flex: 1;
+  min-height: 0;
 }
 
 .cases-area {
   flex: 1;
   overflow: auto;
+  min-width: 0;
 }
 </style>

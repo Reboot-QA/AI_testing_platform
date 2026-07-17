@@ -1,5 +1,5 @@
 <template>
-  <div class="workspace">
+  <div class="ax-workspace workspace">
     <div class="ws-header">
       <el-button link @click="backToWorkbench">
         <el-icon><ArrowLeft /></el-icon> 工作台
@@ -30,12 +30,13 @@
       </el-select>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+    <el-tabs v-model="activeTab" class="ws-tabs" @tab-change="onTabChange">
       <el-tab-pane v-for="s in sections" :key="s.key" :label="s.label" :name="s.key" />
     </el-tabs>
 
-    <!-- 按 projectId 加 key：切项目时命中同一路由记录，强制子树重挂载以重载数据 -->
-    <router-view :key="projectId" />
+    <div class="ws-content">
+      <router-view :key="projectId" />
+    </div>
   </div>
 </template>
 
@@ -95,16 +96,25 @@ watch(
       router.push('/apifox')
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 </script>
 
 <style scoped>
+.workspace {
+  height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .ws-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--ax-gap);
+  margin-bottom: var(--ax-gap);
+  flex: none;
 }
 
 .proj-switch {
@@ -117,10 +127,21 @@ watch(
 
 .env-label {
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
 }
 
 .env-switch {
   width: 180px;
+}
+
+.ws-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ws-content > :deep(*) {
+  height: 100%;
+  min-height: 0;
 }
 </style>

@@ -84,8 +84,8 @@ function onCommand(cmd) {
   border: 1px solid var(--ax-border);
   border-left: 3px solid var(--pc);
   border-radius: var(--ax-radius-lg);
-  padding: 14px 16px;
-  min-height: 116px;
+  padding: 10px 12px;
+  min-height: 92px;
   cursor: pointer;
   background: var(--ax-bg);
   transition:
@@ -93,7 +93,7 @@ function onCommand(cmd) {
     box-shadow var(--ax-transition);
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 6px;
 }
 
 .projcard:hover {
@@ -112,7 +112,7 @@ function onCommand(cmd) {
   flex: 1;
   min-width: 0;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--ax-text);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -152,9 +152,9 @@ function onCommand(cmd) {
 
 .pmeta {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   color: var(--ax-text-tertiary);
-  font-size: 12.5px;
+  font-size: 12px;
 }
 
 .pmeta .sep {
@@ -186,8 +186,8 @@ function onCommand(cmd) {
 /* 拖拽手柄常显于卡片右下角，不挤占标题宽度 */
 .drag-handle {
   position: absolute;
-  right: 12px;
-  bottom: 14px;
+  right: 10px;
+  bottom: 10px;
   color: var(--ax-text-placeholder);
   cursor: grab;
   transition: color var(--ax-transition);

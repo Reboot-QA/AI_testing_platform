@@ -1,24 +1,30 @@
 <template>
   <div class="suite-panel">
     <div class="list-panel">
-      <div class="list-toolbar">
-        <span>测试套件</span>
-        <el-button size="small" type="primary" @click="addSuite">
+      <div class="panel-head">
+        <span class="panel-title">测试套件</span>
+        <el-button size="small" type="primary" title="新建套件" @click="addSuite">
           <el-icon><Plus /></el-icon>
         </el-button>
       </div>
       <div
         v-for="s in suites"
         :key="s.id"
-        class="item"
-        :class="{ active: activeId === s.id }"
+        class="suite-row"
+        :class="{ 'suite-row--active': activeId === s.id }"
         @click="onSelectSuite(s.id)"
       >
-        <el-icon><Files /></el-icon>
-        <span class="item-name">{{ s.name }}</span>
-        <el-tag size="small" type="info">{{ s.item_count }} 项</el-tag>
-        <el-button link size="small" @click.stop="copySuite(s)">复制</el-button>
-        <el-button link type="danger" size="small" @click.stop="delSuite(s)">删</el-button>
+        <el-icon class="suite-row-icon"><Files /></el-icon>
+        <el-tooltip :content="s.name" placement="right" :show-after="600">
+          <span class="suite-name">{{ s.name }}</span>
+        </el-tooltip>
+        <span class="suite-meta">{{ s.item_count }} 项</span>
+        <el-icon class="suite-action" title="复制套件" @click.stop="copySuite(s)">
+          <CopyDocument />
+        </el-icon>
+        <el-icon class="suite-del" title="删除套件" @click.stop="delSuite(s)">
+          <Delete />
+        </el-icon>
       </div>
       <el-empty v-if="suites.length === 0" description="暂无套件" :image-size="60" />
     </div>
@@ -58,20 +64,33 @@
           />
 
           <div class="items-title">套件项（按序批量执行 · 拖拽调整顺序）</div>
-          <VueDraggable v-model="activeTab.form.items" handle=".drag-handle" :animation="150">
+          <VueDraggable
+            v-model="activeTab.form.items"
+            handle=".drag-handle"
+            :animation="150"
+            ghost-class="suite-item-ghost"
+          >
             <div v-for="(it, i) in activeTab.form.items" :key="it._uid" class="suite-item">
-              <el-icon class="drag-handle"><Rank /></el-icon>
+              <span class="drag-handle" title="拖拽调整顺序" @click.stop>
+                <el-icon><Rank /></el-icon>
+              </span>
               <el-switch v-model="it.enabled" size="small" />
               <el-tag size="small" :type="it.target_type === 'scenario' ? 'warning' : ''">
                 {{ it.target_type === 'scenario' ? '场景' : '用例' }}
               </el-tag>
-              <MethodTag v-if="it.endpoint_method" :method="it.endpoint_method" />
+              <MethodTag v-if="it.endpoint_method" :method="it.endpoint_method" class="si-method" />
               <span class="si-name" :class="{ 'si-gone': !it.target_name }">
                 {{ it.target_name || '(目标已删除，建议移除)' }}
               </span>
-              <el-button link type="danger" size="small" @click="activeTab.form.items.splice(i, 1)"
-                >移除</el-button
+              <el-button
+                link
+                type="danger"
+                size="small"
+                class="si-remove"
+                @click="activeTab.form.items.splice(i, 1)"
               >
+                移除
+              </el-button>
             </div>
           </VueDraggable>
           <el-empty
@@ -316,43 +335,97 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 }
 
 .list-panel {
-  width: 260px;
+  width: 240px;
+  flex-shrink: 0;
   border-right: 1px solid var(--ax-border);
   overflow: auto;
   padding-right: 8px;
 }
 
-.list-toolbar {
+/* 字号阶梯：面板标题 14 > 套件名 12 > 元信息 11 */
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
   margin-bottom: 8px;
 }
 
-.item {
+.panel-title {
+  font-size: var(--ax-font);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-brand);
+}
+
+.suite-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 6px 6px 8px;
   border-radius: 4px;
   cursor: pointer;
 }
 
-.item:hover {
+.suite-row:hover {
   background: var(--ax-bg-hover);
 }
 
-.item.active {
+.suite-row--active {
   background: var(--ax-bg-active);
 }
 
-.item-name {
+.suite-row-icon {
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text-tertiary);
+}
+
+.suite-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--ax-font-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ax-text);
+}
+
+.suite-meta {
+  flex-shrink: 0;
+  font-size: var(--ax-font-xs);
+  line-height: 1;
+  color: var(--ax-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.suite-action {
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  cursor: pointer;
+  color: var(--ax-text-placeholder);
+  transition: color 0.15s;
+}
+
+.suite-action:hover {
+  color: var(--ax-brand);
+}
+
+.suite-del {
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  cursor: pointer;
+  color: var(--ax-text-placeholder);
+  transition: color 0.15s;
+}
+
+.suite-del:hover {
+  color: var(--el-color-danger);
+}
+
+.list-panel :deep(.el-empty__description) {
+  font-size: var(--ax-font-xs);
 }
 
 .editor-panel {
@@ -371,7 +444,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 
 .dirty-dot {
   color: var(--ax-warning);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .row1 {
@@ -383,7 +456,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 
 .run-hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .desc-input {
@@ -391,7 +464,9 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 }
 
 .items-title {
+  font-size: var(--ax-font);
   font-weight: 600;
+  line-height: 1.35;
   color: var(--ax-brand);
   margin-bottom: 10px;
 }
@@ -399,24 +474,74 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 .suite-item {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 8px;
-  border: 1px solid var(--ax-border);
+  gap: 6px;
+  padding: 5px 6px;
   border-radius: 4px;
-  margin-bottom: 6px;
-  background: var(--ax-bg-subtle);
+  margin-bottom: 4px;
+  font-size: var(--ax-font-xs);
+  line-height: 1.35;
+}
+
+.suite-item:hover {
+  background: var(--ax-bg-hover);
 }
 
 .drag-handle {
-  cursor: move;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  font-size: var(--ax-font-sm);
+  cursor: grab;
   color: var(--ax-text-placeholder);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.suite-item :deep(.el-switch) {
+  height: auto;
+}
+
+.suite-item :deep(.el-tag) {
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 6px;
+  font-size: var(--ax-font-xs);
+  line-height: 18px;
+}
+
+.si-method {
+  flex-shrink: 0;
+  font-size: var(--ax-font-xs) !important;
 }
 
 .si-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--ax-font-sm);
+  font-weight: 400;
+  color: var(--ax-text);
+}
+
+.suite-item :deep(.si-remove.el-button.is-link) {
+  flex-shrink: 0;
+  padding: 0 4px;
+  font-size: var(--ax-font-xs);
+  height: auto;
+}
+
+.tab-body :deep(.el-empty__description) {
+  font-size: var(--ax-font-xs);
+}
+
+:global(.suite-item-ghost) {
+  opacity: 0.45;
+  background: var(--ax-bg-hover);
+  border-radius: 4px;
 }
 
 .si-gone {

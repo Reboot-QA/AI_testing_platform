@@ -256,7 +256,7 @@ function clearFile() {
 }
 
 .sub-title {
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
   margin: 8px 0;
 }
@@ -274,7 +274,7 @@ function clearFile() {
 }
 
 .binary-file {
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 
@@ -291,7 +291,7 @@ function clearFile() {
 }
 
 .c-label {
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 
@@ -309,12 +309,12 @@ function clearFile() {
 .set-label {
   flex: none;
   width: 96px;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 
 .set-hint {
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   color: var(--ax-text-placeholder);
 }
 </style>

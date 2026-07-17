@@ -363,8 +363,9 @@ function addStep() {
 <style scoped>
 .steps-editor {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 340px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .steps-col {
@@ -389,12 +390,12 @@ function addStep() {
 
 .add-hint {
   flex: 1;
-  font-size: 11px;
+  font-size: var(--ax-font-xs);
   line-height: 1.35;
   color: var(--ax-text-placeholder);
 }
 
 .steps-col :deep(.el-empty__description) {
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 </style>

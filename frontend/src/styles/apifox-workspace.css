@@ -1,0 +1,172 @@
+/* Apifox 项目工作区 UI 规范：字号/侧栏/列表项/Tab 区统一入口。
+   在 ProjectWorkspace 根节点挂 .ax-workspace 后生效；子组件 scoped 样式请引用 --ax-ws-* 变量。 */
+
+.ax-workspace {
+  --ax-ws-title: var(--ax-font); /* 14px 面板标题 */
+  --ax-ws-body: var(--ax-font-sm); /* 13px 正文/树节点 */
+  --ax-ws-meta: var(--ax-font-xs); /* 12px 次要/元信息 */
+  font-size: var(--ax-ws-body);
+  color: var(--ax-text);
+  line-height: 1.35;
+}
+
+/* ── 顶栏 Tab ── */
+.ax-workspace .ws-tabs.el-tabs > .el-tabs__header {
+  margin-bottom: var(--ax-gap-sm);
+}
+
+.ax-workspace .ws-tabs .el-tabs__item {
+  font-size: var(--ax-ws-body);
+  height: 36px;
+  line-height: 36px;
+}
+
+/* ── 侧栏列表（panel-head / panel-title / list-panel） ── */
+.ax-workspace .panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--ax-gap);
+}
+
+.ax-workspace .panel-title,
+.ax-workspace .var-title,
+.ax-workspace .list-head {
+  font-size: var(--ax-ws-title);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-brand);
+}
+
+.ax-workspace .list-panel {
+  width: 260px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--ax-border);
+  overflow: auto;
+  padding-right: var(--ax-gap);
+}
+
+.ax-workspace .tree-panel {
+  width: 280px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--ax-border);
+  overflow: auto;
+  padding-right: var(--ax-gap);
+}
+
+.ax-workspace .editor-panel {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── 接口/场景 Tab 内容区撑满 ── */
+.ax-workspace .tab-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.ax-workspace .endpoint-tabs,
+.ax-workspace .spec-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ax-workspace .endpoint-tabs > .el-tabs__content,
+.ax-workspace .spec-tabs > .el-tabs__content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.ax-workspace .endpoint-tabs > .el-tabs__content > .el-tab-pane,
+.ax-workspace .spec-tabs > .el-tabs__content > .el-tab-pane {
+  height: 100%;
+}
+
+/* ── 分组标题 / 子标题 ── */
+.ax-workspace .group-head,
+.ax-workspace .schema-head,
+.ax-workspace .sub-title,
+.ax-workspace .sec-title,
+.ax-workspace .group-title {
+  font-size: var(--ax-ws-meta);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-text-secondary);
+}
+
+/* ── 列表项 ── */
+.ax-workspace .schema-item,
+.ax-workspace .env-item,
+.ax-workspace .suite-item,
+.ax-workspace .dataset-item,
+.ax-workspace .scenario-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--ax-radius-sm);
+  cursor: pointer;
+  font-size: var(--ax-ws-body);
+  color: var(--ax-text);
+}
+
+.ax-workspace .schema-item:hover,
+.ax-workspace .env-item:hover,
+.ax-workspace .suite-item:hover,
+.ax-workspace .dataset-item:hover,
+.ax-workspace .scenario-row:hover {
+  background: var(--ax-bg-hover);
+}
+
+.ax-workspace .schema-item.active,
+.ax-workspace .env-item.active,
+.ax-workspace .suite-item.active,
+.ax-workspace .dataset-item.active,
+.ax-workspace .scenario-row.active {
+  background: var(--ax-bg-active);
+}
+
+.ax-workspace .schema-name,
+.ax-workspace .env-name,
+.ax-workspace .suite-name,
+.ax-workspace .dataset-name,
+.ax-workspace .scenario-name,
+.ax-workspace .node-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ax-ws-body);
+}
+
+.ax-workspace .schema-ref,
+.ax-workspace .group-head-count,
+.ax-workspace .meta,
+.ax-workspace .sub,
+.ax-workspace .none-tip {
+  font-size: var(--ax-ws-meta);
+  color: var(--ax-text-tertiary);
+}
+
+/* ── 空状态 ── */
+.ax-workspace .el-empty__description {
+  font-size: var(--ax-ws-meta) !important;
+}
+
+/* ── 分割布局根 ── */
+.ax-workspace .ax-ws-split {
+  display: flex;
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
+}

@@ -2,7 +2,7 @@
   <div class="tiles">
     <div v-for="t in tiles" :key="t.label" class="tile">
       <div class="ico" :style="{ backgroundColor: tint(t.color), color: t.color }">
-        <el-icon :size="22"><component :is="t.icon" /></el-icon>
+        <el-icon :size="18"><component :is="t.icon" /></el-icon>
       </div>
       <div class="meta">
         <div class="n" :class="{ live: t.live }">{{ t.value }}</div>
@@ -40,21 +40,22 @@ const tiles = computed(() => {
 <style scoped>
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-  gap: 14px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+  flex: none;
 }
 
 .tile {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   background: var(--ax-bg);
   border: 1px solid var(--ax-border);
   border-radius: var(--ax-radius-lg);
   box-shadow: var(--ax-shadow-sm);
-  padding: 14px 16px;
+  padding: 10px 12px;
   transition: all var(--ax-transition);
 }
 
@@ -65,8 +66,8 @@ const tiles = computed(() => {
 
 .ico {
   flex: none;
-  width: 44px;
-  height: 44px;
+  width: 36px;
+  height: 36px;
   border-radius: var(--ax-radius-lg);
   display: grid;
   place-items: center;
@@ -77,7 +78,7 @@ const tiles = computed(() => {
 }
 
 .n {
-  font-size: 26px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1.1;
   color: var(--ax-text);
@@ -90,8 +91,8 @@ const tiles = computed(() => {
 
 .l {
   color: var(--ax-text-secondary);
-  font-size: 12.5px;
-  margin-top: 3px;
+  font-size: 12px;
+  margin-top: 2px;
 }
 
 .live-dot {
@@ -121,6 +122,18 @@ const tiles = computed(() => {
 @media (prefers-reduced-motion: reduce) {
   .live-dot {
     animation: none;
+  }
+}
+
+@media (max-width: 1100px) {
+  .tiles {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 640px) {
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 </style>

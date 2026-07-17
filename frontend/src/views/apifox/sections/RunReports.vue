@@ -1,5 +1,5 @@
 <template>
-  <div>
+  <div class="reports-page">
     <div class="toolbar">
       <span class="title">测试报告</span>
       <el-button size="small" @click="loadRuns">
@@ -306,21 +306,31 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.reports-page {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: var(--ax-gap-sm);
+  flex: none;
 }
 
 .title {
+  font-size: var(--ax-font);
   font-weight: 600;
   color: var(--ax-brand);
 }
 
 .sub {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   margin-left: 6px;
 }
 
@@ -351,7 +361,7 @@ onMounted(async () => {
 .group-title {
   font-weight: 600;
   color: var(--ax-brand);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   margin: 6px 0 4px;
   padding: 4px 8px;
   background: var(--ax-bg-subtle);
@@ -362,11 +372,11 @@ onMounted(async () => {
   font-weight: 600;
   color: var(--ax-text-tertiary);
   margin: 10px 0 4px;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
 }
 
 .line {
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   padding: 2px 0;
 }
 
@@ -377,7 +387,7 @@ onMounted(async () => {
 
 .err {
   color: var(--ax-danger);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   margin-bottom: 6px;
 }
 
@@ -390,7 +400,7 @@ onMounted(async () => {
   border: 1px solid var(--ax-border);
   border-radius: 4px;
   padding: 8px;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   max-height: 320px;
   overflow: auto;
 }
