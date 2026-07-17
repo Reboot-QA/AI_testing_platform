@@ -3,6 +3,7 @@ import json
 import subprocess
 from typing import Any, Dict, List, Optional, Tuple
 
+from app.services.apifox.script_js_runtime import POST_RUNNER, PRE_RUNNER
 
 SAFE_PYTHON_BUILTINS = {
     "True": True,
@@ -32,42 +33,6 @@ SAFE_PYTHON_BUILTINS = {
     "any": any,
     "all": all,
 }
-
-
-NODE_RUNNER = r"""
-const fs = require('fs');
-const input = JSON.parse(fs.readFileSync(0, 'utf-8'));
-const variables = input.variables;
-const logs = [];
-const console = {
-  log: (...args) => logs.push(args.map((item) => String(item)).join(' ')),
-};
-try {
-  const runner = new Function('variables', 'console', input.script);
-  runner(variables, console);
-  process.stdout.write(JSON.stringify({ ok: true, variables, logs }));
-} catch (err) {
-  process.stdout.write(JSON.stringify({ ok: false, error: String(err), variables, logs }));
-}
-"""
-
-POST_NODE_RUNNER = r"""
-const fs = require('fs');
-const input = JSON.parse(fs.readFileSync(0, 'utf-8'));
-const variables = input.variables;
-const response = input.response || { body: '', status: 0, headers: {} };
-const logs = [];
-const console = {
-  log: (...args) => logs.push(args.map((item) => String(item)).join(' ')),
-};
-try {
-  const runner = new Function('variables', 'console', 'response', input.script);
-  runner(variables, console, response);
-  process.stdout.write(JSON.stringify({ ok: true, variables, logs }));
-} catch (err) {
-  process.stdout.write(JSON.stringify({ ok: false, error: String(err), variables, logs }));
-}
-"""
 
 
 def _normalize_variables(variables: Dict[str, str]) -> Dict[str, str]:
@@ -176,7 +141,7 @@ def _run_javascript_pre_script(script: str, variables: Dict[str, str]) -> Tuple[
     payload = json.dumps({"variables": variables, "script": script}, ensure_ascii=False)
     try:
         completed = subprocess.run(
-            ["node", "-e", NODE_RUNNER],
+            ["node", "-e", PRE_RUNNER],
             input=payload,
             capture_output=True,
             text=True,
@@ -297,7 +262,7 @@ def _run_javascript_post_script(
     payload = json.dumps({"variables": variables, "script": script, "response": response}, ensure_ascii=False)
     try:
         completed = subprocess.run(
-            ["node", "-e", POST_NODE_RUNNER],
+            ["node", "-e", POST_RUNNER],
             input=payload,
             capture_output=True,
             text=True,
