@@ -19,19 +19,27 @@
           <el-tag size="small" :type="statusType(row.status)">{{ statusText(row.status) }}</el-tag>
         </template>
       </el-table-column>
-      <el-table-column label="类型" width="130">
+      <el-table-column label="目标" min-width="180" show-overflow-tooltip>
         <template #default="{ row }">
-          {{ row.total_items > 1 ? `批量 · ${row.total_items} 接口` : '单接口' }}
+          {{ row.target || `批量 · ${row.total_items} 接口` }}
         </template>
       </el-table-column>
-      <el-table-column label="进度" width="100">
+      <el-table-column label="类别" min-width="150" show-overflow-tooltip>
+        <template #default="{ row }">{{ categorySummary(row.categories) }}</template>
+      </el-table-column>
+      <el-table-column label="进度" width="90">
         <template #default="{ row }">{{ row.done_items }}/{{ row.total_items }}</template>
       </el-table-column>
-      <el-table-column label="模式" width="80">
-        <template #default="{ row }">{{ modeText(row.mode) }}</template>
+      <el-table-column label="生成用例" width="96">
+        <template #default="{ row }">{{ row.generated_total }} 条</template>
       </el-table-column>
-      <el-table-column label="创建时间">
+      <el-table-column label="创建时间" width="140">
         <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+      </el-table-column>
+      <el-table-column label="完成时间" width="140">
+        <template #default="{ row }">{{
+          row.finished_at ? formatTime(row.finished_at) : '--'
+        }}</template>
       </el-table-column>
     </el-table>
 
@@ -60,6 +68,7 @@ import { apifoxApi } from '@/api'
 import type { Schemas } from '@/api/types'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
+import { categoryLabel } from '@/utils/caseCategory'
 import AiGenTaskProgress from '@/components/apifox/AiGenTaskProgress.vue'
 
 type TaskRow = Schemas['AiGenTaskBrief']
@@ -121,8 +130,8 @@ const statusType = (s: string): string =>
     running: 'primary',
     canceled: 'info',
   })[s] || 'info'
-const modeText = (m: string | null | undefined): string =>
-  m === 'mock' ? 'Mock' : m === 'llm' ? 'LLM' : '-'
+const categorySummary = (cats: string[]): string =>
+  cats?.length ? cats.map((c) => categoryLabel(c)).join(' · ') : '-'
 const formatTime = (t: string): string => (t ? t.slice(0, 16).replace('T', ' ') : '')
 
 // 有进行中的任务时轮询刷新列表（进度、状态实时更新）

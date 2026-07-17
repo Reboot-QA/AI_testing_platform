@@ -9410,6 +9410,30 @@
             ],
             "title": "Mode"
           },
+          "target": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target"
+          },
+          "categories": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Categories",
+            "default": []
+          },
+          "generated_total": {
+            "type": "integer",
+            "title": "Generated Total",
+            "default": 0
+          },
           "total_items": {
             "type": "integer",
             "title": "Total Items"
@@ -9422,6 +9446,18 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
           }
         },
         "type": "object",
@@ -9568,6 +9604,25 @@
               }
             ],
             "title": "Provider Id"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/AiGenCategory"
+            },
+            "type": "array",
+            "title": "Categories",
+            "default": []
+          },
+          "creator_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator Name"
           },
           "total_items": {
             "type": "integer",
