@@ -94,13 +94,13 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 import ActualRequestView from '@/components/apifox/ActualRequestView.vue'
-import type { EndpointEditorForm } from '@/components/apifox/ApiEndpointEditor.vue'
+import type { EndpointEditorForm } from '@/types/apifox'
 
 type ScriptBrief = Schemas['ScriptBrief']
 type SchemaBrief = Schemas['SchemaBrief']
 type DebugSendResult = Schemas['DebugResponse']
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     form: EndpointEditorForm
     saving?: boolean

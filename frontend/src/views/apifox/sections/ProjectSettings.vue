@@ -72,16 +72,16 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { projectApi, userApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import ProjectScriptsPanel from '@/components/apifox/ProjectScriptsPanel.vue'
 
-const route = useRoute()
 const router = useRouter()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)

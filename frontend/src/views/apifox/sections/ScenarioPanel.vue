@@ -95,7 +95,7 @@
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import type { SSEEvent } from '@/api/request'
@@ -112,8 +112,7 @@ import ScenarioRunConfigBar from '@/components/apifox/ScenarioRunConfigBar.vue'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 const store = useWorkspaceStore()
 const tabsStore = useScenarioTabsStore()
 

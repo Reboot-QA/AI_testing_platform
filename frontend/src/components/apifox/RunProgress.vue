@@ -36,7 +36,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { iterationLabel } from '@/utils/iterationLabel'
 
 interface RunProgressStepEvent {
@@ -88,8 +89,8 @@ const props = withDefaults(
 )
 defineEmits<{ clear: [] }>()
 
-const route = useRoute()
 const router = useRouter()
+const pid = useRouteParamId()
 
 // 本次运行的 run_id（start 事件携带）；有则可跳转到「测试报告」定位该次报告
 const runId = computed(
@@ -97,7 +98,7 @@ const runId = computed(
 )
 function viewReport() {
   if (!runId.value) return
-  router.push(`/apifox/project/${route.params.projectId}/reports?run=${runId.value}`)
+  router.push(`/apifox/project/${pid.value}/reports?run=${runId.value}`)
 }
 
 const stepEvents = computed(() =>

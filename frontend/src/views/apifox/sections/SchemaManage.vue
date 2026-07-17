@@ -88,6 +88,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import type { SchemaField } from '@/types/apifox'
@@ -98,7 +99,7 @@ import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import SchemaFieldRow from '@/components/apifox/SchemaFieldRow.vue'
 
 const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 
 const schemas = ref<Schemas['SchemaBrief'][]>([])
 const filterText = ref('')

@@ -333,6 +333,7 @@ import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
+import type { ProjectPageOut } from '@/api/project'
 import { formatBeijingTime } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
@@ -348,6 +349,8 @@ import {
   type ProjectFilter,
   type Requirement,
   type RequirementPage,
+  type RequirementStatus,
+  type ReviewStatus,
   type TestCase,
 } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
@@ -403,19 +406,19 @@ const typeMap: Record<string, string> = {
   security: '安全',
 }
 const sourceMap: Record<string, string> = { manual: '手动', ai_document: '文档解析' }
-const statusMap: Record<string, string> = { draft: '草稿', approved: '已评审', closed: '已关闭' }
-const statusType: Record<string, 'info' | 'success' | 'warning'> = {
+const statusMap: Record<RequirementStatus, string> = { draft: '草稿', approved: '已评审', closed: '已关闭' }
+const statusType: Record<RequirementStatus, 'info' | 'success' | 'warning'> = {
   draft: 'info',
   approved: 'success',
   closed: 'warning',
 }
-const reviewMap: Record<string, string> = {
+const reviewMap: Record<ReviewStatus, string> = {
   draft: '草稿',
   pending: '待评审',
   approved: '已通过',
   rejected: '已驳回',
 }
-const reviewType: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
+const reviewType: Record<ReviewStatus, 'info' | 'warning' | 'success' | 'danger'> = {
   draft: 'info',
   pending: 'warning',
   approved: 'success',
@@ -434,6 +437,10 @@ const rules: FormRules<RequirementForm> = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
 }
 
+function isProjectPage(data: Project[] | ProjectPageOut): data is ProjectPageOut {
+  return !Array.isArray(data)
+}
+
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
 const deletableSelectedCount = computed(
@@ -445,7 +452,7 @@ const blockedSelectedCount = computed(
 
 async function loadProjects() {
   const data = await projectApi.list()
-  projects.value = Array.isArray(data) ? data : data.items
+  projects.value = isProjectPage(data) ? data.items : data
   await loadData()
 }
 
@@ -497,7 +504,7 @@ function handlePageSizeChange() {
   loadData()
 }
 
-function downloadBlob(blob, filename) {
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -510,7 +517,7 @@ function currentProjectName() {
   return projects.value.find((item) => item.id === projectId.value)?.name || 'requirements'
 }
 
-async function handleExport(format) {
+async function handleExport(format: string) {
   if (isAllProjects.value) {
     ElMessage.warning('请先选择具体项目')
     return
@@ -541,7 +548,7 @@ function openImportDialog() {
   importDialogVisible.value = true
 }
 
-function handleImportFileChange(uploadFile) {
+function handleImportFileChange(uploadFile: { raw?: UploadRawFile }) {
   importFile.value = uploadFile.raw || null
 }
 
@@ -568,7 +575,7 @@ async function handleImport() {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: Requirement | null = null) {
   editing.value = row
   form.title = row?.title || ''
   form.description = row?.description || ''
@@ -579,7 +586,7 @@ function openDialog(row = null) {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     if (editing.value) {
@@ -608,7 +615,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Requirement) {
   if (row.testcase_count > 0) {
     ElMessage.warning(
       `该需求下有 ${row.testcase_count} 条关联用例，请先点击关联用例数字，清理全部关联用例后再删除`,
@@ -649,7 +656,7 @@ async function handleClearTestcases() {
   }
 }
 
-async function openTestcases(row) {
+async function openTestcases(row: Requirement) {
   currentRequirement.value = row
   casesDialogVisible.value = true
   await reloadLinkedTestcases()
@@ -668,28 +675,28 @@ async function reloadLinkedTestcases() {
   }
 }
 
-async function handleDeleteCase(caseId) {
+async function handleDeleteCase(caseId: number) {
   await testcaseApi.delete(caseId)
   ElMessage.success('删除成功')
   await reloadLinkedTestcases()
   loadData()
 }
 
-function openCaseDetail(row) {
+function openCaseDetail(row: TestCase) {
   caseDetail.value = row
   caseDrawerVisible.value = true
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: Requirement[]) {
   selectedRows.value = rows
   selectedIds.value = rows.map((row) => row.id)
 }
 
-function groupRowsByProject(rows) {
-  const groups = new Map()
+function groupRowsByProject(rows: Requirement[]) {
+  const groups = new Map<number, Requirement[]>()
   for (const row of rows) {
     if (!groups.has(row.project_id)) groups.set(row.project_id, [])
-    groups.get(row.project_id).push(row)
+    groups.get(row.project_id)!.push(row)
   }
   return groups
 }

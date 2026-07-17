@@ -1,5 +1,7 @@
 /** Apifox 请求规格、用例配置、操作编排等 UI 层共享类型 */
 
+import type { Schemas } from '@/api/types'
+
 export type KvValueType = 'string' | 'number' | 'boolean' | 'file'
 
 export interface KvRow {
@@ -240,3 +242,42 @@ export interface SchemaField {
 }
 
 export type JsonSchemaObject = Record<string, unknown>
+
+export interface EndpointEditorForm {
+  method: string
+  path: string
+  name: string
+  server_name?: string | null
+  request_spec: RequestSpec
+  description?: string | null
+  response_schema_id?: number | null
+  contract_strict?: boolean
+  assertions?: Schemas['AssertionRow'][]
+  extracts?: Schemas['ExtractRow'][]
+  pre_scripts?: Schemas['CaseScriptOut'][]
+  post_scripts?: Schemas['CaseScriptOut'][]
+}
+
+export interface ApiDocPreviewForm {
+  method: string
+  path?: string
+  name?: string
+  description?: string
+  request_spec?: RequestSpec
+}
+
+export type EndpointForm = EndpointEditorForm & { id: number }
+
+export interface ScenarioStepSelection {
+  uid: number | null
+}
+
+export type ScenarioEditorStep = Schemas['StepOut'] & {
+  _uid?: number
+  elseChildren?: ScenarioEditorStep[]
+  elseEnabled?: boolean
+  wait_ms?: number | null
+  endpoint_method?: string | null
+  case_name?: string | null
+  scenario_name?: string | null
+}

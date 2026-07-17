@@ -101,7 +101,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
@@ -110,8 +110,7 @@ import VariableTable from '@/components/apifox/VariableTable.vue'
 import GlobalParamsPanel from '@/components/apifox/GlobalParamsPanel.vue'
 import EnvDatabasesPanel from '@/components/apifox/EnvDatabasesPanel.vue'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 const store = useWorkspaceStore()
 
 const environments = ref<Schemas['EnvironmentOut'][]>([])

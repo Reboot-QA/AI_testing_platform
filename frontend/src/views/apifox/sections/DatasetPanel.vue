@@ -96,14 +96,13 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 
 const datasets = ref<Schemas['DatasetBrief'][]>([])
 const saving = ref(false)

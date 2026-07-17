@@ -218,6 +218,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -228,7 +229,7 @@ import { iterationLabel } from '@/utils/iterationLabel'
 import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 
 const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 const store = useWorkspaceStore()
 
 const envName = (id: number | null | undefined) =>

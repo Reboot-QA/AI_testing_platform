@@ -114,21 +114,11 @@
 import { computed } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
 import type { Schemas } from '@/api/types'
+import type { ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
 
 defineOptions({ name: 'ScenarioStepRow' })
 
-export interface ScenarioStepSelection {
-  uid: number | null
-}
-
-type StepOut = Schemas['StepOut']
-
-export type ScenarioEditorStep = StepOut & {
-  _uid?: number
-  elseChildren?: ScenarioEditorStep[]
-  elseEnabled?: boolean
-  wait_ms?: number | null
-}
+export type { ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
 
 type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 type ScenarioBrief = Schemas['ScenarioBrief']

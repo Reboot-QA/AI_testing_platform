@@ -153,7 +153,7 @@
         :form="step.config"
         show-meta
         :server-names="serverNames"
-        :project-id="route.params.projectId"
+        :project-id="pid"
       />
       <div class="sd-field sd-field-top">
         <span class="sd-label">断言</span>
@@ -169,7 +169,8 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
+import type { ScenarioEditorStep } from '@/types/apifox'
 import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
@@ -184,7 +185,6 @@ import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
 import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 import type { CaseEditorForm } from '@/components/apifox/CaseEditor.vue'
-import type { ScenarioEditorStep } from '@/components/apifox/ScenarioStepRow.vue'
 
 type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 type ScenarioBrief = Schemas['ScenarioBrief']
@@ -211,7 +211,7 @@ const props = withDefaults(
   },
 )
 
-const route = useRoute()
+const pid = useRouteParamId()
 const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
 
 // db 步骤 config 由 addStep 初始化；防御性保证 extracts 为数组

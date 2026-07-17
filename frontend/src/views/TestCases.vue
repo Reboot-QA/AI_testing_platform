@@ -283,6 +283,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
+import type { ProjectPageOut } from '@/api/project'
 import { formatBeijingTime } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
@@ -296,6 +297,7 @@ import {
   type DateInput,
   type Project,
   type ProjectFilter,
+  type ReviewStatus,
   type TestCase,
   type TestCasePage,
 } from '@/types/common'
@@ -340,13 +342,13 @@ const formRef = ref<FormInstance>()
 const uploadRef = ref<UploadInstance>()
 const importFile = ref<UploadRawFile | null>(null)
 
-const reviewMap: Record<string, string> = {
+const reviewMap: Record<ReviewStatus, string> = {
   draft: '草稿',
   pending: '待评审',
   approved: '已通过',
   rejected: '已驳回',
 }
-const reviewType: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
+const reviewType: Record<ReviewStatus, 'info' | 'warning' | 'success' | 'danger'> = {
   draft: 'info',
   pending: 'warning',
   approved: 'success',
@@ -366,6 +368,10 @@ const rules: FormRules<TestCaseForm> = {
   title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
 }
 
+function isProjectPage(data: Project[] | ProjectPageOut): data is ProjectPageOut {
+  return !Array.isArray(data)
+}
+
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
 const batchSubmitCount = computed(
@@ -382,27 +388,30 @@ const canBatchSubmit = computed(() => batchSubmitCount.value > 0)
 const canBatchApprove = computed(() => batchApproveCount.value > 0)
 const canBatchReject = computed(() => batchRejectCount.value > 0)
 
-const batchReviewConfig = {
+const batchReviewConfig: Record<
+  Extract<ReviewStatus, 'pending' | 'approved' | 'rejected'>,
+  { title: string; message: (count: number) => string; success: string }
+> = {
   pending: {
     title: '批量审批',
-    message: (count) => `确认将选中的 ${count} 条用例提交评审（设为待评审）？`,
+    message: (count: number) => `确认将选中的 ${count} 条用例提交评审（设为待评审）？`,
     success: '批量审批成功',
   },
   approved: {
     title: '批量通过',
-    message: (count) => `确认通过选中的 ${count} 条待评审用例？`,
+    message: (count: number) => `确认通过选中的 ${count} 条待评审用例？`,
     success: '批量通过成功',
   },
   rejected: {
     title: '批量驳回',
-    message: (count) => `确认驳回选中的 ${count} 条待评审用例？`,
+    message: (count: number) => `确认驳回选中的 ${count} 条待评审用例？`,
     success: '批量驳回成功',
   },
 }
 
 async function loadProjects() {
   const data = await projectApi.list()
-  projects.value = Array.isArray(data) ? data : data.items
+  projects.value = isProjectPage(data) ? data.items : data
   await loadData()
 }
 
@@ -462,7 +471,7 @@ function handlePageSizeChange() {
   loadData()
 }
 
-function openDialog(row = null) {
+function openDialog(row: TestCase | null = null) {
   editing.value = row
   form.title = row?.title || ''
   form.priority = row?.priority || 'P1'
@@ -473,13 +482,13 @@ function openDialog(row = null) {
   dialogVisible.value = true
 }
 
-function openDetail(row) {
+function openDetail(row: TestCase) {
   detail.value = row
   drawerVisible.value = true
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     const payload = { ...form, project_id: projectId.value, case_type: 'functional' }
@@ -497,7 +506,7 @@ async function handleSubmit() {
   }
 }
 
-async function review(row, status) {
+async function review(row: TestCase, status: ReviewStatus) {
   await testcaseApi.update(row.id, { review_status: status })
   ElMessage.success(status === 'approved' ? '已通过' : '已驳回')
   loadData()
@@ -509,21 +518,21 @@ async function handleDelete(id) {
   loadData()
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: TestCase[]) {
   selectedRows.value = rows
   selectedIds.value = rows.map((row) => row.id)
 }
 
-function groupRowsByProject(rows) {
-  const groups = new Map()
+function groupRowsByProject(rows: TestCase[]) {
+  const groups = new Map<number, TestCase[]>()
   for (const row of rows) {
     if (!groups.has(row.project_id)) groups.set(row.project_id, [])
-    groups.get(row.project_id).push(row)
+    groups.get(row.project_id)!.push(row)
   }
   return groups
 }
 
-async function handleBatchReview(status) {
+async function handleBatchReview(status: Extract<ReviewStatus, 'pending' | 'approved' | 'rejected'>) {
   const countMap = {
     pending: batchSubmitCount.value,
     approved: batchApproveCount.value,
@@ -578,7 +587,7 @@ async function handleBatchDelete() {
   loadData()
 }
 
-async function handleExport(format) {
+async function handleExport(format: string) {
   if (isAllProjects.value) {
     ElMessage.warning('请先选择具体项目')
     return
@@ -599,7 +608,7 @@ async function handleExport(format) {
   }
 }
 
-function downloadBlob(blob, filename) {
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -618,7 +627,7 @@ function openImportDialog() {
   importDialogVisible.value = true
 }
 
-function handleImportFileChange(uploadFile) {
+function handleImportFileChange(uploadFile: { raw?: UploadRawFile }) {
   importFile.value = uploadFile.raw || null
 }
 
