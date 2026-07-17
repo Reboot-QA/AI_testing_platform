@@ -87,6 +87,17 @@ class ScenarioBrief(BaseModel):
     sort_order: int
 
 
+class ScenarioReorderItem(BaseModel):
+    id: int
+    folder_id: Optional[int] = None  # None=未分组
+    sort_order: int
+
+
+class ScenarioReorderRequest(BaseModel):
+    # 拖拽后只下发受影响的组（组内重排=1组；跨组=源组+目标组），后端只更新这些 id
+    items: List[ScenarioReorderItem] = Field(min_length=1)
+
+
 class ScenarioOut(BaseModel):
     id: int
     project_id: int
