@@ -43,9 +43,17 @@ class AiGenTaskOut(BaseModel):
 class AiGenTaskBrief(BaseModel):
     id: int
     status: str
+    mode: Optional[str] = None  # llm|mock，跑起来才定
     total_items: int
     done_items: int
     created_at: datetime
+
+
+class AiGenTaskPageOut(BaseModel):
+    items: List[AiGenTaskBrief]
+    total: int
+    page: int
+    page_size: int
 
 
 class AiGenApplyRequest(BaseModel):

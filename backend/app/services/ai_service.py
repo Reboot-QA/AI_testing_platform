@@ -321,9 +321,13 @@ async def call_llm_chat(
     model: str,
     system_prompt: str,
     user_prompt: str,
+    read_timeout: float = 120.0,
 ) -> str:
-    """发一次 OpenAI 兼容 chat/completions 请求，返回非空 content；失败抛 ValueError。"""
-    timeout = httpx.Timeout(connect=15.0, read=120.0, write=15.0, pool=15.0)
+    """发一次 OpenAI 兼容 chat/completions 请求，返回非空 content；失败抛 ValueError。
+
+    read_timeout 可由调用方调大：后台任务化的场景（如 AI 生成用例）用户不阻塞，可给 LLM 更长时间。
+    """
+    timeout = httpx.Timeout(connect=15.0, read=read_timeout, write=15.0, pool=15.0)
     payload = _build_request_payload(
         model=model, api_base=api_base, system_prompt=system_prompt, user_prompt=user_prompt
     )

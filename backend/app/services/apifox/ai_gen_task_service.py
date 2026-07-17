@@ -18,6 +18,7 @@ from app.routers.apifox.ai_gen_task_schemas import (
     AiGenTaskCreate,
     AiGenTaskItemOut,
     AiGenTaskOut,
+    AiGenTaskPageOut,
 )
 from app.routers.apifox.case_schemas import AiGenCategory, CaseCreate
 from app.services.apifox import case_service
@@ -105,14 +106,24 @@ def task_out(db: Session, task: ApifoxAiGenTask) -> AiGenTaskOut:
     )
 
 
+def _brief(task: ApifoxAiGenTask) -> AiGenTaskBrief:
+    return AiGenTaskBrief(
+        id=task.id, status=task.status, mode=task.mode,
+        total_items=task.total_items, done_items=task.done_items, created_at=task.created_at,
+    )
+
+
 def list_active(db: Session, project_id: int) -> List[AiGenTaskBrief]:
-    return [
-        AiGenTaskBrief(
-            id=t.id, status=t.status, total_items=t.total_items,
-            done_items=t.done_items, created_at=t.created_at,
-        )
-        for t in repo.list_active_tasks(db, project_id)
-    ]
+    return [_brief(t) for t in repo.list_active_tasks(db, project_id)]
+
+
+def list_tasks_page(db: Session, project_id: int, page: int, page_size: int) -> AiGenTaskPageOut:
+    return AiGenTaskPageOut(
+        items=[_brief(t) for t in repo.list_project_tasks_page(db, project_id, page, page_size)],
+        total=repo.count_project_tasks(db, project_id),
+        page=page,
+        page_size=page_size,
+    )
 
 
 # ---------- 取消 ----------
@@ -124,6 +135,28 @@ def cancel_task(db: Session, task: ApifoxAiGenTask) -> ApifoxAiGenTask:
     for item in repo.list_items(db, task.id):
         if item.status in ("pending", "running"):
             item.status = "canceled"
+    db.commit()
+    db.refresh(task)
+    return task
+
+
+# ---------- 重试失败接口 ----------
+def retry_item(db: Session, task: ApifoxAiGenTask, item: ApifoxAiGenTaskItem) -> ApifoxAiGenTask:
+    """重试某个失败接口：该 item 复位 pending、整任务复位 pending 交 worker 重跑。
+
+    仅任务已结束 + 该接口失败时可重试（避免与运行中的 worker 抢状态）。
+    """
+    if task.status not in _TERMINAL:
+        raise ValueError("任务尚未结束，无法重试")
+    if item.status != "failed":
+        raise ValueError("仅失败的接口可重试")
+    item.status = "pending"
+    item.error = None
+    item.result_cases = None
+    item.generated_count = 0
+    task.status = "pending"
+    task.finished_at = None
+    task.done_items = max(0, task.done_items - 1)  # worker 重处理该 item 会再 +1
     db.commit()
     db.refresh(task)
     return task

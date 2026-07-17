@@ -98,6 +98,12 @@ const routes: RouteRecordRaw[] = [
             meta: { permission: 'apifox_workbench', sectionTitle: '测试报告' },
           },
           {
+            path: 'ai-jobs',
+            name: 'ApifoxAiJobs',
+            component: () => import('@/views/apifox/sections/AiGenJobsPanel.vue'),
+            meta: { permission: 'apifox_workbench', sectionTitle: 'AI 生成' },
+          },
+          {
             path: 'environments',
             name: 'ApifoxEnvironments',
             component: () => import('@/views/apifox/sections/EnvManage.vue'),

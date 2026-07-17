@@ -53,6 +53,23 @@ def list_project_tasks(db: Session, project_id: int, limit: int = 20) -> List[Ap
     )
 
 
+def count_project_tasks(db: Session, project_id: int) -> int:
+    return db.query(ApifoxAiGenTask).filter(ApifoxAiGenTask.project_id == project_id).count()
+
+
+def list_project_tasks_page(
+    db: Session, project_id: int, page: int, page_size: int
+) -> List[ApifoxAiGenTask]:
+    return (
+        db.query(ApifoxAiGenTask)
+        .filter(ApifoxAiGenTask.project_id == project_id)
+        .order_by(ApifoxAiGenTask.id.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+
+
 def claim_next_pending(db: Session) -> Optional[ApifoxAiGenTask]:
     """worker 取一个待处理任务（按 id 升序，先到先跑）。单 worker 线程，无需行锁。"""
     return (

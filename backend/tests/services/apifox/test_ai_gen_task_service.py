@@ -170,6 +170,59 @@ def test_list_active_excludes_terminal_task(db, make_endpoint):
     assert service.list_active(db, 1) == []
 
 
+def test_list_tasks_page_paginates(db, make_endpoint):
+    ep = make_endpoint(project_id=1)
+    for _ in range(3):
+        service.create_task(db, 1, 1, _create([ep.id]))
+
+    page1 = service.list_tasks_page(db, 1, page=1, page_size=2)
+    page2 = service.list_tasks_page(db, 1, page=2, page_size=2)
+
+    assert page1.total == 3 and len(page1.items) == 2 and page1.page == 1
+    assert len(page2.items) == 1  # 倒序、第二页剩 1 条
+
+
+def test_retry_item_resets_failed_item_and_task(db, make_endpoint):
+    ep = make_endpoint(project_id=1)
+    task = service.create_task(db, 1, 1, _create([ep.id]))
+    item = repo.list_items(db, task.id)[0]
+    item.status = "failed"
+    item.error = "LLM 超时"
+    task.status = "partial"
+    task.done_items = 1
+    db.commit()
+
+    service.retry_item(db, task, item)
+
+    db.refresh(task)
+    db.refresh(item)
+    assert item.status == "pending" and item.error is None
+    assert task.status == "pending" and task.done_items == 0 and task.finished_at is None
+
+
+def test_retry_item_rejects_non_failed(db, make_endpoint):
+    ep = make_endpoint(project_id=1)
+    task = service.create_task(db, 1, 1, _create([ep.id]))
+    item = repo.list_items(db, task.id)[0]
+    item.status = "succeeded"
+    task.status = "succeeded"
+    db.commit()
+
+    with pytest.raises(ValueError):
+        service.retry_item(db, task, item)
+
+
+def test_retry_item_rejects_when_task_not_finished(db, make_endpoint):
+    ep = make_endpoint(project_id=1)
+    task = service.create_task(db, 1, 1, _create([ep.id]))  # status=pending
+    item = repo.list_items(db, task.id)[0]
+    item.status = "failed"
+    db.commit()
+
+    with pytest.raises(ValueError):
+        service.retry_item(db, task, item)
+
+
 def test_purge_project_removes_tasks_and_items(db, make_endpoint):
     from app.services.apifox.project_cleanup import purge_project_apifox
 
