@@ -1,7 +1,9 @@
 <template>
   <el-dialog
     :model-value="visible"
-    :title="action === 'update' ? '更新 Swagger（增量同步）' : '导入 OpenAPI / Swagger'"
+    :title="
+      action === 'update' ? '更新 Swagger（增量同步）' : '导入 OpenAPI / Swagger / Postman / cURL'
+    "
     width="620px"
     @update:model-value="$emit('update:visible', $event)"
   >
@@ -13,7 +15,7 @@
     <template v-if="!diff">
       <el-radio-group v-model="mode" size="small" class="mode-switch">
         <el-radio-button value="url">URL 拉取</el-radio-button>
-        <el-radio-button value="content">粘贴 JSON</el-radio-button>
+        <el-radio-button value="content">粘贴内容</el-radio-button>
       </el-radio-group>
 
       <el-input
@@ -26,7 +28,7 @@
         v-model="content"
         type="textarea"
         :rows="12"
-        placeholder="粘贴 OpenAPI 3.x JSON 文档"
+        placeholder="粘贴 OpenAPI 3.x / Swagger 2.0 / Postman Collection 的 JSON，或直接粘贴 cURL 命令（自动识别格式）"
       />
       <p class="tip">{{ tip }}</p>
     </template>
