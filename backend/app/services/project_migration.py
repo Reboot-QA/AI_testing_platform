@@ -2,11 +2,11 @@
 
 背景：演示等长生命周期库残留过旧的 project_members 表（列不全、id 可能非自增），
 create_all 遇已存在表会跳过，导致 SELECT created_by 报 1054、INSERT 因 id 无默认值报错。
-该表完全归"项目成员"功能所有：为空时直接按模型重建；非空时保守只补列、不动数据。
+该表完全归"项目成员"功能所有：为空时按模型重建；非空时保守只补列、不动数据。
 
-注意：count 与 DDL 必须走**同一条连接**。若用会话 db 先 SELECT（开事务持元数据锁）、
-再用另一条连接 DROP（要独占锁），MySQL 下会自己等自己、无限挂起（sqlite 无此锁，测不出）。
-整段兜异常：结构迁移失败绝不阻断应用启动。
+**绝不挂起启动**：DDL（尤其 DROP）要独占元数据锁，若被其它连接（如上次异常退出残留的
+连接）持锁会一直等。故 MySQL 下设 lock_wait_timeout=5，拿不到锁就快速失败；count 后立即
+commit 释放自身锁；整段兜异常——本迁移失败只记日志，绝不阻断应用启动。
 """
 
 import logging
@@ -27,15 +27,17 @@ def migrate_project_members_columns(db: Session) -> None:
             return
         existing = {c["name"] for c in inspector.get_columns("project_members")}
 
-        # 同一条连接完成 count + DDL，避免与会话事务争元数据锁导致 DROP 挂起
         with engine.connect() as conn:
+            if engine.dialect.name == "mysql":
+                # DDL 抢不到元数据锁就 5s 失败，绝不挂起部署
+                conn.execute(text("SET SESSION lock_wait_timeout = 5"))
             count = conn.execute(text("SELECT COUNT(*) FROM project_members")).scalar() or 0
+            conn.commit()  # 释放 count 的共享元数据锁，DDL 只需与外部锁竞争
+
             if count == 0:
-                # 空表：按模型重建，一次纠正自增 id / 全部列 / 唯一约束
                 ProjectMember.__table__.drop(conn, checkfirst=True)
                 ProjectMember.__table__.create(conn, checkfirst=True)
             else:
-                # 非空（正常库）：仅补缺列，不动数据
                 if "created_by" not in existing:
                     conn.execute(text("ALTER TABLE project_members ADD COLUMN created_by INTEGER NULL"))
                 if "created_at" not in existing:
@@ -43,4 +45,4 @@ def migrate_project_members_columns(db: Session) -> None:
             conn.commit()
         db.expire_all()
     except Exception:  # noqa: BLE001 - 结构迁移失败不得阻断应用启动
-        logger.exception("project_members 结构迁移失败，已跳过")
+        logger.exception("project_members 结构迁移失败，已跳过（不阻断启动）")
