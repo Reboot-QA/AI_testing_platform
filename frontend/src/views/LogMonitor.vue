@@ -107,13 +107,30 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { logsApi } from '@/api'
 import { formatBeijingTime } from '@/utils/datetime'
 
-const sources = ref([])
+interface LogSource {
+  key: string
+  label: string
+  exists: boolean
+  size: number
+  line_count: number
+  filename: string
+  modified_at?: string
+}
+
+interface LogLine {
+  no?: number
+  level?: string
+  text: string
+  type?: string
+}
+
+const sources = ref<LogSource[]>([])
 const logDir = ref('')
 const activeSource = ref('backend')
 const lineCount = ref(200)
@@ -122,18 +139,18 @@ const levelFilter = ref('')
 const loading = ref(false)
 const liveMode = ref(true)
 const autoScroll = ref(true)
-const displayLines = ref([])
+const displayLines = ref<LogLine[]>([])
 const totalMatched = ref(0)
-const logContainerRef = ref(null)
+const logContainerRef = ref<HTMLElement | null>(null)
 
-let streamAbort = null
-let refreshTimer = null
+let streamAbort: AbortController | null = null
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const sourceOptions = computed(() =>
   sources.value.map((item) => ({ label: item.label, value: item.key })),
 )
 
-function formatSize(size) {
+function formatSize(size: number) {
   if (!size) return '0 B'
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -194,7 +211,7 @@ async function startStream() {
     if (!response.ok) {
       throw new Error('实时日志连接失败')
     }
-    const reader = response.body.getReader()
+    const reader = response.body!.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
     while (true) {
@@ -206,7 +223,7 @@ async function startStream() {
       for (const chunk of chunks) {
         const line = chunk.trim()
         if (!line.startsWith('data:')) continue
-        const payload = JSON.parse(line.slice(5).trim())
+        const payload = JSON.parse(line.slice(5).trim()) as LogLine & { type?: string }
         if (payload.type === 'line') {
           displayLines.value.push(payload)
           if (displayLines.value.length > 3000) {
@@ -217,14 +234,14 @@ async function startStream() {
         }
       }
     }
-  } catch (error) {
-    if (error.name !== 'AbortError') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       ElMessage.warning(error.message || '实时日志连接中断')
     }
   }
 }
 
-function handleLiveToggle(enabled) {
+function handleLiveToggle(enabled: boolean) {
   if (enabled) {
     startStream()
   } else {
@@ -233,7 +250,7 @@ function handleLiveToggle(enabled) {
   }
 }
 
-function switchSource(source) {
+function switchSource(source: string) {
   if (activeSource.value === source) return
   activeSource.value = source
   handleSourceChange(source)

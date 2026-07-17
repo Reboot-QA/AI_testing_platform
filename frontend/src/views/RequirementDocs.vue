@@ -158,27 +158,47 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { TableInstance, UploadFile } from 'element-plus'
 import { projectApi, requirementApi, settingsApi } from '@/api'
+import type { Schemas } from '@/api/types'
+import type { LlmProvider, Project } from '@/types/common'
+
+type ExtractedRequirement = Schemas['ExtractedRequirement']
+
+interface ExtractedRow extends ExtractedRequirement {
+  _key: number
+}
+
+interface ExtractStreamEvent {
+  type: string
+  message?: string
+  current?: number
+  chunk?: number
+  chunk_total?: number
+  mode?: string
+  total?: number
+  data?: ExtractedRequirement
+}
 
 const router = useRouter()
-const projects = ref([])
-const llmProviders = ref([])
-const projectId = ref(null)
-const providerId = ref(null)
+const projects = ref<Project[]>([])
+const llmProviders = ref<LlmProvider[]>([])
+const projectId = ref<number | null>(null)
+const providerId = ref<number | null>(null)
 const providersLoading = ref(false)
 const mockMode = ref(false)
-const selectedFile = ref(null)
+const selectedFile = ref<File | null>(null)
 const extracting = ref(false)
 const importing = ref(false)
-const extracted = ref([])
-const selectedRows = ref([])
+const extracted = ref<ExtractedRow[]>([])
+const selectedRows = ref<ExtractedRow[]>([])
 const lastMode = ref('')
 const extractMessage = ref('')
-const tableRef = ref()
+const tableRef = ref<TableInstance>()
 const progressMessage = ref('')
 const progressCurrent = ref(0)
 const progressChunk = ref(0)
@@ -198,7 +218,7 @@ const progressPercent = computed(() => {
   return 100
 })
 
-function formatProviderLabel(item) {
+function formatProviderLabel(item: LlmProvider) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -229,19 +249,19 @@ async function loadProviders() {
   }
 }
 
-function handleFileChange(uploadFile) {
-  selectedFile.value = uploadFile.raw
+function handleFileChange(uploadFile: UploadFile) {
+  selectedFile.value = uploadFile.raw ?? null
 }
 
 function handleFileRemove() {
   selectedFile.value = null
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: ExtractedRow[]) {
   selectedRows.value = rows
 }
 
-function handleRemoveRow(row) {
+function handleRemoveRow(row: ExtractedRow) {
   extracted.value = extracted.value.filter((item) => item._key !== row._key)
   selectedRows.value = selectedRows.value.filter((item) => item._key !== row._key)
 }
@@ -281,35 +301,36 @@ async function handleExtract() {
       projectId.value,
       selectedFile.value,
       providerId.value,
-      async (event) => {
+      async (event: ExtractStreamEvent) => {
         if (event.type === 'status') {
-          progressMessage.value = event.message
-          progressCurrent.value = event.current || progressCurrent.value
-          progressChunk.value = event.chunk || progressChunk.value
-          progressChunkTotal.value = event.chunk_total || progressChunkTotal.value
-        } else if (event.type === 'requirement') {
-          const row = { ...event.data, _key: ++tempKey }
+          progressMessage.value = event.message || ''
+          progressCurrent.value = event.current ?? progressCurrent.value
+          progressChunk.value = event.chunk ?? progressChunk.value
+          progressChunkTotal.value = event.chunk_total ?? progressChunkTotal.value
+        } else if (event.type === 'requirement' && event.data) {
+          const row: ExtractedRow = { ...event.data, _key: ++tempKey }
           extracted.value.push(row)
-          progressCurrent.value = event.current
-          progressChunk.value = event.chunk || progressChunk.value
-          progressChunkTotal.value = event.chunk_total || progressChunkTotal.value
+          progressCurrent.value = event.current ?? progressCurrent.value
+          progressChunk.value = event.chunk ?? progressChunk.value
+          progressChunkTotal.value = event.chunk_total ?? progressChunkTotal.value
           progressMessage.value = `已提取 ${event.current} 条需求点...`
           await nextTick()
           tableRef.value?.toggleRowSelection(row, true)
         } else if (event.type === 'done') {
-          lastMode.value = event.mode
-          progressCurrent.value = event.total
+          lastMode.value = event.mode || ''
+          progressCurrent.value = event.total ?? progressCurrent.value
           progressChunk.value = progressChunkTotal.value || progressChunk.value
-          progressMessage.value = event.message
-          extractMessage.value = event.message
+          progressMessage.value = event.message || ''
+          extractMessage.value = event.message || ''
           ElMessage.success(event.message || '解析完成')
         } else if (event.type === 'error') {
           throw new Error(event.message)
         }
       },
     )
-  } catch (error) {
-    ElMessage.error(error.message || '解析失败')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '解析失败'
+    ElMessage.error(message)
   } finally {
     extracting.value = false
   }
@@ -326,7 +347,7 @@ async function handleImport() {
   importing.value = true
   try {
     const res = await requirementApi.batchImport({
-      project_id: projectId.value,
+      project_id: projectId.value!,
       requirements: selectedRows.value.map((item) => ({
         title: item.title,
         description: item.description,

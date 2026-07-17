@@ -167,10 +167,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { normalizeSpec } from '@/utils/apifoxSpec'
@@ -182,16 +183,33 @@ import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
 import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
+import type { CaseEditorForm } from '@/components/apifox/CaseEditor.vue'
+import type { ScenarioEditorStep } from '@/components/apifox/ScenarioStepRow.vue'
 
-const props = defineProps({
-  step: { type: Object, required: true },
-  cases: { type: Array, default: () => [] },
-  scenarios: { type: Array, default: () => [] },
-  currentScenarioId: { type: Number, default: null },
-  scripts: { type: Array, default: () => [] },
-  databases: { type: Array, default: () => [] },
-  serverNames: { type: Array, default: () => [] },
-})
+type ProjectCaseBrief = Schemas['ProjectCaseBrief']
+type ScenarioBrief = Schemas['ScenarioBrief']
+type ScriptBrief = Schemas['ScriptBrief']
+type DatabaseOut = Schemas['DatabaseOut']
+
+const props = withDefaults(
+  defineProps<{
+    step: ScenarioEditorStep
+    cases?: ProjectCaseBrief[]
+    scenarios?: ScenarioBrief[]
+    currentScenarioId?: number | null
+    scripts?: ScriptBrief[]
+    databases?: DatabaseOut[]
+    serverNames?: string[]
+  }>(),
+  {
+    cases: () => [],
+    scenarios: () => [],
+    currentScenarioId: null,
+    scripts: () => [],
+    databases: () => [],
+    serverNames: () => [],
+  },
+)
 
 const route = useRoute()
 const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
@@ -215,12 +233,12 @@ const ifCondition = computed(
 // loop 的 config 由 addStep 初始化好全部字段，此处纯读取
 const loopConfig = computed(() => props.step.config ?? { mode: 'count', count: 1 })
 
-function onElseToggle(enabled) {
+function onElseToggle(enabled: boolean) {
   if (enabled && !Array.isArray(props.step.elseChildren)) props.step.elseChildren = []
 }
 
 const savingCase = ref(false)
-const caseForm = reactive({
+const caseForm = reactive<CaseEditorForm>({
   id: null,
   name: '',
   request_spec: null,
@@ -240,7 +258,7 @@ const availableScenarios = computed(() =>
 // 加载/保存时的内容快照，用于整体保存时判断引用用例是否真被编辑过（脏检查）
 let caseSnapshot = ''
 
-function applyCase(c) {
+function applyCase(c: Schemas['CaseOut']) {
   caseForm.id = c.id
   caseForm.name = c.name
   caseForm.request_spec = normalizeSpec(c.request_spec)
@@ -255,7 +273,7 @@ function applyCase(c) {
   caseSnapshot = JSON.stringify(caseFormPayload())
 }
 
-async function loadCase(id) {
+async function loadCase(id: number | null | undefined) {
   if (!id) {
     caseForm.id = null
     return
@@ -272,7 +290,7 @@ watch(
   { immediate: true },
 )
 
-function onCaseChange(id) {
+function onCaseChange(id: number) {
   const c = props.cases.find((x) => x.id === id)
   if (c) {
     props.step.case_name = c.name
@@ -280,7 +298,7 @@ function onCaseChange(id) {
   }
 }
 
-function onScenarioChange(id) {
+function onScenarioChange(id: number) {
   const s = props.scenarios.find((x) => x.id === id)
   if (s) props.step.scenario_name = s.name
 }

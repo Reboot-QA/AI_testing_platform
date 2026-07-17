@@ -1,6 +1,7 @@
 // 桶式再导出：保持 `@/api` 导入路径不变，各域实现拆到同目录模块文件。
 export { authApi } from './auth'
 export { projectApi } from './project'
+export type { ProjectListParams, ProjectPageOut } from './project'
 export { requirementApi } from './requirement'
 export { testcaseApi } from './testcase'
 export { settingsApi } from './settings'

@@ -18,12 +18,15 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import type { Schemas } from '@/api/types'
 import { EXTRACT_SOURCE_OPTIONS, VARIABLE_SCOPE_OPTIONS } from '@/utils/apiCaseConfig'
 
-defineProps({ rows: { type: Array, required: true } })
+type ExtractRow = Schemas['ExtractRow']
 
-function emptyRow() {
+defineProps<{ rows: ExtractRow[] }>()
+
+function emptyRow(): ExtractRow {
   return { var_name: '', source: 'response_json', path: '$.data', scope: 'environment', enabled: true }
 }
 </script>

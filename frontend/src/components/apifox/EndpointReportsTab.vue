@@ -31,21 +31,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 
-const props = defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
 
 const store = useWorkspaceStore()
-const rows = ref([])
+const rows = ref<Schemas['RunBrief'][]>([])
 
-const envName = (id) => (id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-')
+const envName = (id: number | null | undefined) =>
+  id == null ? '-' : store.environments.find((e) => e.id === id)?.name || '-'
 
 async function load() {
   // 后端按接口的用例精确过滤，不受项目级「最近 100 条」窗口影响（评审#1）

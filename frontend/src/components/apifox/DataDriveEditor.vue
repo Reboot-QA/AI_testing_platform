@@ -68,15 +68,26 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { Schemas } from '@/api/types'
+import type { KvRow } from '@/types/apifox'
 import { variableNamesFromRows } from '@/utils/apiCaseConfig'
 
-const props = defineProps({
-  model: { type: Object, required: true },
-  varRows: { type: Array, default: () => [] },
-  datasets: { type: Array, default: () => [] },
-})
+type DatasetBrief = Schemas['DatasetBrief']
+type DataDriveModel = Schemas['DataDrive']
+
+const props = withDefaults(
+  defineProps<{
+    model: DataDriveModel
+    varRows?: KvRow[]
+    datasets?: DatasetBrief[]
+  }>(),
+  {
+    varRows: () => [],
+    datasets: () => [],
+  },
+)
 
 const varNames = computed(() => variableNamesFromRows(props.varRows))
 
@@ -89,7 +100,7 @@ const source = computed({
 })
 
 function addRow() {
-  const values = {}
+  const values: Record<string, string> = {}
   varNames.value.forEach((n) => {
     values[n] = ''
   })

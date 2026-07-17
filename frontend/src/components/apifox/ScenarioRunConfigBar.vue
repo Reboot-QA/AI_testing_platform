@@ -42,15 +42,31 @@
   </div>
 </template>
 
-<script setup>
-// 绑数据集时按行数据驱动整场景（循环次数忽略）；否则整场景重复跑循环次数遍
-defineProps({
-  datasets: { type: Array, default: () => [] },
-  loopCount: { type: Number, default: 1 },
-  datasetId: { type: [Number, String], default: null },
-  propagateAuth: { type: Boolean, default: true },
-})
-defineEmits(['update:loopCount', 'update:datasetId', 'update:propagateAuth'])
+<script setup lang="ts">
+import type { Schemas } from '@/api/types'
+import type { Id } from '@/api/request'
+
+type DatasetBrief = Schemas['DatasetBrief']
+
+withDefaults(
+  defineProps<{
+    datasets?: DatasetBrief[]
+    loopCount?: number
+    datasetId?: number | string | null
+    propagateAuth?: boolean
+  }>(),
+  {
+    datasets: () => [],
+    loopCount: 1,
+    datasetId: null,
+    propagateAuth: true,
+  },
+)
+defineEmits<{
+  'update:loopCount': [value: number]
+  'update:datasetId': [value: number | null]
+  'update:propagateAuth': [value: boolean]
+}>()
 </script>
 
 <style scoped>

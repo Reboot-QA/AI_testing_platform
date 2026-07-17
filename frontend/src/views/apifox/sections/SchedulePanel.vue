@@ -141,10 +141,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 
 const route = useRoute()
@@ -152,24 +153,24 @@ const pid = computed(() => route.params.projectId)
 
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
-const schedules = ref([])
-const cases = ref([])
-const scenarios = ref([])
-const suites = ref([])
-const environments = ref([])
+const schedules = ref<Schemas['ScheduleOut'][]>([])
+const cases = ref<Schemas['ProjectCaseBrief'][]>([])
+const scenarios = ref<Schemas['ScenarioBrief'][]>([])
+const suites = ref<Schemas['SuiteBrief'][]>([])
+const environments = ref<Schemas['EnvironmentOut'][]>([])
 const dialogVisible = ref(false)
-const editing = ref(null)
+const editing = ref<Schemas['ScheduleOut'] | null>(null)
 const saving = ref(false)
-const togglingId = ref(null)
-const runningId = ref(null)
+const togglingId = ref<number | null>(null)
+const runningId = ref<number | null>(null)
 const runTime = ref('09:00')
 
 const form = reactive({
   name: '',
-  target_type: 'case',
-  target_id: null,
-  environment_id: null,
-  schedule_type: 'daily',
+  target_type: 'case' as 'case' | 'scenario' | 'suite',
+  target_id: null as number | null,
+  environment_id: null as number | null,
+  schedule_type: 'daily' as string,
   week_day: 0,
   interval_minutes: 60,
   cron_expr: '',
@@ -183,15 +184,15 @@ const targetOptions = computed(() => {
   return cases.value.map((c) => ({ id: c.id, label: `[${c.endpoint_method}] ${c.name}` }))
 })
 
-function fmt(t) {
+function fmt(t: string | null | undefined) {
   return t ? String(t).replace('T', ' ').slice(0, 16) : ''
 }
 
-function targetTypeLabel(t) {
+function targetTypeLabel(t: string) {
   return t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例'
 }
 
-function targetTagType(t) {
+function targetTagType(t: string) {
   return t === 'scenario' ? 'warning' : t === 'suite' ? 'primary' : 'success'
 }
 
@@ -210,7 +211,7 @@ async function loadAll() {
   environments.value = envs
 }
 
-function openDialog(row) {
+function openDialog(row?: Schemas['ScheduleOut']) {
   editing.value = row || null
   if (row) {
     Object.assign(form, {
@@ -277,7 +278,7 @@ async function save() {
   }
 }
 
-async function toggle(row) {
+async function toggle(row: Schemas['ScheduleOut']) {
   togglingId.value = row.id
   try {
     await apifoxApi.updateSchedule(row.id, { enabled: !row.enabled })
@@ -287,7 +288,7 @@ async function toggle(row) {
   }
 }
 
-async function runNow(row) {
+async function runNow(row: Schemas['ScheduleOut']) {
   runningId.value = row.id
   try {
     const res = await apifoxApi.runScheduleNow(row.id)
@@ -295,14 +296,14 @@ async function runNow(row) {
       `执行完成：${res.last_run_status === 'passed' ? '通过' : '失败'}，可在测试报告查看`,
     )
     await loadAll()
-  } catch (e) {
-    ElMessage.error(e.message || '执行失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '执行失败')
   } finally {
     runningId.value = null
   }
 }
 
-async function del(row) {
+async function del(row: Schemas['ScheduleOut']) {
   await ElMessageBox.confirm(`确认删除定时任务「${row.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteSchedule(row.id)
   ElMessage.success('已删除')

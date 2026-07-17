@@ -363,34 +363,57 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
+import type { Schemas } from '@/api/types'
 import { formatBeijingTime } from '@/utils/datetime'
+import type { DateInput, Project, Requirement, TestCase } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
 
-const projects = ref([])
-const projectId = ref(null)
-const createRequirements = ref([])
-const runs = ref([])
+type TestRunSummary = Schemas['ManualTestRunSummaryOut']
+type TestRunDetail = Schemas['ManualTestRunDetailOut']
+type TestRunCase = Schemas['ManualTestRunCaseOut']
+type CaseResult = 'pass' | 'fail' | 'blocked' | 'skip'
+type CaseFilter = 'all' | 'pending' | 'pass' | 'fail' | 'blocked' | 'skip'
+
+interface CreateRunForm {
+  project_id: number | null
+  name: string
+  build_name: string
+  description: string
+  requirement_ids: number[]
+}
+
+interface ResultForm {
+  actual_result: string
+  remark: string
+}
+
+const projects = ref<Project[]>([])
+const projectId = ref<number | null>(null)
+const createRequirements = ref<Requirement[]>([])
+const runs = ref<TestRunSummary[]>([])
 const runsLoading = ref(false)
 
-const executingRun = ref(null)
-const currentCase = ref(null)
-const caseFilter = ref('all')
+const executingRun = ref<TestRunDetail | null>(null)
+const currentCase = ref<TestRunCase | null>(null)
+const caseFilter = ref<CaseFilter>('all')
 const submitting = ref(false)
-const resultForm = reactive({ actual_result: '', remark: '' })
+const resultForm = reactive<ResultForm>({ actual_result: '', remark: '' })
 
 const createDialogVisible = ref(false)
-const createFormRef = ref()
-const createForm = reactive({
+const createFormRef = ref<FormInstance>()
+const createForm = reactive<CreateRunForm>({
   project_id: null,
   name: '',
   build_name: '',
   description: '',
   requirement_ids: [],
 })
-const createRules = {
+const createRules: FormRules<CreateRunForm> = {
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   name: [{ required: true, message: '请输入测试单名称', trigger: 'blur' }],
   requirement_ids: [
@@ -403,20 +426,34 @@ const createRules = {
     },
   ],
 }
-const availableCases = ref([])
+const availableCases = ref<TestCase[]>([])
 const casesLoading = ref(false)
-const selectedCaseIds = ref([])
+const selectedCaseIds = ref<number[]>([])
 const creating = ref(false)
-const caseTableSelection = ref([])
-const caseTableRef = ref()
+const caseTableSelection = ref<TestCase[]>([])
+const caseTableRef = ref<TableInstance>()
 
 const detailDrawerVisible = ref(false)
-const detailRun = ref(null)
+const detailRun = ref<TestRunDetail | null>(null)
 
-const runStatusLabel = { waiting: '待开始', running: '执行中', finished: '已完成' }
-const runStatusType = { waiting: 'info', running: 'warning', finished: 'success' }
-const resultLabel = { pending: '待测', pass: '通过', fail: '失败', blocked: '阻塞', skip: '跳过' }
-const resultType = {
+const runStatusLabel: Record<string, string> = {
+  waiting: '待开始',
+  running: '执行中',
+  finished: '已完成',
+}
+const runStatusType: Record<string, string> = {
+  waiting: 'info',
+  running: 'warning',
+  finished: 'success',
+}
+const resultLabel: Record<string, string> = {
+  pending: '待测',
+  pass: '通过',
+  fail: '失败',
+  blocked: '阻塞',
+  skip: '跳过',
+}
+const resultType: Record<string, string> = {
   pending: 'info',
   pass: 'success',
   fail: 'danger',
@@ -437,13 +474,14 @@ const currentCaseIndex = computed(() => {
 
 const prevCase = computed(() => {
   const idx = currentCaseIndex.value
-  if (idx <= 0) return null
+  if (idx <= 0 || !executingRun.value?.cases) return null
   return executingRun.value.cases[idx - 1]
 })
 
 const nextCase = computed(() => {
   const idx = currentCaseIndex.value
-  if (idx < 0 || idx >= executingRun.value.cases.length - 1) return null
+  if (idx < 0 || !executingRun.value?.cases) return null
+  if (idx >= executingRun.value.cases.length - 1) return null
   return executingRun.value.cases[idx + 1]
 })
 
@@ -458,11 +496,11 @@ const allRequirementsSelected = computed(
     createForm.requirement_ids.length === createRequirements.value.length,
 )
 
-function formatTime(value) {
+function formatTime(value: DateInput) {
   return formatBeijingTime(value)
 }
 
-function runProgress(run) {
+function runProgress(run: TestRunSummary | TestRunDetail | null) {
   if (!run?.total_count) return 0
   return Math.round(((run.total_count - run.pending_count) / run.total_count) * 100)
 }
@@ -498,25 +536,26 @@ function backToList() {
   loadRuns()
 }
 
-async function enterExecution(row) {
+async function enterExecution(row: TestRunSummary) {
   executingRun.value = await testExecutionApi.getRun(row.id)
   caseFilter.value = 'pending'
-  const firstPending = executingRun.value.cases.find((item) => item.result === 'pending')
-  selectCase(firstPending || executingRun.value.cases[0] || null)
+  const cases = executingRun.value.cases || []
+  const firstPending = cases.find((item) => item.result === 'pending')
+  selectCase(firstPending || cases[0] || null)
 }
 
-async function viewRunDetail(row) {
+async function viewRunDetail(row: TestRunSummary) {
   detailRun.value = await testExecutionApi.getRun(row.id)
   detailDrawerVisible.value = true
 }
 
-async function removeRun(row) {
+async function removeRun(row: TestRunSummary) {
   await testExecutionApi.deleteRun(row.id)
   ElMessage.success('已删除')
   await loadRuns()
 }
 
-function selectCase(item) {
+function selectCase(item: TestRunCase | null) {
   if (!item) {
     currentCase.value = null
     return
@@ -532,7 +571,7 @@ watch(currentCase, (item) => {
   resultForm.remark = item.remark || ''
 })
 
-async function submitResult(result) {
+async function submitResult(result: CaseResult) {
   if (!currentCase.value || !executingRun.value) return
   const prevIndex = currentCaseIndex.value
   submitting.value = true
@@ -544,7 +583,7 @@ async function submitResult(result) {
     })
     executingRun.value = await testExecutionApi.getRun(executingRun.value.id)
     ElMessage.success(`已标记为${resultLabel[result]}`)
-    const cases = executingRun.value.cases
+    const cases = executingRun.value.cases || []
     const next =
       cases.slice(prevIndex + 1).find((item) => item.result === 'pending') ||
       cases.find((item) => item.result === 'pending') ||
@@ -614,7 +653,7 @@ async function loadAvailableCases() {
   }
 }
 
-function handleCaseSelection(rows) {
+function handleCaseSelection(rows: TestCase[]) {
   caseTableSelection.value = rows
   selectedCaseIds.value = rows.map((item) => item.id)
 }
@@ -640,7 +679,7 @@ function toggleSelectAll() {
 }
 
 async function createRun() {
-  await createFormRef.value.validate()
+  await createFormRef.value?.validate()
   if (!selectedCaseIds.value.length) {
     ElMessage.warning('请至少选择一条用例')
     return
@@ -648,7 +687,7 @@ async function createRun() {
   creating.value = true
   try {
     const run = await testExecutionApi.createRun({
-      project_id: createForm.project_id,
+      project_id: createForm.project_id!,
       name: createForm.name,
       build_name: createForm.build_name || undefined,
       description: createForm.description || undefined,
@@ -660,7 +699,8 @@ async function createRun() {
     ElMessage.success('测试单已创建')
     executingRun.value = run
     caseFilter.value = 'pending'
-    selectCase(run.cases.find((item) => item.result === 'pending') || run.cases[0] || null)
+    const runCases = run.cases || []
+    selectCase(runCases.find((item) => item.result === 'pending') || runCases[0] || null)
   } finally {
     creating.value = false
   }

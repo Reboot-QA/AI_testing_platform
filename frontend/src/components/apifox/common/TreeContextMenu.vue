@@ -13,18 +13,35 @@
   </teleport>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onBeforeUnmount, watch } from 'vue'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  x: { type: Number, default: 0 },
-  y: { type: Number, default: 0 },
-  items: { type: Array, default: () => [] },
-})
-const emit = defineEmits(['select', 'close'])
+export interface TreeContextMenuItem {
+  key: string
+  label: string
+  danger?: boolean
+}
 
-function pick(key) {
+const props = withDefaults(
+  defineProps<{
+    visible?: boolean
+    x?: number
+    y?: number
+    items?: TreeContextMenuItem[]
+  }>(),
+  {
+    visible: false,
+    x: 0,
+    y: 0,
+    items: () => [],
+  },
+)
+const emit = defineEmits<{
+  select: [key: string]
+  close: []
+}>()
+
+function pick(key: string) {
   emit('select', key)
   emit('close')
 }

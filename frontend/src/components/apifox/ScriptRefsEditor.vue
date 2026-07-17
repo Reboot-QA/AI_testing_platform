@@ -26,15 +26,24 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { Schemas } from '@/api/types'
 
-const props = defineProps({
-  rows: { type: Array, required: true },
-  scripts: { type: Array, default: () => [] },
-})
+type CaseScriptOut = Schemas['CaseScriptOut']
+type ScriptBrief = Schemas['ScriptBrief']
 
-const pickedId = ref(null)
+const props = withDefaults(
+  defineProps<{
+    rows: CaseScriptOut[]
+    scripts?: ScriptBrief[]
+  }>(),
+  {
+    scripts: () => [],
+  },
+)
+
+const pickedId = ref<number | null>(null)
 
 const availableScripts = computed(() =>
   props.scripts.filter((s) => !props.rows.some((r) => r.script_id === s.id))
@@ -47,7 +56,7 @@ function addRef() {
   pickedId.value = null
 }
 
-function move(i, delta) {
+function move(i: number, delta: number) {
   const j = i + delta
   const [row] = props.rows.splice(i, 1)
   props.rows.splice(j, 0, row)

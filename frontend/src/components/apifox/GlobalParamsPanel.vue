@@ -43,16 +43,16 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 
-const props = defineProps({
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{ projectId: Id }>()
 
 const LOCATIONS = ['header', 'query', 'cookie', 'body']
-const params = ref([])
+const params = ref<Schemas['GlobalParamOut'][]>([])
 const newParam = reactive({ location: 'header', key: '', value: '' })
 
 async function loadParams() {
@@ -68,14 +68,14 @@ async function addParam() {
   await loadParams()
 }
 
-async function updateParam(row) {
+async function updateParam(row: Schemas['GlobalParamOut']) {
   await apifoxApi.updateGlobalParam(row.id, {
     location: row.location, key: row.key, value: row.value, enabled: row.enabled,
   })
   await loadParams()
 }
 
-async function delParam(row) {
+async function delParam(row: Schemas['GlobalParamOut']) {
   await apifoxApi.deleteGlobalParam(row.id)
   await loadParams()
 }

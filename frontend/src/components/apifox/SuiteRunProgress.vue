@@ -36,29 +36,65 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  events: { type: Array, default: () => [] },
-  running: { type: Boolean, default: false },
-})
-defineEmits(['clear'])
+interface SuiteRunItem {
+  index: number
+  target_type?: string
+  target_name?: string
+  status?: string
+  passed_count?: number
+  failed_count?: number
+  duration_ms?: number | null
+  error_message?: string | null
+}
+
+interface SuiteRunEvent {
+  type: string
+  index?: number
+  total?: number
+  target_type?: string
+  target_name?: string
+  status?: string
+  passed_count?: number
+  failed_count?: number
+  duration_ms?: number | null
+  error_message?: string | null
+  message?: string
+}
+
+const props = withDefaults(
+  defineProps<{
+    events?: SuiteRunEvent[]
+    running?: boolean
+  }>(),
+  {
+    events: () => [],
+    running: false,
+  },
+)
+defineEmits<{ clear: [] }>()
 
 const doneEvent = computed(() => props.events.find((e) => e.type === 'suite_done'))
 const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
 const total = computed(() => {
   const start = props.events.find((e) => e.type === 'suite_start')
-  return start ? start.total : 0
+  return start?.total ?? 0
 })
 
 // item_start 起一行(running)，item_done 覆盖为终态；按 index 归并保持顺序
 const items = computed(() => {
-  const map = new Map()
+  const map = new Map<number, SuiteRunItem>()
   for (const e of props.events) {
-    if (e.type === 'item_start') {
-      map.set(e.index, { index: e.index, target_type: e.target_type, target_name: e.target_name, status: 'running' })
-    } else if (e.type === 'item_done') {
+    if (e.type === 'item_start' && e.index != null) {
+      map.set(e.index, {
+        index: e.index,
+        target_type: e.target_type,
+        target_name: e.target_name,
+        status: 'running',
+      })
+    } else if (e.type === 'item_done' && e.index != null) {
       const prev = map.get(e.index) || { index: e.index, target_name: e.target_name }
       map.set(e.index, {
         ...prev,

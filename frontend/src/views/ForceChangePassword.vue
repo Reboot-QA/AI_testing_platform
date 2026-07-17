@@ -47,25 +47,32 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { authApi } from '@/api'
 import { useUserStore } from '@/stores/user'
+import type { FormInstance, FormRuleItem, FormRules } from '@/types/element-plus'
+
+interface PasswordForm {
+  old_password: string
+  new_password: string
+  confirm_password: string
+}
 
 const router = useRouter()
 const userStore = useUserStore()
-const formRef = ref()
+const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
-const form = reactive({
+const form = reactive<PasswordForm>({
   old_password: '',
   new_password: '',
   confirm_password: '',
 })
 
-const validateConfirmPassword = (_rule, value, callback) => {
+const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return
@@ -77,7 +84,7 @@ const validateConfirmPassword = (_rule, value, callback) => {
   callback()
 }
 
-const rules = {
+const rules: FormRules<PasswordForm> = {
   old_password: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   new_password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
@@ -87,7 +94,7 @@ const rules = {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     await authApi.changePassword({
