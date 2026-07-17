@@ -51,6 +51,12 @@ def get_scenario(db: Session, scenario_id: int) -> Optional[ApifoxScenario]:
     return db.query(ApifoxScenario).filter(ApifoxScenario.id == scenario_id).first()
 
 
+def list_scenarios_by_ids(db: Session, ids: List[int]) -> List[ApifoxScenario]:
+    if not ids:
+        return []
+    return db.query(ApifoxScenario).filter(ApifoxScenario.id.in_(ids)).all()
+
+
 def add(db: Session, obj):
     db.add(obj)
     db.flush()

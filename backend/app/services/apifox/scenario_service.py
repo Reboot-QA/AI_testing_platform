@@ -16,6 +16,7 @@ from app.routers.apifox.scenario_schemas import (
     ScenarioBrief,
     ScenarioCreate,
     ScenarioOut,
+    ScenarioReorderItem,
     ScenarioRunConfig,
     ScenarioUpdate,
     StepIn,
@@ -289,6 +290,26 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
     if data.steps is not None:  # http 步骤 body 可能移除/替换 binary 文件，清孤儿上传
         upload_service.purge_unreferenced_uploads(db, scenario.project_id)
     return _out(db, scenario)
+
+
+def reorder_scenarios(db: Session, project_id: int, items: List[ScenarioReorderItem]) -> None:
+    """批量落库场景的分组与排序（拖拽持久化）。
+
+    只更新传入的 id（支持"只发受影响的组"）；folder_id/sort_order 一起写，一次 commit。
+    排序非内容编辑，不 bump version，避免与"编辑场景"抢乐观锁。
+    """
+    scenarios = {s.id: s for s in repo.list_scenarios_by_ids(db, [it.id for it in items])}
+    validated_folders: set[int] = set()
+    for it in items:
+        scenario = scenarios.get(it.id)
+        if not scenario or scenario.project_id != project_id:
+            raise ValueError("场景不存在或不属于本项目")
+        if it.folder_id is not None and it.folder_id not in validated_folders:
+            _validate_folder(db, it.folder_id, project_id)
+            validated_folders.add(it.folder_id)
+        scenario.folder_id = it.folder_id
+        scenario.sort_order = it.sort_order
+    db.commit()
 
 
 def delete_scenario(db: Session, scenario: ApifoxScenario) -> None:

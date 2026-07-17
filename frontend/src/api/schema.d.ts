@@ -1605,6 +1605,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/scenarios/reorder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reorder Scenarios */
+        post: operations["reorder_scenarios_api_v1_apifox_projects__pid__scenarios_reorder_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/scenarios/{sid}": {
         parameters: {
             query?: never;
@@ -4261,6 +4278,20 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** ScenarioReorderItem */
+        ScenarioReorderItem: {
+            /** Id */
+            id: number;
+            /** Folder Id */
+            folder_id?: number | null;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** ScenarioReorderRequest */
+        ScenarioReorderRequest: {
+            /** Items */
+            items: components["schemas"]["ScenarioReorderItem"][];
         };
         /** ScenarioRunConfig */
         ScenarioRunConfig: {
@@ -9646,6 +9677,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScenarioOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reorder_scenarios_api_v1_apifox_projects__pid__scenarios_reorder_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenarioReorderRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
