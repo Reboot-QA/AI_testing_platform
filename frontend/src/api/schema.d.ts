@@ -1890,6 +1890,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/workbench/running": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workbench Running */
+        get: operations["workbench_running_api_v1_apifox_workbench_running_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/workbench/reports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workbench Reports */
+        get: operations["workbench_reports_api_v1_apifox_workbench_reports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/projects/{pid}/suites": {
         parameters: {
             query?: never;
@@ -5168,10 +5202,28 @@ export interface components {
             stats: components["schemas"]["WorkbenchStats"];
             /** Projects */
             projects: components["schemas"]["WorkbenchProject"][];
-            /** Running */
-            running: components["schemas"]["WorkbenchRunning"][];
-            /** Recent Reports */
-            recent_reports: components["schemas"]["WorkbenchReport"][];
+        };
+        /** WorkbenchRunningPageOut */
+        WorkbenchRunningPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchRunning"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
+        /** WorkbenchReportPageOut */
+        WorkbenchReportPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchReport"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
         };
         /** WorkbenchProject */
         WorkbenchProject: {
@@ -5201,6 +5253,8 @@ export interface components {
             project_id: number;
             /** Project Name */
             project_name: string;
+            /** Target Type */
+            target_type: string;
             /** Target Name */
             target_name: string;
             /** Environment Name */

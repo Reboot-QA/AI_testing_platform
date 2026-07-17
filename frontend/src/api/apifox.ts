@@ -12,8 +12,26 @@ function runStream(
   return streamSSE(`${url}${query}`, { signal: options.signal, onEvent })
 }
 
+export type WorkbenchRunningPageOut = {
+  items: Schemas['WorkbenchRunning'][]
+  total: number
+  page: number
+  page_size: number
+}
+
+export type WorkbenchReportPageOut = {
+  items: Schemas['WorkbenchReport'][]
+  total: number
+  page: number
+  page_size: number
+}
+
 export const apifoxApi = {
   workbenchOverview: () => get<Schemas['WorkbenchOverviewOut']>('/apifox/workbench/overview'),
+  workbenchRunning: (params: { page?: number; page_size?: number } = {}) =>
+    get<WorkbenchRunningPageOut>('/apifox/workbench/running', { params }),
+  workbenchReports: (params: { page?: number; page_size?: number } = {}) =>
+    get<WorkbenchReportPageOut>('/apifox/workbench/reports', { params }),
 
   listFolders: (pid: Id) => get<Schemas['FolderOut'][]>(`/apifox/projects/${pid}/folders`),
   createFolder: (pid: Id, data: Schemas['FolderCreate']) =>

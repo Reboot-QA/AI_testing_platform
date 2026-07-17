@@ -48,6 +48,39 @@ def list_running(db: Session, project_ids: List[int]) -> List[ApifoxRun]:
     )
 
 
+def count_running(db: Session, project_ids: List[int]) -> int:
+    if not project_ids:
+        return 0
+    return (
+        db.query(func.count(ApifoxRun.id))
+        .filter(ApifoxRun.project_id.in_(project_ids), ApifoxRun.status == "running")
+        .scalar()
+        or 0
+    )
+
+
+def list_running_page(db: Session, project_ids: List[int], page: int, page_size: int) -> List[ApifoxRun]:
+    if not project_ids:
+        return []
+    offset = (page - 1) * page_size
+    return (
+        db.query(ApifoxRun)
+        .filter(ApifoxRun.project_id.in_(project_ids), ApifoxRun.status == "running")
+        .order_by(ApifoxRun.id.desc())
+        .offset(offset)
+        .limit(page_size)
+        .all()
+    )
+
+
+def count_runs(db: Session, project_ids: List[int]) -> int:
+    if not project_ids:
+        return 0
+    return (
+        db.query(func.count(ApifoxRun.id)).filter(ApifoxRun.project_id.in_(project_ids)).scalar() or 0
+    )
+
+
 def recent_runs(db: Session, project_ids: List[int], limit: int = 10) -> List[ApifoxRun]:
     # 不按 status 过滤：running 记录会同时出现在「最近报告」，前端按状态区分渲染
     if not project_ids:
@@ -57,6 +90,20 @@ def recent_runs(db: Session, project_ids: List[int], limit: int = 10) -> List[Ap
         .filter(ApifoxRun.project_id.in_(project_ids))
         .order_by(ApifoxRun.id.desc())
         .limit(limit)
+        .all()
+    )
+
+
+def recent_runs_page(db: Session, project_ids: List[int], page: int, page_size: int) -> List[ApifoxRun]:
+    if not project_ids:
+        return []
+    offset = (page - 1) * page_size
+    return (
+        db.query(ApifoxRun)
+        .filter(ApifoxRun.project_id.in_(project_ids))
+        .order_by(ApifoxRun.id.desc())
+        .offset(offset)
+        .limit(page_size)
         .all()
     )
 
