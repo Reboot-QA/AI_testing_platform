@@ -14,6 +14,24 @@
       <span class="hint">语言：{{ lang }}（跟随当前脚本）</span>
     </div>
 
+    <div class="row">
+      <span class="lbl">预设</span>
+      <el-select
+        v-model="selectedPreset"
+        size="small"
+        placeholder="载入已保存的调试输入"
+        clearable
+        style="width: 220px"
+        @change="applyPreset"
+      >
+        <el-option v-for="p in presets" :key="p.name" :label="p.name" :value="p.name" />
+      </el-select>
+      <el-button size="small" @click="savePreset">保存当前输入</el-button>
+      <el-button v-if="selectedPreset" size="small" text type="danger" @click="deletePreset"
+        >删除</el-button
+      >
+    </div>
+
     <div class="block">
       <div class="block-title">输入变量</div>
       <KvRowsEditor :rows="varRows" />
@@ -63,7 +81,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { onMounted, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import type { KvRow } from '@/types/apifox'
 import { apifoxApi } from '@/api'
@@ -91,6 +110,72 @@ const respStatus = ref(200)
 const respBody = ref('')
 const running = ref(false)
 const result = ref<Schemas['ScriptDebugOut'] | null>(null)
+
+// 调试输入预设（本浏览器保存，供下次复用）
+interface DebugPreset {
+  name: string
+  phase: 'pre' | 'post'
+  variables: Record<string, string>
+  respStatus: number
+  respBody: string
+}
+const PRESET_KEY = 'apifox:scriptDebugPresets'
+const presets = ref<DebugPreset[]>([])
+const selectedPreset = ref<string | null>(null)
+
+function loadPresets() {
+  try {
+    presets.value = JSON.parse(localStorage.getItem(PRESET_KEY) || '[]')
+  } catch {
+    presets.value = []
+  }
+}
+
+function persistPresets() {
+  localStorage.setItem(PRESET_KEY, JSON.stringify(presets.value))
+}
+
+function applyPreset(name: string | null) {
+  const p = presets.value.find((x) => x.name === name)
+  if (!p) return
+  phase.value = p.phase
+  varRows.value = ensureKvRows(Object.entries(p.variables).map(([key, value]) => ({ key, value })))
+  respStatus.value = p.respStatus
+  respBody.value = p.respBody
+}
+
+async function savePreset() {
+  const { value } = await ElMessageBox.prompt(
+    '给这组调试输入起个名字（同名覆盖）',
+    '保存调试预设',
+    {
+      inputPattern: /\S/,
+      inputErrorMessage: '不能为空',
+    },
+  )
+  const name = value.trim()
+  const preset: DebugPreset = {
+    name,
+    phase: phase.value,
+    variables: rowsToObject(varRows.value),
+    respStatus: respStatus.value,
+    respBody: respBody.value,
+  }
+  const idx = presets.value.findIndex((x) => x.name === name)
+  if (idx >= 0) presets.value[idx] = preset
+  else presets.value.push(preset)
+  persistPresets()
+  selectedPreset.value = name
+  ElMessage.success('已保存预设')
+}
+
+function deletePreset() {
+  presets.value = presets.value.filter((x) => x.name !== selectedPreset.value)
+  persistPresets()
+  selectedPreset.value = null
+}
+
+onMounted(loadPresets)
 
 // 每次打开重置结果，避免看到上次的输出
 watch(
