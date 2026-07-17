@@ -131,6 +131,8 @@ export const apifoxApi = {
   listProjectCases: (pid: Id) =>
     get<Schemas['ProjectCaseBrief'][]>(`/apifox/projects/${pid}/cases`),
   listScenarios: (pid: Id) => get<Schemas['ScenarioBrief'][]>(`/apifox/projects/${pid}/scenarios`),
+  reorderScenarios: (pid: Id, data: Schemas['ScenarioReorderRequest']) =>
+    post<{ message: string }>(`/apifox/projects/${pid}/scenarios/reorder`, data),
   getScenario: (sid: Id) => get<Schemas['ScenarioOut']>(`/apifox/scenarios/${sid}`),
   createScenario: (pid: Id, data: Schemas['ScenarioCreate']) =>
     post<Schemas['ScenarioOut']>(`/apifox/projects/${pid}/scenarios`, data),

@@ -6,7 +6,7 @@
       :active-id="activeId"
       @select="onSelectScenario"
       @del="delScenario"
-      @move="onMoveScenario"
+      @reorder="onReorderScenarios"
       @new-scenario="addScenario"
       @new-folder="createFolder"
       @rename-folder="renameFolder"
@@ -143,8 +143,8 @@ const serverNames = computed(() => {
 
 const { folders, loadFolders, createFolder, renameFolder, deleteFolder } = useScenarioFolders(pid)
 
-async function onMoveScenario({ id, folderId }: { id: number; folderId: number | null }) {
-  await apifoxApi.updateScenario(id, { folder_id: folderId }) // 轻量移动：仅改 folder_id
+async function onReorderScenarios(items: Schemas['ScenarioReorderRequest']['items']) {
+  await apifoxApi.reorderScenarios(pid.value, { items }) // 快照：分组+排序一起落库
   await loadScenarios()
 }
 

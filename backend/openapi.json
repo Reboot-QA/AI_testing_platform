@@ -6961,6 +6961,61 @@
         }
       }
     },
+    "/api/v1/apifox/projects/{pid}/scenarios/reorder": {
+      "post": {
+        "tags": [
+          "接口自动化v2·场景"
+        ],
+        "summary": "Reorder Scenarios",
+        "operationId": "reorder_scenarios_api_v1_apifox_projects__pid__scenarios_reorder_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenarioReorderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/scenarios/{sid}": {
       "get": {
         "tags": [
@@ -14736,6 +14791,52 @@
           "updated_at"
         ],
         "title": "ScenarioOut"
+      },
+      "ScenarioReorderItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Id"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sort_order"
+        ],
+        "title": "ScenarioReorderItem"
+      },
+      "ScenarioReorderRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ScenarioReorderItem"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ScenarioReorderRequest"
       },
       "ScenarioRunConfig": {
         "properties": {
