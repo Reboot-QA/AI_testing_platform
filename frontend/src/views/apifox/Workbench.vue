@@ -69,11 +69,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { FormInstance, FormRules } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
 import { apifoxApi, projectApi } from '@/api'
 import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
 import DashboardProjectCard from '@/components/apifox/workbench/DashboardProjectCard.vue'
@@ -83,13 +85,18 @@ import RecentReports from '@/components/apifox/workbench/RecentReports.vue'
 const router = useRouter()
 
 const loading = ref(false)
-const overview = reactive({ stats: {}, projects: [], running: [], recent_reports: [] })
+const overview = reactive<Schemas['WorkbenchOverviewOut']>({
+  stats: {} as Schemas['WorkbenchStats'],
+  projects: [],
+  running: [],
+  recent_reports: [],
+})
 
 const createVisible = ref(false)
 const submitting = ref(false)
-const formRef = ref()
+const formRef = ref<FormInstance>()
 const form = reactive({ name: '', description: '' })
-const rules = {
+const rules: FormRules = {
   name: [{ required: true, message: '请输入项目名', trigger: 'blur' }],
 }
 
@@ -105,7 +112,7 @@ async function loadData() {
   }
 }
 
-function enter(id) {
+function enter(id: number) {
   router.push(`/apifox/project/${id}`)
 }
 
@@ -121,12 +128,12 @@ async function persistOrder() {
   }
 }
 
-function handlePin(project) {
+function handlePin(project: Schemas['WorkbenchProject']) {
   project.pinned = !project.pinned
   persistOrder()
 }
 
-function openReports(run) {
+function openReports(run: Schemas['WorkbenchRunning'] | Schemas['WorkbenchReport']) {
   router.push(`/apifox/project/${run.project_id}/reports`)
 }
 
@@ -137,7 +144,7 @@ function openCreate() {
 }
 
 async function handleCreate() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     await projectApi.create({ name: form.name, description: form.description || undefined })
@@ -149,7 +156,7 @@ async function handleCreate() {
   }
 }
 
-async function handleRename(project) {
+async function handleRename(project: Schemas['WorkbenchProject']) {
   const { value } = await ElMessageBox.prompt('项目名称', '重命名项目', {
     inputValue: project.name,
     inputPattern: /\S/,
@@ -162,7 +169,7 @@ async function handleRename(project) {
   await loadData()
 }
 
-async function handleDelete(project) {
+async function handleDelete(project: Schemas['WorkbenchProject']) {
   // 硬删除不可逆：要求输入项目名完全一致二次确认
   await ElMessageBox.prompt(
     `此操作将永久删除项目「${project.name}」及其全部数据（接口、场景、用例、需求、运行报告等），不可恢复！\n请输入项目名称以确认：`,

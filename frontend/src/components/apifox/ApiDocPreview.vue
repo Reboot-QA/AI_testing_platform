@@ -47,19 +47,26 @@
   </div>
 </template>
 
-<script setup>
-import { computed, h } from 'vue'
+<script setup lang="ts">
+import { computed, h, type VNode } from 'vue'
 import { ElTable, ElTableColumn } from 'element-plus'
+import type { KvRow, RequestSpec } from '@/types/apifox'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 
-const props = defineProps({
-  form: { type: Object, required: true },
-})
+export interface ApiDocPreviewForm {
+  method: string
+  path?: string
+  name?: string
+  description?: string
+  request_spec?: RequestSpec
+}
 
-const spec = computed(() => props.form.request_spec || {})
+const props = defineProps<{ form: ApiDocPreviewForm }>()
 
-function rows(list) {
+const spec = computed(() => props.form.request_spec || ({} as RequestSpec))
+
+function rows(list: KvRow[] | undefined) {
   return (list || []).filter((r) => r && r.enabled !== false && (r.key || '').trim())
 }
 
@@ -75,7 +82,7 @@ const isEmpty = computed(() => {
 })
 
 // 只读参数小表（内联函数式组件，避免额外文件）
-const ParamTable = (p) =>
+const ParamTable = (p: { rows: KvRow[] }): VNode =>
   h(ElTable, { data: p.rows, size: 'small', border: true }, () => [
     h(ElTableColumn, { prop: 'key', label: '参数名', width: 220 }),
     h(ElTableColumn, { prop: 'value', label: '值' }),

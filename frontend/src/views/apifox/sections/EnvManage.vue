@@ -99,10 +99,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import VariableTable from '@/components/apifox/VariableTable.vue'
@@ -113,12 +114,15 @@ const route = useRoute()
 const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
 
-const environments = ref([])
-const vars = ref([])
-const servers = ref([])
+const environments = ref<Schemas['EnvironmentOut'][]>([])
+const vars = ref<Schemas['VariableOut'][]>([])
+const servers = ref<Schemas['ServerOut'][]>([])
 const baseUrl = ref('')
 const newServer = reactive({ name: '', base_url: '' })
-const selected = reactive({ type: 'global', id: null })
+const selected = reactive<{ type: 'global' | 'env' | 'params'; id: number | null }>({
+  type: 'global',
+  id: null,
+})
 
 const selectedName = computed(
   () => environments.value.find((e) => e.id === selected.id)?.name || '',
@@ -153,21 +157,23 @@ async function addServer() {
     newServer.name = ''
     newServer.base_url = ''
     await loadEnvs()
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '添加失败')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '添加失败')
   }
 }
 
-async function saveServer(s) {
+async function saveServer(s: Schemas['ServerOut']) {
   try {
     await apifoxApi.updateEnvServer(s.id, { name: s.name, base_url: s.base_url })
     await loadEnvs()
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '保存失败')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '保存失败')
   }
 }
 
-async function delServer(s) {
+async function delServer(s: Schemas['ServerOut']) {
   await apifoxApi.deleteEnvServer(s.id)
   await loadEnvs()
 }
@@ -177,7 +183,7 @@ async function reloadVars() {
   else vars.value = await apifoxApi.listGlobalVars(pid.value)
 }
 
-function selectEnv(e) {
+function selectEnv(e: Schemas['EnvironmentOut']) {
   selected.type = 'env'
   selected.id = e.id
   syncEnvDetail()
@@ -205,7 +211,7 @@ async function addEnv() {
   await loadEnvs()
 }
 
-async function renameEnv(e) {
+async function renameEnv(e: Schemas['EnvironmentOut']) {
   const { value } = await ElMessageBox.prompt('新名称', '改名', {
     inputValue: e.name,
     inputPattern: /\S/,
@@ -215,12 +221,12 @@ async function renameEnv(e) {
   await loadEnvs()
 }
 
-async function setDefault(e) {
+async function setDefault(e: Schemas['EnvironmentOut']) {
   await apifoxApi.updateEnvironment(e.id, { is_default: true })
   await loadEnvs()
 }
 
-async function delEnv(e) {
+async function delEnv(e: Schemas['EnvironmentOut']) {
   await ElMessageBox.confirm(`确认删除环境「${e.name}」及其变量？`, '提示', { type: 'warning' })
   await apifoxApi.deleteEnvironment(e.id)
   ElMessage.success('已删除')
@@ -228,29 +234,31 @@ async function delEnv(e) {
   await loadEnvs()
 }
 
-async function onCreate(payload) {
+async function onCreate(payload: Schemas['VariableCreate']) {
   try {
-    if (selected.type === 'env') await apifoxApi.createEnvVar(selected.id, payload)
+    if (selected.type === 'env' && selected.id != null)
+      await apifoxApi.createEnvVar(selected.id, payload)
     else await apifoxApi.createGlobalVar(pid.value, payload)
     await reloadVars()
-  } catch (e) {
-    ElMessage.error(e.response?.data?.detail || '创建失败')
+  } catch (e: unknown) {
+    const err = e as { response?: { data?: { detail?: string } } }
+    ElMessage.error(err.response?.data?.detail || '创建失败')
   }
 }
 
-async function onUpdate(id, payload) {
+async function onUpdate(id: number, payload: Partial<Schemas['VariableOut']>) {
   if (selected.type === 'env') await apifoxApi.updateEnvVar(id, payload)
   else await apifoxApi.updateGlobalVar(id, payload)
   await reloadVars()
 }
 
-async function onDelete(id) {
+async function onDelete(id: number) {
   if (selected.type === 'env') await apifoxApi.deleteEnvVar(id)
   else await apifoxApi.deleteGlobalVar(id)
   await reloadVars()
 }
 
-async function onSetLocal(id, value) {
+async function onSetLocal(id: number, value: string | null) {
   if (selected.type === 'env') await apifoxApi.setEnvVarLocal(id, value)
   else await apifoxApi.setGlobalVarLocal(id, value)
   await reloadVars()

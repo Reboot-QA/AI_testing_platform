@@ -69,10 +69,12 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { Schemas } from '@/api/types'
+import type { EndpointEditorForm } from '@/components/apifox/ApiEndpointEditor.vue'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useApiTabsStore } from '@/stores/apiTabs'
@@ -91,9 +93,9 @@ const pid = computed(() => route.params.projectId)
 const store = useWorkspaceStore()
 const tabsStore = useApiTabsStore()
 
-const treePanel = ref(null)
+const treePanel = ref<InstanceType<typeof ApiTreePanel> | null>(null)
 const { scripts, loadScripts } = useProjectScripts(pid)
-const schemas = ref([])
+const schemas = ref<Schemas['SchemaBrief'][]>([])
 
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
@@ -103,7 +105,7 @@ const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
 useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
 
 const serverNames = computed(() => {
-  const names = new Set()
+  const names = new Set<string>()
   store.environments.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
   return [...names]
 })
@@ -111,11 +113,11 @@ const serverNames = computed(() => {
 function goDataModels() {
   router.push(`/apifox/project/${pid.value}/datamodels`)
 }
-function goSchema(id) {
+function goSchema(id: number) {
   router.push(`/apifox/project/${pid.value}/datamodels?schema=${id}`)
 }
 
-async function onSelectEndpoint(id) {
+async function onSelectEndpoint(id: number) {
   try {
     await tabsStore.openEndpoint(pid.value, id)
   } catch {
@@ -123,7 +125,7 @@ async function onSelectEndpoint(id) {
   }
 }
 
-function endpointPayload(form) {
+function endpointPayload(form: EndpointEditorForm) {
   return {
     name: form.name,
     method: form.method,
@@ -141,7 +143,7 @@ function endpointPayload(form) {
 }
 
 // 返回 true=已保存(可安全关闭)，false=未保存/用户取消
-async function saveEndpoint(id) {
+async function saveEndpoint(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return false
   tab.saving = true
@@ -154,9 +156,9 @@ async function saveEndpoint(id) {
     treePanel.value?.reload()
     ElMessage.success('已保存')
     return true
-  } catch (e) {
+  } catch (e: unknown) {
     if (!isConflict(e)) {
-      ElMessage.error(e.message || '保存失败')
+      ElMessage.error((e as Error).message || '保存失败')
       return false
     }
     let resolved = false
@@ -184,7 +186,7 @@ async function saveEndpoint(id) {
 }
 
 // 关闭接口 tab：dirty 时弹「保存并关闭/不保存关闭/取消」
-async function onTabRemove(id) {
+async function onTabRemove(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return
   if (!tabsStore.isDirty(tab)) {
@@ -197,10 +199,10 @@ async function onTabRemove(id) {
   tabsStore.closeTab(pid.value, id)
 }
 
-function onDeleted(id) {
+function onDeleted(id: number) {
   tabsStore.closeTab(pid.value, id)
 }
-function onRenamed(id, name) {
+function onRenamed(id: number, name: string) {
   tabsStore.onRenamed(pid.value, id, name)
 }
 
@@ -209,7 +211,7 @@ async function loadSchemas() {
 }
 
 // 刷新/关浏览器兜底：有未保存改动时浏览器原生确认（store 是内存态，需此兜底）
-function beforeUnloadHandler(e) {
+function beforeUnloadHandler(e: BeforeUnloadEvent) {
   if (tabsStore.hasAnyDirty(pid.value)) {
     e.preventDefault()
     e.returnValue = ''

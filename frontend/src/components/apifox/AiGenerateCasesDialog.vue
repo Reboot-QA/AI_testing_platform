@@ -116,22 +116,33 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { settingsApi } from '@/api'
 import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
 import { categoryLabel } from '@/utils/caseCategory'
 
-const props = defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
-const emit = defineEmits(['created'])
+const props = defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
+const emit = defineEmits<{ created: [] }>()
 
 const store = useApifoxAiGenerateStore()
 
-const DEFAULT_CATEGORIES = () => [
+interface AiCategoryOption {
+  value: string
+  label: string
+  desc: string
+  checked: boolean
+  limit: boolean
+  count: number
+}
+
+const DEFAULT_CATEGORIES = (): AiCategoryOption[] => [
   {
     value: 'positive',
     label: '正向',
@@ -167,16 +178,16 @@ const DEFAULT_CATEGORIES = () => [
 ]
 
 const visible = ref(false)
-const step = ref('config')
+const step = ref<'config' | 'result'>('config')
 const submitting = ref(false)
 const creating = ref(false)
 const canceling = ref(false)
-const categories = ref(DEFAULT_CATEGORIES())
-const selected = ref([])
-const taskId = ref(null)
-const llmProviders = ref([])
+const categories = ref<AiCategoryOption[]>(DEFAULT_CATEGORIES())
+const selected = ref<boolean[]>([])
+const taskId = ref<number | null>(null)
+const llmProviders = ref<Schemas['LLMProviderOut'][]>([])
 const providersLoading = ref(false)
-const providerId = ref(null)
+const providerId = ref<number | null>(null)
 const mockMode = ref(false)
 
 const eid = computed(() => Number(props.endpointId))
@@ -194,7 +205,7 @@ const allSelected = computed(
 )
 const someSelected = computed(() => selectedCount.value > 0 && !allSelected.value)
 
-const tagType = (cat) =>
+const tagType = (cat: string) =>
   ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' })[cat] || 'info'
 
 // 生成完成、拿到用例后默认全选
@@ -233,7 +244,7 @@ function backToConfig() {
   step.value = 'config'
 }
 
-function formatProviderLabel(item) {
+function formatProviderLabel(item: Schemas['LLMProviderOut']) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -254,12 +265,12 @@ async function loadProviders() {
   }
 }
 
-function toggleAll(val) {
+function toggleAll(val: boolean) {
   selected.value = generated.value.map(() => !!val)
 }
 
 // 断言摘要：把每条断言渲染成「状态码 = 200」这类可读短语，帮用户在预览时判断用例意图
-function summarize(g) {
+function summarize(g: Schemas['CaseCreate']) {
   const rows = (g.assertions || []).filter((a) => a.enabled !== false)
   if (!rows.length) return '无断言'
   return rows
@@ -280,8 +291,8 @@ async function generate() {
     taskId.value = await store.start(Number(props.projectId), [eid.value], cats, providerId.value)
     selected.value = []
     step.value = 'result'
-  } catch (e) {
-    ElMessage.error(e.message || 'AI 生成任务创建失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || 'AI 生成任务创建失败')
   } finally {
     submitting.value = false
   }
@@ -293,8 +304,8 @@ async function cancel() {
     await store.cancel(taskId.value)
     ElMessage.info('已取消生成')
     backToConfig()
-  } catch (e) {
-    ElMessage.error(e.message || '取消失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '取消失败')
   } finally {
     canceling.value = false
   }
@@ -317,8 +328,8 @@ async function createSelected() {
       taskId.value = null
       visible.value = false
     }
-  } catch (e) {
-    ElMessage.error(e.message || '入库失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '入库失败')
   } finally {
     creating.value = false
   }

@@ -113,32 +113,47 @@
   </PageCard>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi, departmentApi } from '@/api'
 import { formatBeijingTime } from '@/utils/datetime'
 import { useUserStore } from '@/stores/user'
 import PageCard from '@/components/PageCard.vue'
+import type { DateInput, Department, User } from '@/types/common'
+import type { FormInstance, FormRuleItem, FormRules } from '@/types/element-plus'
+
+interface UserForm {
+  username: string
+  password: string
+  full_name: string
+  email: string
+  department_id: number | null
+  is_active: boolean
+}
+
+interface ResetPasswordForm {
+  password: string
+}
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.user?.id)
 
-const users = ref([])
-const departments = ref([])
+const users = ref<User[]>([])
+const departments = ref<Department[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
 const submitting = ref(false)
 const passwordSubmitting = ref(false)
-const editing = ref(null)
-const passwordTarget = ref(null)
-const formRef = ref()
-const passwordFormRef = ref()
+const editing = ref<User | null>(null)
+const passwordTarget = ref<User | null>(null)
+const formRef = ref<FormInstance>()
+const passwordFormRef = ref<FormInstance>()
 
 const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/
 
-const form = reactive({
+const form = reactive<UserForm>({
   username: '',
   password: '',
   full_name: '',
@@ -147,7 +162,7 @@ const form = reactive({
   is_active: true,
 })
 
-function validateUsername(_rule, value, callback) {
+const validateUsername: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
   if (!value) {
     callback(new Error('请输入用户名'))
     return
@@ -159,7 +174,7 @@ function validateUsername(_rule, value, callback) {
   callback()
 }
 
-function validateEmail(_rule, value, callback) {
+const validateEmail: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
   const email = (value || '').trim()
   if (!email) {
     callback()
@@ -173,25 +188,25 @@ function validateEmail(_rule, value, callback) {
   callback()
 }
 
-const passwordForm = reactive({
+const passwordForm = reactive<ResetPasswordForm>({
   password: '',
 })
 
-const rules = {
+const rules: FormRules<UserForm> = {
   username: [{ required: true, validator: validateUsername, trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   email: [{ validator: validateEmail, trigger: 'blur' }],
   department_id: [{ required: true, message: '请选择部门', trigger: 'change' }],
 }
 
-const passwordRules = {
+const passwordRules: FormRules<ResetPasswordForm> = {
   password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
     { min: 6, message: '密码至少 6 位', trigger: 'blur' },
   ],
 }
 
-function formatTime(value) {
+function formatTime(value: DateInput) {
   return formatBeijingTime(value)
 }
 
@@ -208,7 +223,7 @@ async function loadData() {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: User | null = null) {
   editing.value = row
   form.username = row?.username || ''
   form.password = ''
@@ -219,14 +234,14 @@ function openDialog(row = null) {
   dialogVisible.value = true
 }
 
-function openPasswordDialog(row) {
+function openPasswordDialog(row: User) {
   passwordTarget.value = row
   passwordForm.password = ''
   passwordDialogVisible.value = true
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     if (editing.value) {
@@ -255,10 +270,10 @@ async function handleSubmit() {
 }
 
 async function handleResetPassword() {
-  await passwordFormRef.value.validate()
+  await passwordFormRef.value?.validate()
   passwordSubmitting.value = true
   try {
-    await userApi.resetPassword(passwordTarget.value.id, passwordForm.password)
+    await userApi.resetPassword(passwordTarget.value!.id, passwordForm.password)
     ElMessage.success('密码已重置')
     passwordDialogVisible.value = false
   } finally {
@@ -266,7 +281,7 @@ async function handleResetPassword() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: User) {
   await ElMessageBox.confirm(`确认删除用户「${row.username}」？此操作不可恢复。`, '提示', {
     type: 'warning',
   })

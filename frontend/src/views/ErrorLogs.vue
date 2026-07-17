@@ -157,25 +157,48 @@
   </div>
 </template>
 
-<script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+<script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { errorLogsApi } from '@/api'
 
-const categories = ref([])
+type ErrorCategory = 'all' | 'application' | 'api'
+
+interface ErrorLogCategory {
+  key: string
+  label: string
+  exists: boolean
+  size: number
+  line_count: number
+  filename: string
+}
+
+interface ErrorLogItem {
+  timestamp?: string
+  category?: string
+  level?: string
+  method?: string
+  path?: string
+  status?: number
+  client_ip?: string
+  message?: string
+  type?: string
+}
+
+const categories = ref<ErrorLogCategory[]>([])
 const logDir = ref('')
-const activeCategory = ref('all')
+const activeCategory = ref<ErrorCategory>('all')
 const lineCount = ref(200)
 const keyword = ref('')
 const statusMin = ref(400)
 const methodFilter = ref('')
 const loading = ref(false)
 const liveMode = ref(true)
-const displayItems = ref([])
+const displayItems = ref<ErrorLogItem[]>([])
 const totalMatched = ref(0)
 
-let streamAbort = null
-let refreshTimer = null
+let streamAbort: AbortController | null = null
+let refreshTimer: ReturnType<typeof setInterval> | null = null
 
 const categoryOptions = [
   { label: '全部', value: 'all' },
@@ -183,14 +206,14 @@ const categoryOptions = [
   { label: '接口错误', value: 'api' },
 ]
 
-function formatSize(size) {
+function formatSize(size: number) {
   if (!size) return '0 B'
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
   return `${(size / (1024 * 1024)).toFixed(1)} MB`
 }
 
-function statusClass(status) {
+function statusClass(status: number) {
   if (status >= 500) return 'status-5xx'
   if (status >= 400) return 'status-4xx'
   return ''
@@ -205,7 +228,7 @@ async function loadSummary() {
 async function refreshErrors() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       category: activeCategory.value,
       lines: lineCount.value,
       keyword: keyword.value || undefined,
@@ -245,7 +268,7 @@ async function startStream() {
     if (!response.ok) {
       throw new Error('实时错误日志连接失败')
     }
-    const reader = response.body.getReader()
+    const reader = response.body!.getReader()
     const decoder = new TextDecoder()
     let buffer = ''
     while (true) {
@@ -257,7 +280,7 @@ async function startStream() {
       for (const chunk of chunks) {
         const line = chunk.trim()
         if (!line.startsWith('data:')) continue
-        const payload = JSON.parse(line.slice(5).trim())
+        const payload = JSON.parse(line.slice(5).trim()) as ErrorLogItem & { type?: string }
         if (payload.type === 'item') {
           displayItems.value.unshift(payload)
           if (displayItems.value.length > 500) {
@@ -267,14 +290,14 @@ async function startStream() {
         }
       }
     }
-  } catch (error) {
-    if (error.name !== 'AbortError') {
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name !== 'AbortError') {
       ElMessage.warning(error.message || '实时错误日志连接中断')
     }
   }
 }
 
-function handleLiveToggle(enabled) {
+function handleLiveToggle(enabled: boolean) {
   if (enabled) {
     startStream()
   } else {
@@ -283,9 +306,9 @@ function handleLiveToggle(enabled) {
   }
 }
 
-function switchCategory(category) {
+function switchCategory(category: string) {
   if (activeCategory.value === category) return
-  activeCategory.value = category
+  activeCategory.value = category as ErrorCategory
   handleCategoryChange()
 }
 

@@ -133,29 +133,45 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { settingsApi } from '@/api'
 import PageCard from '@/components/PageCard.vue'
+import type { LlmProvider } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+
+interface LlmSettings {
+  mock_mode: boolean
+  active_provider_id: number | null
+}
+
+interface LlmProviderForm {
+  name: string
+  api_base: string
+  api_key: string
+  model: string
+  enabled: boolean
+  is_default: boolean
+}
 
 const loading = ref(false)
 const saving = ref(false)
 const mockSaving = ref(false)
-const testingId = ref(null)
+const testingId = ref<number | null>(null)
 const dialogTesting = ref(false)
 const dialogVisible = ref(false)
-const editing = ref(null)
-const formRef = ref()
+const editing = ref<LlmProvider | null>(null)
+const formRef = ref<FormInstance>()
 
-const settings = reactive({
+const settings = reactive<LlmSettings>({
   mock_mode: true,
   active_provider_id: null,
 })
 
-const providers = ref([])
+const providers = ref<LlmProvider[]>([])
 
-const form = reactive({
+const form = reactive<LlmProviderForm>({
   name: '',
   api_base: '',
   api_key: '',
@@ -164,7 +180,7 @@ const form = reactive({
   is_default: false,
 })
 
-const rules = {
+const rules: FormRules<LlmProviderForm> = {
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   api_base: [{ required: true, message: '请输入 API Base URL', trigger: 'blur' }],
   model: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
@@ -182,7 +198,7 @@ async function loadSettings() {
   }
 }
 
-async function handleMockChange(value) {
+async function handleMockChange(value: boolean) {
   mockSaving.value = true
   try {
     const data = await settingsApi.updateMockMode(value)
@@ -197,7 +213,7 @@ async function handleMockChange(value) {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: LlmProvider | null = null) {
   editing.value = row
   if (row) {
     Object.assign(form, {
@@ -222,7 +238,7 @@ function openDialog(row = null) {
 }
 
 function buildPayload() {
-  const payload = {
+  const payload: Record<string, unknown> = {
     name: form.name,
     api_base: form.api_base,
     model: form.model,
@@ -236,7 +252,7 @@ function buildPayload() {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   saving.value = true
   try {
     if (editing.value) {
@@ -253,19 +269,19 @@ async function handleSubmit() {
   }
 }
 
-async function handleActivate(id) {
+async function handleActivate(id: number) {
   await settingsApi.activateProvider(id)
   ElMessage.success('已切换当前使用模型')
   await loadSettings()
 }
 
-async function handleDelete(id) {
+async function handleDelete(id: number) {
   await settingsApi.deleteProvider(id)
   ElMessage.success('已删除')
   await loadSettings()
 }
 
-async function handleTest(row) {
+async function handleTest(row: LlmProvider) {
   testingId.value = row.id
   try {
     const result = await settingsApi.testLLM({ provider_id: row.id })
@@ -280,10 +296,10 @@ async function handleTest(row) {
 }
 
 async function handleDialogTest() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   dialogTesting.value = true
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       api_base: form.api_base,
       model: form.model,
       mock_mode: settings.mock_mode,

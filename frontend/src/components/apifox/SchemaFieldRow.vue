@@ -66,25 +66,38 @@
   />
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { SchemaField } from '@/types/apifox'
 import { FIELD_TYPES, newField } from '@/composables/useJsonSchema'
+import type { Schemas } from '@/api/types'
 import SchemaConstraintsEditor from '@/components/apifox/SchemaConstraintsEditor.vue'
 
-const props = defineProps({
-  field: { type: Object, required: true },
-  list: { type: Array, default: null },
-  index: { type: Number, default: -1 },
-  depth: { type: Number, default: 0 },
-  isItem: { type: Boolean, default: false },
-  models: { type: Array, default: () => [] },
-})
+type SchemaBrief = Schemas['SchemaBrief']
+
+const props = withDefaults(
+  defineProps<{
+    field: SchemaField
+    list?: SchemaField[] | null
+    index?: number
+    depth?: number
+    isItem?: boolean
+    models?: SchemaBrief[]
+  }>(),
+  {
+    list: null,
+    index: -1,
+    depth: 0,
+    isItem: false,
+    models: () => [],
+  },
+)
 
 const CONSTRAINABLE = ['string', 'integer', 'number', 'array']
 const showConstraints = computed(() => CONSTRAINABLE.includes(props.field.type))
 const hasConstraints = computed(() => Object.keys(props.field.extra || {}).length > 0)
 
-function onTypeChange(type) {
+function onTypeChange(type: string) {
   if (type === 'array') props.field.children = [newField('string')]
   else props.field.children = []
   if (type !== 'ref') props.field.refName = ''

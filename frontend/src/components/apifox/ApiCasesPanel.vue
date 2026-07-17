@@ -13,16 +13,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
+import type { Id } from '@/api/request'
 import EndpointCasesTab from '@/components/apifox/EndpointCasesTab.vue'
 import EndpointReportsTab from '@/components/apifox/EndpointReportsTab.vue'
 import EndpointDocTab from '@/components/apifox/EndpointDocTab.vue'
 
-defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
+defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
 
 const tab = ref('cases')
 </script>

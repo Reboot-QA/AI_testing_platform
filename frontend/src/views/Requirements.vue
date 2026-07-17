@@ -326,7 +326,7 @@
   </PageCard>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
@@ -338,18 +338,36 @@ import {
   unregisterAssistantHandler,
 } from '@/utils/assistantActionRegistry'
 
-const ALL_PROJECTS = '__all__'
+import {
+  ALL_PROJECTS,
+  type DateInput,
+  type Project,
+  type ProjectFilter,
+  type Requirement,
+  type RequirementPage,
+  type TestCase,
+} from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+import type { UploadInstance, UploadRawFile } from 'element-plus'
 
-function formatTime(value) {
+interface RequirementForm {
+  title: string
+  description: string
+  req_type: string
+  priority: string
+  status: string
+}
+
+function formatTime(value: DateInput) {
   return formatBeijingTime(value)
 }
 
-const projects = ref([])
-const requirements = ref([])
-const linkedTestcases = ref([])
-const selectedIds = ref([])
-const selectedRows = ref([])
-const projectId = ref(ALL_PROJECTS)
+const projects = ref<Project[]>([])
+const requirements = ref<Requirement[]>([])
+const linkedTestcases = ref<TestCase[]>([])
+const selectedIds = ref<number[]>([])
+const selectedRows = ref<Requirement[]>([])
+const projectId = ref<ProjectFilter>(ALL_PROJECTS)
 const filterStatus = ref('')
 const keyword = ref('')
 const batchStatus = ref('')
@@ -368,21 +386,40 @@ const importDialogVisible = ref(false)
 const casesDialogVisible = ref(false)
 const caseDrawerVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const currentRequirement = ref(null)
-const caseDetail = ref(null)
-const formRef = ref()
-const uploadRef = ref()
-const importFile = ref(null)
+const editing = ref<Requirement | null>(null)
+const currentRequirement = ref<Requirement | null>(null)
+const caseDetail = ref<TestCase | null>(null)
+const formRef = ref<FormInstance>()
+const uploadRef = ref<UploadInstance>()
+const importFile = ref<UploadRawFile | null>(null)
 
-const typeMap = { functional: '功能', api: '接口', performance: '性能', security: '安全' }
-const sourceMap = { manual: '手动', ai_document: '文档解析' }
-const statusMap = { draft: '草稿', approved: '已评审', closed: '已关闭' }
-const statusType = { draft: 'info', approved: 'success', closed: 'warning' }
-const reviewMap = { draft: '草稿', pending: '待评审', approved: '已通过', rejected: '已驳回' }
-const reviewType = { draft: 'info', pending: 'warning', approved: 'success', rejected: 'danger' }
+const typeMap: Record<string, string> = {
+  functional: '功能',
+  api: '接口',
+  performance: '性能',
+  security: '安全',
+}
+const sourceMap: Record<string, string> = { manual: '手动', ai_document: '文档解析' }
+const statusMap: Record<string, string> = { draft: '草稿', approved: '已评审', closed: '已关闭' }
+const statusType: Record<string, 'info' | 'success' | 'warning'> = {
+  draft: 'info',
+  approved: 'success',
+  closed: 'warning',
+}
+const reviewMap: Record<string, string> = {
+  draft: '草稿',
+  pending: '待评审',
+  approved: '已通过',
+  rejected: '已驳回',
+}
+const reviewType: Record<string, 'info' | 'warning' | 'success' | 'danger'> = {
+  draft: 'info',
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+}
 
-const form = reactive({
+const form = reactive<RequirementForm>({
   title: '',
   description: '',
   req_type: 'functional',
@@ -390,7 +427,9 @@ const form = reactive({
   status: 'draft',
 })
 
-const rules = { title: [{ required: true, message: '请输入标题', trigger: 'blur' }] }
+const rules: FormRules<RequirementForm> = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+}
 
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
@@ -402,14 +441,15 @@ const blockedSelectedCount = computed(
 )
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  const data = await projectApi.list()
+  projects.value = Array.isArray(data) ? data : data.items
   await loadData()
 }
 
 async function loadData() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       page: currentPage.value,
       page_size: pageSize.value,
     }
@@ -422,7 +462,7 @@ async function loadData() {
     if (keyword.value.trim()) {
       params.keyword = keyword.value.trim()
     }
-    const data = await requirementApi.list(null, params)
+    const data = (await requirementApi.list(null, params)) as RequirementPage
     requirements.value = data.items || []
     total.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)

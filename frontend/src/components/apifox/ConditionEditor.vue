@@ -14,7 +14,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+export interface ConditionConfig {
+  left: string
+  operator: string
+  right: string
+}
+
 const OPERATORS = [
   { value: 'eq', label: '等于' },
   { value: 'neq', label: '不等于' },
@@ -28,9 +34,7 @@ const OPERATORS = [
   { value: 'exists', label: '存在' },
 ]
 
-defineProps({
-  condition: { type: Object, required: true },
-})
+defineProps<{ condition: ConditionConfig }>()
 </script>
 
 <style scoped>

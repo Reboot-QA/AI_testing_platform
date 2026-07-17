@@ -110,22 +110,45 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
 
 defineOptions({ name: 'ScenarioStepRow' })
 
-const props = defineProps({
-  row: { type: Object, required: true },
-  index: { type: Number, default: 0 },
-  cases: { type: Array, default: () => [] },
-  scenarios: { type: Array, default: () => [] },
-  currentScenarioId: { type: Number, default: null },
-  selection: { type: Object, required: true },
-})
+export interface ScenarioStepSelection {
+  uid: number | null
+}
 
-defineEmits(['remove'])
+export interface ScenarioEditorStep extends Schemas['StepOut'] {
+  _uid?: number
+  elseChildren?: ScenarioEditorStep[]
+  elseEnabled?: boolean
+  wait_ms?: number | null
+}
+
+type ProjectCaseBrief = Schemas['ProjectCaseBrief']
+type ScenarioBrief = Schemas['ScenarioBrief']
+
+const props = withDefaults(
+  defineProps<{
+    row: ScenarioEditorStep
+    index?: number
+    cases?: ProjectCaseBrief[]
+    scenarios?: ScenarioBrief[]
+    currentScenarioId?: number | null
+    selection: ScenarioStepSelection
+  }>(),
+  {
+    index: 0,
+    cases: () => [],
+    scenarios: () => [],
+    currentScenarioId: null,
+  },
+)
+
+defineEmits<{ remove: [] }>()
 
 const typeLabel = computed(
   () =>

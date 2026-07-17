@@ -62,26 +62,35 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { Schemas } from '@/api/types'
+import type { KvRow } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  lang: { type: String, default: 'javascript' },
-  content: { type: String, default: '' },
-})
-defineEmits(['update:visible'])
+const props = withDefaults(
+  defineProps<{
+    visible?: boolean
+    lang?: string
+    content?: string
+  }>(),
+  {
+    visible: false,
+    lang: 'javascript',
+    content: '',
+  },
+)
+defineEmits<{ 'update:visible': [value: boolean] }>()
 
 const phase = ref('pre')
-const varRows = ref(ensureKvRows([]))
+const varRows = ref<KvRow[]>(ensureKvRows([]))
 const respStatus = ref(200)
 const respBody = ref('')
 const running = ref(false)
-const result = ref(null)
+const result = ref<Schemas['ScriptDebugOut'] | null>(null)
 
 // 每次打开重置结果，避免看到上次的输出
 watch(
@@ -91,7 +100,7 @@ watch(
   },
 )
 
-function rowsToObject(rows) {
+function rowsToObject(rows: KvRow[]) {
   return Object.fromEntries(
     rows.filter((r) => r.key && r.enabled !== false).map((r) => [r.key, r.value ?? '']),
   )

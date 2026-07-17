@@ -39,10 +39,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { projectApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -57,22 +58,22 @@ const sections = [
   { key: 'reports', label: '测试报告' },
   { key: 'environments', label: '环境' },
   { key: 'settings', label: '项目设置' },
-]
+] as const
 
-const projects = ref([])
-const projectId = computed(() => route.params.projectId)
+const projects = ref<Schemas['ProjectOut'][]>([])
+const projectId = computed(() => route.params.projectId as string)
 const activeTab = computed(() => route.path.split('/').pop())
 
-function currentTab() {
+function currentTab(): string {
   const seg = route.path.split('/').pop()
-  return sections.some((s) => s.key === seg) ? seg : 'apis'
+  return sections.some((s) => s.key === seg) ? (seg as string) : 'apis'
 }
 
-function onTabChange(name) {
+function onTabChange(name: string | number) {
   router.push(`/apifox/project/${projectId.value}/${name}`)
 }
 
-function switchProject(id) {
+function switchProject(id: string) {
   if (id && id !== projectId.value) router.push(`/apifox/project/${id}/${currentTab()}`)
 }
 

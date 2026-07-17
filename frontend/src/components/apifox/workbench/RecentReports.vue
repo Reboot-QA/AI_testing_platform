@@ -19,25 +19,29 @@
   </div>
 </template>
 
-<script setup>
-defineProps({
-  reports: { type: Array, default: () => [] },
+<script setup lang="ts">
+import type { Schemas } from '@/api/types'
+
+type WorkbenchReport = Schemas['WorkbenchReport'] & { target_type?: string }
+
+withDefaults(defineProps<{ reports?: WorkbenchReport[] }>(), {
+  reports: () => [],
 })
-defineEmits(['open'])
+defineEmits<{ open: [report: WorkbenchReport] }>()
 
 // 测试类型：场景/单接口/套件（对齐自动化测试各模块），色块与首字按类型区分
-const TYPE_LABEL = { scenario: '场景', case: '单接口', suite: '套件' }
-const TYPE_COLOR = { scenario: '#2b6cb0', case: '#2c7a7b', suite: '#6b46c1' }
-const typeLabel = (t) => TYPE_LABEL[t] || '用例'
-const colorOf = (t) => TYPE_COLOR[t] || '#2c5282'
-const time = (v) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
+const TYPE_LABEL: Record<string, string> = { scenario: '场景', case: '单接口', suite: '套件' }
+const TYPE_COLOR: Record<string, string> = { scenario: '#2b6cb0', case: '#2c7a7b', suite: '#6b46c1' }
+const typeLabel = (t: string | undefined) => TYPE_LABEL[t || ''] || '用例'
+const colorOf = (t: string | undefined) => TYPE_COLOR[t || ''] || '#2c5282'
+const time = (v: string) => (v ? new Date(v).toLocaleString('zh-CN', { hour12: false }) : '-')
 
-function pillClass(r) {
+function pillClass(r: WorkbenchReport) {
   if (r.status === 'running') return 'run'
   return r.status === 'passed' ? 'ok' : 'bad'
 }
 
-function pillText(r) {
+function pillText(r: WorkbenchReport) {
   if (r.status === 'running') return '运行中'
   const label = r.status === 'passed' ? '通过' : '失败'
   return `${label} ${r.passed_count}/${r.total_count}`

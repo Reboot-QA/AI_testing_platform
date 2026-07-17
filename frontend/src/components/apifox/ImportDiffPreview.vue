@@ -67,12 +67,19 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
+import type { Schemas } from '@/api/types'
 
-const props = defineProps({
-  diff: { type: Object, required: true },
-})
+type ImportDiffView = Schemas['ImportDiffOut'] & {
+  added: NonNullable<Schemas['ImportDiffOut']['added']>
+  changed: NonNullable<Schemas['ImportDiffOut']['changed']>
+  removed: NonNullable<Schemas['ImportDiffOut']['removed']>
+}
+
+export type { ImportDiffView }
+
+const props = defineProps<{ diff: ImportDiffView }>()
 
 const active = ref(['added', 'changed', 'removed'])
 

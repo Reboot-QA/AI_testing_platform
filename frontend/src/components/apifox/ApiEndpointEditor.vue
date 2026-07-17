@@ -164,9 +164,13 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { UploadRawFile } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
+import type { RequestSpec } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
@@ -174,17 +178,46 @@ import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
 import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
 import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
 
-const props = defineProps({
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
-  showMeta: { type: Boolean, default: true },
-  serverNames: { type: Array, default: () => [] },
-  showProcessors: { type: Boolean, default: false },
-  scripts: { type: Array, default: () => [] },
-  schemas: { type: Array, default: () => [] },
-  projectId: { type: [String, Number], default: '' },
-})
-defineEmits(['save'])
+type ScriptBrief = Schemas['ScriptBrief']
+type SchemaBrief = Schemas['SchemaBrief']
+
+export interface EndpointEditorForm {
+  method: string
+  path: string
+  name: string
+  server_name?: string | null
+  request_spec: RequestSpec
+  description?: string | null
+  response_schema_id?: number | null
+  contract_strict?: boolean
+  assertions?: Schemas['AssertionRow'][]
+  extracts?: Schemas['ExtractRow'][]
+  pre_scripts?: Schemas['CaseScriptOut'][]
+  post_scripts?: Schemas['CaseScriptOut'][]
+}
+
+const props = withDefaults(
+  defineProps<{
+    form: EndpointEditorForm
+    saving?: boolean
+    showMeta?: boolean
+    serverNames?: string[]
+    showProcessors?: boolean
+    scripts?: ScriptBrief[]
+    schemas?: SchemaBrief[]
+    projectId?: Id
+  }>(),
+  {
+    saving: false,
+    showMeta: true,
+    serverNames: () => [],
+    showProcessors: false,
+    scripts: () => [],
+    schemas: () => [],
+    projectId: '',
+  },
+)
+defineEmits<{ save: [] }>()
 
 // 兼容历史/未归一化 spec：确保 settings 存在，避免「设置」tab 的 v-model 绑定报错
 watch(
@@ -208,15 +241,15 @@ const bodyLang = computed(() => {
 
 // binary body：上传文件到项目，spec 只存 file_id + 展示名（发送时后端按 id 取字节）
 const uploading = ref(false)
-async function onPickFile(file) {
+async function onPickFile(file: UploadRawFile) {
   uploading.value = true
   try {
     const res = await apifoxApi.uploadFile(props.projectId, file)
     props.form.request_spec.body.file_id = res.id
     props.form.request_spec.body.file_name = res.filename
     ElMessage.success('已上传')
-  } catch (e) {
-    ElMessage.error(e.message || '上传失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '上传失败')
   } finally {
     uploading.value = false
   }

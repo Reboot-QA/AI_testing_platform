@@ -43,14 +43,23 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
+import type { ConditionConfig } from '@/components/apifox/ConditionEditor.vue'
 
-const props = defineProps({
-  config: { type: Object, required: true },
-})
+export interface LoopConfig {
+  mode: string
+  count?: number | null
+  list_var?: string
+  item_var?: string
+  index_var?: string
+  max_iterations?: number | null
+  condition?: ConditionConfig
+}
 
-function onModeChange(mode) {
+const props = defineProps<{ config: LoopConfig }>()
+
+function onModeChange(mode: string) {
   const c = props.config
   if (mode === 'count' && c.count == null) c.count = 1
   if (mode === 'list') {

@@ -98,35 +98,44 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { projectApi } from '@/api'
+import { projectApi, type ProjectListParams } from '@/api/project'
 import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
+import type { Project, DateInput } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
 
-const projects = ref([])
+interface ProjectForm {
+  name: string
+  description: string
+}
+
+const projects = ref<Project[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const formRef = ref()
+const editing = ref<Project | null>(null)
+const formRef = ref<FormInstance>()
 const keyword = ref('')
 const currentPage = ref(1)
 const pageSize = ref(10)
 const total = ref(0)
 
-const form = reactive({ name: '', description: '' })
-const rules = { name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }] }
+const form = reactive<ProjectForm>({ name: '', description: '' })
+const rules: FormRules<ProjectForm> = {
+  name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
+}
 
-function formatDate(d) {
+function formatDate(d: DateInput) {
   return formatBeijingTime(d, '')
 }
 
 async function loadData() {
   loading.value = true
   try {
-    const params = {
+    const params: ProjectListParams = {
       page: currentPage.value,
       page_size: pageSize.value,
     }
@@ -134,8 +143,10 @@ async function loadData() {
       params.keyword = keyword.value.trim()
     }
     const data = await projectApi.list(params)
-    projects.value = data.items || []
-    total.value = data.total || 0
+    if ('items' in data) {
+      projects.value = data.items
+      total.value = data.total
+    }
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
     if (currentPage.value > maxPage) {
       currentPage.value = maxPage
@@ -158,7 +169,7 @@ function handlePageSizeChange() {
   loadData()
 }
 
-function openDialog(row = null) {
+function openDialog(row: Project | null = null) {
   editing.value = row
   form.name = row?.name || ''
   form.description = row?.description || ''
@@ -166,7 +177,7 @@ function openDialog(row = null) {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     if (editing.value) {
@@ -183,7 +194,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Project) {
   if (row.requirement_count > 0 || row.testcase_count > 0) {
     ElMessage.warning(
       `该项目下存在 ${row.requirement_count} 条需求、${row.testcase_count} 条用例，请先清理全部关联需求和用例后再删除`,

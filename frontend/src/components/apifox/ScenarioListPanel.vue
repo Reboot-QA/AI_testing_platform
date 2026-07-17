@@ -111,29 +111,46 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, toRef, watch } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
 import {
   PRIORITY_OPTIONS,
   priorityMeta,
   useScenarioPriorityFilter,
 } from '@/composables/useScenarioPriority'
 
-const props = defineProps({
-  scenarios: { type: Array, default: () => [] },
-  folders: { type: Array, default: () => [] },
-  activeId: { type: [Number, String], default: null },
-})
-const emit = defineEmits([
-  'select',
-  'del',
-  'move',
-  'new-scenario',
-  'new-folder',
-  'rename-folder',
-  'delete-folder',
-])
+type ScenarioBrief = Schemas['ScenarioBrief']
+type ScenarioFolderOut = Schemas['ScenarioFolderOut']
+
+interface ScenarioGroup {
+  key: string
+  folder: ScenarioFolderOut | null
+  scenarios: ScenarioBrief[]
+}
+
+const props = withDefaults(
+  defineProps<{
+    scenarios?: ScenarioBrief[]
+    folders?: ScenarioFolderOut[]
+    activeId?: number | string | null
+  }>(),
+  {
+    scenarios: () => [],
+    folders: () => [],
+    activeId: null,
+  },
+)
+const emit = defineEmits<{
+  select: [id: number]
+  del: [scenario: ScenarioBrief]
+  move: [payload: { id: number; folderId: number | null }]
+  'new-scenario': []
+  'new-folder': []
+  'rename-folder': [folder: ScenarioFolderOut]
+  'delete-folder': [folder: ScenarioFolderOut]
+}>()
 
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
 
@@ -156,7 +173,7 @@ const groups = computed(() => {
 })
 
 // 拖拽需要可变数组：从 groups 派生本地可变副本，props 变化时重建
-const localGroups = ref([])
+const localGroups = ref<ScenarioGroup[]>([])
 watch(
   groups,
   (g) => {
@@ -166,7 +183,13 @@ watch(
 )
 
 // 跨分组拖放结束时持久化 folder_id（组内重排后端不支持，忽略）
-function onDragEnd(grp, evt) {
+interface ScenarioDragEndEvent {
+  from?: HTMLElement
+  to?: HTMLElement
+  item?: HTMLElement & { dataset?: { scenarioId?: string } }
+}
+
+function onDragEnd(grp: ScenarioGroup, evt: ScenarioDragEndEvent) {
   if (!evt || evt.from === evt.to) return
   const id = Number(evt.item?.dataset?.scenarioId)
   if (!id) return
@@ -178,7 +201,7 @@ function onDragEnd(grp, evt) {
   emit('move', { id, folderId: targetFolderId })
 }
 
-function onFolderCmd(cmd, folder) {
+function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
   emit(cmd === 'rename' ? 'rename-folder' : 'delete-folder', folder)
 }
 </script>

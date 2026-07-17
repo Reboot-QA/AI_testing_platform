@@ -118,14 +118,62 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { assistantApi } from '@/api'
 import { useUserStore } from '@/stores/user'
-import { executeAssistantActions, injectAssistantHighlightStyle } from '@/utils/assistantExecutor'
+import {
+  executeAssistantActions,
+  injectAssistantHighlightStyle,
+  type AssistantActionStep,
+} from '@/utils/assistantExecutor'
 import { clearAssistantChat } from '@/utils/assistantChatStorage'
+
+type MessageRole = 'user' | 'assistant'
+type ActionStatus = 'pending' | 'running' | 'done' | 'error' | 'cancelled' | null
+
+interface ExecutionLog {
+  label: string
+  status: 'running' | 'done' | 'error'
+}
+
+interface ChatMessage {
+  id: string
+  role: MessageRole
+  content: string
+  actions?: AssistantActionStep[]
+  actionStatus?: ActionStatus
+  executionLogs?: ExecutionLog[]
+  actionError?: string
+}
+
+interface Suggestion {
+  text: string
+  preset: string
+}
+
+interface StreamChatOptions {
+  displayText?: string
+  preset?: string
+  autoExecute?: boolean
+}
+
+interface RunPlanOptions {
+  resetAfterSuccess?: boolean
+}
+
+interface AssistantStreamEvent {
+  type: 'meta' | 'plan' | 'token' | 'error'
+  mode?: string
+  provider_name?: string
+  model?: string
+  actions?: AssistantActionStep[]
+  needs_confirmation?: boolean
+  content?: string
+  message?: string
+}
 
 const route = useRoute()
 const userStore = useUserStore()
@@ -134,9 +182,9 @@ const open = ref(false)
 const input = ref('')
 const loading = ref(false)
 const executing = ref(false)
-const messageListRef = ref()
+const messageListRef = ref<HTMLElement | null>(null)
 const modeLabel = ref('')
-const abortController = ref(null)
+const abortController = ref<AbortController | null>(null)
 const fabBottom = ref(24)
 const dragging = ref(false)
 const dragMoved = ref(false)
@@ -174,23 +222,23 @@ function resetAssistantChat() {
   prepareAssistantForSessionStart()
 }
 
-function buildChatPayload(excludeAssistantId) {
+function buildChatPayload(excludeAssistantId?: string) {
   return messages.value
     .filter((item) => item.id !== excludeAssistantId)
     .filter((item) => item.role === 'user' || item.content?.trim())
     .map((item) => ({ role: item.role, content: item.content }))
 }
 
-const messages = ref([])
+const messages = ref<ChatMessage[]>([])
 
-const suggestions = [
+const suggestions: Suggestion[] = [
   { text: '帮我演示项目管理全流程', preset: 'project_management_full' },
   { text: '帮我演示需求管理全流程', preset: 'requirement_management_full' },
   { text: '帮我演示用例管理全流程', preset: 'testcase_management_full' },
   { text: '帮我演示接口自动化管理全流程', preset: 'api_automation_management_full' },
 ]
 
-function formatContent(text) {
+function formatContent(text: string) {
   if (!text) return ''
   return text
     .replace(/&/g, '&amp;')
@@ -240,7 +288,7 @@ watch(open, (visible) => {
   }
 })
 
-function clampFabBottom(value) {
+function clampFabBottom(value: number) {
   const maxBottom = Math.max(FAB_MIN_BOTTOM, window.innerHeight - 120)
   return Math.min(maxBottom, Math.max(FAB_MIN_BOTTOM, value))
 }
@@ -261,30 +309,30 @@ function persistFabBottom() {
   localStorage.setItem(FAB_STORAGE_KEY, String(fabBottom.value))
 }
 
-function onDragStart(event) {
+function onDragStart(event: MouseEvent) {
   if (event.button !== 0) return
   startDrag(event.clientY)
 }
 
-function onTouchStart(event) {
+function onTouchStart(event: TouchEvent) {
   if (!event.touches?.length) return
   startDrag(event.touches[0].clientY)
 }
 
-function startDrag(clientY) {
+function startDrag(clientY: number) {
   dragging.value = true
   dragMoved.value = false
   const startY = clientY
   const startBottom = fabBottom.value
 
-  const onMove = (nextY) => {
+  const onMove = (nextY: number) => {
     const delta = startY - nextY
     if (Math.abs(delta) > 4) dragMoved.value = true
     fabBottom.value = clampFabBottom(startBottom + delta)
   }
 
-  const onMouseMove = (ev) => onMove(ev.clientY)
-  const onTouchMove = (ev) => {
+  const onMouseMove = (ev: MouseEvent) => onMove(ev.clientY)
+  const onTouchMove = (ev: TouchEvent) => {
     if (ev.touches?.length) onMove(ev.touches[0].clientY)
   }
 
@@ -310,7 +358,7 @@ function stopStreaming() {
   }
 }
 
-async function streamChat(question, options = {}) {
+async function streamChat(question: string, options: StreamChatOptions = {}) {
   const displayText = options.displayText || question
   messages.value.push({ id: createMessageId(), role: 'user', content: displayText })
   loading.value = true
@@ -340,7 +388,7 @@ async function streamChat(question, options = {}) {
         page_path: route.path,
         demo_preset: options.preset || undefined,
       },
-      (event) => {
+      (event: AssistantStreamEvent) => {
         const assistantMessage = findAssistantMessage()
         if (!assistantMessage) return
 
@@ -363,10 +411,10 @@ async function streamChat(question, options = {}) {
       },
       { signal: abortController.value.signal }
     )
-  } catch (error) {
-    if (error.name === 'AbortError') return
+  } catch (error: unknown) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
     const assistantMessage = findAssistantMessage()
-    const fallback = error.message || '助手暂时不可用'
+    const fallback = error instanceof Error ? error.message : '助手暂时不可用'
     if (assistantMessage && !assistantMessage.content) {
       assistantMessage.content = fallback
     }
@@ -385,14 +433,14 @@ async function streamChat(question, options = {}) {
   }
 }
 
-function cancelPlan(messageId) {
+function cancelPlan(messageId: string) {
   const msg = messages.value.find((item) => item.id === messageId)
   if (!msg) return
   msg.actionStatus = 'cancelled'
   msg.actions = []
 }
 
-async function runPlan(messageId, options = {}) {
+async function runPlan(messageId: string, options: RunPlanOptions = {}) {
   const msg = messages.value.find((item) => item.id === messageId)
   if (!msg?.actions?.length || executing.value) return
 
@@ -404,11 +452,12 @@ async function runPlan(messageId, options = {}) {
   let succeeded = false
   try {
     await executeAssistantActions(msg.actions, (progress) => {
-      const existing = msg.executionLogs.find((item) => item.label === progress.label)
+      const logs = msg.executionLogs ?? (msg.executionLogs = [])
+      const existing = logs.find((item) => item.label === progress.label)
       if (existing) {
         existing.status = progress.status
       } else {
-        msg.executionLogs.push({ label: progress.label, status: progress.status })
+        logs.push({ label: progress.label, status: progress.status })
       }
       scrollToBottom()
     })
@@ -416,9 +465,9 @@ async function runPlan(messageId, options = {}) {
     msg.content += '\n\n**已在浏览器中完成上述操作。**'
     ElMessage.success('自动操作已完成')
     succeeded = true
-  } catch (error) {
+  } catch (error: unknown) {
     msg.actionStatus = 'error'
-    msg.actionError = error.message || '执行失败'
+    msg.actionError = error instanceof Error ? error.message : '执行失败'
     ElMessage.error(msg.actionError)
   } finally {
     executing.value = false
@@ -436,7 +485,7 @@ function handleSend() {
   streamChat(text)
 }
 
-function sendSuggestion(item) {
+function sendSuggestion(item: Suggestion) {
   if (loading.value || executing.value || !item?.preset) return
   streamChat(item.text, {
     preset: item.preset,

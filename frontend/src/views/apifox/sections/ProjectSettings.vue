@@ -70,10 +70,11 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { projectApi, userApi } from '@/api'
 import { useUserStore } from '@/stores/user'
 import ProjectScriptsPanel from '@/components/apifox/ProjectScriptsPanel.vue'
@@ -84,7 +85,7 @@ const pid = computed(() => route.params.projectId)
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.isAdmin)
-const users = ref([])
+const users = ref<Schemas['UserOut'][]>([])
 // 硬删除仅项目负责人/系统管理员可见（与工作台卡片、后端校验一致）
 const canDelete = computed(() => isAdmin.value || basicForm.owner_id === userStore.user?.id)
 
@@ -93,9 +94,9 @@ const SECTIONS = [
   { key: 'scripts', label: '脚本库', icon: 'Tickets' },
 ]
 
-const section = ref('basic')
+const section = ref<'basic' | 'scripts'>('basic')
 const savingBasic = ref(false)
-const basicForm = reactive({ name: '', description: '', owner_id: null })
+const basicForm = reactive({ name: '', description: '', owner_id: null as number | null })
 
 async function loadBasic() {
   const p = await projectApi.get(pid.value)

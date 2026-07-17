@@ -81,7 +81,7 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { departmentApi } from '@/api'
@@ -92,10 +92,11 @@ import {
   STANDALONE_BUSINESS_MENUS,
   SYSTEM_MENUS,
 } from '@/config/menus'
+import type { Department } from '@/types/common'
 
-const departments = ref([])
-const selectedDepartmentId = ref(null)
-const selectedMenus = ref([])
+const departments = ref<Department[]>([])
+const selectedDepartmentId = ref<number | null>(null)
+const selectedMenus = ref<string[]>([])
 const permissionLoading = ref(false)
 const saving = ref(false)
 

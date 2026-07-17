@@ -56,11 +56,22 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
+import type { Schemas } from '@/api/types'
 
-defineProps({ variables: { type: Array, default: () => [] } })
-const emit = defineEmits(['create', 'update', 'delete', 'set-local'])
+type VariableOut = Schemas['VariableOut']
+type VariableCreate = Schemas['VariableCreate']
+
+withDefaults(defineProps<{ variables?: VariableOut[] }>(), {
+  variables: () => [],
+})
+const emit = defineEmits<{
+  create: [payload: VariableCreate]
+  update: [id: number, payload: Partial<VariableOut>]
+  delete: [id: number]
+  'set-local': [id: number, value: string | null]
+}>()
 
 const newKey = ref('')
 const newVal = ref('')
