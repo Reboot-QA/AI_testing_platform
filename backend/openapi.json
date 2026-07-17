@@ -13915,6 +13915,14 @@
           "notify_aigen": {
             "type": "boolean",
             "title": "Notify Aigen"
+          },
+          "retry_count": {
+            "type": "integer",
+            "title": "Retry Count"
+          },
+          "retry_interval_sec": {
+            "type": "integer",
+            "title": "Retry Interval Sec"
           }
         },
         "type": "object",
@@ -13924,7 +13932,9 @@
           "telegram_enabled",
           "notify_schedule",
           "notify_run",
-          "notify_aigen"
+          "notify_aigen",
+          "retry_count",
+          "retry_interval_sec"
         ],
         "title": "NotifyConfigOut"
       },
@@ -14030,6 +14040,20 @@
             "type": "boolean",
             "title": "Notify Aigen",
             "default": true
+          },
+          "retry_count": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Retry Count",
+            "default": 0
+          },
+          "retry_interval_sec": {
+            "type": "integer",
+            "maximum": 60.0,
+            "minimum": 1.0,
+            "title": "Retry Interval Sec",
+            "default": 5
           }
         },
         "type": "object",

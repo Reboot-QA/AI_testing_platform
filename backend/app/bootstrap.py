@@ -6,12 +6,14 @@ from app.services.api_automation_migration import (
     migrate_requirement_created_by,
     migrate_testcase_created_by,
 )
+from app.services.apifox.ai_gen_worker import init_ai_gen_tasks_on_startup
 from app.services.apifox.migration import (
     migrate_apifox_assertion_operator,
     migrate_apifox_case_category,
     migrate_apifox_endpoint_contract,
     migrate_apifox_endpoint_server_name,
     migrate_apifox_folder_kind,
+    migrate_apifox_notify_retry,
     migrate_apifox_optimistic_version,
     migrate_apifox_run_iteration,
     migrate_apifox_run_parent,
@@ -24,7 +26,6 @@ from app.services.apifox.migration import (
     migrate_apifox_scenario_step_tree,
     migrate_apifox_schedule_cron,
 )
-from app.services.apifox.ai_gen_worker import init_ai_gen_tasks_on_startup
 from app.services.apifox.scheduler import init_schedules_on_startup
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.seed import seed_demo_data
@@ -59,6 +60,7 @@ def run_bootstrap() -> None:
         ("迁移文件夹kind列", migrate_apifox_folder_kind),
         ("迁移场景文件夹列", migrate_apifox_scenario_folder),
         ("迁移运行步骤告警列", migrate_apifox_run_step_warnings),
+        ("迁移失败通知重试列", migrate_apifox_notify_retry),
         ("写入演示数据", seed_demo_data),
         ("加载 LLM 配置", init_llm_settings_from_env),
         ("迁移菜单权限", migrate_all_user_permissions),

@@ -52,6 +52,8 @@ def config_out(cfg: ApifoxNotifyConfig) -> NotifyConfigOut:
         notify_schedule=cfg.notify_schedule,
         notify_run=cfg.notify_run,
         notify_aigen=cfg.notify_aigen,
+        retry_count=cfg.retry_count,
+        retry_interval_sec=cfg.retry_interval_sec,
     )
 
 
@@ -68,6 +70,8 @@ def update_config(db: Session, project_id: int, data: NotifyConfigUpdate) -> Api
     cfg.notify_schedule = data.notify_schedule
     cfg.notify_run = data.notify_run
     cfg.notify_aigen = data.notify_aigen
+    cfg.retry_count = data.retry_count
+    cfg.retry_interval_sec = data.retry_interval_sec
     if data.smtp_password:  # 留空=保留原密钥
         cfg.smtp_password = data.smtp_password
     if data.telegram_bot_token:
