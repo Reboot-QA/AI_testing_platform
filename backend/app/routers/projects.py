@@ -14,18 +14,22 @@ from app.models.user import User
 from app.schemas import (
     DashboardStats,
     ProjectCreate,
+    ProjectMemberAddIn,
+    ProjectMemberCandidateOut,
+    ProjectMemberOut,
     ProjectOut,
     ProjectPageOut,
     ProjectPrefOrderIn,
     ProjectUpdate,
 )
-from app.services import user_project_pref_service
+from app.services import project_member_service, user_project_pref_service
 from app.services.apifox.project_cleanup import purge_project_all
 from app.services.project_access_service import (
     accessible_projects_query,
     get_accessible_project,
     get_accessible_project_ids,
     is_admin,
+    is_project_manager,
 )
 
 router = APIRouter(prefix="/projects", tags=["项目"])
@@ -168,6 +172,9 @@ def update_project(
         if not db.query(User).filter(User.id == new_owner_id).first():
             raise HTTPException(status_code=404, detail="指定的负责人用户不存在")
         project.owner_id = new_owner_id
+    # 项目名称仅项目负责人/系统管理员可改，成员不可改名
+    if "name" in payload and payload["name"] != project.name and not is_project_manager(current_user, project):
+        raise HTTPException(status_code=403, detail="仅项目负责人或系统管理员可修改项目名称")
     for key, value in payload.items():
         setattr(project, key, value)
     db.commit()
@@ -185,3 +192,52 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
     db.delete(project)
     db.commit()
     return {"message": "删除成功"}
+
+
+# ---------- 项目成员（显式授权，跨部门加人） ----------
+def _manager_project(db: Session, project_id: int, user: User) -> Project:
+    """管理成员需项目负责人或系统管理员。"""
+    project = get_accessible_project(db, project_id, user)
+    if not is_project_manager(user, project):
+        raise HTTPException(status_code=403, detail="仅项目负责人或系统管理员可管理成员")
+    return project
+
+
+@router.get("/{project_id}/members", response_model=List[ProjectMemberOut])
+def list_project_members(
+    project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    get_accessible_project(db, project_id, current_user)  # 项目可见即可查看成员
+    return project_member_service.list_members(db, project_id)
+
+
+@router.get("/{project_id}/member-candidates", response_model=List[ProjectMemberCandidateOut])
+def list_member_candidates(
+    project_id: int,
+    keyword: Optional[str] = Query(None, max_length=200),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _manager_project(db, project_id, current_user)
+    return project_member_service.list_candidates(db, project_id, keyword)
+
+
+@router.post("/{project_id}/members", response_model=ProjectMemberOut)
+def add_project_member(
+    project_id: int,
+    data: ProjectMemberAddIn,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _manager_project(db, project_id, current_user)
+    return project_member_service.add_member(db, project_id, data.user_id, current_user.id)
+
+
+@router.delete("/{project_id}/members/{user_id}")
+def remove_project_member(
+    project_id: int, user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+):
+    _manager_project(db, project_id, current_user)
+    if not project_member_service.remove_member(db, project_id, user_id):
+        raise HTTPException(status_code=404, detail="该用户不是项目成员")
+    return {"message": "已移除成员"}

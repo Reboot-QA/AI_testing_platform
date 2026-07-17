@@ -130,6 +130,12 @@ export const apifoxApi = {
   deleteScript: (sid: Id) => del<any>(`/apifox/scripts/${sid}`),
   debugScript: (data: Schemas['ScriptDebugIn']) =>
     post<Schemas['ScriptDebugOut']>('/apifox/scripts/debug', data),
+  listDebugPresets: (pid: Id) =>
+    get<Schemas['DebugPresetOut'][]>(`/apifox/projects/${pid}/script-debug-presets`),
+  saveDebugPreset: (pid: Id, data: Schemas['DebugPresetIn']) =>
+    put<Schemas['DebugPresetOut']>(`/apifox/projects/${pid}/script-debug-presets`, data),
+  deleteDebugPreset: (pid: Id, presetId: Id) =>
+    del<{ message: string }>(`/apifox/projects/${pid}/script-debug-presets/${presetId}`),
 
   listGlobalParams: (pid: Id) =>
     get<Schemas['GlobalParamOut'][]>(`/apifox/projects/${pid}/global-params`),

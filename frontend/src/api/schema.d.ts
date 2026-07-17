@@ -146,6 +146,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Project Members */
+        get: operations["list_project_members_api_v1_projects__project_id__members_get"];
+        put?: never;
+        /** Add Project Member */
+        post: operations["add_project_member_api_v1_projects__project_id__members_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/member-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Member Candidates */
+        get: operations["list_member_candidates_api_v1_projects__project_id__member_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{project_id}/members/{user_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Project Member */
+        delete: operations["remove_project_member_api_v1_projects__project_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements": {
         parameters: {
             query?: never;
@@ -1549,6 +1601,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/script-debug-presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Debug Presets */
+        get: operations["list_debug_presets_api_v1_apifox_projects__pid__script_debug_presets_get"];
+        /** Save Debug Preset */
+        put: operations["save_debug_preset_api_v1_apifox_projects__pid__script_debug_presets_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/projects/{pid}/script-debug-presets/{preset_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Debug Preset */
+        delete: operations["delete_debug_preset_api_v1_apifox_projects__pid__script_debug_presets__preset_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/scripts/{sid}": {
         parameters: {
             query?: never;
@@ -2904,6 +2991,48 @@ export interface components {
             /** Expected Version */
             expected_version?: number | null;
         };
+        /** DebugPresetIn */
+        DebugPresetIn: {
+            /** Name */
+            name: string;
+            /**
+             * Phase
+             * @default pre
+             * @enum {string}
+             */
+            phase: "pre" | "post";
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+            /**
+             * Response Status
+             * @default 200
+             */
+            response_status: number;
+            /**
+             * Response Body
+             * @default
+             */
+            response_body: string;
+        };
+        /** DebugPresetOut */
+        DebugPresetOut: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Phase */
+            phase: string;
+            /** Variables */
+            variables?: {
+                [key: string]: string;
+            };
+            /** Response Status */
+            response_status: number;
+            /** Response Body */
+            response_body: string;
+        };
         /** DebugRequest */
         DebugRequest: {
             /**
@@ -3967,6 +4096,50 @@ export interface components {
             name: string;
             /** Description */
             description?: string | null;
+        };
+        /** ProjectMemberAddIn */
+        ProjectMemberAddIn: {
+            /** User Id */
+            user_id: number;
+        };
+        /** ProjectMemberCandidateOut */
+        ProjectMemberCandidateOut: {
+            /** Id */
+            id: number;
+            /** Username */
+            username: string;
+            /** Full Name */
+            full_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /**
+             * Department Name
+             * @default
+             */
+            department_name: string;
+        };
+        /** ProjectMemberOut */
+        ProjectMemberOut: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number;
+            /** Username */
+            username: string;
+            /** Full Name */
+            full_name?: string | null;
+            /** Email */
+            email?: string | null;
+            /**
+             * Department Name
+             * @default
+             */
+            department_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /** ProjectOut */
         ProjectOut: {
@@ -5868,6 +6041,137 @@ export interface operations {
             header?: never;
             path: {
                 project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_project_members_api_v1_projects__project_id__members_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMemberOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_project_member_api_v1_projects__project_id__members_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectMemberAddIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMemberOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_member_candidates_api_v1_projects__project_id__member_candidates_get: {
+        parameters: {
+            query?: {
+                keyword?: string | null;
+            };
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMemberCandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_project_member_api_v1_projects__project_id__members__user_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+                user_id: number;
             };
             cookie?: never;
         };
@@ -9679,6 +9983,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ScriptDebugOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_debug_presets_api_v1_apifox_projects__pid__script_debug_presets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebugPresetOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_debug_preset_api_v1_apifox_projects__pid__script_debug_presets_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DebugPresetIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DebugPresetOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_debug_preset_api_v1_apifox_projects__pid__script_debug_presets__preset_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+                preset_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
