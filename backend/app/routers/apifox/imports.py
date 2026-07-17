@@ -5,6 +5,7 @@ from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -64,6 +65,10 @@ def import_openapi(
         report = import_service.import_openapi(db, pid, _load_doc(data))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except IntegrityError:
+        db.rollback()
+        logger.exception("OpenAPI 导入唯一约束冲突 pid=%s", pid)
+        raise HTTPException(status_code=409, detail="导入的接口或数据模型存在重名，请检查后重试")
     except _DOC_STRUCTURE_ERRORS as exc:
         db.rollback()
         raise _doc_error(pid, "导入", exc)
@@ -100,6 +105,10 @@ def import_openapi_sync(
         return import_sync_service.apply_sync(db, pid, _load_doc(data), data.delete_unreferenced)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+    except IntegrityError:
+        db.rollback()
+        logger.exception("OpenAPI 更新同步唯一约束冲突 pid=%s", pid)
+        raise HTTPException(status_code=409, detail="导入的接口或数据模型存在重名，请检查后重试")
     except _DOC_STRUCTURE_ERRORS as exc:
         db.rollback()
         raise _doc_error(pid, "更新同步", exc)
