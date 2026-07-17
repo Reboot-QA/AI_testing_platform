@@ -24,6 +24,7 @@ from app.services.apifox.migration import (
     migrate_apifox_scenario_step_tree,
     migrate_apifox_schedule_cron,
 )
+from app.services.apifox.ai_gen_worker import init_ai_gen_tasks_on_startup
 from app.services.apifox.scheduler import init_schedules_on_startup
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.seed import seed_demo_data
@@ -62,6 +63,7 @@ def run_bootstrap() -> None:
         ("加载 LLM 配置", init_llm_settings_from_env),
         ("迁移菜单权限", migrate_all_user_permissions),
         ("初始化定时任务", init_schedules_on_startup),
+        ("恢复残留AI生成任务", init_ai_gen_tasks_on_startup),
     ]
 
     import app.models  # noqa: F401

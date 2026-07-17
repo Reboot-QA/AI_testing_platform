@@ -1,3 +1,4 @@
+from app.models.apifox.ai_gen_task import ApifoxAiGenTask, ApifoxAiGenTaskItem
 from app.models.apifox.case import (
     ApifoxCaseAssertion,
     ApifoxCaseExtract,
@@ -29,6 +30,8 @@ from app.models.apifox.variable import (
 )
 
 __all__ = [
+    "ApifoxAiGenTask",
+    "ApifoxAiGenTaskItem",
     "ApifoxFolder",
     "ApifoxEndpoint",
     "ApifoxEndpointAssertion",

@@ -3,11 +3,18 @@
     <div class="rp-head">
       <span>运行进度</span>
       <el-tag v-if="running" size="small" type="warning">执行中…</el-tag>
-      <el-tag v-else-if="doneEvent" size="small" :type="doneEvent.status === 'passed' ? 'success' : 'danger'">
-        {{ doneEvent.status === 'passed' ? '通过' : '失败' }} · 通过率 {{ doneEvent.pass_rate }}%
-        · {{ Math.round(doneEvent.duration_ms || 0) }}ms
+      <el-tag
+        v-else-if="doneEvent"
+        size="small"
+        :type="doneEvent.status === 'passed' ? 'success' : 'danger'"
+      >
+        {{ doneEvent.status === 'passed' ? '通过' : '失败' }} · 通过率 {{ doneEvent.pass_rate }}% ·
+        {{ Math.round(doneEvent.duration_ms || 0) }}ms
       </el-tag>
       <el-tag v-else-if="errorEvent" size="small" type="danger">错误</el-tag>
+      <el-button v-if="runId" link type="primary" size="small" @click="viewReport">
+        查看测试报告
+      </el-button>
       <el-button link size="small" @click="$emit('clear')">收起</el-button>
     </div>
 
@@ -29,6 +36,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { iterationLabel } from '@/utils/iterationLabel'
 
 const props = defineProps({
@@ -36,6 +44,16 @@ const props = defineProps({
   running: { type: Boolean, default: false },
 })
 defineEmits(['clear'])
+
+const route = useRoute()
+const router = useRouter()
+
+// 本次运行的 run_id（start 事件携带）；有则可跳转到「测试报告」定位该次报告
+const runId = computed(() => props.events.find((e) => e.type === 'start')?.run_id)
+function viewReport() {
+  if (!runId.value) return
+  router.push(`/apifox/project/${route.params.projectId}/reports?run=${runId.value}`)
+}
 
 const stepEvents = computed(() => props.events.filter((e) => e.type === 'step'))
 const doneEvent = computed(() => props.events.find((e) => e.type === 'done'))

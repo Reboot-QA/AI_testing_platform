@@ -34,6 +34,8 @@ class SuiteUpdate(BaseModel):
     description: Optional[str] = None
     items: Optional[List[SuiteItemIn]] = None
     sort_order: Optional[int] = None
+    # 乐观锁：客户端读取时的版本；不一致则 409（None=不校验，向后兼容）
+    expected_version: Optional[int] = None
 
 
 class SuiteBrief(BaseModel):
@@ -51,5 +53,6 @@ class SuiteOut(BaseModel):
     description: Optional[str] = None
     items: List[SuiteItemOut]
     sort_order: int
+    version: int = 1
     created_at: datetime
     updated_at: datetime
