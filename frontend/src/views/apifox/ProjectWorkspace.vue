@@ -28,7 +28,21 @@
       >
         <el-option v-for="e in store.environments" :key="e.id" :label="e.name" :value="e.id" />
       </el-select>
+      <el-button size="small" text title="环境管理" @click="envDialogVisible = true">
+        <el-icon><Setting /></el-icon>
+      </el-button>
     </div>
+
+    <el-dialog
+      v-model="envDialogVisible"
+      title="环境管理"
+      width="900px"
+      top="6vh"
+      destroy-on-close
+      class="env-dialog"
+    >
+      <EnvManage />
+    </el-dialog>
 
     <el-tabs v-model="activeTab" class="ws-tabs" @tab-change="onTabChange">
       <el-tab-pane v-for="s in sections" :key="s.key" :label="s.label" :name="s.key" />
@@ -49,10 +63,12 @@ import type { Schemas } from '@/api/types'
 import { unwrapProjectList } from '@/api/project'
 import { projectApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
+import EnvManage from '@/views/apifox/sections/EnvManage.vue'
 
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
+const envDialogVisible = ref(false)
 
 const sections = [
   { key: 'apis', label: '接口管理' },
@@ -136,6 +152,13 @@ watch(
 
 .env-switch {
   width: 180px;
+}
+
+/* 弹窗内嵌整页环境管理：给 body 固定高度，EnvManage 的 flex 布局才能撑开 */
+.env-dialog :deep(.el-dialog__body) {
+  height: 72vh;
+  padding-top: 8px;
+  overflow: hidden;
 }
 
 .ws-content {
