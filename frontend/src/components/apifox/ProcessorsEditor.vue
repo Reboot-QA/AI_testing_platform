@@ -55,7 +55,7 @@
         >
           <el-option v-for="o in OPERATORS" :key="o.value" :label="o.label" :value="o.value" />
         </el-select>
-        <el-input v-model="op.expected" size="small" placeholder="期望值" style="flex: 1" />
+        <VarInput v-model="op.expected" placeholder="期望值" style="flex: 1" />
       </template>
 
       <!-- 提取 -->
@@ -69,7 +69,7 @@
             :value="s.value"
           />
         </el-select>
-        <el-input v-model="op.path" size="small" placeholder="路径/表达式" style="width: 140px" />
+        <VarInput v-model="op.path" placeholder="路径/表达式" style="width: 140px" />
         <el-select v-model="op.scope" size="small" style="width: 100px">
           <el-option
             v-for="sc in VARIABLE_SCOPE_OPTIONS"
@@ -115,6 +115,7 @@
 import { computed, ref } from 'vue'
 import type { Schemas } from '@/api/types'
 import { EXTRACT_SOURCE_OPTIONS, VARIABLE_SCOPE_OPTIONS } from '@/utils/apiCaseConfig'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 
 type Processor = Schemas['ProcessorRow']
 
