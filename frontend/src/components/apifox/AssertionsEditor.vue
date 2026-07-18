@@ -5,9 +5,8 @@
       <el-select v-model="row.type" size="small" style="width: 120px">
         <el-option v-for="t in TYPES" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
-      <el-input
+      <VarInput
         v-model="row.path"
-        size="small"
         :disabled="!needsPath(row.type)"
         :placeholder="pathPlaceholder(row.type)"
         style="width: 150px"
@@ -21,9 +20,8 @@
         <el-option v-for="o in OPERATORS" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
       <span v-else class="op-na">{{ impliedOp(row.type) }}</span>
-      <el-input
+      <VarInput
         v-model="row.expected"
-        size="small"
         :disabled="row.operator === 'exists' && needsOperator(row.type)"
         placeholder="期望值"
       />
@@ -39,6 +37,7 @@
 
 <script setup lang="ts">
 import type { Schemas } from '@/api/types'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 
 type AssertionRow = Schemas['AssertionRow']
 

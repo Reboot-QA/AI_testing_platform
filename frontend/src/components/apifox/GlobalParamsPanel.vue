@@ -16,7 +16,7 @@
       </el-table-column>
       <el-table-column label="值" min-width="180">
         <template #default="{ row }">
-          <el-input v-model="row.value" size="small" @change="updateParam(row)" />
+          <VarInput v-model="row.value" @change="updateParam(row)" />
         </template>
       </el-table-column>
       <el-table-column label="启用" width="70" align="center">
@@ -48,6 +48,7 @@ import { onMounted, reactive, ref } from 'vue'
 import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 
 const props = defineProps<{ projectId: Id }>()
 

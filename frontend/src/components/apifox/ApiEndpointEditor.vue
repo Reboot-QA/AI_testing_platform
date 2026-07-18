@@ -13,7 +13,12 @@
         >
           <el-option v-for="n in serverNames" :key="n" :label="n" :value="n" />
         </el-select>
-        <el-input v-model="form.path" placeholder="/path/to/api" class="path-input" />
+        <VarInput
+          v-model="form.path"
+          size="default"
+          placeholder="/path/to/api"
+          class="path-input"
+        />
         <el-button type="primary" :loading="saving" @click="$emit('save')">保存</el-button>
       </div>
       <el-input v-model="form.name" placeholder="接口名称" class="name-input" />
@@ -79,20 +84,23 @@
           <el-radio-button value="bearer">Bearer</el-radio-button>
           <el-radio-button value="basic">Basic</el-radio-button>
         </el-radio-group>
-        <el-input
+        <VarInput
           v-if="form.request_spec.auth.type === 'bearer'"
           v-model="form.request_spec.auth.token"
+          size="default"
           placeholder="Token"
           class="auth-input"
         />
         <template v-else-if="form.request_spec.auth.type === 'basic'">
-          <el-input
+          <VarInput
             v-model="form.request_spec.auth.username"
+            size="default"
             placeholder="用户名"
             class="auth-input"
           />
-          <el-input
+          <VarInput
             v-model="form.request_spec.auth.password"
+            size="default"
             placeholder="密码"
             class="auth-input"
           />
@@ -157,6 +165,7 @@ import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
 import ProcessorsEditor from '@/components/apifox/ProcessorsEditor.vue'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 
 type ScriptBrief = Schemas['ScriptBrief']
 type SchemaBrief = Schemas['SchemaBrief']
