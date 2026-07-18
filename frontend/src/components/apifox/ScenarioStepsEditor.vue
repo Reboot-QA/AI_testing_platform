@@ -56,9 +56,10 @@
           v-if="newType === 'case'"
           v-model="pickedCaseId"
           size="small"
-          placeholder="选择接口用例"
+          placeholder="选择用例（可留空加占位步骤）"
           style="flex: 1"
           filterable
+          clearable
         >
           <el-option
             v-for="c in cases"
@@ -244,7 +245,7 @@ const availableScenarios = computed(() =>
 )
 
 const canAdd = computed(() => {
-  if (newType.value === 'case') return !!pickedCaseId.value
+  if (newType.value === 'case') return true // 允许不选用例先加空白占位步骤，之后在右侧详情补选
   if (newType.value === 'wait') return waitMs.value > 0
   if (newType.value === 'scenario') return !!pickedScenarioId.value
   if (newType.value === 'import-endpoint') return !!pickedEndpointId.value
@@ -324,14 +325,14 @@ function importFromCurl() {
 
 function addStep() {
   if (newType.value === 'case') {
+    // 未选用例则加空白占位步骤（ref_case_id 为空），之后在右侧详情补选
     const c = props.cases.find((x) => x.id === pickedCaseId.value)
-    if (!c) return
     props.rows.push({
       type: 'case',
-      ref_case_id: c.id,
+      ref_case_id: c ? c.id : null,
       enabled: true,
-      case_name: c.name,
-      endpoint_method: c.endpoint_method,
+      case_name: c ? c.name : '未指定用例',
+      endpoint_method: c ? c.endpoint_method : undefined,
       _uid: ++_seq,
     })
     pickedCaseId.value = null
