@@ -42,7 +42,7 @@
           size="small"
           class="kv-val"
         />
-        <el-input v-else v-model="row.value" placeholder="值" size="small" class="kv-val" />
+        <VarInput v-else v-model="row.value" placeholder="值" class="kv-val" />
 
         <el-select
           v-if="showType"
@@ -83,6 +83,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from 'vue'
 import type { KvRow } from '@/types/apifox'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 import { emptyKvRow } from '@/utils/apiCaseConfig'
 import {
   COMMON_HEADER_PRESETS,
