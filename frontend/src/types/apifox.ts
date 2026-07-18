@@ -257,6 +257,8 @@ export interface RequestSpecHolderForm {
   extracts?: Schemas['ExtractRow'][]
   pre_scripts?: Schemas['CaseScriptOut'][]
   post_scripts?: Schemas['CaseScriptOut'][]
+  pre_processors?: Schemas['ProcessorRow'][]
+  post_processors?: Schemas['ProcessorRow'][]
 }
 
 export interface EndpointEditorForm {
@@ -272,6 +274,8 @@ export interface EndpointEditorForm {
   extracts?: Schemas['ExtractRow'][]
   pre_scripts?: Schemas['CaseScriptOut'][]
   post_scripts?: Schemas['CaseScriptOut'][]
+  pre_processors?: Schemas['ProcessorRow'][]
+  post_processors?: Schemas['ProcessorRow'][]
 }
 
 export interface ApiDocPreviewForm {

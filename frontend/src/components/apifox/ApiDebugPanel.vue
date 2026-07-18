@@ -91,6 +91,7 @@ import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { processorsToLegacy } from '@/utils/caseProcessors'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 import ActualRequestView from '@/components/apifox/ActualRequestView.vue'
@@ -132,23 +133,22 @@ const statusType = computed(() => {
 async function send() {
   sending.value = true
   try {
+    // debug 直发仍用旧管线：从当前有序处理器实时派生（wait/顺序在快速直发里忽略）
+    const legacy = processorsToLegacy(
+      props.form.pre_processors || [],
+      props.form.post_processors || [],
+    )
     resp.value = await apifoxApi.debugSend(props.projectId, {
       method: props.form.method,
       path: props.form.path,
       server_name: props.form.server_name,
       request_spec: props.form.request_spec as Schemas['DebugRequest']['request_spec'],
       environment_id: store.currentEnvironmentId,
-      assertions: props.form.assertions || [],
-      extracts: props.form.extracts || [],
-      pre_scripts: (props.form.pre_scripts || []).map(({ script_id, enabled }) => ({
-        script_id,
-        enabled,
-      })),
-      post_scripts: (props.form.post_scripts || []).map(({ script_id, enabled }) => ({
-        script_id,
-        enabled,
-      })),
-      response_schema_id: props.form.response_schema_id || null,
+      assertions: legacy.assertions as Schemas['DebugRequest']['assertions'],
+      extracts: legacy.extracts as Schemas['DebugRequest']['extracts'],
+      pre_scripts: legacy.pre_scripts as Schemas['DebugRequest']['pre_scripts'],
+      post_scripts: legacy.post_scripts as Schemas['DebugRequest']['post_scripts'],
+      response_schema_id: legacy.response_schema_id,
     })
     respTab.value = 'body'
   } catch (e: unknown) {

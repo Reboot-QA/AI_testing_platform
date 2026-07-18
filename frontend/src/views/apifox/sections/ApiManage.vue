@@ -86,6 +86,7 @@ import { useRouteParamId } from '@/composables/useRouteParamId'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useApiTabsStore } from '@/stores/apiTabs'
+import { processorsToLegacy } from '@/utils/caseProcessors'
 import { useProjectScripts } from '@/composables/useProjectScripts'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
@@ -140,6 +141,7 @@ async function onSelectEndpoint(id: number) {
 }
 
 function endpointPayload(form: EndpointEditorForm): Schemas['EndpointUpdate'] {
+  const legacy = processorsToLegacy(form.pre_processors ?? [], form.post_processors ?? [])
   return {
     name: form.name,
     method: form.method,
@@ -147,15 +149,15 @@ function endpointPayload(form: EndpointEditorForm): Schemas['EndpointUpdate'] {
     server_name: form.server_name,
     description: form.description,
     request_spec: form.request_spec as Schemas['EndpointUpdate']['request_spec'],
-    assertions: form.assertions,
-    extracts: form.extracts,
-    pre_scripts: (form.pre_scripts ?? []).map(({ script_id, enabled }) => ({ script_id, enabled })),
-    post_scripts: (form.post_scripts ?? []).map(({ script_id, enabled }) => ({
-      script_id,
-      enabled,
-    })),
-    response_schema_id: form.response_schema_id,
-    contract_strict: form.contract_strict,
+    // 有序处理器为单一事实来源：清空旧分列字段；契约字段从处理器同步（供 debug 直发与回退）
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
+    pre_processors: form.pre_processors ?? [],
+    post_processors: form.post_processors ?? [],
+    response_schema_id: legacy.response_schema_id,
+    contract_strict: legacy.contract_strict,
   }
 }
 

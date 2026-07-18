@@ -14,6 +14,7 @@ from app.routers.apifox.schemas import (
     CaseScriptRef,
     ExtractRow,
     KvRow,
+    ProcessorRow,
     RequestSpec,
 )
 
@@ -22,6 +23,7 @@ __all__ = [
     "ExtractRow",
     "CaseScriptRef",
     "CaseScriptOut",
+    "ProcessorRow",
     "DataDriveRow",
     "DataDrive",
     "CaseCreate",
@@ -62,6 +64,9 @@ class CaseCreate(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
     post_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    # 有序处理器（自由混排，非空则取代上面的分列字段与旧固定管线）
+    pre_processors: List[ProcessorRow] = Field(default_factory=list)
+    post_processors: List[ProcessorRow] = Field(default_factory=list)
 
 
 class AiGenCategory(BaseModel):
@@ -89,6 +94,8 @@ class CaseUpdate(BaseModel):
     extracts: Optional[List[ExtractRow]] = None
     pre_scripts: Optional[List[CaseScriptRef]] = None
     post_scripts: Optional[List[CaseScriptRef]] = None
+    pre_processors: Optional[List[ProcessorRow]] = None
+    post_processors: Optional[List[ProcessorRow]] = None
     sort_order: Optional[int] = None
     # 乐观锁：客户端读取时的版本；服务端不一致则 409（None=不校验，向后兼容）
     expected_version: Optional[int] = None
@@ -125,6 +132,8 @@ class CaseOut(BaseModel):
     extracts: List[ExtractRow]
     pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
     post_scripts: List[CaseScriptOut] = Field(default_factory=list)
+    pre_processors: List[ProcessorRow] = Field(default_factory=list)
+    post_processors: List[ProcessorRow] = Field(default_factory=list)
     sort_order: int
     version: int = 1
     created_at: datetime

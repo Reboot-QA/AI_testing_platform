@@ -223,6 +223,22 @@ def migrate_apifox_run_step_warnings(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_ordered_processors(db: Session) -> None:
+    """apifox_endpoint_cases / apifox_endpoints 加 pre_processors/post_processors（有序处理器 JSON）。"""
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
+    with engine.begin() as conn:
+        for table in ("apifox_endpoint_cases", "apifox_endpoints"):
+            if table not in tables:
+                continue
+            cols = {c["name"] for c in inspector.get_columns(table)}
+            if "pre_processors" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN pre_processors TEXT"))
+            if "post_processors" not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN post_processors TEXT"))
+    db.expire_all()
+
+
 def migrate_apifox_notify_retry(db: Session) -> None:
     """apifox_notify_configs 加 retry_count/retry_interval_sec（定时任务失败自动重试，项目级）。"""
     inspector = inspect(engine)

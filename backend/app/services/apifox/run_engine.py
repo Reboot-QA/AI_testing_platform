@@ -326,6 +326,129 @@ def _send_request(
 
 
 # ---------- 单用例执行 ----------
+_MAX_PROC_WAIT_MS = 60000
+
+
+class _Op:
+    """有序处理器项（鸭子兼容 evaluate_assertions/run_extracts/run_script_links 的属性访问）。
+
+    不引 routers.schemas 的 ProcessorRow，避免 run_engine 触发 routers 包的循环导入。
+    """
+
+    __slots__ = (
+        "kind", "enabled", "script_id", "wait_ms", "type", "path", "operator",
+        "expected", "var_name", "source", "scope", "response_schema_id", "contract_strict",
+    )
+
+    def __init__(self, **kw):
+        self.kind = kw.get("kind")
+        self.enabled = kw.get("enabled", True)
+        self.script_id = kw.get("script_id")
+        self.wait_ms = kw.get("wait_ms")
+        self.type = kw.get("type")
+        self.path = kw.get("path")
+        self.operator = kw.get("operator") or "eq"
+        self.expected = kw.get("expected")
+        self.var_name = kw.get("var_name")
+        self.source = kw.get("source") or "response_json"
+        self.scope = kw.get("scope") or "temporary"
+        self.response_schema_id = kw.get("response_schema_id")
+        self.contract_strict = kw.get("contract_strict")
+
+
+def _parse_processors(raw) -> List["_Op"]:
+    data = _loads(raw, None)
+    if not isinstance(data, list):
+        return []
+    return [_Op(**x) for x in data if isinstance(x, dict)]
+
+
+def _script_op(link) -> "_Op":
+    return _Op(kind="script", script_id=link.script_id, enabled=link.enabled)
+
+
+def _fallback_pre_ops(pre_script_links) -> List["_Op"]:
+    """无前置处理器时，把旧前置脚本按序转成 script 处理器（保持旧行为）。"""
+    return [_script_op(link) for link in pre_script_links]
+
+
+def _fallback_post_ops(assertions, contract_schema_id, contract_strict, extracts, post_script_links):
+    """无后置处理器时，把旧的 断言→契约→提取→后置脚本 按旧固定顺序转成处理器列表。"""
+    ops: List[_Op] = [
+        _Op(kind="assertion", type=a.type, path=a.path, operator=a.operator,
+            expected=a.expected, enabled=a.enabled)
+        for a in assertions
+    ]
+    if contract_schema_id:
+        ops.append(_Op(kind="contract", response_schema_id=contract_schema_id,
+                       contract_strict=bool(contract_strict), enabled=True))
+    ops += [
+        _Op(kind="extract", var_name=e.var_name, source=e.source, path=e.path,
+            scope=e.scope, enabled=e.enabled)
+        for e in extracts
+    ]
+    ops += [_script_op(link) for link in post_script_links]
+    return ops
+
+
+def _run_pre_ops(db: Session, ops, variables: Dict[str, str], detail: Dict[str, Any]):
+    """按序执行前置 ops（script/wait）。返回 (variables, error)；脚本 error 短路。"""
+    for op in ops:
+        if not op.enabled:
+            continue
+        if op.kind == "script" and op.script_id:
+            variables, logs, error = run_script_links(db, [op], True, variables)
+            detail["script_logs"].extend(logs)
+            if error:
+                return variables, error
+        elif op.kind == "wait":
+            time.sleep(min(op.wait_ms or 0, _MAX_PROC_WAIT_MS) / 1000)
+    return variables, None
+
+
+def _run_post_ops(db, ops, response, detail, variables, request_snapshot, duration_ms, project_id):
+    """按序执行后置 ops（script/wait/assertion/extract/contract）。返回 passed。"""
+    passed = True
+    saw_assertion = False
+    for op in ops:
+        if not op.enabled:
+            continue
+        if op.kind == "assertion":
+            saw_assertion = True
+            ok, results = evaluate_assertions([op], response, duration_ms)
+            detail["assertion_results"].extend(results)
+            passed = passed and ok
+        elif op.kind == "extract":
+            extracted, scoped, results = run_extracts([op], response, request_snapshot, duration_ms)
+            detail["extracted"].update(extracted)
+            detail["scoped"].extend(scoped)
+            detail["extract_results"].extend(results)
+            variables.update(extracted)  # 立即注入，供后续 script op 使用
+        elif op.kind == "contract" and op.response_schema_id:
+            schema = schema_repo.get_schema(db, op.response_schema_id)
+            if schema and schema.project_id == project_id:
+                resolved = schema_ref.resolve_schema_text(db, project_id, schema.json_schema)
+                contract = contract_service.validate_response(resolved, response)
+                contract["schema_name"] = schema.name
+                detail["contract_result"] = contract
+                if op.contract_strict and not contract["passed"]:
+                    passed = False
+        elif op.kind == "script" and op.script_id:
+            variables, logs, error = run_script_links(
+                db, [op], False, variables, response=response, duration_ms=duration_ms
+            )
+            detail["script_logs"].extend(logs)
+            if error:
+                detail["script_logs"].append(f"后置脚本错误: {error}")
+        elif op.kind == "wait":
+            time.sleep(min(op.wait_ms or 0, _MAX_PROC_WAIT_MS) / 1000)
+    if not saw_assertion:  # 无断言 op → 沿用默认 2xx/3xx 校验
+        ok, results = evaluate_assertions([], response, duration_ms)
+        detail["assertion_results"].extend(results)
+        passed = passed and ok
+    return passed
+
+
 def execute_case(
     db: Session,
     case: ApifoxEndpointCase,
@@ -352,10 +475,23 @@ def execute_case(
     ep_assertions = endpoint_repo.list_endpoint_assertions(db, endpoint.id)
     ep_extracts = endpoint_repo.list_endpoint_extracts(db, endpoint.id)
 
-    # 前置脚本（接口-pre 先于 用例-pre；error → failed）
-    pre_links = _phase_links(ep_scripts, "pre") + _phase_links(case_scripts, "pre")
-    variables, pre_logs, pre_error = run_script_links(db, pre_links, True, variables)
-    detail["script_logs"].extend(pre_logs)
+    # 有序处理器（自由混排）：任一层为空回退该层旧字段；四处皆空则完全走旧固定管线（零回归）
+    case_pre_procs = _parse_processors(case.pre_processors)
+    case_post_procs = _parse_processors(case.post_processors)
+    ep_pre_procs = _parse_processors(endpoint.pre_processors)
+    ep_post_procs = _parse_processors(endpoint.post_processors)
+    use_processors = bool(case_pre_procs or case_post_procs or ep_pre_procs or ep_post_procs)
+
+    # 前置（接口在前、用例在后）
+    if use_processors:
+        pre_ops = (ep_pre_procs or _fallback_pre_ops(_phase_links(ep_scripts, "pre"))) + (
+            case_pre_procs or _fallback_pre_ops(_phase_links(case_scripts, "pre"))
+        )
+        variables, pre_error = _run_pre_ops(db, pre_ops, variables, detail)
+    else:
+        pre_links = _phase_links(ep_scripts, "pre") + _phase_links(case_scripts, "pre")
+        variables, pre_logs, pre_error = run_script_links(db, pre_links, True, variables)
+        detail["script_logs"].extend(pre_logs)
     if pre_error:
         detail["error_message"] = f"前置脚本失败: {pre_error}"
         return "failed", detail
@@ -376,6 +512,25 @@ def execute_case(
         return "failed", detail
     duration_ms = detail["duration_ms"]
 
+    request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
+
+    if use_processors:
+        # 后置按序自由混排（用例层在前、接口层在后；层内空则回退旧字段的固定子序）
+        post_ops = (
+            case_post_procs
+            or _fallback_post_ops(assertions, None, False, extracts, _phase_links(case_scripts, "post"))
+        ) + (
+            ep_post_procs
+            or _fallback_post_ops(
+                ep_assertions, endpoint.response_schema_id, endpoint.contract_strict,
+                ep_extracts, _phase_links(ep_scripts, "post"),
+            )
+        )
+        passed = _run_post_ops(
+            db, post_ops, response, detail, variables, request_snapshot, duration_ms, case.project_id
+        )
+        return ("passed" if passed else "failed"), detail
+
     # 断言并集：接口断言 + 用例断言都评估
     passed, assertion_results = evaluate_assertions(
         list(ep_assertions) + list(assertions), response, duration_ms
@@ -394,7 +549,6 @@ def execute_case(
                 passed = False
 
     # 提取并集：接口提取在前，用例同名变量后写覆盖
-    request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
     extracted, scoped, extract_results = run_extracts(
         list(ep_extracts) + list(extracts), response, request_snapshot, duration_ms
     )
