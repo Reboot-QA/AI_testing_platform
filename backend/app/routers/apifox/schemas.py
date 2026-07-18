@@ -140,6 +140,8 @@ class EndpointCreate(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
     post_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    pre_processors: List[ProcessorRow] = Field(default_factory=list)
+    post_processors: List[ProcessorRow] = Field(default_factory=list)
 
 
 class EndpointUpdate(BaseModel):
@@ -157,6 +159,8 @@ class EndpointUpdate(BaseModel):
     extracts: Optional[List[ExtractRow]] = None
     pre_scripts: Optional[List[CaseScriptRef]] = None
     post_scripts: Optional[List[CaseScriptRef]] = None
+    pre_processors: Optional[List[ProcessorRow]] = None
+    post_processors: Optional[List[ProcessorRow]] = None
     # 乐观锁：客户端读取时的版本；不一致则 409（None=不校验，向后兼容）
     expected_version: Optional[int] = None
 
@@ -189,6 +193,8 @@ class EndpointOut(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
     post_scripts: List[CaseScriptOut] = Field(default_factory=list)
+    pre_processors: List[ProcessorRow] = Field(default_factory=list)
+    post_processors: List[ProcessorRow] = Field(default_factory=list)
     version: int = 1
     created_at: datetime
     updated_at: datetime

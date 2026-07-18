@@ -83,6 +83,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { emptySpec, normalizeSpec as normSpec } from '@/utils/apifoxSpec'
 import { CASE_CATEGORIES, CATEGORY_FILTERS, categoryLabel } from '@/utils/caseCategory'
+import { deriveProcessors } from '@/utils/caseProcessors'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
@@ -120,6 +121,8 @@ const form = reactive<CaseEditorForm>({
   extracts: [],
   pre_scripts: [],
   post_scripts: [],
+  pre_processors: [],
+  post_processors: [],
   data_drive: { enabled: false, source: 'inline', rows: [] },
   version: 1,
 })
@@ -152,6 +155,9 @@ function applyCase(c: Schemas['CaseOut']) {
   form.extracts = c.extracts || []
   form.pre_scripts = c.pre_scripts || []
   form.post_scripts = c.post_scripts || []
+  form.pre_processors = c.pre_processors || []
+  form.post_processors = c.post_processors || []
+  deriveProcessors(form) // 存量用例无处理器时由旧字段派生
   form.data_drive =
     c.data_drive?.enabled !== undefined
       ? c.data_drive
@@ -212,10 +218,13 @@ function casePayload() {
     request_spec: form.request_spec,
     variables: form.variables,
     data_drive: form.data_drive,
-    assertions: form.assertions,
-    extracts: form.extracts,
-    pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+    // 有序处理器为单一事实来源：清空旧分列字段，避免与处理器双写
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
+    pre_processors: form.pre_processors,
+    post_processors: form.post_processors,
   }
 }
 

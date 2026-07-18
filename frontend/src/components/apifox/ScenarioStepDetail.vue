@@ -176,6 +176,7 @@ import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
+import { deriveProcessors } from '@/utils/caseProcessors'
 import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
@@ -248,6 +249,8 @@ const caseForm = reactive<CaseEditorForm>({
   extracts: [],
   pre_scripts: [],
   post_scripts: [],
+  pre_processors: [],
+  post_processors: [],
   data_drive: { enabled: false, source: 'inline', rows: [] },
   version: 1,
 })
@@ -268,6 +271,9 @@ function applyCase(c: Schemas['CaseOut']) {
   caseForm.extracts = c.extracts || []
   caseForm.pre_scripts = c.pre_scripts || []
   caseForm.post_scripts = c.post_scripts || []
+  caseForm.pre_processors = c.pre_processors || []
+  caseForm.post_processors = c.post_processors || []
+  deriveProcessors(caseForm) // 存量用例无处理器时由旧字段派生（须在快照前）
   caseForm.data_drive =
     c.data_drive?.enabled !== undefined
       ? c.data_drive
@@ -312,10 +318,13 @@ function caseFormPayload() {
     request_spec: caseForm.request_spec,
     variables: caseForm.variables,
     data_drive: caseForm.data_drive,
-    assertions: caseForm.assertions,
-    extracts: caseForm.extracts,
-    pre_scripts: caseForm.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    post_scripts: caseForm.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+    // 有序处理器为单一事实来源：清空旧分列字段
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
+    pre_processors: caseForm.pre_processors,
+    post_processors: caseForm.post_processors,
   }
 }
 

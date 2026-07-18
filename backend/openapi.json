@@ -12221,6 +12221,20 @@
             },
             "type": "array",
             "title": "Post Scripts"
+          },
+          "pre_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Pre Processors"
+          },
+          "post_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Post Processors"
           }
         },
         "type": "object",
@@ -12334,6 +12348,20 @@
             },
             "type": "array",
             "title": "Post Scripts"
+          },
+          "pre_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Pre Processors"
+          },
+          "post_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Post Processors"
           },
           "version": {
             "type": "integer",
@@ -12533,6 +12561,34 @@
               }
             ],
             "title": "Post Scripts"
+          },
+          "pre_processors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProcessorRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Processors"
+          },
+          "post_processors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProcessorRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Processors"
           },
           "expected_version": {
             "anyOf": [

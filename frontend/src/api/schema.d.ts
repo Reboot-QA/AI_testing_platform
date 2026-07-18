@@ -3225,6 +3225,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptRef"][];
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptRef"][];
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][];
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][];
         };
         /** EndpointOut */
         EndpointOut: {
@@ -3262,6 +3266,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptOut"][];
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptOut"][];
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][];
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][];
             /**
              * Version
              * @default 1
@@ -3307,6 +3315,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptRef"][] | null;
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptRef"][] | null;
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][] | null;
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][] | null;
             /** Expected Version */
             expected_version?: number | null;
         };
