@@ -39,11 +39,14 @@
 
         <el-select
           v-if="newType === 'import-endpoint'"
-          v-model="pickedEndpointId"
+          v-model="pickedEndpointIds"
           size="small"
-          placeholder="选择接口"
+          placeholder="选择接口（可多选）"
           style="flex: 1"
           filterable
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
         >
           <el-option
             v-for="ep in endpoints"
@@ -54,12 +57,14 @@
         </el-select>
         <el-select
           v-if="newType === 'case'"
-          v-model="pickedCaseId"
+          v-model="pickedCaseIds"
           size="small"
-          placeholder="选择用例（可留空加占位步骤）"
+          placeholder="选择用例（可多选，留空则加占位步骤）"
           style="flex: 1"
           filterable
-          clearable
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
         >
           <el-option
             v-for="c in cases"
@@ -232,9 +237,9 @@ function removeTop(i: number) {
 }
 
 const newType = ref('case')
-const pickedCaseId = ref<number | null>(null)
+const pickedCaseIds = ref<number[]>([])
 const pickedScenarioId = ref<number | null>(null)
-const pickedEndpointId = ref<number | null>(null)
+const pickedEndpointIds = ref<number[]>([])
 const waitMs = ref(500)
 const groupName = ref('')
 const curlVisible = ref(false)
@@ -248,7 +253,7 @@ const canAdd = computed(() => {
   if (newType.value === 'case') return true // 允许不选用例先加空白占位步骤，之后在右侧详情补选
   if (newType.value === 'wait') return waitMs.value > 0
   if (newType.value === 'scenario') return !!pickedScenarioId.value
-  if (newType.value === 'import-endpoint') return !!pickedEndpointId.value
+  if (newType.value === 'import-endpoint') return pickedEndpointIds.value.length > 0
   return true
 })
 
@@ -282,22 +287,24 @@ function newHttpStep(
 }
 
 async function importFromEndpoint() {
-  const endpointId = pickedEndpointId.value
-  if (endpointId == null) return
+  const ids = [...pickedEndpointIds.value]
+  if (ids.length === 0) return
   try {
-    const e = await apifoxApi.getEndpoint(endpointId)
-    props.rows.push(
-      newHttpStep({
-        name: e.name,
-        method: e.method,
-        path: e.path,
-        server_name: e.server_name,
-        request_spec: normalizeSpec(e.request_spec),
-        assertions: e.assertions || [],
-        extracts: e.extracts || [],
-      }),
-    )
-    pickedEndpointId.value = null
+    for (const endpointId of ids) {
+      const e = await apifoxApi.getEndpoint(endpointId)
+      props.rows.push(
+        newHttpStep({
+          name: e.name,
+          method: e.method,
+          path: e.path,
+          server_name: e.server_name,
+          request_spec: normalizeSpec(e.request_spec),
+          assertions: e.assertions || [],
+          extracts: e.extracts || [],
+        }),
+      )
+    }
+    pickedEndpointIds.value = []
     newType.value = 'http'
   } catch {
     ElMessage.error('接口加载失败')
@@ -325,17 +332,32 @@ function importFromCurl() {
 
 function addStep() {
   if (newType.value === 'case') {
-    // 未选用例则加空白占位步骤（ref_case_id 为空），之后在右侧详情补选
-    const c = props.cases.find((x) => x.id === pickedCaseId.value)
-    props.rows.push({
-      type: 'case',
-      ref_case_id: c ? c.id : null,
-      enabled: true,
-      case_name: c ? c.name : '未指定用例',
-      endpoint_method: c ? c.endpoint_method : undefined,
-      _uid: ++_seq,
-    })
-    pickedCaseId.value = null
+    const ids = pickedCaseIds.value
+    if (ids.length === 0) {
+      // 未选用例则加一个空白占位步骤（ref_case_id 为空），之后在右侧详情补选
+      props.rows.push({
+        type: 'case',
+        ref_case_id: null,
+        enabled: true,
+        case_name: '未指定用例',
+        _uid: ++_seq,
+      })
+    } else {
+      // 多选：每个用例加一个步骤（保持选择顺序）
+      for (const id of ids) {
+        const c = props.cases.find((x) => x.id === id)
+        if (!c) continue
+        props.rows.push({
+          type: 'case',
+          ref_case_id: c.id,
+          enabled: true,
+          case_name: c.name,
+          endpoint_method: c.endpoint_method,
+          _uid: ++_seq,
+        })
+      }
+    }
+    pickedCaseIds.value = []
   } else if (newType.value === 'wait') {
     props.rows.push({ type: 'wait', wait_ms: waitMs.value, enabled: true, _uid: ++_seq })
   } else if (newType.value === 'scenario') {
