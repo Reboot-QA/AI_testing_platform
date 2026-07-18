@@ -1,0 +1,89 @@
+/* apifox2 克隆样式：移植自 Apifox-UI 的 globals.css + antd token 近似。
+   作用域限定在 .apifox2-root 下，避免污染平台其它页面。 */
+
+.apifox2-root {
+  /* 方法/状态色（对应 globals.css 的 :root[theme='lightDefault']） */
+  --color-green-6: #4caf50;
+  --color-orange-6: #fa8c16;
+  --color-blue-6: #1890ff;
+  --color-volcano-6: #fa541c;
+  --color-pink-6: #eb2f96;
+  --color-geekblue-6: #2f54eb;
+  --color-lime-6: #a0d911;
+  --color-yellow-6: #fadb14;
+  --color-purple-6: #9373ee;
+  --color-red-6: #f5222d;
+  --color-grey-6: rgb(170 170 170);
+  --color-scrollbar-thumb: rgb(0 0 0 / 15%);
+
+  /* antd token 近似映射 */
+  --a2-color-primary: #ff4d4f;
+  --a2-color-text: rgba(0, 0, 0, 0.88);
+  --a2-color-text-secondary: rgba(0, 0, 0, 0.65);
+  --a2-color-text-tertiary: rgba(0, 0, 0, 0.45);
+  --a2-color-border: #d9d9d9;
+  --a2-color-border-secondary: #f0f0f0;
+  --a2-color-fill-alter: rgba(0, 0, 0, 0.02);
+  --a2-color-fill-tertiary: rgba(0, 0, 0, 0.04);
+  --a2-color-fill-secondary: rgba(0, 0, 0, 0.06);
+  --a2-color-bg-container: #ffffff;
+
+  /* 布局 token（对应 globals.css :root） */
+  --layout-header-height: 40px;
+  --p-main: 8px;
+  --p-tab-content: 16px;
+
+  height: 100%;
+  display: flex;
+  color: var(--a2-color-text);
+  background-color: var(--a2-color-fill-tertiary);
+  font-size: 14px;
+}
+
+/* 暗黑主题（对应 ThemeEditor 的 darkDefault） */
+.apifox2-root[data-theme='darkDefault'] {
+  --color-green-6: #49aa19;
+  --color-orange-6: #d87a16;
+  --color-blue-6: #177ddc;
+  --color-volcano-6: #d84a1b;
+  --color-pink-6: #cf2f86;
+  --color-geekblue-6: #2b4acb;
+  --color-lime-6: #8bbb11;
+  --color-yellow-6: #d8bd14;
+  --color-purple-6: #9383f1;
+  --color-red-6: #d32029;
+  --color-grey-6: rgb(170 170 170);
+  --color-scrollbar-thumb: rgb(255 255 255 / 30%);
+
+  --a2-color-text: rgba(255, 255, 255, 0.85);
+  --a2-color-text-secondary: rgba(255, 255, 255, 0.65);
+  --a2-color-text-tertiary: rgba(255, 255, 255, 0.45);
+  --a2-color-border: #424242;
+  --a2-color-border-secondary: #303030;
+  --a2-color-fill-alter: rgba(255, 255, 255, 0.04);
+  --a2-color-fill-tertiary: rgba(255, 255, 255, 0.08);
+  --a2-color-fill-secondary: rgba(255, 255, 255, 0.12);
+  --a2-color-bg-container: #141414;
+
+  color-scheme: dark;
+}
+
+.apifox2-root *,
+.apifox2-root *::before,
+.apifox2-root *::after {
+  box-sizing: border-box;
+}
+
+.apifox2-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.apifox2-root ::-webkit-scrollbar-thumb {
+  border-radius: 4px;
+  background: var(--color-scrollbar-thumb);
+}
+
+.apifox2-root ::-webkit-scrollbar-track {
+  background: transparent;
+}

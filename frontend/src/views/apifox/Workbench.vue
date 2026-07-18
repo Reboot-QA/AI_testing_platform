@@ -82,6 +82,8 @@ import WorkbenchStats from '@/components/apifox/workbench/WorkbenchStats.vue'
 import DashboardProjectCard from '@/components/apifox/workbench/DashboardProjectCard.vue'
 import WorkbenchActivity from '@/components/apifox/workbench/WorkbenchActivity.vue'
 
+const props = withDefaults(defineProps<{ basePath?: string }>(), { basePath: '/apifox' })
+
 const router = useRouter()
 
 const loading = ref(false)
@@ -113,7 +115,7 @@ async function loadData() {
 }
 
 function enter(id: number) {
-  router.push(`/apifox/project/${id}`)
+  router.push(`${props.basePath}/project/${id}`)
 }
 
 // 置顶项稳定置于最前（与后端排序语义一致），再按当前展示顺序保存偏好
@@ -134,7 +136,7 @@ function handlePin(project: Schemas['WorkbenchProject']) {
 }
 
 function openReports(run: Schemas['WorkbenchRunning'] | Schemas['WorkbenchReport']) {
-  router.push(`/apifox/project/${run.project_id}/reports`)
+  router.push(`${props.basePath}/project/${run.project_id}/reports`)
 }
 
 function openCreate() {

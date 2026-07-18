@@ -118,6 +118,19 @@ const routes: RouteRecordRaw[] = [
         ],
       },
       {
+        path: 'apifox2',
+        name: 'Apifox2Workbench',
+        component: () => import('@/views/apifox/Workbench.vue'),
+        props: { basePath: '/apifox2' },
+        meta: { permission: 'apifox_workbench' },
+      },
+      {
+        path: 'apifox2/project/:projectId',
+        name: 'Apifox2Project',
+        component: () => import('@/apifox2/views/ProjectWorkspace.vue'),
+        meta: { permission: 'apifox_workbench' },
+      },
+      {
         path: 'system',
         redirect: '/system/settings',
       },

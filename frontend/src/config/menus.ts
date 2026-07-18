@@ -64,6 +64,14 @@ export const MENU_DEFINITIONS: MenuDefinition[] = [
     parent: 'api_automation_mgmt',
     parentLabel: '接口自动化',
   },
+  {
+    key: 'apifox2_workbench',
+    label: 'apifox2工作台',
+    path: '/apifox2',
+    group: 'business',
+    parent: 'api_automation_mgmt',
+    parentLabel: '接口自动化',
+  },
   { key: 'system_settings', label: '全局设置', path: '/system/settings', group: 'system' },
   { key: 'system_users', label: '用户管理', path: '/system/users', group: 'system' },
   { key: 'system_departments', label: '部门权限', path: '/system/departments', group: 'system' },
@@ -90,6 +98,7 @@ export const PAGE_TITLES: Record<string, string> = {
   '/dashboard': '仪表盘',
   '/projects': '项目管理',
   '/apifox': '工作台',
+  '/apifox2': 'apifox2工作台',
   '/requirement-docs': 'AI分析需求',
   '/requirements': '需求点',
   '/testcases': '用例库',
@@ -137,6 +146,7 @@ export const LOG_MENU_GROUPS: MenuGroup[] = [
 
 export const SUBMENU_INDEX_BY_PATH: Record<string, string> = {
   '/apifox': 'api_automation_mgmt',
+  '/apifox2': 'api_automation_mgmt',
   '/requirement-docs': 'requirement_mgmt',
   '/requirements': 'requirement_mgmt',
   '/testcases': 'testcase_mgmt',

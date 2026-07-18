@@ -79,6 +79,9 @@
           <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox">
             工作台
           </el-menu-item>
+          <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox2">
+            apifox2工作台
+          </el-menu-item>
         </el-sub-menu>
 
         <el-sub-menu v-if="showLogMenu" index="log_mgmt">
