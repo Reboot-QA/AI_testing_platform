@@ -131,33 +131,15 @@
       <!-- 接口级处理器（与用例级合并叠加）；用例编辑器内不显示（用例有自己的处理器 tab） -->
       <template v-if="showProcessors">
         <el-tab-pane label="前置操作" name="pre">
-          <ScriptRefsEditor :rows="form.pre_scripts ?? []" :scripts="scripts" />
+          <ProcessorsEditor :rows="form.pre_processors ?? []" phase="pre" :scripts="scripts" />
         </el-tab-pane>
         <el-tab-pane label="后置操作" name="post">
-          <div class="proc-sub-title">后置脚本</div>
-          <ScriptRefsEditor :rows="form.post_scripts ?? []" :scripts="scripts" />
-          <div class="proc-sub-title">提取</div>
-          <ExtractsEditor :rows="form.extracts ?? []" />
-        </el-tab-pane>
-        <el-tab-pane label="断言" name="assertions">
-          <AssertionsEditor :rows="form.assertions ?? []" />
-        </el-tab-pane>
-        <el-tab-pane label="响应契约" name="contract">
-          <div class="contract-row">
-            <span class="c-label">响应数据模型</span>
-            <el-select
-              v-model="form.response_schema_id"
-              placeholder="不校验"
-              clearable
-              filterable
-              style="width: 260px"
-            >
-              <el-option v-for="s in schemas" :key="s.id" :label="s.name" :value="s.id" />
-            </el-select>
-          </div>
-          <el-checkbox v-model="form.contract_strict" :disabled="!form.response_schema_id">
-            契约不符则判失败（默认仅提示，不影响通过）
-          </el-checkbox>
+          <ProcessorsEditor
+            :rows="form.post_processors ?? []"
+            phase="post"
+            :scripts="scripts"
+            :schemas="schemas"
+          />
         </el-tab-pane>
       </template>
     </el-tabs>
@@ -174,9 +156,7 @@ import type { RequestSpecHolderForm } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import KvRowsEditor from '@/components/apifox/KvRowsEditor.vue'
 import CodeEditor from '@/components/apifox/common/CodeEditor.vue'
-import ScriptRefsEditor from '@/components/apifox/ScriptRefsEditor.vue'
-import AssertionsEditor from '@/components/apifox/AssertionsEditor.vue'
-import ExtractsEditor from '@/components/apifox/ExtractsEditor.vue'
+import ProcessorsEditor from '@/components/apifox/ProcessorsEditor.vue'
 
 type ScriptBrief = Schemas['ScriptBrief']
 type SchemaBrief = Schemas['SchemaBrief']

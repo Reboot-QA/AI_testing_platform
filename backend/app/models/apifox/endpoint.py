@@ -85,6 +85,9 @@ class ApifoxEndpoint(Base):
         ForeignKey("apifox_schemas.id"), nullable=True
     )
     contract_strict: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 有序处理器列表 JSON（同用例：为空回退旧固定管线，零回归）
+    pre_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    post_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     # 乐观锁版本：每次保存 +1，多人并发编辑冲突检测（多 tab 同开同一接口）

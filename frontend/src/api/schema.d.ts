@@ -2669,6 +2669,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptRef"][];
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptRef"][];
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][];
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][];
         };
         /** CaseOut */
         CaseOut: {
@@ -2697,6 +2701,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptOut"][];
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptOut"][];
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][];
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][];
             /** Sort Order */
             sort_order: number;
             /**
@@ -2766,6 +2774,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptRef"][] | null;
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptRef"][] | null;
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][] | null;
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][] | null;
             /** Sort Order */
             sort_order?: number | null;
             /** Expected Version */
@@ -3213,6 +3225,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptRef"][];
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptRef"][];
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][];
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][];
         };
         /** EndpointOut */
         EndpointOut: {
@@ -3250,6 +3266,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptOut"][];
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptOut"][];
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][];
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][];
             /**
              * Version
              * @default 1
@@ -3295,6 +3315,10 @@ export interface components {
             pre_scripts?: components["schemas"]["CaseScriptRef"][] | null;
             /** Post Scripts */
             post_scripts?: components["schemas"]["CaseScriptRef"][] | null;
+            /** Pre Processors */
+            pre_processors?: components["schemas"]["ProcessorRow"][] | null;
+            /** Post Processors */
+            post_processors?: components["schemas"]["ProcessorRow"][] | null;
             /** Expected Version */
             expected_version?: number | null;
         };
@@ -4073,6 +4097,51 @@ export interface components {
              * @default []
              */
             results: components["schemas"]["NotifyChannelResult"][];
+        };
+        /**
+         * ProcessorRow
+         * @description 前/后置有序处理器（自由混排）。kind 决定用到哪些字段；为空则回退旧固定管线。
+         */
+        ProcessorRow: {
+            /** Kind */
+            kind: string;
+            /**
+             * Enabled
+             * @default true
+             */
+            enabled: boolean;
+            /** Script Id */
+            script_id?: number | null;
+            /**
+             * Script Name
+             * @default
+             */
+            script_name: string;
+            /**
+             * Script Lang
+             * @default
+             */
+            script_lang: string;
+            /** Wait Ms */
+            wait_ms?: number | null;
+            /** Type */
+            type?: string | null;
+            /** Path */
+            path?: string | null;
+            /** Operator */
+            operator?: string | null;
+            /** Expected */
+            expected?: string | null;
+            /** Var Name */
+            var_name?: string | null;
+            /** Source */
+            source?: string | null;
+            /** Scope */
+            scope?: string | null;
+            /** Response Schema Id */
+            response_schema_id?: number | null;
+            /** Contract Strict */
+            contract_strict?: boolean | null;
         };
         /**
          * ProjectCaseBrief

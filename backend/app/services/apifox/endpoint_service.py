@@ -4,7 +4,8 @@
 不做权限判定（在 router 用 project_access_service）。提交事务由本层负责（写操作末尾 commit）。
 """
 
-from typing import List
+import json
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -29,6 +30,7 @@ from app.routers.apifox.schemas import (
     FolderCreate,
     FolderOut,
     FolderUpdate,
+    ProcessorRow,
     RequestSpec,
     TreeReorderRequest,
 )
@@ -108,6 +110,19 @@ def _load_endpoint_scripts(db: Session, endpoint_id: int) -> tuple[List[CaseScri
     return pre, post
 
 
+def _load_processors(text) -> List[ProcessorRow]:
+    if not text:
+        return []
+    try:
+        return [ProcessorRow(**x) for x in json.loads(text)]
+    except (ValueError, TypeError):
+        return []
+
+
+def _dump_processors(rows) -> Optional[str]:
+    return json.dumps([r.model_dump() for r in rows], ensure_ascii=False) if rows else None
+
+
 def _endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
     pre_scripts, post_scripts = _load_endpoint_scripts(db, endpoint.id)
     return EndpointOut(
@@ -134,6 +149,8 @@ def _endpoint_out(db: Session, endpoint: ApifoxEndpoint) -> EndpointOut:
         ],
         pre_scripts=pre_scripts,
         post_scripts=post_scripts,
+        pre_processors=_load_processors(endpoint.pre_processors),
+        post_processors=_load_processors(endpoint.post_processors),
         created_at=endpoint.created_at,
         updated_at=endpoint.updated_at,
     )
@@ -254,6 +271,8 @@ def create_endpoint(db: Session, project_id: int, data: EndpointCreate) -> Endpo
         description=data.description,
         response_schema_id=data.response_schema_id,
         contract_strict=data.contract_strict,
+        pre_processors=_dump_processors(data.pre_processors),
+        post_processors=_dump_processors(data.post_processors),
     )
     repo.create_endpoint(db, endpoint)  # flush 后 endpoint.id 可用
     _write_endpoint_assertions(db, endpoint.id, data.assertions)
@@ -307,6 +326,10 @@ def update_endpoint(db: Session, endpoint: ApifoxEndpoint, data: EndpointUpdate)
     if data.post_scripts is not None:
         script_repo.delete_endpoint_scripts(db, endpoint.id, "post")
         _write_endpoint_scripts(db, endpoint, "post", data.post_scripts)
+    if data.pre_processors is not None:
+        endpoint.pre_processors = _dump_processors(data.pre_processors)
+    if data.post_processors is not None:
+        endpoint.post_processors = _dump_processors(data.post_processors)
     db.commit()
     db.refresh(endpoint)
     if data.request_spec is not None:  # body 可能移除/替换 binary 文件，清孤儿上传

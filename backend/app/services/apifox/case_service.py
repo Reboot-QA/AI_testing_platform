@@ -5,7 +5,7 @@
 """
 
 import json
-from typing import List
+from typing import List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -30,7 +30,7 @@ from app.routers.apifox.case_schemas import (
     ExtractRow,
     ProjectCaseBrief,
 )
-from app.routers.apifox.schemas import KvRow, RequestSpec
+from app.routers.apifox.schemas import KvRow, ProcessorRow, RequestSpec
 from app.services.apifox import upload_service, versioning
 
 
@@ -54,6 +54,20 @@ def _load_variables(text: str | None) -> List[KvRow]:
 
 def _dump_variables(rows: List[KvRow]) -> str:
     return json.dumps([r.model_dump() for r in rows], ensure_ascii=False)
+
+
+def _load_processors(text: str | None) -> List[ProcessorRow]:
+    if not text:
+        return []
+    try:
+        return [ProcessorRow(**x) for x in json.loads(text)]
+    except (ValueError, TypeError):
+        return []
+
+
+def _dump_processors(rows: List[ProcessorRow]) -> Optional[str]:
+    # 空列表存 None：运行时回退旧固定管线（零回归）
+    return json.dumps([r.model_dump() for r in rows], ensure_ascii=False) if rows else None
 
 
 def _load_data_drive(text: str | None) -> DataDrive:
@@ -124,6 +138,8 @@ def _case_out(db: Session, case: ApifoxEndpointCase) -> CaseOut:
     return CaseOut(
         pre_scripts=pre_scripts,
         post_scripts=post_scripts,
+        pre_processors=_load_processors(case.pre_processors),
+        post_processors=_load_processors(case.post_processors),
         id=case.id,
         project_id=case.project_id,
         endpoint_id=case.endpoint_id,
@@ -185,6 +201,8 @@ def create_case(db: Session, project_id: int, endpoint_id: int, data: CaseCreate
         request_spec=data.request_spec.model_dump_json(),
         variables=_dump_variables(data.variables),
         data_drive=data.data_drive.model_dump_json(),
+        pre_processors=_dump_processors(data.pre_processors),
+        post_processors=_dump_processors(data.post_processors),
     )
     repo.add(db, case)
     _write_assertions(db, case.id, data.assertions)
@@ -265,6 +283,10 @@ def update_case(db: Session, case: ApifoxEndpointCase, data: CaseUpdate) -> Case
     if data.post_scripts is not None:
         script_repo.delete_case_scripts(db, case.id, "post")
         _write_case_scripts(db, case, "post", data.post_scripts)
+    if data.pre_processors is not None:
+        case.pre_processors = _dump_processors(data.pre_processors)
+    if data.post_processors is not None:
+        case.post_processors = _dump_processors(data.post_processors)
     db.commit()
     db.refresh(case)
     if data.request_spec is not None:  # body 可能移除/替换 binary 文件，清孤儿上传
