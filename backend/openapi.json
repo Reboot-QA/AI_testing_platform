@@ -10759,6 +10759,20 @@
             },
             "type": "array",
             "title": "Post Scripts"
+          },
+          "pre_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Pre Processors"
+          },
+          "post_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Post Processors"
           }
         },
         "type": "object",
@@ -10830,6 +10844,20 @@
             },
             "type": "array",
             "title": "Post Scripts"
+          },
+          "pre_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Pre Processors"
+          },
+          "post_processors": {
+            "items": {
+              "$ref": "#/components/schemas/ProcessorRow"
+            },
+            "type": "array",
+            "title": "Post Processors"
           },
           "sort_order": {
             "type": "integer",
@@ -11030,6 +11058,34 @@
               }
             ],
             "title": "Post Scripts"
+          },
+          "pre_processors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProcessorRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pre Processors"
+          },
+          "post_processors": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ProcessorRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Processors"
           },
           "sort_order": {
             "anyOf": [
@@ -14541,6 +14597,156 @@
         },
         "type": "object",
         "title": "NotifyTestResult"
+      },
+      "ProcessorRow": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled",
+            "default": true
+          },
+          "script_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Script Id"
+          },
+          "script_name": {
+            "type": "string",
+            "title": "Script Name",
+            "default": ""
+          },
+          "script_lang": {
+            "type": "string",
+            "title": "Script Lang",
+            "default": ""
+          },
+          "wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Ms"
+          },
+          "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "operator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operator"
+          },
+          "expected": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected"
+          },
+          "var_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var Name"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          },
+          "response_schema_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Response Schema Id"
+          },
+          "contract_strict": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Strict"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "title": "ProcessorRow",
+        "description": "前/后置有序处理器（自由混排）。kind 决定用到哪些字段；为空则回退旧固定管线。"
       },
       "ProjectCaseBrief": {
         "properties": {

@@ -80,6 +80,31 @@ class CaseScriptOut(CaseScriptRef):
     script_lang: str = ""
 
 
+class ProcessorRow(BaseModel):
+    """前/后置有序处理器（自由混排）。kind 决定用到哪些字段；为空则回退旧固定管线。"""
+
+    kind: str  # script | wait | assertion | extract | contract
+    enabled: bool = True
+    # script
+    script_id: Optional[int] = None
+    script_name: str = ""  # 回显用
+    script_lang: str = ""
+    # wait
+    wait_ms: Optional[int] = None
+    # assertion（type/path/operator/expected）
+    type: Optional[str] = None
+    path: Optional[str] = None
+    operator: Optional[str] = None
+    expected: Optional[str] = None
+    # extract（var_name/source/path/scope）
+    var_name: Optional[str] = None
+    source: Optional[str] = None
+    scope: Optional[str] = None
+    # contract
+    response_schema_id: Optional[int] = None
+    contract_strict: Optional[bool] = None
+
+
 # ---------- folder ----------
 class FolderCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)

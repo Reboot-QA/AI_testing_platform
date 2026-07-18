@@ -26,6 +26,10 @@ class ApifoxEndpointCase(Base):
     request_spec: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     variables: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     data_drive: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 有序处理器列表 JSON（对齐 Apifox 前/后置自由混排：script/wait/assertion/extract/contract）。
+    # 为空则回退旧固定管线（pre_scripts→请求→断言→契约→提取→post_scripts），零回归。
+    pre_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    post_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     # 乐观锁版本：每次保存 +1，多人并发编辑冲突检测
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
