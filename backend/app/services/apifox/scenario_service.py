@@ -74,11 +74,11 @@ def _validate_step(db: Session, scenario: ApifoxScenario, step: StepIn) -> None:
     if step.children and step.type not in CONTAINER_STEP_TYPES:
         raise ValueError("仅容器型步骤（分组）可包含子步骤")
     if step.type == "case":
-        if not step.ref_case_id:
-            raise ValueError("用例步骤必须指定 ref_case_id")
-        case = case_repo.get_case(db, step.ref_case_id)
-        if not case or case.project_id != scenario.project_id:
-            raise ValueError("引用的用例不存在或不属于该项目")
+        # 允许空引用（占位步骤：运行时跳过、之后在详情里补选用例）；填了 id 才校验存在与归属
+        if step.ref_case_id:
+            case = case_repo.get_case(db, step.ref_case_id)
+            if not case or case.project_id != scenario.project_id:
+                raise ValueError("引用的用例不存在或不属于该项目")
     elif step.type == "wait":
         if not step.wait_ms or step.wait_ms <= 0:
             raise ValueError("等待步骤必须指定大于 0 的 wait_ms")

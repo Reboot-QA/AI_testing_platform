@@ -134,13 +134,13 @@
           <ScriptRefsEditor :rows="form.pre_scripts ?? []" :scripts="scripts" />
         </el-tab-pane>
         <el-tab-pane label="后置操作" name="post">
+          <div class="proc-sub-title">后置脚本</div>
           <ScriptRefsEditor :rows="form.post_scripts ?? []" :scripts="scripts" />
+          <div class="proc-sub-title">提取</div>
+          <ExtractsEditor :rows="form.extracts ?? []" />
         </el-tab-pane>
         <el-tab-pane label="断言" name="assertions">
           <AssertionsEditor :rows="form.assertions ?? []" />
-        </el-tab-pane>
-        <el-tab-pane label="提取" name="extracts">
-          <ExtractsEditor :rows="form.extracts ?? []" />
         </el-tab-pane>
         <el-tab-pane label="响应契约" name="contract">
           <div class="contract-row">
@@ -313,6 +313,17 @@ function clearFile() {
 .c-label {
   font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
+}
+
+.proc-sub-title {
+  font-size: var(--ax-font-sm);
+  font-weight: 600;
+  color: var(--ax-text-secondary);
+  margin: 4px 0 8px;
+}
+
+.proc-sub-title:not(:first-child) {
+  margin-top: 16px;
 }
 
 .settings-form {
