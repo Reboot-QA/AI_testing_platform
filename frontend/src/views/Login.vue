@@ -68,7 +68,7 @@
 
             <Button
               type="button"
-              class="mt-2 h-11 w-full text-base"
+              class="mt-2 h-11 w-full text-base cursor-pointer"
               :disabled="loading"
               @click="handleLogin"
             >

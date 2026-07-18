@@ -1,0 +1,9 @@
+---
+description: 前端（Vue3 + TS）开发硬约束
+globs: frontend/src/**/*.{ts,vue}
+alwaysApply: false
+---
+
+编辑前端代码前，遵循以下硬约束（单一事实来源，与 Claude Code 共用同一份，勿在此复制正文）：
+
+@.claude/rules/frontend.md

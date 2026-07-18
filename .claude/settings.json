@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo 提示：前端改动记得 pnpm typecheck（须 0 error），后端改动记得 ruff check app。"
+          }
+        ]
+      }
+    ]
+  }
+}

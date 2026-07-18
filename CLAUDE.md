@@ -2,6 +2,21 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## AI 配置分层导航
+
+本仓库 AI 上下文按「五层知识体系」组织，Claude Code 与 Cursor 共享同一份规则（单一事实来源）：
+
+| 层 | 位置 | 作用 |
+| --- | --- | --- |
+| 1 个人全局 | `~/.claude/CLAUDE.md`（仓库外） | 个人偏好，跨项目生效；Cursor 对应 Settings → User Rules |
+| 2 项目共享 | **本文** | 概述 / 命令 / 架构，常驻加载 |
+| 3 项目私有 | `CLAUDE.local.md`（已 gitignore） | 本地 proxy target / 端口 / 当前调试任务 |
+| 4 领域规则 | `.claude/rules/*.md`（唯一正文）+ `.cursor/rules/*.mdc`（Cursor 薄封装） | 前端/后端/Git 硬约束；子目录 `CLAUDE.md` 按路径 `@import` |
+| 5 技能 | `~/.claude/skills/`（个人通用）+ `.claude/skills/`（项目专属） | 可复用工作流 |
+
+- **规则单一事实来源在 `.claude/rules/`**：`frontend.md`、`backend.md`、`git-workflow.md`。改规则改这三份；`frontend/CLAUDE.md` / `backend/CLAUDE.md` 与 `.cursor/rules/*.mdc` 都是引用它们的薄封装。
+- 详细开发规范（不复制、仅链接）：前端见 `frontend/docs/*.md`，后端见 `skills/后端开发规范.md`。
+
 ## 项目概述
 
 基于 **FastAPI + Vue 3** 的 AI 测试平台（需求管理 / 功能用例 / AI 生成 / 手工执行 / 接口自动化）。文档、注释、commit message 均使用中文。
@@ -12,13 +27,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 cd frontend
-pnpm install     # 包管理器统一为 pnpm（corepack enable pnpm 激活；npm/yarn 会被 only-allow 拦截）
-pnpm dev         # 开发服务器，端口 5173
-pnpm build       # 生产构建到 dist/
+pnpm install       # 包管理器统一为 pnpm（corepack enable pnpm 激活；npm/yarn 会被 only-allow 拦截）
+pnpm dev           # 开发服务器，端口 5173
+pnpm build         # 生产构建到 dist/
+pnpm lint          # ESLint（lint:fix 自动修）
+pnpm format        # Prettier 格式化 src
+pnpm typecheck     # vue-tsc --noEmit，类型基线必须 0 error
+pnpm gen:api-types # 从 backend/openapi.json 生成 src/api/schema.d.ts（不手工维护该文件）
 ```
 
-- 前端无 lint / 测试脚本。
-- Vite 将 `/api` 代理到 `vite.config.js` 中的 target（当前指向演示服务器 `43.160.226.39`）；本地联调后端时需改为 `http://127.0.0.1:8000`，但**不要把这个改动提交**。
+- 质量工具链：ESLint 9(flat) + Prettier + husky/lint-staged/commitlint + `vue-tsc`；提交自动过 pre-commit（lint+format，仅 `src/`）、commit-msg（commitlint）、pre-push（typecheck）。无单元测试脚本。
+- Vite 将 `/api/` 代理到 **`vite.config.ts`** 中的 target（当前指向演示服务器 `43.160.226.39`）；本地联调后端时需改为 `http://127.0.0.1:8000`，但**不要把这个改动提交**（详见 `CLAUDE.local.md`）。
 
 ### 后端（backend/，FastAPI + SQLAlchemy + MySQL）
 
@@ -52,10 +71,7 @@ mypy app          # 宽松基线：不强制注解
 
 ## Git 工作流
 
-- 分支流：本地功能分支 → PR 到 `test` → `test` 合入 `main`。
-- **前端 PR 只提交源码 + package.json，不含 node_modules / dist**（node_modules 历史上被纳入了 git 跟踪，改动它会出现在 git status 里——不要提交这些变化）。
-- Commit 风格：中文 conventional commits，如 `feat(apifox): ...`、`fix(apifox): ...`。
-- `接口自动化重构_进度与计划.md`（仓库根目录）是接口自动化重构的**单一事实来源**，做相关改动后应同步更新该文档。
+@.claude/rules/git-workflow.md
 
 ## 架构
 
@@ -81,16 +97,13 @@ models/apifox/     # SQLAlchemy 模型，表前缀 apifox_
 - **乐观锁**：apifox 六实体带 version 字段，冲突返回 HTTP 409。
 - 执行引擎通过 **SSE** 推送套件/场景运行进度。
 - LLM：OpenAI 兼容 API（`services/ai_service.py`），未配 key 或 `LLM_MOCK_MODE=true` 走 Mock；系统「全局设置」中的多 Provider 配置优先于环境变量。
+- 后端硬约束详见 `.claude/rules/backend.md`（→ `skills/后端开发规范.md`）。
 
 ### 前端结构
 
 - **API 层集中在 `src/api/index.ts`**（axios 单实例，baseURL `/api/v1`，自动带 token，401 跳登录，响应拦截器直接返回 `response.data`）。注意：`/apifox/` 路径的 409 不弹全局错误，由调用方配合 `composables/useSaveConflict.ts` 处理保存冲突。
 - 路由守卫：`src/router/index.ts`，每个路由 `meta.permission` 对应后端菜单权限。
-- **`src/` 业务代码统一 TypeScript**（`.ts`）；禁止新增 `.js` 源文件。Vue SFC 统一使用 `<script setup lang="ts">`。
-- **TS 约定：**
-  1. 路由动态参数（如 `projectId`）统一用 `useRouteParamId()`（`composables/useRouteParamId.ts`），禁止直接解构 `route.params`。
-  2. script 中引用 props 必须 `const props = defineProps/withDefaults(...)`；template 可直接用 prop 名。
-  3. Apifox UI 类型放 `types/apifox.ts`；API 实体类型用 `Schemas['XxxOut']`（`api/types`），勿从 `.vue` 文件 export type。
 - apifox 前端：`views/apifox/ProjectWorkspace.vue` 是项目工作区外壳（顶部 tab 切 `views/apifox/sections/` 下各面板），可复用组件在 `components/apifox/`。
 - 代码编辑器统一用 Monaco（`@guolao/vue-monaco-editor`，本地 worker 无 CDN）；design token / Apifox 配色在 `src/styles/`。
 - Pinia stores：`user`（登录态/权限）、`workspace`（当前项目）、`apiTabs`、`aiGenerate`。
+- 前端硬约束（TS/SFC/API 类型/token/300 行等）详见 `.claude/rules/frontend.md`（→ `frontend/docs/*.md`）。改前端代码前必读。

@@ -1,13 +1,13 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import tailwindcss from '@tailwindcss/vite'
-import { resolve } from 'path'
+import { fileURLToPath, URL } from 'node:url'
 
 export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
     alias: {
-      '@': resolve(__dirname, 'src'),
+      '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
   build: {
@@ -17,7 +17,7 @@ export default defineConfig({
     chunkSizeWarningLimit: 1200,
     rollupOptions: {
       output: {
-        manualChunks(id) {
+        manualChunks(id: string) {
           if (id.includes('monaco-editor')) {
             return 'monaco'
           }
@@ -42,7 +42,8 @@ export default defineConfig({
         timeout: 0,
         configure: (proxy) => {
           proxy.on('proxyRes', (proxyRes) => {
-            if (proxyRes.headers['content-type']?.includes('text/event-stream')) {
+            const contentType = proxyRes.headers['content-type']
+            if (typeof contentType === 'string' && contentType.includes('text/event-stream')) {
               proxyRes.headers['cache-control'] = 'no-cache'
               proxyRes.headers['x-accel-buffering'] = 'no'
             }
