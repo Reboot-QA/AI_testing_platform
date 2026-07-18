@@ -142,6 +142,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { VueDraggable } from 'vue-draggable-plus'
 import type { Schemas } from '@/api/types'
 import type { RequestSpec } from '@/types/apifox'
 import { apifoxApi } from '@/api'
