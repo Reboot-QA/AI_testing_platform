@@ -12,9 +12,8 @@
       </el-table-column>
       <el-table-column label="远程值（团队共享）" min-width="160">
         <template #default="{ row }">
-          <el-input
+          <VarInput
             v-model="row.remote_value"
-            size="small"
             placeholder="团队共享"
             @change="$emit('update', row.id, { remote_value: row.remote_value })"
           />
@@ -22,9 +21,8 @@
       </el-table-column>
       <el-table-column label="我的本地值（个人覆盖）" min-width="160">
         <template #default="{ row }">
-          <el-input
+          <VarInput
             v-model="row.local_value"
-            size="small"
             placeholder="留空=用远程值"
             @change="$emit('set-local', row.id, row.local_value === '' ? null : row.local_value)"
           />
@@ -73,6 +71,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import type { Schemas } from '@/api/types'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 
 type VariableOut = Schemas['VariableOut']
 type VariableCreate = Schemas['VariableCreate']

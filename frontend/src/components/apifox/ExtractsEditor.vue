@@ -11,7 +11,7 @@
           :value="s.value"
         />
       </el-select>
-      <el-input v-model="row.path" size="small" placeholder="路径/表达式" style="width: 160px" />
+      <VarInput v-model="row.path" placeholder="路径/表达式" style="width: 160px" />
       <el-select v-model="row.scope" size="small" style="width: 110px">
         <el-option
           v-for="sc in VARIABLE_SCOPE_OPTIONS"
@@ -32,6 +32,7 @@
 
 <script setup lang="ts">
 import type { Schemas } from '@/api/types'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 import { EXTRACT_SOURCE_OPTIONS, VARIABLE_SCOPE_OPTIONS } from '@/utils/apiCaseConfig'
 
 type ExtractRow = Schemas['ExtractRow']

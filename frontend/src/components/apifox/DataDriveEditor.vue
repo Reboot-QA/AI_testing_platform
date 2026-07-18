@@ -40,7 +40,7 @@
       </el-table-column>
       <el-table-column v-for="name in varNames" :key="name" :label="name" min-width="120">
         <template #default="{ row }">
-          <el-input v-model="row.values[name]" size="small" />
+          <VarInput v-model="row.values[name]" />
         </template>
       </el-table-column>
       <el-table-column label="启用" width="60" align="center">
@@ -72,6 +72,7 @@
 import { computed } from 'vue'
 import type { Schemas } from '@/api/types'
 import type { KvRow } from '@/types/apifox'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 import { variableNamesFromRows } from '@/utils/apiCaseConfig'
 
 type DatasetBrief = Schemas['DatasetBrief']

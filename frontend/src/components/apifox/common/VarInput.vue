@@ -11,7 +11,7 @@
       @input="onInput"
       @scroll="syncScroll"
       @focus="focused = true"
-      @blur="focused = false"
+      @blur="onBlur"
     />
   </div>
 </template>
@@ -28,7 +28,7 @@ const props = withDefaults(
   }>(),
   { modelValue: '', placeholder: '', size: 'small', disabled: false },
 )
-const emit = defineEmits<{ 'update:modelValue': [v: string] }>()
+const emit = defineEmits<{ 'update:modelValue': [v: string]; change: [v: string] }>()
 
 const inputEl = ref<HTMLInputElement>()
 const mirrorEl = ref<HTMLElement>()
@@ -50,6 +50,10 @@ function onInput(e: Event) {
 }
 function syncScroll() {
   if (mirrorEl.value && inputEl.value) mirrorEl.value.scrollLeft = inputEl.value.scrollLeft
+}
+function onBlur() {
+  focused.value = false
+  emit('change', inputEl.value?.value ?? '')
 }
 </script>
 
