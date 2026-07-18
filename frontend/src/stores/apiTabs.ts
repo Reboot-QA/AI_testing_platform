@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { apifoxApi } from '@/api'
 import type { Schemas } from '@/api/types'
 import { normalizeSpec } from '@/utils/apifoxSpec'
+import { deriveEndpointProcessors } from '@/utils/caseProcessors'
 import type { EndpointForm } from '@/types/apifox'
 
 type Endpoint = Schemas['EndpointOut']
@@ -26,7 +27,7 @@ interface ProjectTabsState {
 }
 
 function endpointToForm(e: Endpoint): EndpointForm {
-  return {
+  const form: EndpointForm = {
     id: e.id,
     name: e.name,
     method: e.method,
@@ -38,9 +39,13 @@ function endpointToForm(e: Endpoint): EndpointForm {
     extracts: e.extracts || [],
     pre_scripts: e.pre_scripts || [],
     post_scripts: e.post_scripts || [],
+    pre_processors: e.pre_processors || [],
+    post_processors: e.post_processors || [],
     response_schema_id: e.response_schema_id || null,
     contract_strict: e.contract_strict || false,
   }
+  deriveEndpointProcessors(form) // 存量接口无处理器时由旧字段派生（含契约），须在快照前
+  return form
 }
 
 const snap = (form: EndpointForm): string => JSON.stringify(form)
