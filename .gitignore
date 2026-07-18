@@ -13,6 +13,9 @@ backend/*.db
 frontend/dist/
 frontend/.claude
 
+# Claude Code 项目私有层（层3），只在本地生效，不入库
+CLAUDE.local.md
+
 # 依赖目录（任意层级；pnpm install / dev 会在其下产生缓存，勿入库）
 node_modules/
 
