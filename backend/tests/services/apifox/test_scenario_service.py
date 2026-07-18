@@ -430,3 +430,25 @@ def test_scenario_create_rejects_invalid_priority():
 
     with pytest.raises(ValidationError):
         ScenarioCreate(name="S", priority="urgent")
+
+
+def test_empty_case_step_placeholder_allowed(db):
+    # 空白用例步骤（占位）：ref_case_id 为空应允许保存，之后在详情补选用例
+    out = svc.create_scenario(
+        db,
+        project_id=1,
+        data=ScenarioCreate(name="占位", steps=[StepIn(type="case", ref_case_id=None, name="未指定用例")]),
+    )
+
+    assert len(out.steps) == 1
+    assert out.steps[0].type == "case"
+    assert out.steps[0].ref_case_id is None
+
+
+def test_case_step_with_nonexistent_ref_still_rejected(db):
+    with pytest.raises(ValueError):
+        svc.create_scenario(
+            db,
+            project_id=1,
+            data=ScenarioCreate(name="坏引用", steps=[StepIn(type="case", ref_case_id=999999)]),
+        )
