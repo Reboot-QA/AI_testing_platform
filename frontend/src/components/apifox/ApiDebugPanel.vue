@@ -23,22 +23,45 @@
         <span class="meta">{{ Math.round(resp.duration_ms) }} ms</span>
         <span v-if="resp.error" class="err">{{ resp.error }}</span>
       </div>
+      <el-alert
+        v-for="(w, i) in resp.warnings || []"
+        :key="'w' + i"
+        :title="w"
+        type="warning"
+        :closable="false"
+        show-icon
+        class="warn"
+      />
       <el-tabs v-model="respTab" class="resp-tabs">
-        <el-tab-pane label="Body" name="body">
+        <el-tab-pane label="实际请求" name="request">
+          <div class="resp-box">
+            <ActualRequestView
+              :method="resp.method"
+              :url="resp.url"
+              :headers="resp.request_headers"
+              :body="resp.request_body"
+            />
+          </div>
+        </el-tab-pane>
+        <el-tab-pane label="响应 Body" name="body">
           <div class="resp-box"><JsonView :data="resp.response_body" :deep="3" /></div>
         </el-tab-pane>
-        <el-tab-pane label="Headers" name="headers">
+        <el-tab-pane label="响应 Headers" name="headers">
           <div class="resp-box"><JsonView :data="resp.response_headers" :deep="2" /></div>
         </el-tab-pane>
         <el-tab-pane v-if="resp.assertion_results?.length" label="断言" name="assertions">
           <div v-for="(a, i) in resp.assertion_results" :key="'a' + i" class="line">
-            <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{ a.passed ? '过' : '败' }}</el-tag>
+            <el-tag size="small" :type="a.passed ? 'success' : 'danger'">{{
+              a.passed ? '过' : '败'
+            }}</el-tag>
             {{ a.message }}
           </div>
         </el-tab-pane>
         <el-tab-pane v-if="resp.extract_results?.length" label="提取" name="extracts">
           <div v-for="(e, i) in resp.extract_results" :key="'e' + i" class="line">
-            <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{ e.passed ? '成' : '败' }}</el-tag>
+            <el-tag size="small" :type="e.passed ? 'success' : 'danger'">{{
+              e.passed ? '成' : '败'
+            }}</el-tag>
             {{ e.var_name }} = {{ e.value || e.message }}（{{ e.scope }}）
           </div>
         </el-tab-pane>
@@ -52,34 +75,53 @@
             </el-tag>
             {{ resp.contract_result.schema_name }} · {{ resp.contract_result.message }}
           </div>
-          <div v-for="(err, i) in resp.contract_result.errors" :key="'c' + i" class="line mono">{{ err }}</div>
+          <div v-for="(err, i) in resp.contract_result.errors" :key="'c' + i" class="line mono">
+            {{ err }}
+          </div>
         </el-tab-pane>
       </el-tabs>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { processorsToLegacy } from '@/utils/caseProcessors'
 import ApiEndpointEditor from '@/components/apifox/ApiEndpointEditor.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
+import ActualRequestView from '@/components/apifox/ActualRequestView.vue'
+import type { EndpointEditorForm } from '@/types/apifox'
 
-const props = defineProps({
-  form: { type: Object, required: true },
-  saving: { type: Boolean, default: false },
-  serverNames: { type: Array, default: () => [] },
-  projectId: { type: [String, Number], required: true },
-  scripts: { type: Array, default: () => [] },
-  schemas: { type: Array, default: () => [] },
-})
-defineEmits(['save'])
+type ScriptBrief = Schemas['ScriptBrief']
+type SchemaBrief = Schemas['SchemaBrief']
+type DebugSendResult = Schemas['DebugResponse']
+
+const props = withDefaults(
+  defineProps<{
+    form: EndpointEditorForm
+    saving?: boolean
+    serverNames?: string[]
+    projectId: Id
+    scripts?: ScriptBrief[]
+    schemas?: SchemaBrief[]
+  }>(),
+  {
+    saving: false,
+    serverNames: () => [],
+    scripts: () => [],
+    schemas: () => [],
+  },
+)
+defineEmits<{ save: [] }>()
 
 const store = useWorkspaceStore()
 const sending = ref(false)
-const resp = ref(null)
+const resp = ref<DebugSendResult | null>(null)
 const respTab = ref('body')
 
 const statusType = computed(() => {
@@ -91,21 +133,26 @@ const statusType = computed(() => {
 async function send() {
   sending.value = true
   try {
+    // debug 直发仍用旧管线：从当前有序处理器实时派生（wait/顺序在快速直发里忽略）
+    const legacy = processorsToLegacy(
+      props.form.pre_processors || [],
+      props.form.post_processors || [],
+    )
     resp.value = await apifoxApi.debugSend(props.projectId, {
       method: props.form.method,
       path: props.form.path,
       server_name: props.form.server_name,
-      request_spec: props.form.request_spec,
+      request_spec: props.form.request_spec as Schemas['DebugRequest']['request_spec'],
       environment_id: store.currentEnvironmentId,
-      assertions: props.form.assertions || [],
-      extracts: props.form.extracts || [],
-      pre_scripts: (props.form.pre_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
-      post_scripts: (props.form.post_scripts || []).map(({ script_id, enabled }) => ({ script_id, enabled })),
-      response_schema_id: props.form.response_schema_id || null,
+      assertions: legacy.assertions as Schemas['DebugRequest']['assertions'],
+      extracts: legacy.extracts as Schemas['DebugRequest']['extracts'],
+      pre_scripts: legacy.pre_scripts as Schemas['DebugRequest']['pre_scripts'],
+      post_scripts: legacy.post_scripts as Schemas['DebugRequest']['post_scripts'],
+      response_schema_id: legacy.response_schema_id,
     })
     respTab.value = 'body'
-  } catch (e) {
-    ElMessage.error(e.message || '发送失败')
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '发送失败')
   } finally {
     sending.value = false
   }
@@ -122,7 +169,7 @@ async function send() {
 
 .hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .resp {
@@ -144,12 +191,12 @@ async function send() {
 
 .meta {
   color: var(--ax-text-secondary);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .err {
   color: var(--ax-danger);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .resp-box {
@@ -162,12 +209,16 @@ async function send() {
 }
 
 .line {
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   padding: 3px 0;
 }
 
 .mono {
   font-family: Consolas, Monaco, monospace;
   color: var(--ax-text-secondary);
+}
+
+.warn {
+  margin-bottom: 8px;
 }
 </style>

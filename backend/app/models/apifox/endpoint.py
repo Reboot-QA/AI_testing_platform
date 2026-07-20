@@ -22,6 +22,8 @@ class ApifoxFolder(Base):
     parent_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("apifox_folders.id"), nullable=True, index=True
     )
+    # endpoint | scenario —— 同一张表按 kind 区分接口文件夹与场景文件夹
+    kind: Mapped[str] = mapped_column(String(20), default="endpoint", server_default="endpoint", index=True)
     name: Mapped[str] = mapped_column(String(200))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -83,6 +85,9 @@ class ApifoxEndpoint(Base):
         ForeignKey("apifox_schemas.id"), nullable=True
     )
     contract_strict: Mapped[bool] = mapped_column(Boolean, default=False)
+    # 有序处理器列表 JSON（同用例：为空回退旧固定管线，零回归）
+    pre_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    post_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
     # 乐观锁版本：每次保存 +1，多人并发编辑冲突检测（多 tab 同开同一接口）

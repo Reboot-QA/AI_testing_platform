@@ -39,11 +39,14 @@
 
         <el-select
           v-if="newType === 'import-endpoint'"
-          v-model="pickedEndpointId"
+          v-model="pickedEndpointIds"
           size="small"
-          placeholder="选择接口"
+          placeholder="选择接口（可多选）"
           style="flex: 1"
           filterable
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
         >
           <el-option
             v-for="ep in endpoints"
@@ -52,7 +55,17 @@
             :value="ep.id"
           />
         </el-select>
-        <el-select v-if="newType === 'case'" v-model="pickedCaseId" size="small" placeholder="选择接口用例" style="flex: 1" filterable>
+        <el-select
+          v-if="newType === 'case'"
+          v-model="pickedCaseIds"
+          size="small"
+          placeholder="选择用例（可多选，留空则加占位步骤）"
+          style="flex: 1"
+          filterable
+          multiple
+          collapse-tags
+          collapse-tags-tooltip
+        >
           <el-option
             v-for="c in cases"
             :key="c.id"
@@ -60,20 +73,45 @@
             :value="c.id"
           />
         </el-select>
-        <el-input-number v-else-if="newType === 'wait'" v-model="waitMs" size="small" :min="1" :step="100" style="width: 130px" />
-        <el-select v-else-if="newType === 'scenario'" v-model="pickedScenarioId" size="small" placeholder="选择子场景" style="flex: 1" filterable>
+        <el-input-number
+          v-else-if="newType === 'wait'"
+          v-model="waitMs"
+          size="small"
+          :min="1"
+          :step="100"
+          style="width: 130px"
+        />
+        <el-select
+          v-else-if="newType === 'scenario'"
+          v-model="pickedScenarioId"
+          size="small"
+          placeholder="选择子场景"
+          style="flex: 1"
+          filterable
+        >
           <el-option v-for="s in availableScenarios" :key="s.id" :label="s.name" :value="s.id" />
         </el-select>
-        <el-input v-else-if="newType === 'group'" v-model="groupName" size="small" placeholder="分组名称" style="flex: 1" />
-        <span v-else-if="newType === 'break' || newType === 'continue'" class="add-hint">添加后拖入循环体内</span>
+        <el-input
+          v-else-if="newType === 'group'"
+          v-model="groupName"
+          size="small"
+          placeholder="分组名称"
+          style="flex: 1"
+        />
+        <span v-else-if="newType === 'break' || newType === 'continue'" class="add-hint"
+          >添加后拖入循环体内</span
+        >
         <span v-else class="add-hint">添加后在右侧配置</span>
-        <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep">+ 添加</el-button>
+        <el-button size="small" type="primary" :disabled="!canAdd" @click="addStep"
+          >+ 添加</el-button
+        >
       </div>
     </div>
 
     <div class="detail-col">
       <ScenarioStepDetail
         v-if="selectedStep"
+        ref="detailRef"
         :key="selectedStep._uid"
         :step="selectedStep"
         :cases="cases"
@@ -101,30 +139,57 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
+import type { RequestSpec } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { parseCurl } from '@/utils/curlParser'
 import ScenarioStepRow from '@/components/apifox/ScenarioStepRow.vue'
 import ScenarioStepDetail from '@/components/apifox/ScenarioStepDetail.vue'
+import type { ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
 
-const props = defineProps({
-  rows: { type: Array, required: true },
-  cases: { type: Array, default: () => [] },
-  scenarios: { type: Array, default: () => [] },
-  currentScenarioId: { type: Number, default: null },
-  scripts: { type: Array, default: () => [] },
-  databases: { type: Array, default: () => [] },
-  endpoints: { type: Array, default: () => [] },
-  serverNames: { type: Array, default: () => [] },
-})
+type ProjectCaseBrief = Schemas['ProjectCaseBrief']
+type ScenarioBrief = Schemas['ScenarioBrief']
+type ScriptBrief = Schemas['ScriptBrief']
+type DatabaseOut = Schemas['DatabaseOut']
+type EndpointBrief = Schemas['EndpointBrief']
+
+const props = withDefaults(
+  defineProps<{
+    rows: ScenarioEditorStep[]
+    cases?: ProjectCaseBrief[]
+    scenarios?: ScenarioBrief[]
+    currentScenarioId?: number | null
+    scripts?: ScriptBrief[]
+    databases?: DatabaseOut[]
+    endpoints?: EndpointBrief[]
+    serverNames?: string[]
+  }>(),
+  {
+    cases: () => [],
+    scenarios: () => [],
+    currentScenarioId: null,
+    scripts: () => [],
+    databases: () => [],
+    endpoints: () => [],
+    serverNames: () => [],
+  },
+)
+
+// 供父级（场景整体保存）调用：把当前选中步骤详情里未落库的引用用例编辑一并保存
+const detailRef = ref<InstanceType<typeof ScenarioStepDetail> | null>(null)
+async function flushDetail() {
+  await detailRef.value?.flushCase?.()
+}
+defineExpose({ flushDetail })
 
 let _seq = 0
 // 容器步骤的可嵌套子列表：分组一个，条件(if)两个（then=children / else=elseChildren）
-function stepChildLists(r) {
+function stepChildLists(r: ScenarioEditorStep): ScenarioEditorStep[][] {
   if (r.type === 'group' || r.type === 'loop') {
     if (!Array.isArray(r.children)) r.children = []
     return [r.children]
@@ -137,19 +202,25 @@ function stepChildLists(r) {
   return []
 }
 
-function ensureUids(rows) {
+function ensureUids(rows: ScenarioEditorStep[]) {
   rows.forEach((r) => {
     if (r._uid == null) r._uid = ++_seq
     stepChildLists(r).forEach(ensureUids)
   })
 }
 onMounted(() => ensureUids(props.rows))
-watch(() => props.rows.length, () => ensureUids(props.rows))
+watch(
+  () => props.rows.length,
+  () => ensureUids(props.rows),
+)
 
 // 选中态用共享 reactive（UI 态，非业务数据，显式传 prop，不走 provide/inject）
-const selection = reactive({ uid: null })
+const selection = reactive<ScenarioStepSelection>({ uid: null })
 
-function findByUid(rows, uid) {
+function findByUid(
+  rows: ScenarioEditorStep[],
+  uid: number | string | null,
+): ScenarioEditorStep | null {
   for (const r of rows) {
     if (r._uid === uid) return r
     for (const list of stepChildLists(r)) {
@@ -161,54 +232,80 @@ function findByUid(rows, uid) {
 }
 const selectedStep = computed(() => findByUid(props.rows, selection.uid))
 
-function removeTop(i) {
+function removeTop(i: number) {
   if (props.rows[i]?._uid === selection.uid) selection.uid = null
   props.rows.splice(i, 1)
 }
 
 const newType = ref('case')
-const pickedCaseId = ref(null)
-const pickedScenarioId = ref(null)
-const pickedEndpointId = ref(null)
+const pickedCaseIds = ref<number[]>([])
+const pickedScenarioId = ref<number | null>(null)
+const pickedEndpointIds = ref<number[]>([])
 const waitMs = ref(500)
 const groupName = ref('')
 const curlVisible = ref(false)
 const curlText = ref('')
 
 const availableScenarios = computed(() =>
-  props.scenarios.filter((s) => s.id !== props.currentScenarioId)
+  props.scenarios.filter((s) => s.id !== props.currentScenarioId),
 )
 
 const canAdd = computed(() => {
-  if (newType.value === 'case') return !!pickedCaseId.value
+  if (newType.value === 'case') return true // 允许不选用例先加空白占位步骤，之后在右侧详情补选
   if (newType.value === 'wait') return waitMs.value > 0
   if (newType.value === 'scenario') return !!pickedScenarioId.value
-  if (newType.value === 'import-endpoint') return !!pickedEndpointId.value
+  if (newType.value === 'import-endpoint') return pickedEndpointIds.value.length > 0
   return true
 })
 
-function newHttpStep(over = {}) {
+function newHttpStep(
+  over: Partial<{
+    name: string
+    method: string
+    path: string
+    server_name: string | null
+    request_spec: RequestSpec
+    assertions: Schemas['AssertionRow'][]
+    extracts: Schemas['ExtractRow'][]
+  }> = {},
+): ScenarioEditorStep {
   return {
-    type: 'http', enabled: true, name: over.name || 'HTTP 请求', _uid: ++_seq,
+    type: 'http',
+    enabled: true,
+    name: over.name || 'HTTP 请求',
+    _uid: ++_seq,
     config: {
-      name: over.name || '', method: over.method || 'GET', path: over.path || '',
+      name: over.name || '',
+      method: over.method || 'GET',
+      path: over.path || '',
       server_name: over.server_name || null,
       // 统一归一化请求结构，两个导入路径与空步骤保持一致的形状
       request_spec: normalizeSpec(over.request_spec || emptySpec()),
-      assertions: over.assertions || [], extracts: over.extracts || [],
+      assertions: over.assertions || [],
+      extracts: over.extracts || [],
     },
   }
 }
 
 async function importFromEndpoint() {
+  const ids = [...pickedEndpointIds.value]
+  if (ids.length === 0) return
   try {
-    const e = await apifoxApi.getEndpoint(pickedEndpointId.value)
-    props.rows.push(newHttpStep({
-      name: e.name, method: e.method, path: e.path, server_name: e.server_name,
-      request_spec: e.request_spec,
-      assertions: e.assertions || [], extracts: e.extracts || [],
-    }))
-    pickedEndpointId.value = null
+    for (const endpointId of ids) {
+      const e = await apifoxApi.getEndpoint(endpointId)
+      props.rows.push(
+        newHttpStep({
+          name: e.name,
+          method: e.method,
+          path: e.path,
+          server_name: e.server_name,
+          request_spec: normalizeSpec(e.request_spec),
+          assertions: e.assertions || [],
+          extracts: e.extracts || [],
+        }),
+      )
+    }
+    pickedEndpointIds.value = []
     newType.value = 'http'
   } catch {
     ElMessage.error('接口加载失败')
@@ -221,7 +318,14 @@ function importFromCurl() {
     ElMessage.error('无法解析，请粘贴以 curl 开头的完整命令')
     return
   }
-  props.rows.push(newHttpStep(parsed))
+  props.rows.push(
+    newHttpStep({
+      name: parsed.name,
+      method: parsed.method,
+      path: parsed.path,
+      request_spec: normalizeSpec(parsed.request_spec),
+    }),
+  )
   curlVisible.value = false
   curlText.value = ''
   newType.value = 'http'
@@ -229,36 +333,72 @@ function importFromCurl() {
 
 function addStep() {
   if (newType.value === 'case') {
-    const c = props.cases.find((x) => x.id === pickedCaseId.value)
-    props.rows.push({
-      type: 'case', ref_case_id: c.id, enabled: true,
-      case_name: c.name, endpoint_method: c.endpoint_method, _uid: ++_seq,
-    })
-    pickedCaseId.value = null
+    const ids = pickedCaseIds.value
+    if (ids.length === 0) {
+      // 未选用例则加一个空白占位步骤（ref_case_id 为空），之后在右侧详情补选
+      props.rows.push({
+        type: 'case',
+        ref_case_id: null,
+        enabled: true,
+        case_name: '未指定用例',
+        _uid: ++_seq,
+      })
+    } else {
+      // 多选：每个用例加一个步骤（保持选择顺序）
+      for (const id of ids) {
+        const c = props.cases.find((x) => x.id === id)
+        if (!c) continue
+        props.rows.push({
+          type: 'case',
+          ref_case_id: c.id,
+          enabled: true,
+          case_name: c.name,
+          endpoint_method: c.endpoint_method,
+          _uid: ++_seq,
+        })
+      }
+    }
+    pickedCaseIds.value = []
   } else if (newType.value === 'wait') {
     props.rows.push({ type: 'wait', wait_ms: waitMs.value, enabled: true, _uid: ++_seq })
   } else if (newType.value === 'scenario') {
     const s = props.scenarios.find((x) => x.id === pickedScenarioId.value)
+    if (!s) return
     props.rows.push({
-      type: 'scenario', ref_scenario_id: s.id, enabled: true, scenario_name: s.name, _uid: ++_seq,
+      type: 'scenario',
+      ref_scenario_id: s.id,
+      enabled: true,
+      scenario_name: s.name,
+      _uid: ++_seq,
     })
     pickedScenarioId.value = null
   } else if (newType.value === 'group') {
     props.rows.push({
-      type: 'group', name: groupName.value || '分组', enabled: true, children: [], _uid: ++_seq,
+      type: 'group',
+      name: groupName.value || '分组',
+      enabled: true,
+      children: [],
+      _uid: ++_seq,
     })
     groupName.value = ''
   } else if (newType.value === 'if') {
     props.rows.push({
-      type: 'if', enabled: true, _uid: ++_seq,
+      type: 'if',
+      enabled: true,
+      _uid: ++_seq,
       config: { condition: { left: '', operator: 'eq', right: '' } },
-      children: [], elseEnabled: false, elseChildren: [],
+      children: [],
+      elseEnabled: false,
+      elseChildren: [],
     })
   } else if (newType.value === 'break' || newType.value === 'continue') {
     props.rows.push({ type: newType.value, enabled: true, _uid: ++_seq })
   } else if (newType.value === 'db') {
     props.rows.push({
-      type: 'db', enabled: true, name: '数据库操作', _uid: ++_seq,
+      type: 'db',
+      enabled: true,
+      name: '数据库操作',
+      _uid: ++_seq,
       config: { connection_id: null, sql: '', extracts: [] },
     })
   } else if (newType.value === 'http') {
@@ -269,10 +409,18 @@ function addStep() {
     curlVisible.value = true
   } else {
     props.rows.push({
-      type: 'loop', enabled: true, _uid: ++_seq, children: [],
+      type: 'loop',
+      enabled: true,
+      _uid: ++_seq,
+      children: [],
       config: {
-        mode: 'count', count: 1, list_var: '', item_var: 'item', index_var: 'index',
-        max_iterations: 10, condition: { left: '', operator: 'eq', right: '' },
+        mode: 'count',
+        count: 1,
+        list_var: '',
+        item_var: 'item',
+        index_var: 'index',
+        max_iterations: 10,
+        condition: { left: '', operator: 'eq', right: '' },
       },
     })
   }
@@ -282,8 +430,9 @@ function addStep() {
 <style scoped>
 .steps-editor {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 340px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .steps-col {
@@ -308,7 +457,12 @@ function addStep() {
 
 .add-hint {
   flex: 1;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
+  line-height: 1.35;
   color: var(--ax-text-placeholder);
+}
+
+.steps-col :deep(.el-empty__description) {
+  font-size: var(--ax-font-xs);
 }
 </style>

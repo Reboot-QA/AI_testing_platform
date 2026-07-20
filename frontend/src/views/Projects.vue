@@ -1,45 +1,72 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
+      <el-input
+        v-model="keyword"
+        clearable
+        placeholder="搜索项目名称/描述/创建人/部门"
+        style="width: 280px"
+        @keyup.enter="handleSearch"
+        @clear="handleSearch"
+      />
+      <el-button type="primary" plain @click="handleSearch">
+        <el-icon><Search /></el-icon>
+        搜索
+      </el-button>
       <el-button type="primary" data-assistant="projects.create_btn" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新建项目
       </el-button>
     </template>
 
-    <el-table v-loading="loading" :data="projects" stripe border>
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="name" label="项目名称" min-width="180" />
-      <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
-      <el-table-column prop="requirement_count" label="需求数" width="90" align="center" />
-      <el-table-column prop="testcase_count" label="用例数" width="90" align="center" />
-      <el-table-column prop="status" label="状态" width="90">
-        <template #default="{ row }">
-          <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
-            {{ row.status === 'active' ? '进行中' : row.status }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="owner_name" label="创建人" width="100" />
-      <el-table-column prop="department_name" label="部门" width="120">
-        <template #default="{ row }">{{ row.department_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" width="170">
-        <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="160" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button
-            link
-            type="danger"
-            :disabled="row.requirement_count > 0 || row.testcase_count > 0"
-            @click="handleDelete(row)"
-          >
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-fill">
+      <el-table v-loading="loading" :data="projects" stripe border height="100%">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="name" label="项目名称" min-width="180" />
+        <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
+        <el-table-column prop="requirement_count" label="需求数" width="90" align="center" />
+        <el-table-column prop="testcase_count" label="用例数" width="90" align="center" />
+        <el-table-column prop="status" label="状态" width="90">
+          <template #default="{ row }">
+            <el-tag :type="row.status === 'active' ? 'success' : 'info'" size="small">
+              {{ row.status === 'active' ? '进行中' : row.status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="owner_name" label="创建人" width="100" />
+        <el-table-column prop="department_name" label="部门" width="120">
+          <template #default="{ row }">{{ row.department_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatDate(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="160" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+            <el-button
+              link
+              type="danger"
+              :disabled="row.requirement_count > 0 || row.testcase_count > 0"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
+
+    <div class="pagination-bar">
+      <el-pagination
+        v-model:current-page="currentPage"
+        v-model:page-size="pageSize"
+        :total="total"
+        :page-sizes="[...PAGE_SIZE_OPTIONS]"
+        layout="total, sizes, prev, pager, next, jumper"
+        background
+        @current-change="loadData"
+        @size-change="handlePageSizeChange"
+      />
+    </div>
   </PageCard>
 
   <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="500px">
@@ -71,36 +98,79 @@
   </el-dialog>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { projectApi } from '@/api'
+import { projectApi, type ProjectListParams } from '@/api/project'
+import { formatBeijingTime } from '@/utils/datetime'
 import PageCard from '@/components/PageCard.vue'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
+import type { Project, DateInput } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
 
-const projects = ref([])
+interface ProjectForm {
+  name: string
+  description: string
+}
+
+const projects = ref<Project[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const formRef = ref()
+const editing = ref<Project | null>(null)
+const formRef = ref<FormInstance>()
+const keyword = ref('')
+const currentPage = ref(1)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
+const total = ref(0)
 
-const form = reactive({ name: '', description: '' })
-const rules = { name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }] }
+const form = reactive<ProjectForm>({ name: '', description: '' })
+const rules: FormRules<ProjectForm> = {
+  name: [{ required: true, message: '请输入项目名称', trigger: 'blur' }],
+}
 
-function formatDate(d) {
-  return d ? new Date(d).toLocaleString('zh-CN') : ''
+function formatDate(d: DateInput) {
+  return formatBeijingTime(d, '')
 }
 
 async function loadData() {
   loading.value = true
   try {
-    projects.value = await projectApi.list()
+    const params: ProjectListParams = {
+      page: currentPage.value,
+      page_size: pageSize.value,
+    }
+    if (keyword.value.trim()) {
+      params.keyword = keyword.value.trim()
+    }
+    const data = await projectApi.list(params)
+    if ('items' in data) {
+      projects.value = data.items
+      total.value = data.total
+    }
+    const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
+    if (currentPage.value > maxPage) {
+      currentPage.value = maxPage
+      if (maxPage !== params.page) {
+        return loadData()
+      }
+    }
   } finally {
     loading.value = false
   }
 }
 
-function openDialog(row = null) {
+function handleSearch() {
+  currentPage.value = 1
+  loadData()
+}
+
+function handlePageSizeChange() {
+  currentPage.value = 1
+  loadData()
+}
+
+function openDialog(row: Project | null = null) {
   editing.value = row
   form.name = row?.name || ''
   form.description = row?.description || ''
@@ -108,7 +178,7 @@ function openDialog(row = null) {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     if (editing.value) {
@@ -125,7 +195,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Project) {
   if (row.requirement_count > 0 || row.testcase_count > 0) {
     ElMessage.warning(
       `该项目下存在 ${row.requirement_count} 条需求、${row.testcase_count} 条用例，请先清理全部关联需求和用例后再删除`,

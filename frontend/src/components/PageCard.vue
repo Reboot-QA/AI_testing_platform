@@ -1,4 +1,4 @@
-<script setup>
+<script setup lang="ts">
 // 通用页面内容容器：把「工具栏 + 表格/内容」装进统一白卡片（圆角/阴影/内边距）。
 // 页面标题由 MainLayout 顶栏统一展示，故此卡片默认不重复标题。
 // 用法：
@@ -6,13 +6,19 @@
 //     <template #toolbar> <el-button>新建</el-button> ...筛选项 </template>
 //     <el-table ... />
 //   </PageCard>
-defineProps({
-  // 内容区是否带内边距（表格类留 true；需要内容自行贴边时传 false）
-  padded: { type: Boolean, default: true },
-  // 撑满 el-main 剩余高度：卡片变纵向 flex，内容区 flex-1 内部滚动
-  // （配合内部表格 height="100%"，实现表头/工具栏/分页固定、仅数据区滚动）
-  fill: { type: Boolean, default: false },
-})
+withDefaults(
+  defineProps<{
+    // 内容区是否带内边距（表格类留 true；需要内容自行贴边时传 false）
+    padded?: boolean
+    // 撑满 el-main 剩余高度：卡片变纵向 flex，内容区 flex-1 内部滚动
+    // （配合内部表格 height="100%"，实现表头/工具栏/分页固定、仅数据区滚动）
+    fill?: boolean
+  }>(),
+  {
+    padded: true,
+    fill: false,
+  },
+)
 </script>
 
 <template>

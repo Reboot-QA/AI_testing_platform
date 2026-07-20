@@ -3,7 +3,7 @@
     <div
       class="step-row"
       :class="{ active: selection.uid === row._uid, disabled: row.enabled === false }"
-      @click.stop="selection.uid = row._uid"
+      @click.stop="selection.uid = row._uid ?? null"
     >
       <el-icon class="drag-handle" title="拖拽排序/移动"><Rank /></el-icon>
       <span class="idx">{{ index + 1 }}</span>
@@ -15,14 +15,14 @@
 
     <div v-if="row.type === 'group'" class="group-body">
       <VueDraggable
-        v-model="row.children"
+        v-model="children"
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
         class="group-drop"
       >
         <ScenarioStepRow
-          v-for="(child, i) in row.children"
+          v-for="(child, i) in children"
           :key="child._uid"
           :row="child"
           :index="i"
@@ -30,23 +30,23 @@
           :scenarios="scenarios"
           :current-scenario-id="currentScenarioId"
           :selection="selection"
-          @remove="row.children.splice(i, 1)"
+          @remove="children.splice(i, 1)"
         />
       </VueDraggable>
-      <div v-if="row.children.length === 0" class="group-empty">拖步骤到此分组内</div>
+      <div v-if="children.length === 0" class="group-empty">拖步骤到此分组内</div>
     </div>
 
     <div v-else-if="row.type === 'if'" class="group-body">
       <div class="branch-label">Then（条件成立）</div>
       <VueDraggable
-        v-model="row.children"
+        v-model="children"
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
         class="group-drop"
       >
         <ScenarioStepRow
-          v-for="(child, i) in row.children"
+          v-for="(child, i) in children"
           :key="child._uid"
           :row="child"
           :index="i"
@@ -54,22 +54,22 @@
           :scenarios="scenarios"
           :current-scenario-id="currentScenarioId"
           :selection="selection"
-          @remove="row.children.splice(i, 1)"
+          @remove="children.splice(i, 1)"
         />
       </VueDraggable>
-      <div v-if="row.children.length === 0" class="group-empty">拖步骤到 Then 分支</div>
+      <div v-if="children.length === 0" class="group-empty">拖步骤到 Then 分支</div>
 
       <template v-if="row.elseEnabled">
         <div class="branch-label">Else（条件不成立）</div>
         <VueDraggable
-          v-model="row.elseChildren"
+          v-model="elseChildren"
           :group="{ name: 'scenario-steps' }"
           handle=".drag-handle"
           :animation="150"
           class="group-drop"
         >
           <ScenarioStepRow
-            v-for="(child, i) in row.elseChildren"
+            v-for="(child, i) in elseChildren"
             :key="child._uid"
             :row="child"
             :index="i"
@@ -77,24 +77,24 @@
             :scenarios="scenarios"
             :current-scenario-id="currentScenarioId"
             :selection="selection"
-            @remove="row.elseChildren.splice(i, 1)"
+            @remove="elseChildren.splice(i, 1)"
           />
         </VueDraggable>
-        <div v-if="row.elseChildren.length === 0" class="group-empty">拖步骤到 Else 分支</div>
+        <div v-if="elseChildren.length === 0" class="group-empty">拖步骤到 Else 分支</div>
       </template>
     </div>
 
     <div v-else-if="row.type === 'loop'" class="group-body">
       <div class="branch-label">循环体</div>
       <VueDraggable
-        v-model="row.children"
+        v-model="children"
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
         class="group-drop"
       >
         <ScenarioStepRow
-          v-for="(child, i) in row.children"
+          v-for="(child, i) in children"
           :key="child._uid"
           :row="child"
           :index="i"
@@ -102,55 +102,115 @@
           :scenarios="scenarios"
           :current-scenario-id="currentScenarioId"
           :selection="selection"
-          @remove="row.children.splice(i, 1)"
+          @remove="children.splice(i, 1)"
         />
       </VueDraggable>
-      <div v-if="row.children.length === 0" class="group-empty">拖步骤到循环体内</div>
+      <div v-if="children.length === 0" class="group-empty">拖步骤到循环体内</div>
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import { VueDraggable } from 'vue-draggable-plus'
+import type { Schemas } from '@/api/types'
+import type { HttpStepConfig, ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
+import {
+  ensureElseChildren,
+  ensureIfConfig,
+  ensureLoopConfig,
+  ensureStepChildren,
+} from '@/types/apifox'
 
 defineOptions({ name: 'ScenarioStepRow' })
 
-const props = defineProps({
-  row: { type: Object, required: true },
-  index: { type: Number, default: 0 },
-  cases: { type: Array, default: () => [] },
-  scenarios: { type: Array, default: () => [] },
-  currentScenarioId: { type: Number, default: null },
-  selection: { type: Object, required: true },
+export type { ScenarioEditorStep, ScenarioStepSelection } from '@/types/apifox'
+
+type ProjectCaseBrief = Schemas['ProjectCaseBrief']
+type ScenarioBrief = Schemas['ScenarioBrief']
+
+const props = withDefaults(
+  defineProps<{
+    row: ScenarioEditorStep
+    index?: number
+    cases?: ProjectCaseBrief[]
+    scenarios?: ScenarioBrief[]
+    currentScenarioId?: number | null
+    selection: ScenarioStepSelection
+  }>(),
+  {
+    index: 0,
+    cases: () => [],
+    scenarios: () => [],
+    currentScenarioId: null,
+  },
+)
+
+defineEmits<{ remove: [] }>()
+
+const children = computed({
+  get: () => ensureStepChildren(props.row),
+  set: (value: ScenarioEditorStep[]) => {
+    props.row.children = value
+  },
 })
 
-defineEmits(['remove'])
+const elseChildren = computed({
+  get: () => ensureElseChildren(props.row),
+  set: (value: ScenarioEditorStep[]) => {
+    props.row.elseChildren = value
+  },
+})
 
 const typeLabel = computed(
-  () => ({ case: '用例', wait: '等待', scenario: '子场景', group: '分组', if: '条件', loop: '循环', break: '跳出循环', continue: '跳过本轮', db: '数据库', http: 'HTTP' }[props.row.type] || props.row.type)
+  () =>
+    ({
+      case: '用例',
+      wait: '等待',
+      scenario: '子场景',
+      group: '分组',
+      if: '条件',
+      loop: '循环',
+      break: '跳出循环',
+      continue: '跳过本轮',
+      db: '数据库',
+      http: 'HTTP',
+    })[props.row.type] || props.row.type,
 )
 const typeTag = computed(
-  () => ({ case: 'success', wait: 'warning', scenario: 'info', group: 'primary', if: 'danger', loop: 'warning', break: 'danger', continue: 'info', db: 'primary', http: 'success' }[props.row.type] || 'info')
+  () =>
+    ({
+      case: 'success',
+      wait: 'warning',
+      scenario: 'info',
+      group: 'primary',
+      if: 'danger',
+      loop: 'warning',
+      break: 'danger',
+      continue: 'info',
+      db: 'primary',
+      http: 'success',
+    })[props.row.type] || 'info',
 )
 
 const displayName = computed(() => {
   const row = props.row
   if (row.type === 'if') {
-    const c = row.config?.condition || {}
+    const c = ensureIfConfig(row).condition
     return `如果 ${c.left || '?'} ${c.operator || 'eq'} ${c.operator === 'exists' ? '' : (c.right ?? '')}`.trim()
   }
   if (row.type === 'loop') {
-    const c = row.config || {}
+    const c = ensureLoopConfig(row)
     if (c.mode === 'list') return `遍历 ${c.list_var || '?'}`
-    if (c.mode === 'while') return `当 ${c.condition?.left || '?'} ${c.condition?.operator || ''} … 时循环`
+    if (c.mode === 'while')
+      return `当 ${c.condition?.left || '?'} ${c.condition?.operator || ''} … 时循环`
     return `循环 ${c.count ?? '?'} 次`
   }
   if (row.type === 'break') return '跳出循环'
   if (row.type === 'continue') return '跳过本轮'
   if (row.type === 'http') {
-    const c = row.config || {}
-    return `[${c.method || 'GET'}] ${c.path || row.name || 'HTTP'}`.trim()
+    const c = row.config as HttpStepConfig | undefined
+    return `[${c?.method || 'GET'}] ${c?.path || row.name || 'HTTP'}`.trim()
   }
   if (row.name) return row.name
   if (row.type === 'case') {
@@ -167,11 +227,13 @@ const displayName = computed(() => {
 .step-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 6px;
-  padding: 4px 6px;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 5px 6px;
   border-radius: 4px;
   cursor: pointer;
+  font-size: 12px;
+  line-height: 1.35;
 }
 
 .step-row:hover {
@@ -188,6 +250,8 @@ const displayName = computed(() => {
 }
 
 .drag-handle {
+  flex-shrink: 0;
+  font-size: 13px;
   cursor: grab;
   color: var(--ax-text-placeholder);
 }
@@ -197,21 +261,47 @@ const displayName = computed(() => {
 }
 
 .idx {
-  width: 20px;
+  flex-shrink: 0;
+  width: 18px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
   color: var(--ax-text-placeholder);
-  font-size: 12px;
   text-align: right;
+}
+
+.step-row :deep(.el-checkbox) {
+  height: auto;
+  margin-right: 0;
+}
+
+.step-row :deep(.el-tag) {
+  flex-shrink: 0;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 11px;
+  line-height: 18px;
 }
 
 .step-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ax-text);
+}
+
+.step-row :deep(.el-button.is-link) {
+  flex-shrink: 0;
+  padding: 0 4px;
+  font-size: 11px;
+  height: auto;
 }
 
 .group-body {
-  margin-left: 22px;
+  margin-left: 20px;
   border-left: 2px solid var(--ax-border);
   padding-left: 8px;
 }
@@ -222,14 +312,16 @@ const displayName = computed(() => {
 
 .group-empty {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.35;
   padding: 4px 6px;
 }
 
 .branch-label {
   font-size: 12px;
-  color: var(--ax-text-secondary);
   font-weight: 600;
+  line-height: 1.35;
+  color: var(--ax-text-secondary);
   margin: 4px 0 2px;
 }
 </style>

@@ -11,12 +11,17 @@
     />
 
     <div class="editor-panel">
+      <div class="panel-toolbar">
+        <el-button size="small" @click="batchAiRef?.open()">
+          <el-icon><MagicStick /></el-icon> 批量 AI 生成
+        </el-button>
+      </div>
       <template v-if="tabs.length">
         <el-tabs
           :model-value="activeId"
           type="card"
           class="endpoint-tabbar"
-          @tab-change="(id) => tabsStore.activate(pid, id)"
+          @tab-change="(id: string | number) => tabsStore.activate(pid, Number(id))"
           @tab-remove="onTabRemove"
         >
           <el-tab-pane v-for="t in tabs" :key="t.id" :name="t.id" closable>
@@ -66,40 +71,56 @@
         </div>
       </div>
     </div>
+
+    <BatchAiGenerateDialog ref="batchAiRef" :project-id="pid" />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import type { Schemas } from '@/api/types'
+import type { EndpointEditorForm } from '@/types/apifox'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useApiTabsStore } from '@/stores/apiTabs'
+import { processorsToLegacy } from '@/utils/caseProcessors'
 import { useProjectScripts } from '@/composables/useProjectScripts'
 import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
 import ApiTreePanel from '@/components/apifox/ApiTreePanel.vue'
 import ApiDebugPanel from '@/components/apifox/ApiDebugPanel.vue'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
 import ApiCasesPanel from '@/components/apifox/ApiCasesPanel.vue'
+import BatchAiGenerateDialog from '@/components/apifox/BatchAiGenerateDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
+import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
 
-const route = useRoute()
 const router = useRouter()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 const store = useWorkspaceStore()
 const tabsStore = useApiTabsStore()
+const aiGenStore = useApifoxAiGenerateStore()
 
-const treePanel = ref(null)
+const treePanel = ref<InstanceType<typeof ApiTreePanel> | null>(null)
+const batchAiRef = ref<InstanceType<typeof BatchAiGenerateDialog> | null>(null)
 const { scripts, loadScripts } = useProjectScripts(pid)
-const schemas = ref([])
+const schemas = ref<Schemas['SchemaBrief'][]>([])
 
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
-const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
+const activeTab = computed(() => {
+  const id = activeId.value
+  return id != null ? tabsStore.findTab(pid.value, id) : null
+})
+
+// 路由级未保存守卫：切路由/切项目/退出前，有未保存改动则确认
+useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
 
 const serverNames = computed(() => {
-  const names = new Set()
+  const names = new Set<string>()
   store.environments.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
   return [...names]
 })
@@ -107,11 +128,11 @@ const serverNames = computed(() => {
 function goDataModels() {
   router.push(`/apifox/project/${pid.value}/datamodels`)
 }
-function goSchema(id) {
+function goSchema(id: number) {
   router.push(`/apifox/project/${pid.value}/datamodels?schema=${id}`)
 }
 
-async function onSelectEndpoint(id) {
+async function onSelectEndpoint(id: number) {
   try {
     await tabsStore.openEndpoint(pid.value, id)
   } catch {
@@ -119,33 +140,44 @@ async function onSelectEndpoint(id) {
   }
 }
 
-function endpointPayload(form) {
+function endpointPayload(form: EndpointEditorForm): Schemas['EndpointUpdate'] {
+  const legacy = processorsToLegacy(form.pre_processors ?? [], form.post_processors ?? [])
   return {
-    name: form.name, method: form.method, path: form.path, server_name: form.server_name,
-    description: form.description, request_spec: form.request_spec,
-    assertions: form.assertions, extracts: form.extracts,
-    pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    response_schema_id: form.response_schema_id, contract_strict: form.contract_strict,
+    name: form.name,
+    method: form.method,
+    path: form.path,
+    server_name: form.server_name,
+    description: form.description,
+    request_spec: form.request_spec as Schemas['EndpointUpdate']['request_spec'],
+    // 有序处理器为单一事实来源：清空旧分列字段；契约字段从处理器同步（供 debug 直发与回退）
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
+    pre_processors: form.pre_processors ?? [],
+    post_processors: form.post_processors ?? [],
+    response_schema_id: legacy.response_schema_id,
+    contract_strict: legacy.contract_strict,
   }
 }
 
 // 返回 true=已保存(可安全关闭)，false=未保存/用户取消
-async function saveEndpoint(id) {
+async function saveEndpoint(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return false
   tab.saving = true
   try {
     const updated = await apifoxApi.updateEndpoint(tab.id, {
-      ...endpointPayload(tab.form), expected_version: tab.version,
+      ...endpointPayload(tab.form),
+      expected_version: tab.version,
     })
     tabsStore.afterSave(pid.value, tab.id, updated)
     treePanel.value?.reload()
     ElMessage.success('已保存')
     return true
-  } catch (e) {
+  } catch (e: unknown) {
     if (!isConflict(e)) {
-      ElMessage.error(e.message || '保存失败')
+      ElMessage.error((e as Error).message || '保存失败')
       return false
     }
     let resolved = false
@@ -158,7 +190,8 @@ async function saveEndpoint(id) {
         const latest = await apifoxApi.getEndpoint(tab.id)
         tab.version = latest.version
         const updated = await apifoxApi.updateEndpoint(tab.id, {
-          ...endpointPayload(tab.form), expected_version: tab.version,
+          ...endpointPayload(tab.form),
+          expected_version: tab.version,
         })
         tabsStore.afterSave(pid.value, tab.id, updated)
         treePanel.value?.reload()
@@ -172,7 +205,7 @@ async function saveEndpoint(id) {
 }
 
 // 关闭接口 tab：dirty 时弹「保存并关闭/不保存关闭/取消」
-async function onTabRemove(id) {
+async function onTabRemove(id: number) {
   const tab = tabsStore.findTab(pid.value, id)
   if (!tab) return
   if (!tabsStore.isDirty(tab)) {
@@ -185,10 +218,10 @@ async function onTabRemove(id) {
   tabsStore.closeTab(pid.value, id)
 }
 
-function onDeleted(id) {
+function onDeleted(id: number) {
   tabsStore.closeTab(pid.value, id)
 }
-function onRenamed(id, name) {
+function onRenamed(id: number, name: string) {
   tabsStore.onRenamed(pid.value, id, name)
 }
 
@@ -197,7 +230,7 @@ async function loadSchemas() {
 }
 
 // 刷新/关浏览器兜底：有未保存改动时浏览器原生确认（store 是内存态，需此兜底）
-function beforeUnloadHandler(e) {
+function beforeUnloadHandler(e: BeforeUnloadEvent) {
   if (tabsStore.hasAnyDirty(pid.value)) {
     e.preventDefault()
     e.returnValue = ''
@@ -207,6 +240,7 @@ function beforeUnloadHandler(e) {
 onMounted(() => {
   loadScripts()
   loadSchemas()
+  aiGenStore.resumeActive(Number(pid.value)).catch(() => {}) // 刷新/重登后恢复进行中的 AI 生成任务
   window.addEventListener('beforeunload', beforeUnloadHandler)
 })
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHandler))
@@ -215,14 +249,24 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 <style scoped>
 .api-manage {
   display: flex;
-  gap: 16px;
-  height: calc(100vh - 220px);
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
 }
 
 .editor-panel {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  flex-shrink: 0;
+  margin-bottom: 8px;
 }
 
 .endpoint-tabbar :deep(.el-tabs__header) {
@@ -235,7 +279,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 
 .dirty-dot {
   color: var(--ax-warning);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .empty-cards {
@@ -259,7 +303,7 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
   border-radius: var(--ax-radius-lg);
   background: var(--ax-bg-subtle);
   color: var(--ax-text-secondary);
-  font-size: 14px;
+  font-size: var(--ax-font);
   cursor: pointer;
   transition: all 0.15s;
 }
@@ -270,6 +314,6 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
 }
 
 .ec-icon {
-  font-size: 30px;
+  font-size: var(--ax-font-2xl);
 }
 </style>

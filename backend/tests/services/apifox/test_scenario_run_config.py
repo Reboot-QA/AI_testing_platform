@@ -156,7 +156,7 @@ def test_binding_cross_project_dataset_rejected(db):
 def test_data_driven_scenario_runs_steps_times_rows(db, make_case, monkeypatch):
     seen_vars = []
 
-    def _fake(db, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
         seen_vars.append(dict(variables))
         return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
 
@@ -191,7 +191,7 @@ def test_scenario_binding_counts_toward_dataset_ref_and_blocks_delete(db):
 
 def test_iteration_failure_writes_failed_terminal_state(db, make_case, monkeypatch):
     # 回归：迭代中途未预期异常不得让运行永久卡 running（评审 #2，并发硬规则）
-    def _boom(db, case, endpoint, environment, variables, assertions, extracts):
+    def _boom(db, case, endpoint, environment, variables, assertions, extracts, **_):
         raise RuntimeError("boom")
 
     monkeypatch.setattr(run_engine, "execute_case", _boom)
@@ -211,7 +211,7 @@ def test_iteration_failure_writes_failed_terminal_state(db, make_case, monkeypat
 
 
 def _stub_pass(monkeypatch):
-    def _fake(db, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
         return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
     monkeypatch.setattr(run_engine, "execute_case", _fake)
 
@@ -309,7 +309,7 @@ def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):
     # 第一行注入的变量不得残留到第二行（每行独立 runtime）
     seen_vars = []
 
-    def _fake(db, case, endpoint, environment, variables, assertions, extracts):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
         seen_vars.append(dict(variables))
         return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
 

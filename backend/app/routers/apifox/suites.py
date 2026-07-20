@@ -17,6 +17,7 @@ from app.routers.apifox.suite_schemas import (
     SuiteUpdate,
 )
 from app.services.apifox import suite_service as service
+from app.services.apifox.errors import ConflictError
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·测试套件"])
@@ -53,6 +54,12 @@ def get_suite(sid: int, db: Session = Depends(get_db), user: User = Depends(get_
     return service.get_suite_out(db, suite)
 
 
+@router.post("/suites/{sid}/copy", response_model=SuiteOut)
+def copy_suite(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    suite = _suite_checked(db, sid, user)
+    return service.copy_suite(db, suite)
+
+
 @router.put("/suites/{sid}", response_model=SuiteOut)
 def update_suite(
     sid: int, data: SuiteUpdate, db: Session = Depends(get_db), user: User = Depends(get_current_user)
@@ -60,6 +67,8 @@ def update_suite(
     suite = _suite_checked(db, sid, user)
     try:
         return service.update_suite(db, suite, data)
+    except ConflictError as exc:
+        raise HTTPException(status_code=409, detail=exc.message)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 

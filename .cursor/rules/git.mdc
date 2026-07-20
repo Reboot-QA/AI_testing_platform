@@ -1,0 +1,8 @@
+---
+description: Git 工作流（分支流 / 中文 conventional commit / 禁提交清单）
+alwaysApply: true
+---
+
+提交代码前，遵循以下 Git 工作流（单一事实来源，与 Claude Code 共用同一份）：
+
+@.claude/rules/git-workflow.md

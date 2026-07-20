@@ -1,8 +1,9 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
       <el-select
         v-model="projectId"
+        filterable
         placeholder="选择项目"
         style="width: 200px"
         @change="handleFilterChange"
@@ -85,82 +86,90 @@
       </el-button>
     </template>
 
-    <el-table
-      v-loading="loading"
-      :data="testcases"
-      stripe
-      border
-      @selection-change="handleSelectionChange"
-    >
-      <el-table-column type="selection" width="45" />
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column
-        v-if="isAllProjects"
-        prop="project_name"
-        label="项目"
-        min-width="140"
-        show-overflow-tooltip
-      />
-      <el-table-column
-        prop="requirement_title"
-        label="需求点"
-        min-width="160"
-        show-overflow-tooltip
+    <div class="table-fill">
+      <el-table
+        v-loading="loading"
+        :data="testcases"
+        stripe
+        border
+        height="100%"
+        @selection-change="handleSelectionChange"
       >
-        <template #default="{ row }">{{ row.requirement_title || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
-      <el-table-column prop="priority" label="优先级" width="80" align="center" />
-      <el-table-column prop="case_type" label="类型" width="90" />
-      <el-table-column prop="source" label="来源" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.source === 'ai_generated' ? 'warning' : ''" size="small">
-            {{ row.source === 'ai_generated' ? 'AI生成' : '手动' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="creator_name" label="创建人" width="100">
-        <template #default="{ row }">{{ row.creator_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="review_status" label="评审" width="100">
-        <template #default="{ row }">
-          <el-tag :type="reviewType[row.review_status]" size="small">
-            {{ reviewMap[row.review_status] || row.review_status }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="操作" width="260" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDetail(row)">详情</el-button>
-          <el-button
-            v-if="row.review_status === 'pending'"
-            link
-            type="success"
-            @click="review(row, 'approved')"
-            >通过</el-button
-          >
-          <el-button
-            v-if="row.review_status === 'pending'"
-            link
-            type="warning"
-            @click="review(row, 'rejected')"
-            >驳回</el-button
-          >
-          <el-popconfirm title="确认删除？" @confirm="handleDelete(row.id)">
-            <template #reference>
-              <el-button link type="danger">删除</el-button>
-            </template>
-          </el-popconfirm>
-        </template>
-      </el-table-column>
-    </el-table>
+        <el-table-column type="selection" width="45" />
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column
+          v-if="isAllProjects"
+          prop="project_name"
+          label="项目"
+          min-width="140"
+          show-overflow-tooltip
+        />
+        <el-table-column
+          prop="requirement_title"
+          label="需求点"
+          min-width="160"
+          show-overflow-tooltip
+        >
+          <template #default="{ row }">{{ row.requirement_title || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
+        <el-table-column prop="priority" label="优先级" width="80" align="center" />
+        <el-table-column prop="case_type" label="类型" width="90">
+          <template #default="{ row }">{{ formatCaseTypeLabel(row.case_type) }}</template>
+        </el-table-column>
+        <el-table-column prop="source" label="来源" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.source === 'ai_generated' ? 'warning' : ''" size="small">
+              {{ row.source === 'ai_generated' ? 'AI生成' : '手动' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="creator_name" label="创建人" width="100">
+          <template #default="{ row }">{{ row.creator_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="review_status" label="评审" width="100">
+          <template #default="{ row }">
+            <el-tag :type="reviewType[row.review_status as ReviewStatus]" size="small">
+              {{ reviewMap[row.review_status as ReviewStatus] || row.review_status }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="260" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDetail(row)">详情</el-button>
+            <el-button
+              v-if="row.review_status === 'pending'"
+              link
+              type="success"
+              @click="review(row, 'approved')"
+              >通过</el-button
+            >
+            <el-button
+              v-if="row.review_status === 'pending'"
+              link
+              type="warning"
+              @click="review(row, 'rejected')"
+              >驳回</el-button
+            >
+            <el-popconfirm title="确认删除？" @confirm="handleDelete(row.id)">
+              <template #reference>
+                <el-button link type="danger">删除</el-button>
+              </template>
+            </el-popconfirm>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <div class="pagination-bar">
       <el-pagination
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[...PAGE_SIZE_OPTIONS]"
         layout="total, sizes, prev, pager, next, jumper"
         background
         @current-change="loadData"
@@ -207,12 +216,14 @@
             detail.requirement_title || '-'
           }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ detail.priority }}</el-descriptions-item>
-          <el-descriptions-item label="类型">{{ detail.case_type }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{
+            formatCaseTypeLabel(detail.case_type)
+          }}</el-descriptions-item>
           <el-descriptions-item label="来源">{{
             detail.source === 'ai_generated' ? 'AI生成' : '手动'
           }}</el-descriptions-item>
           <el-descriptions-item label="评审状态">{{
-            reviewMap[detail.review_status]
+            reviewMap[detail.review_status as ReviewStatus]
           }}</el-descriptions-item>
           <el-descriptions-item label="前置条件">{{
             detail.preconditions || '-'
@@ -268,30 +279,57 @@
   </PageCard>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
+import type { ProjectPageOut } from '@/api/project'
+import { formatBeijingTime } from '@/utils/datetime'
+import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
 } from '@/utils/assistantActionRegistry'
 
-const ALL_PROJECTS = '__all__'
+import {
+  ALL_PROJECTS,
+  type DateInput,
+  type Project,
+  type ProjectFilter,
+  type ReviewStatus,
+  type TestCase,
+  type TestCasePage,
+} from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+import type { UploadInstance, UploadRawFile } from 'element-plus'
+
+interface TestCaseForm {
+  title: string
+  priority: string
+  preconditions: string
+  steps: string
+  expected_results: string
+  tags: string
+}
+
+function formatTime(value: DateInput) {
+  return formatBeijingTime(value)
+}
 
 const route = useRoute()
-const projects = ref([])
-const testcases = ref([])
-const selectedRows = ref([])
-const selectedIds = ref([])
-const projectId = ref(ALL_PROJECTS)
+const projects = ref<Project[]>([])
+const testcases = ref<TestCase[]>([])
+const selectedRows = ref<TestCase[]>([])
+const selectedIds = ref<number[]>([])
+const projectId = ref<ProjectFilter>(ALL_PROJECTS)
 const filterStatus = ref('')
 const keyword = ref('')
 const currentPage = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const total = ref(0)
 const loading = ref(false)
 const batchReviewing = ref(false)
@@ -301,16 +339,26 @@ const dialogVisible = ref(false)
 const importDialogVisible = ref(false)
 const drawerVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const detail = ref(null)
-const formRef = ref()
-const uploadRef = ref()
-const importFile = ref(null)
+const editing = ref<TestCase | null>(null)
+const detail = ref<TestCase | null>(null)
+const formRef = ref<FormInstance>()
+const uploadRef = ref<UploadInstance>()
+const importFile = ref<UploadRawFile | null>(null)
 
-const reviewMap = { draft: '草稿', pending: '待评审', approved: '已通过', rejected: '已驳回' }
-const reviewType = { draft: 'info', pending: 'warning', approved: 'success', rejected: 'danger' }
+const reviewMap: Record<ReviewStatus, string> = {
+  draft: '草稿',
+  pending: '待评审',
+  approved: '已通过',
+  rejected: '已驳回',
+}
+const reviewType: Record<ReviewStatus, 'info' | 'warning' | 'success' | 'danger'> = {
+  draft: 'info',
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+}
 
-const form = reactive({
+const form = reactive<TestCaseForm>({
   title: '',
   priority: 'P1',
   preconditions: '',
@@ -319,7 +367,13 @@ const form = reactive({
   tags: '',
 })
 
-const rules = { title: [{ required: true, message: '请输入标题', trigger: 'blur' }] }
+const rules: FormRules<TestCaseForm> = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+}
+
+function isProjectPage(data: Project[] | ProjectPageOut): data is ProjectPageOut {
+  return !Array.isArray(data)
+}
 
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
@@ -337,26 +391,30 @@ const canBatchSubmit = computed(() => batchSubmitCount.value > 0)
 const canBatchApprove = computed(() => batchApproveCount.value > 0)
 const canBatchReject = computed(() => batchRejectCount.value > 0)
 
-const batchReviewConfig = {
+const batchReviewConfig: Record<
+  Extract<ReviewStatus, 'pending' | 'approved' | 'rejected'>,
+  { title: string; message: (count: number) => string; success: string }
+> = {
   pending: {
     title: '批量审批',
-    message: (count) => `确认将选中的 ${count} 条用例提交评审（设为待评审）？`,
+    message: (count: number) => `确认将选中的 ${count} 条用例提交评审（设为待评审）？`,
     success: '批量审批成功',
   },
   approved: {
     title: '批量通过',
-    message: (count) => `确认通过选中的 ${count} 条待评审用例？`,
+    message: (count: number) => `确认通过选中的 ${count} 条待评审用例？`,
     success: '批量通过成功',
   },
   rejected: {
     title: '批量驳回',
-    message: (count) => `确认驳回选中的 ${count} 条待评审用例？`,
+    message: (count: number) => `确认驳回选中的 ${count} 条待评审用例？`,
     success: '批量驳回成功',
   },
 }
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  const data = await projectApi.list()
+  projects.value = isProjectPage(data) ? data.items : data
   await loadData()
 }
 
@@ -375,7 +433,7 @@ registerAssistantHandler('testcases.ensureProject', async () => {
 async function loadData() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       page: currentPage.value,
       page_size: pageSize.value,
     }
@@ -384,7 +442,7 @@ async function loadData() {
     }
     if (filterStatus.value) params.review_status = filterStatus.value
     if (keyword.value.trim()) params.keyword = keyword.value.trim()
-    const data = await testcaseApi.list(params)
+    const data = (await testcaseApi.list(params)) as TestCasePage
     testcases.value = data.items || []
     total.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
@@ -416,7 +474,7 @@ function handlePageSizeChange() {
   loadData()
 }
 
-function openDialog(row = null) {
+function openDialog(row: TestCase | null = null) {
   editing.value = row
   form.title = row?.title || ''
   form.priority = row?.priority || 'P1'
@@ -427,20 +485,24 @@ function openDialog(row = null) {
   dialogVisible.value = true
 }
 
-function openDetail(row) {
+function openDetail(row: TestCase) {
   detail.value = row
   drawerVisible.value = true
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
-    const payload = { ...form, project_id: projectId.value, case_type: 'functional' }
     if (editing.value) {
       await testcaseApi.update(editing.value.id, form)
       ElMessage.success('更新成功')
     } else {
+      if (typeof projectId.value !== 'number') {
+        ElMessage.warning('请选择具体项目')
+        return
+      }
+      const payload = { ...form, project_id: projectId.value, case_type: 'functional' }
       await testcaseApi.create(payload)
       ElMessage.success('创建成功')
     }
@@ -451,33 +513,35 @@ async function handleSubmit() {
   }
 }
 
-async function review(row, status) {
+async function review(row: TestCase, status: ReviewStatus) {
   await testcaseApi.update(row.id, { review_status: status })
   ElMessage.success(status === 'approved' ? '已通过' : '已驳回')
   loadData()
 }
 
-async function handleDelete(id) {
+async function handleDelete(id: number) {
   await testcaseApi.delete(id)
   ElMessage.success('删除成功')
   loadData()
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: TestCase[]) {
   selectedRows.value = rows
   selectedIds.value = rows.map((row) => row.id)
 }
 
-function groupRowsByProject(rows) {
-  const groups = new Map()
+function groupRowsByProject(rows: TestCase[]) {
+  const groups = new Map<number, TestCase[]>()
   for (const row of rows) {
     if (!groups.has(row.project_id)) groups.set(row.project_id, [])
-    groups.get(row.project_id).push(row)
+    groups.get(row.project_id)!.push(row)
   }
   return groups
 }
 
-async function handleBatchReview(status) {
+async function handleBatchReview(
+  status: Extract<ReviewStatus, 'pending' | 'approved' | 'rejected'>,
+) {
   const countMap = {
     pending: batchSubmitCount.value,
     approved: batchApproveCount.value,
@@ -532,7 +596,7 @@ async function handleBatchDelete() {
   loadData()
 }
 
-async function handleExport(format) {
+async function handleExport(format: string) {
   if (isAllProjects.value) {
     ElMessage.warning('请先选择具体项目')
     return
@@ -553,7 +617,7 @@ async function handleExport(format) {
   }
 }
 
-function downloadBlob(blob, filename) {
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -572,7 +636,7 @@ function openImportDialog() {
   importDialogVisible.value = true
 }
 
-function handleImportFileChange(uploadFile) {
+function handleImportFileChange(uploadFile: { raw?: UploadRawFile }) {
   importFile.value = uploadFile.raw || null
 }
 
@@ -619,9 +683,5 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-}
+/* .pagination-bar 已提取为全局工具类（src/styles/layout.css） */
 </style>

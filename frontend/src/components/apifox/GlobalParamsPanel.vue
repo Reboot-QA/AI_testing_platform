@@ -16,7 +16,7 @@
       </el-table-column>
       <el-table-column label="值" min-width="180">
         <template #default="{ row }">
-          <el-input v-model="row.value" size="small" @change="updateParam(row)" />
+          <VarInput v-model="row.value" @change="updateParam(row)" />
         </template>
       </el-table-column>
       <el-table-column label="启用" width="70" align="center">
@@ -43,16 +43,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onMounted, reactive, ref } from 'vue'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 
-const props = defineProps({
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{ projectId: Id }>()
 
 const LOCATIONS = ['header', 'query', 'cookie', 'body']
-const params = ref([])
+const params = ref<Schemas['GlobalParamOut'][]>([])
 const newParam = reactive({ location: 'header', key: '', value: '' })
 
 async function loadParams() {
@@ -61,21 +62,27 @@ async function loadParams() {
 
 async function addParam() {
   await apifoxApi.createGlobalParam(props.projectId, {
-    location: newParam.location, key: newParam.key.trim(), value: newParam.value,
+    location: newParam.location,
+    key: newParam.key.trim(),
+    value: newParam.value,
+    enabled: true,
   })
   newParam.key = ''
   newParam.value = ''
   await loadParams()
 }
 
-async function updateParam(row) {
+async function updateParam(row: Schemas['GlobalParamOut']) {
   await apifoxApi.updateGlobalParam(row.id, {
-    location: row.location, key: row.key, value: row.value, enabled: row.enabled,
+    location: row.location,
+    key: row.key,
+    value: row.value,
+    enabled: row.enabled,
   })
   await loadParams()
 }
 
-async function delParam(row) {
+async function delParam(row: Schemas['GlobalParamOut']) {
   await apifoxApi.deleteGlobalParam(row.id)
   await loadParams()
 }

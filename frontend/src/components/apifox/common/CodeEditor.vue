@@ -19,23 +19,36 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onBeforeMount, ref, shallowRef } from 'vue'
+import type { editor } from 'monaco-editor'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 import { ensureMonaco } from '@/plugins/monaco'
 
-const props = defineProps({
-  modelValue: { type: String, default: '' },
-  language: { type: String, default: 'json' },
-  height: { type: String, default: '240px' },
-  readonly: { type: Boolean, default: false },
-  theme: { type: String, default: 'vs' },
-  showToolbar: { type: Boolean, default: true },
-})
-const emit = defineEmits(['update:modelValue'])
+const props = withDefaults(
+  defineProps<{
+    modelValue?: string
+    language?: string
+    height?: string
+    readonly?: boolean
+    theme?: string
+    showToolbar?: boolean
+  }>(),
+  {
+    modelValue: '',
+    language: 'json',
+    height: '240px',
+    readonly: false,
+    theme: 'vs',
+    showToolbar: true,
+  },
+)
+const emit = defineEmits<{
+  'update:modelValue': [value: string]
+}>()
 
 const ready = ref(false)
-const editorRef = shallowRef(null)
+const editorRef = shallowRef<editor.IStandaloneCodeEditor | null>(null)
 
 const mergedOptions = computed(() => ({
   readOnly: props.readonly,
@@ -55,12 +68,12 @@ onBeforeMount(async () => {
   ready.value = true
 })
 
-function onChange(value) {
+function onChange(value: string | undefined) {
   emit('update:modelValue', value ?? '')
 }
 
-function onMount(editor) {
-  editorRef.value = editor
+function onMount(ed: editor.IStandaloneCodeEditor) {
+  editorRef.value = ed
 }
 
 function format() {
@@ -99,6 +112,6 @@ defineExpose({ format })
   justify-content: center;
   height: 100%;
   color: var(--ax-text-placeholder);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
 }
 </style>

@@ -68,7 +68,7 @@
 
             <Button
               type="button"
-              class="mt-2 h-11 w-full text-base"
+              class="mt-2 h-11 w-full text-base cursor-pointer"
               :disabled="loading"
               @click="handleLogin"
             >
@@ -89,31 +89,41 @@
   </div>
 </template>
 
-<script setup>
-import { ref, reactive } from 'vue'
+<script setup lang="ts">
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { useUserStore } from '@/stores/user'
 import { Button } from '@/components/ui/button'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+
+interface LoginForm {
+  username: string
+  password: string
+}
 
 const router = useRouter()
 const userStore = useUserStore()
-const formRef = ref()
+const formRef = ref<FormInstance>()
 const loading = ref(false)
 const year = new Date().getFullYear()
 
-const form = reactive({
+const form = reactive<LoginForm>({
   username: 'admin',
   password: 'admin123',
 })
 
-const rules = {
+const rules: FormRules<LoginForm> = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
 }
 
+onMounted(() => {
+  userStore.logout()
+})
+
 async function handleLogin() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   loading.value = true
   try {
     await userStore.login(form.username, form.password)

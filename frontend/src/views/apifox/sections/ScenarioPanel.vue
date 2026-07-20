@@ -1,320 +1,323 @@
 <template>
   <div class="scenario-panel">
-    <div class="list-panel">
-      <div class="list-toolbar">
-        <span>场景</span>
-        <el-button size="small" type="primary" @click="addScenario">
-          <el-icon><Plus /></el-icon>
-        </el-button>
-      </div>
-      <div
-        v-for="s in scenarios"
-        :key="s.id"
-        class="item"
-        :class="{ active: form.id === s.id }"
-        @click="onSelectScenario(s.id)"
-      >
-        <el-icon><Share /></el-icon>
-        <span class="item-name">{{ s.name }}</span>
-        <el-tag size="small" type="info">{{ s.step_count }} 步</el-tag>
-        <el-button link type="danger" size="small" @click.stop="delScenario(s)">删</el-button>
-      </div>
-      <el-empty v-if="scenarios.length === 0" description="暂无场景" :image-size="60" />
-    </div>
+    <ScenarioListPanel
+      :scenarios="scenarios"
+      :folders="folders"
+      :active-id="activeId"
+      @select="onSelectScenario"
+      @del="delScenario"
+      @reorder="onReorderScenarios"
+      @new-scenario="addScenario"
+      @new-folder="createFolder"
+      @rename-folder="renameFolder"
+      @delete-folder="onDeleteFolder"
+    />
 
     <div class="editor-panel">
-      <template v-if="form.id">
-        <div class="row1">
-          <el-input v-model="form.name" placeholder="场景名称" style="width: 260px" />
-          <el-button type="primary" :loading="saving" @click="saveScenario">保存</el-button>
-          <el-button type="success" :loading="running" @click="runScenario">运行</el-button>
-          <span class="run-hint">环境在顶部选择</span>
+      <template v-if="tabs.length">
+        <el-tabs
+          :model-value="activeId"
+          type="card"
+          class="scenario-tabbar"
+          @tab-change="onTabChange"
+          @tab-remove="onTabRemove"
+        >
+          <el-tab-pane v-for="t in tabs" :key="t.id" :name="t.id" closable>
+            <template #label>
+              <span class="tab-name">{{ t.name }}</span>
+              <span v-if="tabsStore.isDirty(t)" class="dirty-dot" title="有未保存改动">●</span>
+            </template>
+          </el-tab-pane>
+        </el-tabs>
+
+        <div v-if="activeTab" :key="activeTab.id" class="tab-body">
+          <div class="row1">
+            <el-input v-model="activeTab.form.name" placeholder="场景名称" style="width: 220px" />
+            <el-select v-model="activeTab.form.priority" style="width: 96px">
+              <el-option
+                v-for="p in PRIORITY_OPTIONS"
+                :key="p.value"
+                :label="`优先级 ${p.label}`"
+                :value="p.value"
+              />
+            </el-select>
+            <el-button
+              type="primary"
+              :loading="activeTab.saving"
+              @click="saveScenario(activeTab.id)"
+            >
+              保存
+            </el-button>
+            <el-button
+              type="success"
+              :loading="activeTab.running"
+              @click="runScenario(activeTab.id)"
+            >
+              运行
+            </el-button>
+            <span class="run-hint">环境在顶部选择</span>
+          </div>
+          <el-input
+            v-model="activeTab.form.description"
+            placeholder="描述（选填）"
+            class="desc-input"
+          />
+          <ScenarioRunConfigBar
+            v-model:loop-count="activeTab.form.run_config.loop_count"
+            v-model:dataset-id="activeTab.form.run_config.dataset_id"
+            v-model:propagate-auth="activeTab.form.run_config.propagate_auth"
+            :datasets="datasets"
+          />
+          <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
+          <ScenarioStepsEditor
+            ref="stepsEditorRef"
+            :rows="activeTab.form.steps as ScenarioEditorStep[]"
+            :cases="projectCases"
+            :scenarios="scenarios"
+            :current-scenario-id="activeTab.id"
+            :scripts="scripts"
+            :databases="databases"
+            :endpoints="endpoints"
+            :server-names="serverNames"
+          />
+          <RunProgress
+            :events="activeTab.runEvents as RunProgressEvent[]"
+            :running="activeTab.running"
+            @clear="activeTab.runEvents = []"
+          />
         </div>
-        <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
-        <ScenarioRunConfigBar
-          v-model:loop-count="form.run_config.loop_count"
-          v-model:dataset-id="form.run_config.dataset_id"
-          :datasets="datasets"
-        />
-        <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
-        <ScenarioStepsEditor
-          :rows="form.steps"
-          :cases="projectCases"
-          :scenarios="scenarios"
-          :current-scenario-id="form.id"
-          :scripts="scripts"
-          :databases="databases"
-          :endpoints="endpoints"
-          :server-names="serverNames"
-        />
-        <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
+
       <el-empty v-else description="选择或新建一个场景（串联接口用例形成业务链路）" />
     </div>
   </div>
 </template>
 
-<script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+<script setup lang="ts">
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
+import type { ScenarioEditorStep } from '@/types/apifox'
+import type { ScenarioTab } from '@/stores/scenarioTabs'
 import { apifoxApi } from '@/api'
-import { normalizeSpec } from '@/utils/apifoxSpec'
-import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
-import { useUnsavedGuard } from '@/composables/useUnsavedGuard'
+import { serializeStep } from '@/utils/scenarioSteps'
+import { confirmCloseDirty, isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
+import { useTabsRouteGuard } from '@/composables/useTabsRouteGuard'
 import { useWorkspaceStore } from '@/stores/workspace'
+import { useScenarioTabsStore } from '@/stores/scenarioTabs'
+import { PRIORITY_OPTIONS } from '@/composables/useScenarioPriority'
+import { useScenarioFolders } from '@/composables/useScenarioFolders'
+import ScenarioListPanel from '@/components/apifox/ScenarioListPanel.vue'
 import ScenarioRunConfigBar from '@/components/apifox/ScenarioRunConfigBar.vue'
 import ScenarioStepsEditor from '@/components/apifox/ScenarioStepsEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
-const store = useWorkspaceStore()
+type RunProgressEvent = { type: string; [key: string]: unknown }
 
-const scenarios = ref([])
-const projectCases = ref([])
-const scripts = ref([])
-const databases = ref([])
-const datasets = ref([])
-const endpoints = ref([])
-const saving = ref(false)
+const pid = useRouteParamId()
+const store = useWorkspaceStore()
+const tabsStore = useScenarioTabsStore()
+
+const stepsEditorRef = ref<InstanceType<typeof ScenarioStepsEditor> | null>(null)
+const scenarios = ref<Schemas['ScenarioBrief'][]>([])
+const projectCases = ref<Schemas['ProjectCaseBrief'][]>([])
+const scripts = ref<Schemas['ScriptBrief'][]>([])
+const databases = ref<Schemas['DatabaseOut'][]>([])
+const datasets = ref<Schemas['DatasetBrief'][]>([])
+const endpoints = ref<Schemas['EndpointBrief'][]>([])
+
+const tabs = computed(() => tabsStore.tabsOf(pid.value))
+const activeId = computed(() => tabsStore.activeIdOf(pid.value))
+const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
+
+// 路由级未保存守卫：切路由/切项目/退出前，有未保存改动则确认
+useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
 
 // 场景 HTTP 步骤的服务名选择（取自工作区环境的命名前置 URL）
 const serverNames = computed(() => {
-  const names = new Set()
+  const names = new Set<string>()
   store.environments.forEach((e) => (e.servers || []).forEach((s) => names.add(s.name)))
   return [...names]
 })
-const running = ref(false)
-const runEvents = ref([])
-const form = reactive({
-  id: null,
-  name: '',
-  description: '',
-  steps: [],
-  version: 1,
-  run_config: { loop_count: 1, dataset_id: null },
-})
+
+const { folders, loadFolders, createFolder, renameFolder, deleteFolder } = useScenarioFolders(pid)
+
+async function onReorderScenarios(items: Schemas['ScenarioReorderRequest']['items']) {
+  await apifoxApi.reorderScenarios(pid.value, { items }) // 快照：分组+排序一起落库
+  await loadScenarios()
+}
+
+async function onDeleteFolder(folder: Schemas['ScenarioFolderOut']) {
+  await deleteFolder(folder) // 后端把其下场景移到未分组
+  await loadScenarios()
+}
 
 async function loadScenarios() {
   scenarios.value = await apifoxApi.listScenarios(pid.value)
 }
-
 async function loadProjectCases() {
   projectCases.value = await apifoxApi.listProjectCases(pid.value)
 }
-
 async function loadScripts() {
   scripts.value = await apifoxApi.listScripts(pid.value)
 }
-
 async function loadDatasets() {
   datasets.value = await apifoxApi.listDatasets(pid.value)
 }
-
 async function loadDatabases() {
   databases.value = store.currentEnvironmentId
     ? await apifoxApi.listDatabases(store.currentEnvironmentId)
     : []
 }
-// 数据库连接按环境划分：切环境时重载
 watch(() => store.currentEnvironmentId, loadDatabases)
 
-async function runScenario() {
-  runEvents.value = []
-  running.value = true
+async function onSelectScenario(id: number) {
   try {
-    await apifoxApi.runScenarioStream(form.id, store.currentEnvironmentId, (e) =>
-      runEvents.value.push(e),
-    )
-  } catch (e) {
-    ElMessage.error(e.message || '运行失败')
-  } finally {
-    running.value = false
+    await tabsStore.openScenario(pid.value, id)
+  } catch {
+    ElMessage.error('场景加载失败')
   }
 }
 
-// 后端契约树 → 前端工作态：条件(if)的 else 子步骤拆成 elseEnabled/elseChildren（便于两个独立拖放区）
-function normalizeSteps(steps) {
-  return (steps || []).map(normalizeStep)
-}
-function normalizeStep(s) {
-  const node = { ...s }
-  if (s.type === 'if') {
-    const kids = normalizeSteps(s.children)
-    const elseStep = kids.find((k) => k.type === 'else')
-    node.children = kids.filter((k) => k.type !== 'else')
-    node.elseEnabled = !!elseStep
-    node.elseChildren = elseStep ? elseStep.children || [] : []
-    if (!node.config?.condition)
-      node.config = { condition: { left: '', operator: 'eq', right: '' } }
-  } else if (s.type === 'http') {
-    // http 步骤：补全 request_spec 结构供编辑器绑定，保证 assertions/extracts 为数组
-    const c = s.config || {}
-    node.config = {
-      ...c,
-      request_spec: normalizeSpec(c.request_spec),
-      assertions: c.assertions || [],
-      extracts: c.extracts || [],
-    }
-  } else {
-    node.children = normalizeSteps(s.children)
+// 切 tab 前先把当前 tab 内嵌用例的编辑落库（flushDetail 带脏检查，未改动不发请求）——
+// 避免切 tab 因 :key 重挂载 ScenarioStepDetail 静默丢弃用例编辑
+async function onTabChange(id: string | number) {
+  const tabId = Number(id)
+  try {
+    await stepsEditorRef.value?.flushDetail?.()
+  } catch {
+    /* flush 失败（含冲突取消）不阻断切 tab */
   }
-  return node
-}
-
-// 未保存保护：切换场景/切主 tab/关浏览器前，dirty 则提示
-const guard = useUnsavedGuard({
-  serialize: () =>
-    JSON.stringify({
-      name: form.name,
-      description: form.description,
-      steps: form.steps,
-      run_config: form.run_config,
-    }),
-  save: () => saveScenario(),
-  name: () => form.name,
-})
-// 暴露给父组件 AutoTests：v-if 切子页(非路由)时先过守卫，避免未保存改动被静默卸载丢弃
-defineExpose({ confirmLeave: guard.confirmLeave })
-
-async function selectScenario(sid) {
-  const s = await apifoxApi.getScenario(sid)
-  form.id = s.id
-  form.name = s.name
-  form.description = s.description || ''
-  form.steps = normalizeSteps(s.steps || [])
-  form.version = s.version ?? 1
-  form.run_config = {
-    loop_count: s.run_config?.loop_count ?? 1,
-    dataset_id: s.run_config?.dataset_id ?? null,
-  }
-  guard.markSaved() // 加载后重置未保存基线
-}
-
-// 列表点选（用户主动切换）：先过未保存守卫
-async function onSelectScenario(id) {
-  if (id === form.id) return
-  if (!(await guard.confirmLeave())) return
-  await selectScenario(id)
+  tabsStore.activate(pid.value, tabId)
 }
 
 async function addScenario() {
-  if (!(await guard.confirmLeave())) return // 当前有未保存改动时先确认
   const { value } = await ElMessageBox.prompt('场景名称', '新建场景', {
     inputPattern: /\S/,
     inputErrorMessage: '不能为空',
   })
-  const created = await apifoxApi.createScenario(pid.value, { name: value, steps: [] })
+  const created = await apifoxApi.createScenario(pid.value, {
+    name: value,
+    priority: 'medium',
+    steps: [],
+  })
   ElMessage.success('已创建')
   await loadScenarios()
-  await selectScenario(created.id)
+  await tabsStore.openScenario(pid.value, created.id)
 }
 
-const MAX_STEP_DEPTH = 50
-
-function leafStep(overrides) {
-  return {
-    type: overrides.type,
-    ref_case_id: overrides.ref_case_id ?? null,
-    ref_scenario_id: overrides.ref_scenario_id ?? null,
-    wait_ms: overrides.wait_ms ?? null,
-    config: overrides.config ?? null,
-    name: overrides.name ?? null,
-    enabled: overrides.enabled !== false,
-    children: overrides.children || [],
+async function runScenario(id: number) {
+  const tab = tabsStore.findTab(pid.value, id)
+  if (!tab) return
+  tab.runEvents = [] as RunProgressEvent[]
+  tab.running = true
+  try {
+    await apifoxApi.runScenarioStream(id, store.currentEnvironmentId ?? undefined, (e) =>
+      tab.runEvents.push(e as RunProgressEvent),
+    )
+  } catch (e: unknown) {
+    ElMessage.error((e as Error).message || '运行失败')
+  } finally {
+    tab.running = false
   }
 }
 
-function serializeStep(s, depth = 0) {
-  const deep = depth < MAX_STEP_DEPTH
-  // 条件(if)：then=children，elseEnabled 时把 elseChildren 包成一个 else 子步骤（还原后端嵌套树）
-  if (s.type === 'if') {
-    const children = deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
-    if (s.elseEnabled) {
-      const elseChildren = deep
-        ? (s.elseChildren || []).map((c) => serializeStep(c, depth + 1))
-        : []
-      children.push(leafStep({ type: 'else', children: elseChildren }))
-    }
-    return leafStep({ type: 'if', config: s.config, name: s.name, enabled: s.enabled, children })
-  }
-  const hasBody = s.type === 'group' || s.type === 'loop'
-  const children = hasBody && deep ? (s.children || []).map((c) => serializeStep(c, depth + 1)) : []
-  return leafStep({ ...s, children })
-}
-
-async function doSaveScenario() {
-  const updated = await apifoxApi.updateScenario(form.id, {
-    name: form.name,
-    description: form.description || null,
-    steps: form.steps.map(serializeStep),
+async function doSaveScenario(tab: ScenarioTab) {
+  // 先把选中步骤里引用用例的编辑（勾选/params）落库，再存场景结构 —— 整体保存一次搞定。
+  // 仅当保存的是当前激活 tab 时才 flush（stepsEditorRef 指向激活 tab 的编辑器；关闭非激活 tab 时其编辑器未挂载）
+  if (tab.id === activeId.value) await stepsEditorRef.value?.flushDetail?.()
+  const updated = await apifoxApi.updateScenario(tab.id, {
+    name: tab.form.name,
+    description: tab.form.description || null,
+    priority: tab.form.priority as 'medium' | 'high' | 'low',
+    steps: tab.form.steps.map(serializeStep),
     run_config: {
-      loop_count: form.run_config.loop_count || 1,
-      dataset_id: form.run_config.dataset_id || null, // el-select 清空可能给 ''，统一收敛为 null
+      loop_count: tab.form.run_config.loop_count || 1,
+      dataset_id: tab.form.run_config.dataset_id || null,
+      propagate_auth: tab.form.run_config.propagate_auth !== false,
     },
-    expected_version: form.version,
+    expected_version: tab.version,
   })
-  form.version = updated.version
+  tabsStore.afterSave(pid.value, tab.id, updated.version)
   await loadScenarios()
 }
 
-async function saveScenario() {
-  saving.value = true
+// 返回 true=已保存(可安全关闭)，false=未保存/用户取消
+async function saveScenario(id: number) {
+  const tab = tabsStore.findTab(pid.value, id)
+  if (!tab) return false
+  tab.saving = true
   try {
-    await doSaveScenario()
-    guard.markSaved()
+    await doSaveScenario(tab)
     ElMessage.success('已保存')
     return true
-  } catch (e) {
-    if (!isConflict(e)) return false // 非冲突错误已由 api 拦截器提示，不外抛(避免穿透 confirmLeave)
+  } catch (e: unknown) {
+    if (!isConflict(e)) {
+      ElMessage.error((e as Error).message || '保存失败')
+      return false
+    }
     let resolved = false
     await resolveSaveConflict({
       reload: async () => {
-        await selectScenario(form.id)
+        await tabsStore.reloadScenario(pid.value, tab.id)
         resolved = true
       },
       overwrite: async () => {
-        const latest = await apifoxApi.getScenario(form.id)
-        form.version = latest.version
-        await doSaveScenario()
-        guard.markSaved()
+        const latest = await apifoxApi.getScenario(tab.id)
+        tab.version = latest.version
+        await doSaveScenario(tab)
         resolved = true
       },
     })
     return resolved
   } finally {
-    saving.value = false
+    tab.saving = false
   }
 }
 
-async function delScenario(s) {
+async function onTabRemove(id: number) {
+  const tab = tabsStore.findTab(pid.value, id)
+  if (!tab) return
+  if (!tabsStore.isDirty(tab)) {
+    tabsStore.closeTab(pid.value, id)
+    return
+  }
+  const choice = await confirmCloseDirty(tab.name)
+  if (choice === 'cancel') return
+  if (choice === 'save' && !(await saveScenario(id))) return
+  tabsStore.closeTab(pid.value, id)
+}
+
+async function delScenario(s: Schemas['ScenarioBrief']) {
   await ElMessageBox.confirm(`确认删除场景「${s.name}」？被其他场景引用时会被拦截。`, '提示', {
     type: 'warning',
   })
   await apifoxApi.deleteScenario(s.id)
-  if (form.id === s.id) {
-    // 删的是当前编辑项：清空表单 + 校正未保存基线，避免后续误报 dirty/对已删项发保存
-    form.id = null
-    form.name = ''
-    form.description = ''
-    form.steps = []
-    form.version = 1
-    form.run_config = { loop_count: 1, dataset_id: null }
-    guard.markSaved()
-  }
+  tabsStore.closeTab(pid.value, s.id)
   ElMessage.success('已删除')
   await loadScenarios()
 }
 
+// 刷新/关浏览器兜底：有未保存改动时浏览器原生确认（store 是内存态，需此兜底）
+function beforeUnloadHandler(e: BeforeUnloadEvent) {
+  if (tabsStore.hasAnyDirty(pid.value)) {
+    e.preventDefault()
+    e.returnValue = ''
+  }
+}
+
 onMounted(async () => {
+  window.addEventListener('beforeunload', beforeUnloadHandler)
   await loadScenarios()
+  await loadFolders()
   await loadProjectCases()
   await loadScripts()
   await loadDatabases()
   await loadDatasets()
   endpoints.value = await apifoxApi.listEndpoints(pid.value)
 })
+onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHandler))
 </script>
 
 <style scoped>
@@ -324,49 +327,23 @@ onMounted(async () => {
   height: 100%;
 }
 
-.list-panel {
-  width: 260px;
-  border-right: 1px solid var(--ax-border);
-  overflow: auto;
-  padding-right: 8px;
-}
-
-.list-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
-  margin-bottom: 8px;
-}
-
-.item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.item:hover {
-  background: var(--ax-bg-hover);
-}
-
-.item.active {
-  background: var(--ax-bg-active);
-}
-
-.item-name {
-  flex: 1;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .editor-panel {
   flex: 1;
   overflow: auto;
+  min-width: 0;
+}
+
+.scenario-tabbar :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+
+.tab-name {
+  margin-right: 4px;
+}
+
+.dirty-dot {
+  color: var(--ax-warning);
+  font-size: var(--ax-font-xs);
 }
 
 .row1 {
@@ -378,7 +355,7 @@ onMounted(async () => {
 
 .run-hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 
 .desc-input {
@@ -386,7 +363,9 @@ onMounted(async () => {
 }
 
 .steps-title {
+  font-size: var(--ax-font);
   font-weight: 600;
+  line-height: 1.35;
   color: var(--ax-brand);
   margin-bottom: 10px;
 }

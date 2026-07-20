@@ -3,6 +3,7 @@
     <template #toolbar>
       <el-select
         v-model="projectId"
+        filterable
         placeholder="选择项目"
         style="width: 220px"
         @change="handleProjectChange"
@@ -107,8 +108,8 @@
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="statusType[row.status]" size="small">{{
-              statusMap[row.status] || row.status
+            <el-tag :type="statusType[row.status as RequirementStatus]" size="small">{{
+              statusMap[row.status as RequirementStatus] || row.status
             }}</el-tag>
           </template>
         </el-table-column>
@@ -129,6 +130,9 @@
           </template>
         </el-table-column>
         <el-table-column prop="description" label="描述" min-width="240" show-overflow-tooltip />
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        </el-table-column>
         <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
@@ -150,7 +154,7 @@
         v-model:current-page="currentPage"
         v-model:page-size="pageSize"
         :total="total"
-        :page-sizes="[10, 20, 50, 100]"
+        :page-sizes="[...PAGE_SIZE_OPTIONS]"
         layout="total, sizes, prev, pager, next, jumper"
         background
         @current-change="loadData"
@@ -264,8 +268,8 @@
         </el-table-column>
         <el-table-column prop="review_status" label="评审" width="90">
           <template #default="{ row }">
-            <el-tag :type="reviewType[row.review_status]" size="small">
-              {{ reviewMap[row.review_status] || row.review_status }}
+            <el-tag :type="reviewType[row.review_status as ReviewStatus]" size="small">
+              {{ reviewMap[row.review_status as ReviewStatus] || row.review_status }}
             </el-tag>
           </template>
         </el-table-column>
@@ -299,12 +303,14 @@
         <el-descriptions :column="1" border>
           <el-descriptions-item label="标题">{{ caseDetail.title }}</el-descriptions-item>
           <el-descriptions-item label="优先级">{{ caseDetail.priority }}</el-descriptions-item>
-          <el-descriptions-item label="类型">{{ caseDetail.case_type }}</el-descriptions-item>
+          <el-descriptions-item label="类型">{{
+            formatCaseTypeLabel(caseDetail.case_type)
+          }}</el-descriptions-item>
           <el-descriptions-item label="来源">
             {{ caseDetail.source === 'ai_generated' ? 'AI生成' : '手动' }}
           </el-descriptions-item>
           <el-descriptions-item label="评审状态">
-            {{ reviewMap[caseDetail.review_status] || caseDetail.review_status }}
+            {{ reviewMap[caseDetail.review_status as ReviewStatus] || caseDetail.review_status }}
           </el-descriptions-item>
           <el-descriptions-item label="前置条件">{{
             caseDetail.preconditions || '-'
@@ -322,30 +328,58 @@
   </PageCard>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
+import type { ProjectPageOut } from '@/api/project'
+import { formatBeijingTime } from '@/utils/datetime'
+import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
 } from '@/utils/assistantActionRegistry'
 
-const ALL_PROJECTS = '__all__'
+import {
+  ALL_PROJECTS,
+  type DateInput,
+  type Project,
+  type ProjectFilter,
+  type Requirement,
+  type RequirementPage,
+  type RequirementStatus,
+  type ReviewStatus,
+  type TestCase,
+} from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+import type { UploadInstance, UploadRawFile } from 'element-plus'
 
-const projects = ref([])
-const requirements = ref([])
-const linkedTestcases = ref([])
-const selectedIds = ref([])
-const selectedRows = ref([])
-const projectId = ref(ALL_PROJECTS)
+interface RequirementForm {
+  title: string
+  description: string
+  req_type: string
+  priority: string
+  status: string
+}
+
+function formatTime(value: DateInput) {
+  return formatBeijingTime(value)
+}
+
+const projects = ref<Project[]>([])
+const requirements = ref<Requirement[]>([])
+const linkedTestcases = ref<TestCase[]>([])
+const selectedIds = ref<number[]>([])
+const selectedRows = ref<Requirement[]>([])
+const projectId = ref<ProjectFilter>(ALL_PROJECTS)
 const filterStatus = ref('')
 const keyword = ref('')
 const batchStatus = ref('')
 const currentPage = ref(1)
-const pageSize = ref(10)
+const pageSize = ref(DEFAULT_PAGE_SIZE)
 const total = ref(0)
 const loading = ref(false)
 const exporting = ref(false)
@@ -359,21 +393,44 @@ const importDialogVisible = ref(false)
 const casesDialogVisible = ref(false)
 const caseDrawerVisible = ref(false)
 const submitting = ref(false)
-const editing = ref(null)
-const currentRequirement = ref(null)
-const caseDetail = ref(null)
-const formRef = ref()
-const uploadRef = ref()
-const importFile = ref(null)
+const editing = ref<Requirement | null>(null)
+const currentRequirement = ref<Requirement | null>(null)
+const caseDetail = ref<TestCase | null>(null)
+const formRef = ref<FormInstance>()
+const uploadRef = ref<UploadInstance>()
+const importFile = ref<UploadRawFile | null>(null)
 
-const typeMap = { functional: '功能', api: '接口', performance: '性能', security: '安全' }
-const sourceMap = { manual: '手动', ai_document: '文档解析' }
-const statusMap = { draft: '草稿', approved: '已评审', closed: '已关闭' }
-const statusType = { draft: 'info', approved: 'success', closed: 'warning' }
-const reviewMap = { draft: '草稿', pending: '待评审', approved: '已通过', rejected: '已驳回' }
-const reviewType = { draft: 'info', pending: 'warning', approved: 'success', rejected: 'danger' }
+const typeMap: Record<string, string> = {
+  functional: '功能',
+  api: '接口',
+  performance: '性能',
+  security: '安全',
+}
+const sourceMap: Record<string, string> = { manual: '手动', ai_document: '文档解析' }
+const statusMap: Record<RequirementStatus, string> = {
+  draft: '草稿',
+  approved: '已评审',
+  closed: '已关闭',
+}
+const statusType: Record<RequirementStatus, 'info' | 'success' | 'warning'> = {
+  draft: 'info',
+  approved: 'success',
+  closed: 'warning',
+}
+const reviewMap: Record<ReviewStatus, string> = {
+  draft: '草稿',
+  pending: '待评审',
+  approved: '已通过',
+  rejected: '已驳回',
+}
+const reviewType: Record<ReviewStatus, 'info' | 'warning' | 'success' | 'danger'> = {
+  draft: 'info',
+  pending: 'warning',
+  approved: 'success',
+  rejected: 'danger',
+}
 
-const form = reactive({
+const form = reactive<RequirementForm>({
   title: '',
   description: '',
   req_type: 'functional',
@@ -381,7 +438,13 @@ const form = reactive({
   status: 'draft',
 })
 
-const rules = { title: [{ required: true, message: '请输入标题', trigger: 'blur' }] }
+const rules: FormRules<RequirementForm> = {
+  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+}
+
+function isProjectPage(data: Project[] | ProjectPageOut): data is ProjectPageOut {
+  return !Array.isArray(data)
+}
 
 const isAllProjects = computed(() => projectId.value === ALL_PROJECTS)
 
@@ -393,14 +456,15 @@ const blockedSelectedCount = computed(
 )
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  const data = await projectApi.list()
+  projects.value = isProjectPage(data) ? data.items : data
   await loadData()
 }
 
 async function loadData() {
   loading.value = true
   try {
-    const params = {
+    const params: Record<string, unknown> = {
       page: currentPage.value,
       page_size: pageSize.value,
     }
@@ -413,7 +477,7 @@ async function loadData() {
     if (keyword.value.trim()) {
       params.keyword = keyword.value.trim()
     }
-    const data = await requirementApi.list(null, params)
+    const data = (await requirementApi.list(undefined, params)) as RequirementPage
     requirements.value = data.items || []
     total.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
@@ -445,7 +509,7 @@ function handlePageSizeChange() {
   loadData()
 }
 
-function downloadBlob(blob, filename) {
+function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
@@ -458,7 +522,7 @@ function currentProjectName() {
   return projects.value.find((item) => item.id === projectId.value)?.name || 'requirements'
 }
 
-async function handleExport(format) {
+async function handleExport(format: string) {
   if (isAllProjects.value) {
     ElMessage.warning('请先选择具体项目')
     return
@@ -489,7 +553,7 @@ function openImportDialog() {
   importDialogVisible.value = true
 }
 
-function handleImportFileChange(uploadFile) {
+function handleImportFileChange(uploadFile: { raw?: UploadRawFile }) {
   importFile.value = uploadFile.raw || null
 }
 
@@ -516,7 +580,7 @@ async function handleImport() {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: Requirement | null = null) {
   editing.value = row
   form.title = row?.title || ''
   form.description = row?.description || ''
@@ -527,7 +591,7 @@ function openDialog(row = null) {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     if (editing.value) {
@@ -540,6 +604,10 @@ async function handleSubmit() {
       })
       ElMessage.success('更新成功')
     } else {
+      if (typeof projectId.value !== 'number') {
+        ElMessage.warning('请选择具体项目')
+        return
+      }
       await requirementApi.create({
         project_id: projectId.value,
         title: form.title,
@@ -556,7 +624,7 @@ async function handleSubmit() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: Requirement) {
   if (row.testcase_count > 0) {
     ElMessage.warning(
       `该需求下有 ${row.testcase_count} 条关联用例，请先点击关联用例数字，清理全部关联用例后再删除`,
@@ -597,7 +665,7 @@ async function handleClearTestcases() {
   }
 }
 
-async function openTestcases(row) {
+async function openTestcases(row: Requirement) {
   currentRequirement.value = row
   casesDialogVisible.value = true
   await reloadLinkedTestcases()
@@ -616,28 +684,28 @@ async function reloadLinkedTestcases() {
   }
 }
 
-async function handleDeleteCase(caseId) {
+async function handleDeleteCase(caseId: number) {
   await testcaseApi.delete(caseId)
   ElMessage.success('删除成功')
   await reloadLinkedTestcases()
   loadData()
 }
 
-function openCaseDetail(row) {
+function openCaseDetail(row: TestCase) {
   caseDetail.value = row
   caseDrawerVisible.value = true
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: Requirement[]) {
   selectedRows.value = rows
   selectedIds.value = rows.map((row) => row.id)
 }
 
-function groupRowsByProject(rows) {
-  const groups = new Map()
+function groupRowsByProject(rows: Requirement[]) {
+  const groups = new Map<number, Requirement[]>()
   for (const row of rows) {
     if (!groups.has(row.project_id)) groups.set(row.project_id, [])
-    groups.get(row.project_id).push(row)
+    groups.get(row.project_id)!.push(row)
   }
   return groups
 }
@@ -739,18 +807,7 @@ onUnmounted(() => {
   color: #909399;
 }
 
-/* 表格填满 PageCard fill 的剩余高度；min-height:0 让 el-table 内部滚动生效 */
-.table-fill {
-  flex: 1;
-  min-height: 0;
-}
-
-.pagination-bar {
-  display: flex;
-  justify-content: flex-end;
-  margin-top: 16px;
-  flex: none;
-}
+/* .table-fill / .pagination-bar 已提取为全局工具类（src/styles/layout.css） */
 
 .pre-text {
   white-space: pre-wrap;

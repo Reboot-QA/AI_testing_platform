@@ -27,7 +27,9 @@
         <pre class="raw">{{ spec.body.graphql_query }}</pre>
         <pre v-if="spec.body.graphql_variables" class="raw">{{ spec.body.graphql_variables }}</pre>
       </template>
-      <div v-else-if="spec.body.type === 'binary'" class="raw">{{ spec.body.file_name || '（未选择文件）' }}</div>
+      <div v-else-if="spec.body.type === 'binary'" class="raw">
+        {{ spec.body.file_name || '（未选择文件）' }}
+      </div>
       <ParamTable v-else :rows="rows(spec.body.form)" />
     </section>
     <section v-if="spec.cookies && rows(spec.cookies).length">
@@ -39,27 +41,22 @@
       <div class="auth">类型：{{ spec.auth.type }}</div>
     </section>
 
-    <el-empty
-      v-if="isEmpty"
-      description="该接口暂无请求参数配置"
-      :image-size="60"
-    />
+    <el-empty v-if="isEmpty" description="该接口暂无请求参数配置" :image-size="60" />
   </div>
 </template>
 
-<script setup>
-import { computed, h } from 'vue'
+<script setup lang="ts">
+import { computed, h, type VNode } from 'vue'
 import { ElTable, ElTableColumn } from 'element-plus'
+import type { ApiDocPreviewForm, KvRow, RequestSpec } from '@/types/apifox'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import JsonView from '@/components/apifox/common/JsonView.vue'
 
-const props = defineProps({
-  form: { type: Object, required: true },
-})
+const props = defineProps<{ form: ApiDocPreviewForm }>()
 
-const spec = computed(() => props.form.request_spec || {})
+const spec = computed(() => props.form.request_spec || ({} as RequestSpec))
 
-function rows(list) {
+function rows(list: KvRow[] | undefined) {
   return (list || []).filter((r) => r && r.enabled !== false && (r.key || '').trim())
 }
 
@@ -75,7 +72,7 @@ const isEmpty = computed(() => {
 })
 
 // 只读参数小表（内联函数式组件，避免额外文件）
-const ParamTable = (p) =>
+const ParamTable = (p: { rows: KvRow[] }): VNode =>
   h(ElTable, { data: p.rows, size: 'small', border: true }, () => [
     h(ElTableColumn, { prop: 'key', label: '参数名', width: 220 }),
     h(ElTableColumn, { prop: 'value', label: '值' }),

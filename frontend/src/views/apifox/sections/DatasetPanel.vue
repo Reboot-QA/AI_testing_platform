@@ -1,26 +1,30 @@
 <template>
   <div class="dataset-panel">
     <div class="list-panel">
-      <div class="list-toolbar">
-        <span>数据集</span>
-        <el-button size="small" type="primary" @click="addDataset">
+      <div class="panel-head">
+        <span class="panel-title">数据集</span>
+        <el-button size="small" type="primary" title="新建数据集" @click="addDataset">
           <el-icon><Plus /></el-icon>
         </el-button>
       </div>
       <div
         v-for="d in datasets"
         :key="d.id"
-        class="item"
-        :class="{ active: form.id === d.id }"
+        class="dataset-row"
+        :class="{ 'dataset-row--active': form.id === d.id }"
         @click="selectDataset(d.id)"
       >
-        <el-icon><Grid /></el-icon>
-        <span class="item-name">{{ d.name }}</span>
-        <el-tag size="small" type="info">{{ d.row_count }} 行</el-tag>
-        <el-tag v-if="d.ref_count" size="small" type="warning" title="被用例引用数">
-          {{ d.ref_count }}
-        </el-tag>
-        <el-button link type="danger" size="small" @click.stop="delDataset(d)">删</el-button>
+        <el-icon class="dataset-row-icon"><Grid /></el-icon>
+        <el-tooltip :content="d.name" placement="right" :show-after="600">
+          <span class="dataset-name">{{ d.name }}</span>
+        </el-tooltip>
+        <span class="dataset-meta">{{ d.row_count }} 行</span>
+        <el-tooltip v-if="d.ref_count" content="被用例引用数" placement="right" :show-after="300">
+          <span class="dataset-ref">{{ d.ref_count }} 引用</span>
+        </el-tooltip>
+        <el-icon class="dataset-del" title="删除数据集" @click.stop="delDataset(d)">
+          <Delete />
+        </el-icon>
       </div>
       <el-empty v-if="datasets.length === 0" description="暂无数据集" :image-size="60" />
     </div>
@@ -33,8 +37,8 @@
         </div>
         <el-input v-model="form.description" placeholder="描述（选填）" class="desc-input" />
 
+        <div class="section-title">列定义</div>
         <div class="cols-bar">
-          <span class="cols-label">列：</span>
           <el-tag
             v-for="(c, i) in form.columns"
             :key="c"
@@ -54,6 +58,7 @@
           />
         </div>
 
+        <div class="section-title">数据行</div>
         <el-table :data="form.rows" size="small" border class="rows-table">
           <el-table-column type="index" label="#" width="46" />
           <el-table-column v-for="c in form.columns" :key="c" :label="c" min-width="120">
@@ -68,37 +73,54 @@
           </el-table-column>
           <el-table-column label="操作" width="60" align="center">
             <template #default="{ $index }">
-              <el-button link type="danger" size="small" @click="form.rows.splice($index, 1)">删</el-button>
+              <el-button
+                link
+                type="danger"
+                size="small"
+                class="row-del"
+                @click="form.rows.splice($index, 1)"
+              >
+                删
+              </el-button>
             </template>
           </el-table-column>
         </el-table>
-        <el-button link type="primary" size="small" class="add-row" @click="addRow">+ 添加数据行</el-button>
+        <el-button link type="primary" size="small" class="add-row-btn" @click="addRow">
+          + 添加数据行
+        </el-button>
       </template>
       <el-empty v-else description="选择或新建一个数据集（可被用例数据驱动引用）" />
     </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 
-const route = useRoute()
-const pid = computed(() => route.params.projectId)
+const pid = useRouteParamId()
 
-const datasets = ref([])
+const datasets = ref<Schemas['DatasetBrief'][]>([])
 const saving = ref(false)
 const newCol = ref('')
-const form = reactive({ id: null, name: '', description: '', columns: [], rows: [], version: 1 })
+const form = reactive({
+  id: null as number | null,
+  name: '',
+  description: '',
+  columns: [] as string[],
+  rows: [] as Array<{ values: Record<string, string>; enabled: boolean }>,
+  version: 1,
+})
 
 async function loadDatasets() {
   datasets.value = await apifoxApi.listDatasets(pid.value)
 }
 
-async function selectDataset(did) {
+async function selectDataset(did: number) {
   const d = await apifoxApi.getDataset(did)
   form.id = d.id
   form.name = d.name
@@ -130,14 +152,14 @@ function addColumn() {
   newCol.value = ''
 }
 
-function removeColumn(i) {
+function removeColumn(i: number) {
   const name = form.columns[i]
   form.columns.splice(i, 1)
   form.rows.forEach((r) => delete r.values[name])
 }
 
 function addRow() {
-  const values = {}
+  const values: Record<string, string> = {}
   form.columns.forEach((c) => {
     values[c] = ''
   })
@@ -145,6 +167,7 @@ function addRow() {
 }
 
 async function doSaveDataset() {
+  if (form.id == null) return
   const updated = await apifoxApi.updateDataset(form.id, {
     name: form.name,
     description: form.description || null,
@@ -157,6 +180,8 @@ async function doSaveDataset() {
 }
 
 async function saveDataset() {
+  if (form.id == null) return
+  const datasetId = form.id
   saving.value = true
   try {
     await doSaveDataset()
@@ -165,10 +190,10 @@ async function saveDataset() {
     if (!isConflict(e)) return // 非冲突错误已由 api 拦截器提示
     await resolveSaveConflict({
       reload: async () => {
-        await selectDataset(form.id)
+        await selectDataset(datasetId)
       },
       overwrite: async () => {
-        const latest = await apifoxApi.getDataset(form.id)
+        const latest = await apifoxApi.getDataset(datasetId)
         form.version = latest.version
         await doSaveDataset()
       },
@@ -178,7 +203,7 @@ async function saveDataset() {
   }
 }
 
-async function delDataset(d) {
+async function delDataset(d: Schemas['DatasetBrief']) {
   await ElMessageBox.confirm(`确认删除数据集「${d.name}」？被用例引用时会被拦截。`, '提示', {
     type: 'warning',
   })
@@ -199,48 +224,99 @@ onMounted(loadDatasets)
 }
 
 .list-panel {
-  width: 260px;
+  width: 240px;
+  flex-shrink: 0;
   border-right: 1px solid var(--ax-border);
   overflow: auto;
   padding-right: 8px;
 }
 
-.list-toolbar {
+/* 字号阶梯：面板标题 14 > 数据集名 12 > 元信息 11 */
+.panel-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-weight: 600;
-  color: var(--ax-brand);
   margin-bottom: 8px;
 }
 
-.item {
+.panel-title {
+  font-size: var(--ax-font);
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--ax-brand);
+}
+
+.dataset-row {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 8px;
+  padding: 6px 6px 6px 8px;
   border-radius: 4px;
   cursor: pointer;
 }
 
-.item:hover {
+.dataset-row:hover {
   background: var(--ax-bg-hover);
 }
 
-.item.active {
+.dataset-row--active {
   background: var(--ax-bg-active);
 }
 
-.item-name {
+.dataset-row-icon {
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text-tertiary);
+}
+
+.dataset-name {
   flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--ax-font-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  color: var(--ax-text);
+}
+
+.dataset-meta {
+  flex-shrink: 0;
+  font-size: var(--ax-font-xs);
+  line-height: 1;
+  color: var(--ax-text-placeholder);
+  font-variant-numeric: tabular-nums;
+}
+
+.dataset-ref {
+  flex-shrink: 0;
+  font-size: var(--ax-font-xs);
+  line-height: 1;
+  color: var(--el-color-warning);
+  font-variant-numeric: tabular-nums;
+}
+
+.dataset-del {
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  cursor: pointer;
+  color: var(--ax-text-placeholder);
+  transition: color 0.15s;
+}
+
+.dataset-del:hover {
+  color: var(--el-color-danger);
+}
+
+.list-panel :deep(.el-empty__description) {
+  font-size: var(--ax-font-xs);
 }
 
 .editor-panel {
   flex: 1;
   overflow: auto;
+  min-width: 0;
 }
 
 .row1 {
@@ -254,17 +330,31 @@ onMounted(loadDatasets)
   margin-bottom: 12px;
 }
 
+.section-title {
+  font-size: var(--ax-font);
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ax-brand);
+  margin-bottom: 8px;
+}
+
+.section-title + .rows-table {
+  margin-top: 0;
+}
+
 .cols-bar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 
-.cols-label {
-  font-weight: 600;
-  color: var(--ax-brand);
+.cols-bar :deep(.el-tag) {
+  height: 22px;
+  padding: 0 8px;
+  font-size: var(--ax-font-xs);
+  line-height: 20px;
 }
 
 .col-input {
@@ -272,6 +362,31 @@ onMounted(loadDatasets)
 }
 
 .rows-table {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+}
+
+.rows-table :deep(.el-table__header th) {
+  font-size: var(--ax-font-xs);
+  font-weight: 600;
+  color: var(--ax-text-secondary);
+}
+
+.rows-table :deep(.el-table__body td) {
+  font-size: var(--ax-font-xs);
+}
+
+.rows-table :deep(.row-del.el-button.is-link) {
+  padding: 0 4px;
+  font-size: var(--ax-font-xs);
+  height: auto;
+}
+
+.add-row-btn {
+  font-size: var(--ax-font-xs);
+  padding: 0;
+}
+
+.editor-panel :deep(.el-empty__description) {
+  font-size: var(--ax-font-xs);
 }
 </style>

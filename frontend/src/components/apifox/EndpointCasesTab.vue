@@ -7,12 +7,16 @@
           <el-button size="small" @click="aiGenerate">
             <el-icon><MagicStick /></el-icon> AI 生成
           </el-button>
-          <el-button size="small" type="primary" @click="addCase"><el-icon><Plus /></el-icon></el-button>
+          <el-button size="small" type="primary" @click="addCase"
+            ><el-icon><Plus /></el-icon
+          ></el-button>
         </div>
       </div>
 
       <el-radio-group v-model="filter" size="small" class="cat-filter">
-        <el-radio-button v-for="f in CATEGORY_FILTERS" :key="f.value" :value="f.value">{{ f.label }}</el-radio-button>
+        <el-radio-button v-for="f in CATEGORY_FILTERS" :key="f.value" :value="f.value">{{
+          f.label
+        }}</el-radio-button>
       </el-radio-group>
 
       <div
@@ -24,6 +28,7 @@
       >
         <el-tag size="small" :type="tagType(c.category)">{{ categoryLabel(c.category) }}</el-tag>
         <span class="name">{{ c.name }}</span>
+        <el-button link size="small" @click.stop="copyCase(c)">复制</el-button>
         <el-button link type="danger" size="small" @click.stop="delCase(c)">删</el-button>
       </div>
       <el-empty v-if="!filteredCases.length" description="暂无用例" :image-size="50" />
@@ -32,71 +37,115 @@
     <div class="editor">
       <template v-if="form.id">
         <div class="run-bar">
-          <el-button size="small" type="success" :loading="running" @click="runCase">运行</el-button>
+          <el-button size="small" type="success" :loading="running" @click="runCase"
+            >运行</el-button
+          >
           <span class="cat-label">分类</span>
           <el-select v-model="form.category" size="small" style="width: 110px">
-            <el-option v-for="c in CASE_CATEGORIES" :key="c.value" :label="c.label" :value="c.value" />
+            <el-option
+              v-for="c in CASE_CATEGORIES"
+              :key="c.value"
+              :label="c.label"
+              :value="c.value"
+            />
           </el-select>
           <span class="run-hint">环境在顶部选择</span>
         </div>
-        <CaseEditor :form="form" :saving="saving" :scripts="scripts" :datasets="datasets" @save="saveCase" />
+        <CaseEditor
+          :form="form"
+          :saving="saving"
+          :scripts="scripts"
+          :datasets="datasets"
+          @save="saveCase"
+        />
         <RunProgress :events="runEvents" :running="running" @clear="runEvents = []" />
       </template>
       <el-empty v-else description="选择或新建一个用例" :image-size="60" />
     </div>
+
+    <AiGenerateCasesDialog
+      ref="aiDialogRef"
+      :endpoint-id="endpointId"
+      :project-id="projectId"
+      @created="loadCases"
+    />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
+import type { SSEEvent } from '@/api/request'
 import { apifoxApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { ensureKvRows } from '@/utils/apiCaseConfig'
 import { emptySpec, normalizeSpec as normSpec } from '@/utils/apifoxSpec'
 import { CASE_CATEGORIES, CATEGORY_FILTERS, categoryLabel } from '@/utils/caseCategory'
+import { deriveProcessors } from '@/utils/caseProcessors'
 import { isConflict, resolveSaveConflict } from '@/composables/useSaveConflict'
 import CaseEditor from '@/components/apifox/CaseEditor.vue'
 import RunProgress from '@/components/apifox/RunProgress.vue'
+import AiGenerateCasesDialog from '@/components/apifox/AiGenerateCasesDialog.vue'
+import type { CaseEditorForm } from '@/components/apifox/CaseEditor.vue'
 
-const props = defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
+const props = defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
 
 const store = useWorkspaceStore()
-const cases = ref([])
-const scripts = ref([])
-const datasets = ref([])
+const cases = ref<Schemas['CaseBrief'][]>([])
+const scripts = ref<Schemas['ScriptBrief'][]>([])
+const datasets = ref<Schemas['DatasetBrief'][]>([])
 const saving = ref(false)
 const running = ref(false)
-const runEvents = ref([])
+const runEvents = ref<SSEEvent[]>([])
 const filter = ref('all')
 
 const filteredCases = computed(() =>
-  filter.value === 'all' ? cases.value : cases.value.filter((c) => c.category === filter.value)
+  filter.value === 'all' ? cases.value : cases.value.filter((c) => c.category === filter.value),
 )
 
-const tagType = (cat) => ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' }[cat] || 'info')
+const tagType = (cat: string) =>
+  ({ positive: 'success', negative: 'warning', boundary: '', security: 'danger' })[cat] || 'info'
 
-const form = reactive({
-  id: null, name: '', category: 'other', request_spec: emptySpec(), variables: [], assertions: [], extracts: [],
-  pre_scripts: [], post_scripts: [], data_drive: { enabled: false, rows: [] }, version: 1,
+const form = reactive<CaseEditorForm>({
+  id: null,
+  name: '',
+  category: 'other',
+  request_spec: emptySpec(),
+  variables: [],
+  assertions: [],
+  extracts: [],
+  pre_scripts: [],
+  post_scripts: [],
+  pre_processors: [],
+  post_processors: [],
+  data_drive: { enabled: false, source: 'inline', rows: [] },
+  version: 1,
 })
 
 async function loadCases() {
   cases.value = props.endpointId ? await apifoxApi.listCases(props.endpointId) : []
 }
 
-function emptyCasePayload(name, category) {
+function emptyCasePayload(name: string, category: string): Schemas['CaseCreate'] {
   return {
-    name, category, request_spec: emptySpec(), variables: [],
-    data_drive: { enabled: false, rows: [] }, assertions: [], extracts: [],
-    pre_scripts: [], post_scripts: [],
+    name,
+    category,
+    request_spec: emptySpec() as Schemas['CaseCreate']['request_spec'],
+    variables: [],
+    data_drive: { enabled: false, source: 'inline', rows: [] },
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
   }
 }
 
-function applyCase(c) {
+function applyCase(c: Schemas['CaseOut']) {
   form.id = c.id
   form.name = c.name
   form.category = c.category || 'other'
@@ -106,30 +155,48 @@ function applyCase(c) {
   form.extracts = c.extracts || []
   form.pre_scripts = c.pre_scripts || []
   form.post_scripts = c.post_scripts || []
-  form.data_drive = c.data_drive?.enabled !== undefined ? c.data_drive : { enabled: false, rows: [] }
+  form.pre_processors = c.pre_processors || []
+  form.post_processors = c.post_processors || []
+  deriveProcessors(form) // 存量用例无处理器时由旧字段派生
+  form.data_drive =
+    c.data_drive?.enabled !== undefined
+      ? c.data_drive
+      : { enabled: false, source: 'inline', rows: [] }
   form.version = c.version ?? 1
 }
 
 async function addCase() {
-  const { value } = await ElMessageBox.prompt('用例名称', '新建用例', { inputPattern: /\S/, inputErrorMessage: '不能为空' })
+  const { value } = await ElMessageBox.prompt('用例名称', '新建用例', {
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   // 当前过滤了某分类时，新建默认归入该分类；「全部」时归「其他」
   const category = filter.value === 'all' ? 'other' : filter.value
-  const created = await apifoxApi.createCase(props.endpointId, emptyCasePayload(value, category))
+  const payload = emptyCasePayload(value, category)
+  // 带入接口默认参数：新用例继承接口已配置的 params/headers/body/auth，不从空白开始
+  try {
+    const ep = await apifoxApi.getEndpoint(props.endpointId)
+    if (ep?.request_spec)
+      payload.request_spec = normSpec(ep.request_spec) as Schemas['CaseCreate']['request_spec']
+  } catch {
+    /* 拉取接口失败则用空 spec，不阻塞建用例 */
+  }
+  const created = await apifoxApi.createCase(props.endpointId, payload)
   ElMessage.success('已创建')
   await loadCases()
   applyCase(created)
 }
 
+const aiDialogRef = ref<InstanceType<typeof AiGenerateCasesDialog> | null>(null)
 function aiGenerate() {
-  // 前端按钮占位：AI 生成用例后端待接入（正向/逆向/边界值/安全性），见进度计划
-  ElMessage.info('AI 生成用例功能开发中，后端待接入')
+  aiDialogRef.value?.open()
 }
 
-async function selectCase(cid) {
+async function selectCase(cid: Id) {
   applyCase(await apifoxApi.getCase(cid))
 }
 
-async function delCase(c) {
+async function delCase(c: Schemas['CaseBrief']) {
   await ElMessageBox.confirm(`确认删除用例「${c.name}」？`, '提示', { type: 'warning' })
   await apifoxApi.deleteCase(c.id)
   if (form.id === c.id) form.id = null
@@ -137,17 +204,36 @@ async function delCase(c) {
   await loadCases()
 }
 
+async function copyCase(c: Schemas['CaseBrief']) {
+  const created = await apifoxApi.copyCase(c.id)
+  ElMessage.success('已复制')
+  await loadCases()
+  applyCase(created)
+}
+
 function casePayload() {
   return {
-    name: form.name, category: form.category, request_spec: form.request_spec, variables: form.variables,
-    data_drive: form.data_drive, assertions: form.assertions, extracts: form.extracts,
-    pre_scripts: form.pre_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
-    post_scripts: form.post_scripts.map(({ script_id, enabled }) => ({ script_id, enabled })),
+    name: form.name,
+    category: form.category,
+    request_spec: form.request_spec,
+    variables: form.variables,
+    data_drive: form.data_drive,
+    // 有序处理器为单一事实来源：清空旧分列字段，避免与处理器双写
+    assertions: [],
+    extracts: [],
+    pre_scripts: [],
+    post_scripts: [],
+    pre_processors: form.pre_processors,
+    post_processors: form.post_processors,
   }
 }
 
 async function doSaveCase() {
-  const updated = await apifoxApi.updateCase(form.id, { ...casePayload(), expected_version: form.version })
+  if (form.id == null) return
+  const updated = await apifoxApi.updateCase(form.id, {
+    ...casePayload(),
+    expected_version: form.version,
+  } as Schemas['CaseUpdate'])
   form.version = updated.version
   await loadCases()
 }
@@ -157,11 +243,13 @@ async function saveCase() {
   try {
     await doSaveCase()
     ElMessage.success('已保存')
-  } catch (e) {
+  } catch (e: unknown) {
     if (!isConflict(e)) throw e
+    if (form.id == null) return
     await resolveSaveConflict({
-      reload: () => selectCase(form.id),
+      reload: () => selectCase(form.id!),
       overwrite: async () => {
+        if (form.id == null) return
         const latest = await apifoxApi.getCase(form.id)
         form.version = latest.version
         await doSaveCase()
@@ -173,12 +261,16 @@ async function saveCase() {
 }
 
 async function runCase() {
+  if (form.id == null) return
   runEvents.value = []
   running.value = true
   try {
-    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId, (e) => runEvents.value.push(e))
-  } catch (e) {
-    ElMessage.error(e.message || '运行失败')
+    await apifoxApi.runCaseStream(form.id, store.currentEnvironmentId ?? undefined, (e) =>
+      runEvents.value.push(e),
+    )
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '运行失败'
+    ElMessage.error(msg)
   } finally {
     running.value = false
   }
@@ -186,8 +278,11 @@ async function runCase() {
 
 watch(
   () => props.endpointId,
-  () => { form.id = null; loadCases() },
-  { immediate: true }
+  () => {
+    form.id = null
+    loadCases()
+  },
+  { immediate: true },
 )
 
 apifoxApi.listScripts(props.projectId).then((r) => (scripts.value = r))
@@ -197,8 +292,9 @@ apifoxApi.listDatasets(props.projectId).then((r) => (datasets.value = r))
 <style scoped>
 .cases-panel {
   display: flex;
-  gap: 12px;
-  height: calc(100vh - 360px);
+  gap: var(--ax-gap-sm);
+  height: 100%;
+  min-height: 0;
 }
 
 .list {
@@ -265,12 +361,12 @@ apifoxApi.listDatasets(props.projectId).then((r) => (datasets.value = r))
 }
 
 .cat-label {
-  font-size: 13px;
+  font-size: var(--ax-font);
   color: var(--ax-text-secondary);
 }
 
 .run-hint {
   color: var(--ax-text-placeholder);
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
 }
 </style>

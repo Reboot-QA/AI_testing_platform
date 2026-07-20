@@ -32,7 +32,7 @@
     <template v-else-if="config.mode === 'while'">
       <div class="le-field">
         <span class="le-label">条件</span>
-        <ConditionEditor :condition="config.condition" />
+        <ConditionEditor :condition="whileCondition" />
       </div>
       <div class="le-field">
         <span class="le-label">最大次数</span>
@@ -43,14 +43,21 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import { computed } from 'vue'
 import ConditionEditor from '@/components/apifox/ConditionEditor.vue'
+import type { LoopConfig } from '@/types/apifox'
 
-const props = defineProps({
-  config: { type: Object, required: true },
+export type { LoopConfig } from '@/types/apifox'
+
+const props = defineProps<{ config: LoopConfig }>()
+
+const whileCondition = computed(() => {
+  if (!props.config.condition) props.config.condition = { left: '', operator: 'eq', right: '' }
+  return props.config.condition
 })
 
-function onModeChange(mode) {
+function onModeChange(mode: string) {
   const c = props.config
   if (mode === 'count' && c.count == null) c.count = 1
   if (mode === 'list') {

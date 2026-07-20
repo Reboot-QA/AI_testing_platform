@@ -32,7 +32,7 @@
       列 = 用例变量；每行一组值，执行时按行跑多次。
     </p>
 
-    <el-table v-if="model.enabled && source === 'inline'" :data="model.rows" size="small" border>
+    <el-table v-if="model.enabled && source === 'inline'" :data="rows" size="small" border>
       <el-table-column label="数据集名" width="140">
         <template #default="{ row }">
           <el-input v-model="row.name" size="small" />
@@ -40,7 +40,7 @@
       </el-table-column>
       <el-table-column v-for="name in varNames" :key="name" :label="name" min-width="120">
         <template #default="{ row }">
-          <el-input v-model="row.values[name]" size="small" />
+          <VarInput v-model="row.values[name]" />
         </template>
       </el-table-column>
       <el-table-column label="启用" width="60" align="center">
@@ -50,7 +50,7 @@
       </el-table-column>
       <el-table-column label="操作" width="60" align="center">
         <template #default="{ $index }">
-          <el-button link type="danger" size="small" @click="model.rows.splice($index, 1)">删</el-button>
+          <el-button link type="danger" size="small" @click="rows.splice($index, 1)">删</el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -68,17 +68,39 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { Schemas } from '@/api/types'
+import type { KvRow } from '@/types/apifox'
+import VarInput from '@/components/apifox/common/VarInput.vue'
 import { variableNamesFromRows } from '@/utils/apiCaseConfig'
 
-const props = defineProps({
-  model: { type: Object, required: true },
-  varRows: { type: Array, default: () => [] },
-  datasets: { type: Array, default: () => [] },
-})
+type DatasetBrief = Schemas['DatasetBrief']
+type DataDriveModel = Schemas['DataDrive']
+
+const props = withDefaults(
+  defineProps<{
+    model: DataDriveModel
+    varRows?: KvRow[]
+    datasets?: DatasetBrief[]
+  }>(),
+  {
+    varRows: () => [],
+    datasets: () => [],
+  },
+)
 
 const varNames = computed(() => variableNamesFromRows(props.varRows))
+
+const rows = computed({
+  get: () => {
+    if (!Array.isArray(props.model.rows)) props.model.rows = []
+    return props.model.rows
+  },
+  set: (value) => {
+    props.model.rows = value
+  },
+})
 
 // undefined/其它 视为 inline；写回 model.source
 const source = computed({
@@ -89,11 +111,11 @@ const source = computed({
 })
 
 function addRow() {
-  const values = {}
-  varNames.value.forEach((n) => {
+  const values: Record<string, string> = {}
+  varNames.value.forEach((n: string) => {
     values[n] = ''
   })
-  props.model.rows.push({ name: `数据集${props.model.rows.length + 1}`, enabled: true, values })
+  rows.value.push({ name: `数据集${rows.value.length + 1}`, enabled: true, values })
 }
 </script>
 

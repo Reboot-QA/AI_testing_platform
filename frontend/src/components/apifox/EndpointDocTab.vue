@@ -5,17 +5,17 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { Id } from '@/api/request'
 import { apifoxApi } from '@/api'
 import { normalizeSpec } from '@/utils/apifoxSpec'
 import ApiDocPreview from '@/components/apifox/ApiDocPreview.vue'
+import type { ApiDocPreviewForm } from '@/types/apifox'
 
-const props = defineProps({
-  endpointId: { type: [String, Number], required: true },
-})
+const props = defineProps<{ endpointId: Id }>()
 
-const form = ref(null)
+const form = ref<ApiDocPreviewForm | null>(null)
 
 async function load() {
   if (!props.endpointId) {
@@ -23,7 +23,12 @@ async function load() {
     return
   }
   const ep = await apifoxApi.getEndpoint(props.endpointId)
-  form.value = { method: ep.method, path: ep.path, request_spec: normalizeSpec(ep.request_spec) }
+  form.value = {
+    method: ep.method,
+    path: ep.path,
+    name: ep.name,
+    request_spec: normalizeSpec(ep.request_spec),
+  }
 }
 
 watch(() => props.endpointId, load, { immediate: true })

@@ -1,16 +1,8 @@
 <template>
-  <div class="system-settings">
-    <el-card class="global-card">
-      <template #header>
-        <div class="card-header">
-          <span>全局设置</span>
-          <el-tag :type="settings.mock_mode ? 'info' : 'success'" size="small">
-            {{ settings.mock_mode ? 'Mock 模式' : 'LLM 模式' }}
-          </el-tag>
-        </div>
-      </template>
+  <div class="page-col">
+    <PageCard class="global-card">
       <div class="global-row">
-        <span>Mock 模式</span>
+        <span class="global-label">Mock 模式</span>
         <el-switch
           v-model="settings.mock_mode"
           active-text="开启"
@@ -18,64 +10,80 @@
           :loading="mockSaving"
           @change="handleMockChange"
         />
+        <el-tag :type="settings.mock_mode ? 'info' : 'success'" size="small">
+          {{ settings.mock_mode ? 'Mock 模式' : 'LLM 模式' }}
+        </el-tag>
         <span class="form-tip">开启后所有 AI 生成使用本地模板，不调用大模型</span>
       </div>
-    </el-card>
+    </PageCard>
 
-    <el-card v-loading="loading">
-      <template #header>
-        <div class="card-header">
-          <span>大模型配置</span>
-          <el-button type="primary" @click="openDialog()">
-            <el-icon><Plus /></el-icon> 添加模型
-          </el-button>
-        </div>
+    <PageCard fill class="providers-card">
+      <template #toolbar>
+        <span class="section-label">大模型配置</span>
+        <div class="page-card__spacer" />
+        <el-button type="primary" @click="openDialog()">
+          <el-icon><Plus /></el-icon> 添加模型
+        </el-button>
       </template>
 
-      <el-table :data="providers" stripe border empty-text="暂无模型配置，请点击添加模型">
-        <el-table-column prop="name" label="名称" min-width="160" />
-        <el-table-column prop="model" label="模型" min-width="140" show-overflow-tooltip />
-        <el-table-column
-          prop="api_base"
-          label="API Base URL"
-          min-width="220"
-          show-overflow-tooltip
-        />
-        <el-table-column label="API Key" width="130">
-          <template #default="{ row }">
-            <el-tag v-if="row.api_key_configured" type="success" size="small">已配置</el-tag>
-            <el-tag v-else type="warning" size="small">未配置</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="状态" width="120">
-          <template #default="{ row }">
-            <el-tag v-if="row.is_default" type="primary" size="small">当前使用</el-tag>
-            <el-tag v-else-if="row.enabled" type="info" size="small">可用</el-tag>
-            <el-tag v-else type="danger" size="small">已禁用</el-tag>
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="260" fixed="right">
-          <template #default="{ row }">
-            <el-button
-              link
-              type="primary"
-              :disabled="row.is_default"
-              @click="handleActivate(row.id)"
-            >
-              设为当前
-            </el-button>
-            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-            <el-button link type="primary" :loading="testingId === row.id" @click="handleTest(row)">
-              测试
-            </el-button>
-            <el-popconfirm title="确认删除该模型配置？" @confirm="handleDelete(row.id)">
-              <template #reference>
-                <el-button link type="danger">删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div class="table-fill">
+        <el-table
+          v-loading="loading"
+          :data="providers"
+          stripe
+          border
+          height="100%"
+          empty-text="暂无模型配置，请点击添加模型"
+        >
+          <el-table-column prop="name" label="名称" min-width="160" />
+          <el-table-column prop="model" label="模型" min-width="140" show-overflow-tooltip />
+          <el-table-column
+            prop="api_base"
+            label="API Base URL"
+            min-width="280"
+            show-overflow-tooltip
+          />
+          <el-table-column label="API Key" width="120">
+            <template #default="{ row }">
+              <el-tag v-if="row.api_key_configured" type="success" size="small">已配置</el-tag>
+              <el-tag v-else type="warning" size="small">未配置</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_default" type="primary" size="small">当前使用</el-tag>
+              <el-tag v-else-if="row.enabled" type="info" size="small">可用</el-tag>
+              <el-tag v-else type="danger" size="small">已禁用</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="260" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                :disabled="row.is_default"
+                @click="handleActivate(row.id)"
+              >
+                设为当前
+              </el-button>
+              <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button
+                link
+                type="primary"
+                :loading="testingId === row.id"
+                @click="handleTest(row)"
+              >
+                测试
+              </el-button>
+              <el-popconfirm title="确认删除该模型配置？" @confirm="handleDelete(row.id)">
+                <template #reference>
+                  <el-button link type="danger">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
 
       <el-alert
         class="preset-alert"
@@ -84,7 +92,7 @@
         :closable="false"
         show-icon
       />
-    </el-card>
+    </PageCard>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑模型' : '添加模型'" width="560px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
@@ -125,28 +133,46 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { settingsApi } from '@/api'
+import type { Schemas } from '@/api/types'
+import PageCard from '@/components/PageCard.vue'
+import type { LlmProvider } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+
+interface LlmSettings {
+  mock_mode: boolean
+  active_provider_id: number | null
+}
+
+interface LlmProviderForm {
+  name: string
+  api_base: string
+  api_key: string
+  model: string
+  enabled: boolean
+  is_default: boolean
+}
 
 const loading = ref(false)
 const saving = ref(false)
 const mockSaving = ref(false)
-const testingId = ref(null)
+const testingId = ref<number | null>(null)
 const dialogTesting = ref(false)
 const dialogVisible = ref(false)
-const editing = ref(null)
-const formRef = ref()
+const editing = ref<LlmProvider | null>(null)
+const formRef = ref<FormInstance>()
 
-const settings = reactive({
+const settings = reactive<LlmSettings>({
   mock_mode: true,
   active_provider_id: null,
 })
 
-const providers = ref([])
+const providers = ref<LlmProvider[]>([])
 
-const form = reactive({
+const form = reactive<LlmProviderForm>({
   name: '',
   api_base: '',
   api_key: '',
@@ -155,7 +181,7 @@ const form = reactive({
   is_default: false,
 })
 
-const rules = {
+const rules: FormRules<LlmProviderForm> = {
   name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
   api_base: [{ required: true, message: '请输入 API Base URL', trigger: 'blur' }],
   model: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
@@ -166,19 +192,19 @@ async function loadSettings() {
   try {
     const data = await settingsApi.getLLM()
     settings.mock_mode = data.mock_mode
-    settings.active_provider_id = data.active_provider_id
+    settings.active_provider_id = data.active_provider_id ?? null
     providers.value = data.providers || []
   } finally {
     loading.value = false
   }
 }
 
-async function handleMockChange(value) {
+async function handleMockChange(value: boolean) {
   mockSaving.value = true
   try {
     const data = await settingsApi.updateMockMode(value)
     settings.mock_mode = data.mock_mode
-    settings.active_provider_id = data.active_provider_id
+    settings.active_provider_id = data.active_provider_id ?? null
     providers.value = data.providers || []
     ElMessage.success(value ? '已开启 Mock 模式' : '已关闭 Mock 模式')
   } catch {
@@ -188,7 +214,7 @@ async function handleMockChange(value) {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: LlmProvider | null = null) {
   editing.value = row
   if (row) {
     Object.assign(form, {
@@ -212,8 +238,8 @@ function openDialog(row = null) {
   dialogVisible.value = true
 }
 
-function buildPayload() {
-  const payload = {
+function buildPayload(): Schemas['LLMProviderCreate'] {
+  const payload: Schemas['LLMProviderCreate'] = {
     name: form.name,
     api_base: form.api_base,
     model: form.model,
@@ -227,7 +253,7 @@ function buildPayload() {
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   saving.value = true
   try {
     if (editing.value) {
@@ -244,19 +270,19 @@ async function handleSubmit() {
   }
 }
 
-async function handleActivate(id) {
+async function handleActivate(id: number) {
   await settingsApi.activateProvider(id)
   ElMessage.success('已切换当前使用模型')
   await loadSettings()
 }
 
-async function handleDelete(id) {
+async function handleDelete(id: number) {
   await settingsApi.deleteProvider(id)
   ElMessage.success('已删除')
   await loadSettings()
 }
 
-async function handleTest(row) {
+async function handleTest(row: LlmProvider) {
   testingId.value = row.id
   try {
     const result = await settingsApi.testLLM({ provider_id: row.id })
@@ -271,10 +297,10 @@ async function handleTest(row) {
 }
 
 async function handleDialogTest() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   dialogTesting.value = true
   try {
-    const payload = {
+    const payload: Record<string, unknown> = {
       api_base: form.api_base,
       model: form.model,
       mock_mode: settings.mock_mode,
@@ -299,32 +325,44 @@ onMounted(loadSettings)
 </script>
 
 <style scoped>
-.system-settings {
-  max-width: 1100px;
+.page-col {
+  gap: var(--ax-gap-lg);
 }
 
 .global-card {
-  margin-bottom: 16px;
+  flex: none;
 }
 
-.card-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+.providers-card {
+  flex: 1;
+  min-height: 0;
+  height: auto;
 }
 
 .global-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  flex-wrap: wrap;
+  gap: var(--ax-gap-sm);
+}
+
+.global-label {
+  font-weight: 600;
+  color: var(--ax-text);
+}
+
+.section-label {
+  font-weight: 600;
+  color: var(--ax-text);
 }
 
 .form-tip {
-  color: #909399;
-  font-size: 13px;
+  color: var(--ax-text-secondary);
+  font-size: var(--ax-font-sm);
 }
 
 .preset-alert {
-  margin-top: 16px;
+  margin-top: var(--ax-gap-lg);
+  flex: none;
 }
 </style>

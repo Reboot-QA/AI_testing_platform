@@ -12,12 +12,13 @@
     "preview": "vite preview",
     "lint": "eslint src",
     "lint:fix": "eslint src --fix",
-    "format": "prettier --write \"src/**/*.{js,ts,vue,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{js,ts,vue,css,json}\"",
-    "typecheck": "vue-tsc --noEmit"
+    "format": "prettier --write \"src/**/*.{ts,vue,css,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,vue,css,json}\"",
+    "typecheck": "vue-tsc --noEmit",
+    "gen:api-types": "openapi-typescript ../backend/openapi.json -o src/api/schema.d.ts"
   },
   "lint-staged": {
-    "src/**/*.{js,ts,vue}": [
+    "src/**/*.{ts,vue}": [
       "eslint --fix",
       "prettier --write"
     ],
@@ -47,6 +48,7 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
+    "@types/node": "^26.1.1",
     "@typescript-eslint/parser": "^8.64.0",
     "@vitejs/plugin-vue": "^5.2.1",
     "eslint": "^10.7.0",
@@ -55,6 +57,7 @@
     "globals": "^17.7.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.8",
+    "openapi-typescript": "^7.13.0",
     "prettier": "^3.9.5",
     "typescript": "^5.9.3",
     "vite": "^6.0.5",

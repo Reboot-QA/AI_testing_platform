@@ -15,6 +15,7 @@ class KvRow(BaseModel):
     value: str = ""
     enabled: bool = True
     desc: str = ""
+    type: str = "string"  # 参数类型标注（string/integer/number/boolean/array/object/file），仅 Params 用
 
 
 class BodySpec(BaseModel):
@@ -34,6 +35,12 @@ class AuthSpec(BaseModel):
     password: str = ""
 
 
+class RequestSettings(BaseModel):
+    timeout_ms: Optional[int] = None  # None 或 <=0 → 用平台默认超时（HTTP_TIMEOUT）
+    verify_ssl: bool = True
+    follow_redirects: bool = True
+
+
 class RequestSpec(BaseModel):
     query: List[KvRow] = Field(default_factory=list)
     path_params: List[KvRow] = Field(default_factory=list)
@@ -41,6 +48,7 @@ class RequestSpec(BaseModel):
     cookies: List[KvRow] = Field(default_factory=list)
     body: BodySpec = Field(default_factory=BodySpec)
     auth: AuthSpec = Field(default_factory=AuthSpec)
+    settings: RequestSettings = Field(default_factory=RequestSettings)
 
 
 # ---------- 处理器行（接口级与用例级共用，case_schemas 从此导入避免循环依赖） ----------
@@ -70,6 +78,31 @@ class CaseScriptRef(BaseModel):
 class CaseScriptOut(CaseScriptRef):
     script_name: str = ""
     script_lang: str = ""
+
+
+class ProcessorRow(BaseModel):
+    """前/后置有序处理器（自由混排）。kind 决定用到哪些字段；为空则回退旧固定管线。"""
+
+    kind: str  # script | wait | assertion | extract | contract
+    enabled: bool = True
+    # script
+    script_id: Optional[int] = None
+    script_name: str = ""  # 回显用
+    script_lang: str = ""
+    # wait
+    wait_ms: Optional[int] = None
+    # assertion（type/path/operator/expected）
+    type: Optional[str] = None
+    path: Optional[str] = None
+    operator: Optional[str] = None
+    expected: Optional[str] = None
+    # extract（var_name/source/path/scope）
+    var_name: Optional[str] = None
+    source: Optional[str] = None
+    scope: Optional[str] = None
+    # contract
+    response_schema_id: Optional[int] = None
+    contract_strict: Optional[bool] = None
 
 
 # ---------- folder ----------
@@ -107,6 +140,8 @@ class EndpointCreate(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptRef] = Field(default_factory=list)
     post_scripts: List[CaseScriptRef] = Field(default_factory=list)
+    pre_processors: List[ProcessorRow] = Field(default_factory=list)
+    post_processors: List[ProcessorRow] = Field(default_factory=list)
 
 
 class EndpointUpdate(BaseModel):
@@ -124,6 +159,8 @@ class EndpointUpdate(BaseModel):
     extracts: Optional[List[ExtractRow]] = None
     pre_scripts: Optional[List[CaseScriptRef]] = None
     post_scripts: Optional[List[CaseScriptRef]] = None
+    pre_processors: Optional[List[ProcessorRow]] = None
+    post_processors: Optional[List[ProcessorRow]] = None
     # 乐观锁：客户端读取时的版本；不一致则 409（None=不校验，向后兼容）
     expected_version: Optional[int] = None
 
@@ -156,6 +193,8 @@ class EndpointOut(BaseModel):
     extracts: List[ExtractRow] = Field(default_factory=list)
     pre_scripts: List[CaseScriptOut] = Field(default_factory=list)
     post_scripts: List[CaseScriptOut] = Field(default_factory=list)
+    pre_processors: List[ProcessorRow] = Field(default_factory=list)
+    post_processors: List[ProcessorRow] = Field(default_factory=list)
     version: int = 1
     created_at: datetime
     updated_at: datetime
@@ -177,3 +216,60 @@ class ReorderEndpoint(BaseModel):
 class TreeReorderRequest(BaseModel):
     folders: List[ReorderFolder] = Field(default_factory=list)
     endpoints: List[ReorderEndpoint] = Field(default_factory=list)
+
+
+# ---------- 更新 Swagger（增量同步）：先出 diff 预览，再确认应用 ----------
+class ImportDiffEndpoint(BaseModel):
+    """新增项：新 spec 有、库里无。"""
+
+    method: str
+    path: str
+    name: str
+
+
+class ImportChangedEndpoint(BaseModel):
+    """变更项：两边都有但接口定义不同；受影响用例仅告知（不自动改）。"""
+
+    endpoint_id: int
+    method: str
+    path: str
+    name: str
+    changes: List[str] = Field(default_factory=list)  # 名称/描述/参数/请求体
+    affected_cases: List[str] = Field(default_factory=list)  # 引用该接口的用例名（自查提示）
+
+
+class ImportCaseRef(BaseModel):
+    """被移除接口下、被场景/套件引用的用例（修改提示锚点）。"""
+
+    case_id: int
+    case_name: str
+    scenarios: List[str] = Field(default_factory=list)
+    suites: List[str] = Field(default_factory=list)
+
+
+class ImportRemovedEndpoint(BaseModel):
+    """移除项：库里有、新 spec 无。referenced=True 表示有用例被引用，不自动删。"""
+
+    endpoint_id: int
+    method: str
+    path: str
+    name: str
+    case_count: int = 0
+    referenced: bool = False
+    references: List[ImportCaseRef] = Field(default_factory=list)
+
+
+class ImportDiffOut(BaseModel):
+    added: List[ImportDiffEndpoint] = Field(default_factory=list)
+    changed: List[ImportChangedEndpoint] = Field(default_factory=list)
+    removed: List[ImportRemovedEndpoint] = Field(default_factory=list)
+    schemas_added: int = 0
+
+
+class ImportSyncReport(BaseModel):
+    added: int = 0
+    updated: int = 0
+    deleted: int = 0
+    kept_referenced: int = 0  # 有引用被保留的移除项
+    schemas_created: int = 0
+    warnings: List[str] = Field(default_factory=list)  # 被引用移除项的修改提示

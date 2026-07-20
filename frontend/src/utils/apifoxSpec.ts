@@ -1,0 +1,54 @@
+// apifox 请求规格（request_spec）的空模板与归一化。三处(ApiManage/AutoTests/ApiCasesPanel)共用。
+import { ensureKvRows } from '@/utils/apiCaseConfig'
+import type { RequestSpec } from '@/types/apifox'
+
+export function emptySpec(): RequestSpec {
+  return {
+    query: [],
+    path_params: [],
+    headers: [],
+    cookies: [],
+    body: {
+      type: 'none',
+      raw: '',
+      form: [],
+      graphql_query: '',
+      graphql_variables: '',
+      file_id: null,
+      file_name: '',
+    },
+    auth: { type: 'none', token: '', username: '', password: '' },
+    settings: { timeout_ms: null, verify_ssl: true, follow_redirects: true },
+  }
+}
+
+export function normalizeSpec(spec: unknown): RequestSpec {
+  const s = (spec || {}) as Partial<RequestSpec>
+  const b = (s.body || {}) as Partial<RequestSpec['body']>
+  return {
+    query: ensureKvRows(s.query || []),
+    path_params: ensureKvRows(s.path_params || []),
+    headers: ensureKvRows(s.headers || []),
+    cookies: ensureKvRows(s.cookies || []),
+    body: {
+      type: b.type || 'none',
+      raw: b.raw || '',
+      form: ensureKvRows(b.form || []),
+      graphql_query: b.graphql_query || '',
+      graphql_variables: b.graphql_variables || '',
+      file_id: b.file_id ?? null,
+      file_name: b.file_name || '',
+    },
+    auth: {
+      type: s.auth?.type || 'none',
+      token: s.auth?.token || '',
+      username: s.auth?.username || '',
+      password: s.auth?.password || '',
+    },
+    settings: {
+      timeout_ms: s.settings?.timeout_ms ?? null,
+      verify_ssl: s.settings?.verify_ssl !== false,
+      follow_redirects: s.settings?.follow_redirects !== false,
+    },
+  }
+}

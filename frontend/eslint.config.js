@@ -20,7 +20,7 @@ export default [
     languageOptions: { parserOptions: { parser: { ts: tsParser } } },
   },
   {
-    files: ['**/*.{js,ts,vue}'],
+    files: ['**/*.{ts,vue}'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',

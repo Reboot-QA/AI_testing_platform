@@ -3,11 +3,18 @@
     <div class="rp-head">
       <span>运行进度</span>
       <el-tag v-if="running" size="small" type="warning">执行中…</el-tag>
-      <el-tag v-else-if="doneEvent" size="small" :type="doneEvent.status === 'passed' ? 'success' : 'danger'">
-        {{ doneEvent.status === 'passed' ? '通过' : '失败' }} · 通过率 {{ doneEvent.pass_rate }}%
-        · {{ Math.round(doneEvent.duration_ms || 0) }}ms
+      <el-tag
+        v-else-if="doneEvent"
+        size="small"
+        :type="doneEvent.status === 'passed' ? 'success' : 'danger'"
+      >
+        {{ doneEvent.status === 'passed' ? '通过' : '失败' }} · 通过率 {{ doneEvent.pass_rate }}% ·
+        {{ Math.round(doneEvent.duration_ms || 0) }}ms
       </el-tag>
       <el-tag v-else-if="errorEvent" size="small" type="danger">错误</el-tag>
+      <el-button v-if="runId" link type="primary" size="small" @click="viewReport">
+        查看测试报告
+      </el-button>
       <el-button link size="small" @click="$emit('clear')">收起</el-button>
     </div>
 
@@ -27,22 +34,90 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { iterationLabel } from '@/utils/iterationLabel'
 
-const props = defineProps({
-  events: { type: Array, default: () => [] },
-  running: { type: Boolean, default: false },
-})
-defineEmits(['clear'])
+interface RunProgressStepEvent {
+  type: 'step'
+  iteration?: number
+  index?: number
+  total?: number
+  case_name?: string
+  status?: string
+  response_status?: number
+  duration_ms?: number | null
+  error_message?: string | null
+}
 
-const stepEvents = computed(() => props.events.filter((e) => e.type === 'step'))
-const doneEvent = computed(() => props.events.find((e) => e.type === 'done'))
-const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
+interface RunProgressStartEvent {
+  type: 'start'
+  run_id?: number
+  iterations?: Record<string, unknown>[]
+}
+
+interface RunProgressDoneEvent {
+  type: 'done'
+  status?: string
+  pass_rate?: number
+  duration_ms?: number | null
+}
+
+interface RunProgressErrorEvent {
+  type: 'error'
+  message?: string
+}
+
+type RunProgressEvent =
+  | RunProgressStepEvent
+  | RunProgressStartEvent
+  | RunProgressDoneEvent
+  | RunProgressErrorEvent
+  | Record<string, unknown>
+
+const props = withDefaults(
+  defineProps<{
+    events?: RunProgressEvent[]
+    running?: boolean
+  }>(),
+  {
+    events: () => [],
+    running: false,
+  },
+)
+defineEmits<{ clear: [] }>()
+
+const router = useRouter()
+const pid = useRouteParamId()
+
+// 本次运行的 run_id（start 事件携带）；有则可跳转到「测试报告」定位该次报告
+const runId = computed(() => {
+  const start = props.events.find((e): e is RunProgressStartEvent => e.type === 'start')
+  return start?.run_id
+})
+function viewReport() {
+  if (!runId.value) return
+  router.push(`/apifox/project/${pid.value}/reports?run=${runId.value}`)
+}
+
+const stepEvents = computed(() =>
+  props.events.filter((e): e is RunProgressStepEvent => e.type === 'step'),
+)
+const doneEvent = computed(() =>
+  props.events.find((e): e is RunProgressDoneEvent => e.type === 'done'),
+)
+const errorEvent = computed(() =>
+  props.events.find((e): e is RunProgressErrorEvent => e.type === 'error'),
+)
 
 // 数据驱动/循环多轮：start 事件带 iterations 时按轮次分组展示；单轮为一组无标题（零视觉变化）
-const iterations = computed(() => props.events.find((e) => e.type === 'start')?.iterations || [])
+const iterations = computed(
+  () =>
+    (props.events.find((e) => e.type === 'start') as RunProgressStartEvent | undefined)
+      ?.iterations || [],
+)
 const stepGroups = computed(() => {
   if (iterations.value.length <= 1) return [{ label: '', steps: stepEvents.value }]
   return iterations.value.map((data, i) => ({

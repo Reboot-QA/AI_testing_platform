@@ -1,9 +1,44 @@
 """Apifox 脚本库 · 请求/响应契约。"""
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+
+class ScriptDebugIn(BaseModel):
+    phase: Literal["pre", "post"] = "pre"
+    lang: str = "javascript"
+    content: str = ""
+    variables: Dict[str, str] = Field(default_factory=dict)
+    # post 阶段的响应上下文（pre 忽略）
+    response_body: str = ""
+    response_status: int = 200
+    response_headers: Dict[str, Any] = Field(default_factory=dict)
+
+
+class ScriptDebugOut(BaseModel):
+    status: str  # passed | failed
+    logs: List[str] = Field(default_factory=list)
+    variables: Dict[str, str] = Field(default_factory=dict)
+    error_message: Optional[str] = None
+
+
+class DebugPresetIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    phase: Literal["pre", "post"] = "pre"
+    variables: Dict[str, str] = Field(default_factory=dict)
+    response_status: int = 200
+    response_body: str = ""
+
+
+class DebugPresetOut(BaseModel):
+    id: int
+    name: str
+    phase: str
+    variables: Dict[str, str] = Field(default_factory=dict)
+    response_status: int
+    response_body: str
 
 
 class ScriptCreate(BaseModel):

@@ -4,12 +4,14 @@
 """
 
 import json
+import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, Generator, List, Optional
 
+import httpx
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -30,6 +32,8 @@ from app.repositories.apifox import (
 from app.routers.apifox.case_schemas import AssertionRow, ExtractRow
 from app.services.apifox import db_executor
 from app.services.apifox import run_engine as engine
+
+logger = logging.getLogger(__name__)
 
 MAX_WAIT_MS = 60000
 _MAX_DEPTH = 50
@@ -152,6 +156,24 @@ class _RunContext:
         self.iteration = 0  # 数据驱动/循环当前轮次（0 基），落到每个步骤供报告分组
         # 步骤树按 scenario_id 记忆化为快照：数据驱动/循环多轮不再每轮重查步骤表（评审 #4）
         self.step_tree_cache: Dict[int, Dict[Optional[int], List[_StepNode]]] = {}
+        # 登录态跨步骤透传（仅场景开启）：共享 cookie jar + 传递中的 token
+        self.propagate_auth = False
+        self.cookie_jar = httpx.Cookies()
+        self.auth_token: Optional[str] = None
+
+    def reset_auth_state(self) -> None:
+        """每轮迭代（数据驱动/循环）重置登录态，各轮互不串。"""
+        self.cookie_jar = httpx.Cookies()
+        self.auth_token = None
+
+    def propagation_kwargs(self) -> Dict[str, Any]:
+        if not self.propagate_auth:
+            return {}
+        return {"cookie_jar": self.cookie_jar, "auth_token": self.auth_token}
+
+    def absorb_captured_token(self, detail: Dict[str, Any]) -> None:
+        if self.propagate_auth and detail.get("captured_token"):
+            self.auth_token = detail["captured_token"]
 
 
 def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str, Any],
@@ -177,6 +199,7 @@ def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str
         extract_results=_dumps(detail.get("extract_results") or []),
         script_logs=_dumps(detail.get("script_logs") or []),
         contract_result=_dumps(detail["contract_result"]) if detail.get("contract_result") else None,
+        warnings=_dumps(detail.get("warnings") or []),
         error_message=detail.get("error_message"),
     )
     run_repo.add(ctx.db, step)
@@ -218,8 +241,10 @@ def _run_case_block(
             status, detail = "failed", {"error_message": "用例所属接口不存在", "method": "", "url": ""}
         else:
             status, detail = engine.execute_case(
-                ctx.db, case, endpoint, ctx.environment, merged, assertions, extracts
+                ctx.db, case, endpoint, ctx.environment, merged, assertions, extracts,
+                **ctx.propagation_kwargs(),
             )
+        ctx.absorb_captured_token(detail)
         ctx.runtime.update(detail.get("extracted") or {})
         if detail.get("scoped"):
             engine.persist_scoped_extracts(
@@ -346,8 +371,9 @@ def _run_http_step(
     status, detail = engine.execute_http_request(
         ctx.db, ctx.run.project_id, config.get("method") or "GET", config.get("path") or "",
         config.get("server_name"), config.get("request_spec") or {}, assertions, extracts,
-        ctx.environment, merged,
+        ctx.environment, merged, **ctx.propagation_kwargs(),
     )
+    ctx.absorb_captured_token(detail)
     ctx.runtime.update(detail.get("extracted") or {})
     if detail.get("scoped"):
         engine.persist_scoped_extracts(
@@ -496,6 +522,14 @@ def _run_if_block(
     yield from _run_steps(ctx, by_parent, branch, total, env_vars, global_vars, depth + 1)
 
 
+def recover_orphan_runs(db: Session) -> None:
+    """启动回收：卡在 running 的运行必是上次进程中途被杀残留（SSE 运行不跨重启），标记为失败。"""
+    n = run_repo.mark_running_interrupted(db)
+    if n:
+        db.commit()
+        logger.info("启动回收：%s 个残留 running 运行标记为失败", n)
+
+
 def _start_run(db: Session, project_id: int, target_type: str, target_id: int,
                target_name: str, environment: Optional[ApifoxEnvironment],
                triggered_by: str, total: int, parent_run_id: Optional[int] = None) -> ApifoxRun:
@@ -517,6 +551,23 @@ def _start_run(db: Session, project_id: int, target_type: str, target_id: int,
     return run
 
 
+def _notify_run_failure(db: Session, run: ApifoxRun) -> None:
+    """执行失败通知。子运行（有父）不单独通知；定时触发由 schedule_service 通知，避免重复。"""
+    if run.parent_run_id is not None or (run.triggered_by or "").startswith("schedule:"):
+        return
+    from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+
+    try:
+        total = (run.passed_count or 0) + (run.failed_count or 0)
+        detail = (
+            f"{run.target_type}「{run.target_name}」执行失败："
+            f"{run.failed_count}/{total} 失败。运行记录 #{run.id}。"
+        )
+        notify_service.notify_failure(db, run.project_id, "run", f"执行失败：{run.target_name}", detail)
+    except Exception:  # noqa: BLE001 - 通知不影响主流程
+        logger.exception("执行失败通知异常 run=%s", run.id)
+
+
 def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
     run = ctx.run
     run.passed_count = ctx.passed
@@ -526,6 +577,8 @@ def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
     run.pass_rate = round(ctx.passed / ctx.index * 100, 2) if ctx.index else 0.0
     run.finished_at = datetime.utcnow()
     ctx.db.commit()
+    if run.status == "failed":
+        _notify_run_failure(ctx.db, run)
     return {
         "type": "done",
         "run_id": run.id,
@@ -609,6 +662,8 @@ def iter_scenario_run(
     yield start_event
 
     ctx = _RunContext(db, run, environment, user_id)
+    # 登录态跨步骤透传：run_config 缺字段时默认开（存量场景亦生效）
+    ctx.propagate_auth = bool((engine._loads(scenario.run_config, {}) or {}).get("propagate_auth", True))
     env_vars = engine.resolve_env_vars(db, environment.id if environment else None, user_id)
     global_vars = engine.resolve_global_vars(db, scenario.project_id, user_id)
     started = time.perf_counter()
@@ -617,6 +672,7 @@ def iter_scenario_run(
             ctx.iteration = i
             # 每组数据独立 runtime：数据集行/循环各轮变量互不串（对齐用例数据驱动语义）
             ctx.runtime = dict(injection)
+            ctx.reset_auth_state()  # 每轮独立登录态，与 runtime 同步隔离
             try:
                 yield from _run_scenario_block(ctx, scenario.id, total, env_vars, global_vars)
             except (_BreakLoop, _ContinueLoop):
@@ -666,6 +722,8 @@ def _finalize_suite(db: Session, run: ApifoxRun, started: float,
     run.pass_rate = round(passed_items / done * 100, 2) if done else 0.0
     run.finished_at = datetime.utcnow()
     db.commit()
+    if run.status == "failed":
+        _notify_run_failure(db, run)
     return {
         "type": "suite_done",
         "run_id": run.id,

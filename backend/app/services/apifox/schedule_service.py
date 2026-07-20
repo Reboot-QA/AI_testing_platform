@@ -1,27 +1,30 @@
 """Apifox 定时任务 · 业务层。
 
-复用旧调度线程（不新起调度器）：只写 next_run_at 参与轮询，到期由线程扫描执行。
-调度算法/校验/描述直接复用旧 schedule_service 的鸭子类型函数（只读 schedule_type/
-run_time/week_day/interval_minutes/last_run_at 属性）。定时执行 user_id=None（只读远程值、
-提取写远程值，见 run_engine）。
+由 apifox/scheduler.py 的独立线程驱动：只写 next_run_at 参与轮询，到期由线程扫描执行。
+调度算法/校验/描述委托 apifox/schedule_calc（迁自老 schedule_service，逻辑等价，鸭子类型：
+只读 schedule_type/run_time/week_day/interval_minutes/last_run_at）。定时执行 user_id=None
+（只读远程值、提取写远程值，见 run_engine）。
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Any, Optional, cast
 
+from croniter import croniter
 from sqlalchemy.orm import Session
 
 from app.models.apifox.schedule import ApifoxSchedule
 from app.repositories.apifox import (
     case_repo,
+    notify_repo,
     scenario_repo,
     schedule_repo,
     suite_repo,
     variable_repo,
 )
 from app.services.apifox import run_service
-from app.services.schedule_service import (
+from app.services.apifox.schedule_calc import (
     compute_next_run_at,
     format_schedule_desc,
     validate_schedule_fields,
@@ -33,15 +36,42 @@ logger = logging.getLogger(__name__)
 TARGET_TYPES = {"case", "scenario", "suite"}
 
 # 复用旧调度函数（鸭子类型：只读 schedule_type/run_time/week_day/interval_minutes/last_run_at）；
-# 薄封装并 cast，让类型系统接受 ApifoxSchedule，同时对路由屏蔽底层来源。
-validate_fields = validate_schedule_fields
+# cron 分支为 apifox 独有，不回灌即将下线的老 schedule_service。
+
+
+def validate_fields(
+    *,
+    schedule_type: str,
+    run_time: Optional[str] = None,
+    week_day: Optional[int] = None,
+    interval_minutes: Optional[int] = None,
+    cron_expr: Optional[str] = None,
+) -> None:
+    if schedule_type == "cron":
+        expr = (cron_expr or "").strip()
+        if not expr:
+            raise ValueError("cron 表达式不能为空")
+        if not croniter.is_valid(expr):
+            raise ValueError("cron 表达式无效")
+        return
+    validate_schedule_fields(
+        schedule_type=schedule_type,
+        run_time=run_time,
+        week_day=week_day,
+        interval_minutes=interval_minutes,
+    )
 
 
 def describe(task: ApifoxSchedule) -> str:
+    if task.schedule_type == "cron":
+        return f"Cron：{task.cron_expr or ''}"
     return format_schedule_desc(cast(Any, task))
 
 
 def _compute_next(task: ApifoxSchedule, from_dt: Optional[datetime] = None) -> datetime:
+    if task.schedule_type == "cron":
+        base = from_dt or now_local()
+        return croniter((task.cron_expr or "").strip(), base).get_next(datetime)
     return compute_next_run_at(cast(Any, task), from_dt=from_dt)
 
 
@@ -69,68 +99,107 @@ def refresh_schedule(db: Session, task: ApifoxSchedule, *, force_from_now: bool 
     db.refresh(task)
 
 
+def _run_schedule_once(db: Session, task: ApifoxSchedule) -> tuple[str, Optional[int]]:
+    """跑一次目标，完整消费执行生成器落库，返回 (status, run_id)。目标缺失记 failed。"""
+    environment = None
+    if task.environment_id:
+        environment = variable_repo.get_environment(db, task.environment_id)
+
+    triggered_by = f"schedule:{task.name}"
+    if task.target_type == "case":
+        case = case_repo.get_case(db, task.target_id)
+        events = run_service.iter_case_run(db, case, environment, triggered_by, None) if case else None
+    elif task.target_type == "scenario":
+        scenario = scenario_repo.get_scenario(db, task.target_id)
+        events = run_service.iter_scenario_run(db, scenario, environment, triggered_by, None) if scenario else None
+    elif task.target_type == "suite":
+        suite = suite_repo.get_suite(db, task.target_id)
+        events = run_service.iter_suite_run(db, suite, environment, triggered_by, None) if suite else None
+    else:
+        events = None
+
+    if events is None:
+        logger.warning("apifox 定时任务 %s 目标缺失，跳过执行", task.id)
+        return "failed", None
+
+    run_id: Optional[int] = None
+    status = "failed"
+    for event in events:
+        if event.get("run_id"):
+            run_id = event["run_id"]
+        # 套件终态事件为 suite_done（run_id 来自 suite_start 的父运行）
+        if event.get("type") in ("done", "suite_done"):
+            status = event.get("status") or "failed"
+    return status, run_id
+
+
+def _retry_config(db: Session, project_id: int) -> tuple[int, int]:
+    """项目级自动重试配置 (次数, 间隔秒)；无配置=不重试。间隔封顶 60s 防阻塞单线程调度。"""
+    cfg = notify_repo.get_by_project(db, project_id)
+    if not cfg:
+        return 0, 5
+    return max(0, cfg.retry_count or 0), min(max(1, cfg.retry_interval_sec or 5), 60)
+
+
 def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
-    """定时执行体：完整消费执行生成器落库，回写 last_run_* 与 next_run_at。
+    """定时执行体：失败按项目级配置自动重跑，全部失败才回写终态并通知。
 
-    异常一律吞掉记 failed，避免拖垮轮询线程或其他任务。
+    仅定时任务重试；调度单线程串行，故间隔封顶 60s，避免长间隔拖住其它到期任务。
+    单次异常吞掉记 failed，避免拖垮轮询线程。
     """
+    retry_count, interval = _retry_config(db, task.project_id)
+    status, run_id = "failed", None
     try:
-        environment = None
-        if task.environment_id:
-            environment = variable_repo.get_environment(db, task.environment_id)
-
-        run_id: Optional[int] = None
-        status = "failed"
-        triggered_by = f"schedule:{task.name}"
-
-        if task.target_type == "case":
-            case = case_repo.get_case(db, task.target_id)
-            events = (
-                run_service.iter_case_run(db, case, environment, triggered_by, None)
-                if case else None
-            )
-        elif task.target_type == "scenario":
-            scenario = scenario_repo.get_scenario(db, task.target_id)
-            events = (
-                run_service.iter_scenario_run(db, scenario, environment, triggered_by, None)
-                if scenario else None
-            )
-        elif task.target_type == "suite":
-            suite = suite_repo.get_suite(db, task.target_id)
-            events = (
-                run_service.iter_suite_run(db, suite, environment, triggered_by, None)
-                if suite else None
-            )
-        else:
-            events = None
-
-        if events is None:
-            logger.warning("apifox 定时任务 %s 目标缺失，跳过执行", task.id)
-        else:
-            for event in events:
-                if event.get("run_id"):
-                    run_id = event["run_id"]
-                # 套件终态事件为 suite_done（run_id 来自 suite_start 的父运行）
-                if event.get("type") in ("done", "suite_done"):
-                    status = event.get("status") or "failed"
-
+        for attempt in range(retry_count + 1):
+            if attempt > 0:
+                logger.info("apifox 定时任务 %s 第 %s/%s 次重试", task.id, attempt, retry_count)
+                time.sleep(interval)
+            try:
+                status, run_id = _run_schedule_once(db, task)
+            except Exception:  # noqa: BLE001 - 单次执行异常不得中断轮询线程
+                logger.exception("apifox 定时任务 %s 执行异常（第 %s 次）", task.id, attempt + 1)
+                status, run_id = "failed", None
+            if status != "failed":
+                break
         task.last_run_at = now_local()
         task.last_run_id = run_id
         task.last_run_status = status
-    except Exception:  # noqa: BLE001 - 定时执行异常不得中断轮询线程
-        logger.exception("apifox 定时任务 %s 执行异常", task.id)
-        task.last_run_at = now_local()
-        task.last_run_status = "failed"
     finally:
         if task.enabled:
-            task.next_run_at = _compute_next(task, from_dt=now_local())
+            try:
+                task.next_run_at = _compute_next(task, from_dt=now_local())
+            except Exception:  # noqa: BLE001 - 下次运行算不出（如运行时损坏的 cron）不得让任务每轮重试
+                logger.exception("apifox 定时任务 %s 计算下次运行失败，已禁用以止损", task.id)
+                task.enabled = False
+                task.next_run_at = None
         db.commit()
+
+    if task.last_run_status == "failed":
+        _notify_schedule_failure(db, task)
+
+
+def _notify_schedule_failure(db: Session, task: ApifoxSchedule) -> None:
+    from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+
+    try:
+        detail = f"定时任务「{task.name}」执行失败（{task.target_type}）。"
+        if task.last_run_id:
+            detail += f" 运行记录 #{task.last_run_id}。"
+        notify_service.notify_failure(
+            db, task.project_id, "schedule", f"定时任务失败：{task.name}", detail
+        )
+    except Exception:  # noqa: BLE001 - 通知不影响主流程
+        logger.exception("定时任务失败通知异常 task=%s", task.id)
 
 
 def run_due_apifox_tasks(db: Session) -> None:
-    """轮询线程调用：执行所有到期的 apifox 定时任务。"""
+    """轮询线程调用：执行所有到期的 apifox 定时任务。单条异常隔离，不中断整批。"""
     for task in schedule_repo.list_due(db, now_local()):
-        execute_schedule(db, task)
+        try:
+            execute_schedule(db, task)
+        except Exception:  # noqa: BLE001 - 一条坏数据（如非法 cron）不得中断其余任务
+            logger.exception("apifox 定时任务 %s 处理异常", task.id)
+            db.rollback()
 
 
 __all__ = [

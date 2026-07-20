@@ -7,14 +7,29 @@
         </el-button>
         <template #dropdown>
           <el-dropdown-menu>
-            <el-dropdown-item command="endpoint"><el-icon><Link /></el-icon> 新建接口</el-dropdown-item>
-            <el-dropdown-item command="folder"><el-icon><FolderAdd /></el-icon> 新建文件夹</el-dropdown-item>
-            <el-dropdown-item command="import" divided><el-icon><Download /></el-icon> 导入</el-dropdown-item>
+            <el-dropdown-item command="endpoint"
+              ><el-icon><Link /></el-icon> 新建接口</el-dropdown-item
+            >
+            <el-dropdown-item command="folder"
+              ><el-icon><FolderAdd /></el-icon> 新建文件夹</el-dropdown-item
+            >
+            <el-dropdown-item command="import" divided
+              ><el-icon><Download /></el-icon> 导入</el-dropdown-item
+            >
           </el-dropdown-menu>
         </template>
       </el-dropdown>
+      <el-button size="small" @click="openUpdateSwagger">
+        <el-icon><Refresh /></el-icon> 更新 Swagger
+      </el-button>
     </div>
-    <el-input v-model="filterText" size="small" clearable placeholder="搜索接口 / 文件夹" class="tree-search" />
+    <el-input
+      v-model="filterText"
+      size="small"
+      clearable
+      placeholder="搜索接口 / 文件夹"
+      class="tree-search"
+    />
     <el-tree
       ref="treeRef"
       :data="treeData"
@@ -42,7 +57,9 @@
     </el-tree>
 
     <div v-if="showSchemas" class="schema-section">
-      <div class="schema-head"><el-icon><Box /></el-icon> 数据模型</div>
+      <div class="schema-head">
+        <el-icon><Box /></el-icon> 数据模型
+      </div>
       <div
         v-for="s in filteredSchemas"
         :key="s.id"
@@ -54,7 +71,12 @@
       <div v-if="!filteredSchemas.length" class="schema-empty">暂无数据模型</div>
     </div>
 
-    <ImportDialog v-model:visible="importVisible" :project-id="pid" @imported="reloadAll" />
+    <ImportDialog
+      v-model:visible="importVisible"
+      :project-id="pid"
+      :default-action="importAction"
+      @imported="reloadAll"
+    />
     <TreeContextMenu
       :visible="ctx.visible"
       :x="ctx.x"
@@ -66,26 +88,46 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { Id } from '@/api/request'
+import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
-import { emptySpec } from '@/utils/apifoxSpec'
-import { useApiTree } from '@/composables/useApiTree'
+import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
+import { useApiTree, type ApiTreeNode } from '@/composables/useApiTree'
 import ImportDialog from '@/components/apifox/ImportDialog.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
 
-const props = defineProps({
-  projectId: { type: [String, Number], required: true },
-  showSchemas: { type: Boolean, default: false },  // 接口管理开启：树下方展示数据模型段
-})
-const emit = defineEmits(['select', 'deleted', 'renamed', 'select-schema'])
+const props = withDefaults(
+  defineProps<{
+    projectId: Id
+    showSchemas?: boolean
+  }>(),
+  {
+    showSchemas: false,
+  },
+)
+const emit = defineEmits<{
+  select: [id: number]
+  deleted: [id: number]
+  renamed: [id: number, name: string]
+  'select-schema': [id: number]
+}>()
 
 const pid = computed(() => props.projectId)
-const { treeData, treeRef, filterText, filterNode, allowDrop, onDrop, reload: loadAll } = useApiTree(pid)
+const {
+  treeData,
+  treeRef,
+  filterText,
+  filterNode,
+  allowDrop,
+  onDrop,
+  reload: loadAll,
+} = useApiTree(pid)
 
-const schemas = ref([])
+const schemas = ref<Schemas['SchemaBrief'][]>([])
 const filteredSchemas = computed(() => {
   const kw = filterText.value.trim().toLowerCase()
   return kw ? schemas.value.filter((s) => (s.name || '').toLowerCase().includes(kw)) : schemas.value
@@ -100,14 +142,25 @@ async function reloadAll() {
   await loadSchemas()
 }
 
-const selectedFolderId = ref(null)
+const selectedFolderId = ref<number | null>(null)
 const importVisible = ref(false)
-const ctx = reactive({ visible: false, x: 0, y: 0, node: null })
+const importAction = ref<'import' | 'update'>('import')
+const ctx = reactive<{ visible: boolean; x: number; y: number; node: ApiTreeNode | null }>({
+  visible: false,
+  x: 0,
+  y: 0,
+  node: null,
+})
 
-function onNew(command) {
+function onNew(command: string) {
   if (command === 'endpoint') addEndpoint()
   else if (command === 'folder') addFolder()
-  else if (command === 'import') importVisible.value = true
+  else if (command === 'import') openImport()
+}
+
+function openUpdateSwagger() {
+  importAction.value = 'update'
+  importVisible.value = true
 }
 
 // ---------- 右键菜单 ----------
@@ -115,7 +168,10 @@ const ctxItems = computed(() => {
   if (!ctx.node) return []
   const items = []
   if (ctx.node.type === 'folder') {
-    items.push({ key: 'add-endpoint', label: '新建接口' }, { key: 'add-folder', label: '新建子文件夹' })
+    items.push(
+      { key: 'add-endpoint', label: '新建接口' },
+      { key: 'add-folder', label: '新建子文件夹' },
+    )
   }
   items.push({ key: 'rename', label: '重命名' })
   if (ctx.node.type === 'endpoint') items.push({ key: 'duplicate', label: '复制接口' })
@@ -123,7 +179,7 @@ const ctxItems = computed(() => {
   return items
 })
 
-function onContextMenu(e, data) {
+function onContextMenu(e: MouseEvent, data: ApiTreeNode) {
   e.preventDefault()
   ctx.node = data
   ctx.x = e.clientX
@@ -131,7 +187,7 @@ function onContextMenu(e, data) {
   ctx.visible = true
 }
 
-function onCtxSelect(key) {
+function onCtxSelect(key: string) {
   const node = ctx.node
   if (!node) return
   if (key === 'add-endpoint') {
@@ -149,40 +205,60 @@ function onCtxSelect(key) {
   }
 }
 
-async function duplicateEndpoint(node) {
+async function duplicateEndpoint(node: ApiTreeNode) {
   const e = await apifoxApi.getEndpoint(node.id)
   await apifoxApi.createEndpoint(pid.value, {
-    name: `${e.name} 副本`, method: e.method, path: e.path,
-    folder_id: e.folder_id, request_spec: e.request_spec, description: e.description,
+    name: `${e.name} 副本`,
+    method: e.method,
+    path: e.path,
+    folder_id: e.folder_id,
+    contract_strict: e.contract_strict ?? false,
+    request_spec: normalizeSpec(e.request_spec) as Schemas['EndpointCreate']['request_spec'],
+    description: e.description,
   })
   ElMessage.success('已复制')
   await loadAll()
 }
 
-function onNodeClick(data) {
+function onNodeClick(data: ApiTreeNode) {
   if (data.type === 'folder') selectedFolderId.value = data.id
   else emit('select', data.id)
 }
 
 async function addFolder() {
-  const { value } = await ElMessageBox.prompt('文件夹名称', '新建文件夹', { inputPattern: /\S/, inputErrorMessage: '不能为空' })
+  const { value } = await ElMessageBox.prompt('文件夹名称', '新建文件夹', {
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   await apifoxApi.createFolder(pid.value, { name: value, parent_id: selectedFolderId.value })
   ElMessage.success('已创建')
   await loadAll()
 }
 
 async function addEndpoint() {
-  const { value } = await ElMessageBox.prompt('接口名称', '新建接口', { inputPattern: /\S/, inputErrorMessage: '不能为空' })
+  const { value } = await ElMessageBox.prompt('接口名称', '新建接口', {
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   const created = await apifoxApi.createEndpoint(pid.value, {
-    name: value, method: 'GET', path: '/', folder_id: selectedFolderId.value, request_spec: emptySpec(),
+    name: value,
+    method: 'GET',
+    path: '/',
+    folder_id: selectedFolderId.value,
+    contract_strict: false,
+    request_spec: emptySpec() as Schemas['EndpointCreate']['request_spec'],
   })
   ElMessage.success('已创建')
   await loadAll()
   emit('select', created.id)
 }
 
-async function renameNode(data) {
-  const { value } = await ElMessageBox.prompt('新名称', '改名', { inputValue: data.label, inputPattern: /\S/, inputErrorMessage: '不能为空' })
+async function renameNode(data: ApiTreeNode) {
+  const { value } = await ElMessageBox.prompt('新名称', '改名', {
+    inputValue: data.label,
+    inputPattern: /\S/,
+    inputErrorMessage: '不能为空',
+  })
   if (data.type === 'folder') await apifoxApi.updateFolder(data.id, { name: value })
   else await apifoxApi.updateEndpoint(data.id, { name: value })
   ElMessage.success('已更新')
@@ -190,7 +266,7 @@ async function renameNode(data) {
   if (data.type === 'endpoint') emit('renamed', data.id, value)
 }
 
-async function deleteNode(data) {
+async function deleteNode(data: ApiTreeNode) {
   await ElMessageBox.confirm(`确认删除「${data.label}」？`, '提示', { type: 'warning' })
   if (data.type === 'folder') await apifoxApi.deleteFolder(data.id)
   else {
@@ -202,6 +278,7 @@ async function deleteNode(data) {
 }
 
 function openImport() {
+  importAction.value = 'import'
   importVisible.value = true
 }
 
@@ -212,11 +289,11 @@ onMounted(reloadAll)
 
 <style scoped>
 .tree-panel {
-  width: 300px;
+  width: 280px;
   flex-shrink: 0;
   border-right: 1px solid var(--ax-border);
   overflow: auto;
-  padding-right: 8px;
+  padding-right: var(--ax-gap);
 }
 
 .tree-toolbar {
@@ -266,7 +343,7 @@ onMounted(reloadAll)
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   font-weight: 700;
   color: var(--ax-text-tertiary);
   padding: 4px 8px;
@@ -278,7 +355,7 @@ onMounted(reloadAll)
   padding: 6px 8px 6px 26px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 
@@ -294,7 +371,7 @@ onMounted(reloadAll)
 
 .schema-empty {
   padding: 4px 8px 4px 26px;
-  font-size: 12px;
+  font-size: var(--ax-font-xs);
   color: var(--ax-text-placeholder);
 }
 </style>

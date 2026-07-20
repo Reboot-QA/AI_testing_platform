@@ -1,7 +1,13 @@
 <template>
   <div class="test-execution">
     <div class="toolbar">
-      <el-select v-model="projectId" placeholder="选择项目" style="width: 220px" @change="handleProjectChange">
+      <el-select
+        v-model="projectId"
+        filterable
+        placeholder="选择项目"
+        style="width: 220px"
+        @change="handleProjectChange"
+      >
         <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
       </el-select>
       <el-button type="primary" @click="openCreateDialog">
@@ -11,8 +17,8 @@
     </div>
 
     <!-- 测试单列表 -->
-    <el-card v-if="!executingRun" shadow="never">
-      <el-table v-loading="runsLoading" :data="runs" stripe border>
+    <el-card v-if="!executingRun" shadow="never" class="list-card">
+      <el-table v-loading="runsLoading" :data="runs" stripe border height="100%">
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="name" label="测试单" min-width="180" show-overflow-tooltip />
         <el-table-column prop="build_name" label="版本/构建" width="120">
@@ -23,7 +29,13 @@
             <div class="progress-cell">
               <el-progress
                 :percentage="runProgress(row)"
-                :status="row.status === 'finished' && row.failed_count ? 'exception' : row.status === 'finished' ? 'success' : ''"
+                :status="
+                  row.status === 'finished' && row.failed_count
+                    ? 'exception'
+                    : row.status === 'finished'
+                      ? 'success'
+                      : ''
+                "
                 :stroke-width="8"
               />
               <span class="progress-text">
@@ -45,7 +57,9 @@
         </el-table-column>
         <el-table-column label="状态" width="90">
           <template #default="{ row }">
-            <el-tag :type="runStatusType[row.status]" size="small">{{ runStatusLabel[row.status] }}</el-tag>
+            <el-tag :type="runStatusType[row.status]" size="small">{{
+              runStatusLabel[row.status]
+            }}</el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="executor_name" label="执行人" width="100" />
@@ -92,7 +106,13 @@
         <el-progress
           :percentage="runProgress(executingRun)"
           :stroke-width="10"
-          :status="executingRun.status === 'finished' && executingRun.failed_count ? 'exception' : executingRun.status === 'finished' ? 'success' : ''"
+          :status="
+            executingRun.status === 'finished' && executingRun.failed_count
+              ? 'exception'
+              : executingRun.status === 'finished'
+                ? 'success'
+                : ''
+          "
         />
       </el-card>
 
@@ -118,7 +138,9 @@
             >
               <span class="case-index">{{ index + 1 }}</span>
               <span class="case-title" :title="item.case_title">{{ item.case_title }}</span>
-              <el-tag :type="resultType[item.result]" size="small">{{ resultLabel[item.result] }}</el-tag>
+              <el-tag :type="resultType[item.result]" size="small">{{
+                resultLabel[item.result]
+              }}</el-tag>
             </div>
             <el-empty v-if="!filteredCases.length" description="暂无匹配用例" />
           </div>
@@ -130,7 +152,9 @@
               <h4>{{ currentCase.case_title }}</h4>
               <div class="case-tags">
                 <el-tag size="small">{{ currentCase.case_priority }}</el-tag>
-                <el-tag size="small" type="info">{{ currentCase.case_type }}</el-tag>
+                <el-tag size="small" type="info">{{
+                  formatCaseTypeLabel(currentCase.case_type)
+                }}</el-tag>
                 <el-tag :type="resultType[currentCase.result]" size="small">
                   {{ resultLabel[currentCase.result] }}
                 </el-tag>
@@ -164,18 +188,38 @@
               />
             </el-form-item>
             <el-form-item label="备注">
-              <el-input v-model="resultForm.remark" type="textarea" :rows="2" placeholder="缺陷编号、环境问题等" />
+              <el-input
+                v-model="resultForm.remark"
+                type="textarea"
+                :rows="2"
+                placeholder="缺陷编号、环境问题等"
+              />
             </el-form-item>
           </el-form>
 
           <div class="result-actions">
-            <el-button type="success" size="large" :loading="submitting" @click="submitResult('pass')">
+            <el-button
+              type="success"
+              size="large"
+              :loading="submitting"
+              @click="submitResult('pass')"
+            >
               通过
             </el-button>
-            <el-button type="danger" size="large" :loading="submitting" @click="submitResult('fail')">
+            <el-button
+              type="danger"
+              size="large"
+              :loading="submitting"
+              @click="submitResult('fail')"
+            >
               失败
             </el-button>
-            <el-button type="warning" size="large" :loading="submitting" @click="submitResult('blocked')">
+            <el-button
+              type="warning"
+              size="large"
+              :loading="submitting"
+              @click="submitResult('blocked')"
+            >
               阻塞
             </el-button>
             <el-button type="info" size="large" :loading="submitting" @click="submitResult('skip')">
@@ -196,6 +240,7 @@
         <el-form-item label="项目" prop="project_id">
           <el-select
             v-model="createForm.project_id"
+            filterable
             placeholder="请选择项目"
             style="width: 100%"
             @change="handleCreateProjectChange"
@@ -224,7 +269,12 @@
               style="flex: 1"
               @change="loadAvailableCases"
             >
-              <el-option v-for="r in createRequirements" :key="r.id" :label="r.title" :value="r.id" />
+              <el-option
+                v-for="r in createRequirements"
+                :key="r.id"
+                :label="r.title"
+                :value="r.id"
+              />
             </el-select>
             <el-button
               link
@@ -264,7 +314,9 @@
         <el-table-column prop="id" label="ID" width="70" />
         <el-table-column prop="title" label="标题" min-width="220" show-overflow-tooltip />
         <el-table-column prop="priority" label="优先级" width="80" />
-        <el-table-column prop="case_type" label="类型" width="90" />
+        <el-table-column prop="case_type" label="类型" width="90">
+          <template #default="{ row }">{{ formatCaseTypeLabel(row.case_type) }}</template>
+        </el-table-column>
       </el-table>
       <el-empty v-else description="请先选择项目与需求点，系统将自动加载关联用例" />
 
@@ -279,22 +331,30 @@
       <template v-if="detailRun">
         <el-descriptions :column="2" border>
           <el-descriptions-item label="名称">{{ detailRun.name }}</el-descriptions-item>
-          <el-descriptions-item label="版本">{{ detailRun.build_name || '-' }}</el-descriptions-item>
+          <el-descriptions-item label="版本">{{
+            detailRun.build_name || '-'
+          }}</el-descriptions-item>
           <el-descriptions-item label="状态">
             <el-tag :type="runStatusType[detailRun.status]" size="small">
               {{ runStatusLabel[detailRun.status] }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="通过率">{{ detailRun.pass_rate }}%</el-descriptions-item>
-          <el-descriptions-item label="执行人">{{ detailRun.executor_name || '-' }}</el-descriptions-item>
-          <el-descriptions-item label="创建时间">{{ formatTime(detailRun.created_at) }}</el-descriptions-item>
+          <el-descriptions-item label="执行人">{{
+            detailRun.executor_name || '-'
+          }}</el-descriptions-item>
+          <el-descriptions-item label="创建时间">{{
+            formatTime(detailRun.created_at)
+          }}</el-descriptions-item>
         </el-descriptions>
         <el-table :data="detailRun.cases" stripe border class="detail-table">
           <el-table-column prop="testcase_id" label="用例ID" width="80" />
           <el-table-column prop="case_title" label="标题" min-width="180" show-overflow-tooltip />
           <el-table-column label="结果" width="80">
             <template #default="{ row }">
-              <el-tag :type="resultType[row.result]" size="small">{{ resultLabel[row.result] }}</el-tag>
+              <el-tag :type="resultType[row.result]" size="small">{{
+                resultLabel[row.result]
+              }}</el-tag>
             </template>
           </el-table-column>
           <el-table-column prop="executor_name" label="执行人" width="90" />
@@ -307,57 +367,105 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import type { TableInstance } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
+import { unwrapProjectList } from '@/api/project'
+import type { Schemas } from '@/api/types'
+import { formatBeijingTime } from '@/utils/datetime'
+import { formatCaseTypeLabel } from '@/utils/caseType'
+import type { DateInput, Project, Requirement, TestCase } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
 
-const projects = ref([])
-const projectId = ref(null)
-const createRequirements = ref([])
-const runs = ref([])
+type TestRunSummary = Schemas['ManualTestRunSummaryOut']
+type TestRunDetail = Schemas['ManualTestRunDetailOut']
+type TestRunCase = Schemas['ManualTestRunCaseOut']
+type CaseResult = 'pass' | 'fail' | 'blocked' | 'skip'
+type CaseFilter = 'all' | 'pending' | 'pass' | 'fail' | 'blocked' | 'skip'
+
+interface CreateRunForm {
+  project_id: number | null
+  name: string
+  build_name: string
+  description: string
+  requirement_ids: number[]
+}
+
+interface ResultForm {
+  actual_result: string
+  remark: string
+}
+
+const projects = ref<Project[]>([])
+const projectId = ref<number | null>(null)
+const createRequirements = ref<Requirement[]>([])
+const runs = ref<TestRunSummary[]>([])
 const runsLoading = ref(false)
 
-const executingRun = ref(null)
-const currentCase = ref(null)
-const caseFilter = ref('all')
+const executingRun = ref<TestRunDetail | null>(null)
+const currentCase = ref<TestRunCase | null>(null)
+const caseFilter = ref<CaseFilter>('all')
 const submitting = ref(false)
-const resultForm = reactive({ actual_result: '', remark: '' })
+const resultForm = reactive<ResultForm>({ actual_result: '', remark: '' })
 
 const createDialogVisible = ref(false)
-const createFormRef = ref()
-const createForm = reactive({
+const createFormRef = ref<FormInstance>()
+const createForm = reactive<CreateRunForm>({
   project_id: null,
   name: '',
   build_name: '',
   description: '',
   requirement_ids: [],
 })
-const createRules = {
+const createRules: FormRules<CreateRunForm> = {
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   name: [{ required: true, message: '请输入测试单名称', trigger: 'blur' }],
-  requirement_ids: [{
-    type: 'array',
-    required: true,
-    min: 1,
-    message: '请至少选择一个需求点',
-    trigger: 'change',
-  }],
+  requirement_ids: [
+    {
+      type: 'array',
+      required: true,
+      min: 1,
+      message: '请至少选择一个需求点',
+      trigger: 'change',
+    },
+  ],
 }
-const availableCases = ref([])
+const availableCases = ref<TestCase[]>([])
 const casesLoading = ref(false)
-const selectedCaseIds = ref([])
+const selectedCaseIds = ref<number[]>([])
 const creating = ref(false)
-const caseTableSelection = ref([])
-const caseTableRef = ref()
+const caseTableSelection = ref<TestCase[]>([])
+const caseTableRef = ref<TableInstance>()
 
 const detailDrawerVisible = ref(false)
-const detailRun = ref(null)
+const detailRun = ref<TestRunDetail | null>(null)
 
-const runStatusLabel = { waiting: '待开始', running: '执行中', finished: '已完成' }
-const runStatusType = { waiting: 'info', running: 'warning', finished: 'success' }
-const resultLabel = { pending: '待测', pass: '通过', fail: '失败', blocked: '阻塞', skip: '跳过' }
-const resultType = { pending: 'info', pass: 'success', fail: 'danger', blocked: 'warning', skip: '' }
+const runStatusLabel: Record<string, string> = {
+  waiting: '待开始',
+  running: '执行中',
+  finished: '已完成',
+}
+const runStatusType: Record<string, string> = {
+  waiting: 'info',
+  running: 'warning',
+  finished: 'success',
+}
+const resultLabel: Record<string, string> = {
+  pending: '待测',
+  pass: '通过',
+  fail: '失败',
+  blocked: '阻塞',
+  skip: '跳过',
+}
+const resultType: Record<string, string> = {
+  pending: 'info',
+  pass: 'success',
+  fail: 'danger',
+  blocked: 'warning',
+  skip: '',
+}
 
 const filteredCases = computed(() => {
   if (!executingRun.value?.cases) return []
@@ -366,44 +474,46 @@ const filteredCases = computed(() => {
 })
 
 const currentCaseIndex = computed(() => {
-  if (!currentCase.value || !executingRun.value?.cases) return -1
-  return executingRun.value.cases.findIndex((item) => item.id === currentCase.value.id)
+  const caseId = currentCase.value?.id
+  if (caseId == null || !executingRun.value?.cases) return -1
+  return executingRun.value.cases.findIndex((item) => item.id === caseId)
 })
 
 const prevCase = computed(() => {
   const idx = currentCaseIndex.value
-  if (idx <= 0) return null
+  if (idx <= 0 || !executingRun.value?.cases) return null
   return executingRun.value.cases[idx - 1]
 })
 
 const nextCase = computed(() => {
   const idx = currentCaseIndex.value
-  if (idx < 0 || idx >= executingRun.value.cases.length - 1) return null
+  if (idx < 0 || !executingRun.value?.cases) return null
+  if (idx >= executingRun.value.cases.length - 1) return null
   return executingRun.value.cases[idx + 1]
 })
 
 const allSelected = computed(
-  () => availableCases.value.length > 0 && selectedCaseIds.value.length === availableCases.value.length
+  () =>
+    availableCases.value.length > 0 && selectedCaseIds.value.length === availableCases.value.length,
 )
 
 const allRequirementsSelected = computed(
   () =>
     createRequirements.value.length > 0 &&
-    createForm.requirement_ids.length === createRequirements.value.length
+    createForm.requirement_ids.length === createRequirements.value.length,
 )
 
-function formatTime(value) {
-  if (!value) return '-'
-  return new Date(value).toLocaleString()
+function formatTime(value: DateInput) {
+  return formatBeijingTime(value)
 }
 
-function runProgress(run) {
+function runProgress(run: TestRunSummary | TestRunDetail | null) {
   if (!run?.total_count) return 0
   return Math.round(((run.total_count - run.pending_count) / run.total_count) * 100)
 }
 
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
   if (projects.value.length && !projectId.value) {
     projectId.value = projects.value[0].id
     await handleProjectChange()
@@ -433,25 +543,26 @@ function backToList() {
   loadRuns()
 }
 
-async function enterExecution(row) {
+async function enterExecution(row: TestRunSummary) {
   executingRun.value = await testExecutionApi.getRun(row.id)
   caseFilter.value = 'pending'
-  const firstPending = executingRun.value.cases.find((item) => item.result === 'pending')
-  selectCase(firstPending || executingRun.value.cases[0] || null)
+  const cases = executingRun.value.cases || []
+  const firstPending = cases.find((item) => item.result === 'pending')
+  selectCase(firstPending || cases[0] || null)
 }
 
-async function viewRunDetail(row) {
+async function viewRunDetail(row: TestRunSummary) {
   detailRun.value = await testExecutionApi.getRun(row.id)
   detailDrawerVisible.value = true
 }
 
-async function removeRun(row) {
+async function removeRun(row: TestRunSummary) {
   await testExecutionApi.deleteRun(row.id)
   ElMessage.success('已删除')
   await loadRuns()
 }
 
-function selectCase(item) {
+function selectCase(item: TestRunCase | null) {
   if (!item) {
     currentCase.value = null
     return
@@ -467,7 +578,7 @@ watch(currentCase, (item) => {
   resultForm.remark = item.remark || ''
 })
 
-async function submitResult(result) {
+async function submitResult(result: CaseResult) {
   if (!currentCase.value || !executingRun.value) return
   const prevIndex = currentCaseIndex.value
   submitting.value = true
@@ -479,7 +590,7 @@ async function submitResult(result) {
     })
     executingRun.value = await testExecutionApi.getRun(executingRun.value.id)
     ElMessage.success(`已标记为${resultLabel[result]}`)
-    const cases = executingRun.value.cases
+    const cases = executingRun.value.cases || []
     const next =
       cases.slice(prevIndex + 1).find((item) => item.result === 'pending') ||
       cases.find((item) => item.result === 'pending') ||
@@ -542,14 +653,14 @@ async function loadAvailableCases() {
     await nextTick()
     if (caseTableRef.value) {
       caseTableRef.value.clearSelection()
-      availableCases.value.forEach((row) => caseTableRef.value.toggleRowSelection(row, true))
+      availableCases.value.forEach((row) => caseTableRef.value?.toggleRowSelection(row, true))
     }
   } finally {
     casesLoading.value = false
   }
 }
 
-function handleCaseSelection(rows) {
+function handleCaseSelection(rows: TestCase[]) {
   caseTableSelection.value = rows
   selectedCaseIds.value = rows.map((item) => item.id)
 }
@@ -569,13 +680,13 @@ function toggleSelectAll() {
     caseTableRef.value.clearSelection()
     selectedCaseIds.value = []
   } else {
-    availableCases.value.forEach((row) => caseTableRef.value.toggleRowSelection(row, true))
+    availableCases.value.forEach((row) => caseTableRef.value?.toggleRowSelection(row, true))
     selectedCaseIds.value = availableCases.value.map((item) => item.id)
   }
 }
 
 async function createRun() {
-  await createFormRef.value.validate()
+  await createFormRef.value?.validate()
   if (!selectedCaseIds.value.length) {
     ElMessage.warning('请至少选择一条用例')
     return
@@ -583,7 +694,7 @@ async function createRun() {
   creating.value = true
   try {
     const run = await testExecutionApi.createRun({
-      project_id: createForm.project_id,
+      project_id: createForm.project_id!,
       name: createForm.name,
       build_name: createForm.build_name || undefined,
       description: createForm.description || undefined,
@@ -595,7 +706,8 @@ async function createRun() {
     ElMessage.success('测试单已创建')
     executingRun.value = run
     caseFilter.value = 'pending'
-    selectCase(run.cases.find((item) => item.result === 'pending') || run.cases[0] || null)
+    const runCases = run.cases || []
+    selectCase(runCases.find((item) => item.result === 'pending') || runCases[0] || null)
   } finally {
     creating.value = false
   }
@@ -605,11 +717,41 @@ onMounted(loadProjects)
 </script>
 
 <style scoped>
+/* 页面撑满 el-main 高度：工具栏固定，列表卡/执行面板吃掉剩余高度、内部滚动 */
+.test-execution {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .toolbar {
   display: flex;
   gap: 12px;
   margin-bottom: 16px;
   align-items: center;
+  flex: none;
+}
+
+/* 测试单列表：卡片吃剩余高度，表格在卡片内部滚动 */
+.list-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 执行模式：整块作为一个滚动区，内部两栏各自的 max-height 仍生效 */
+.execute-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 .progress-cell {
@@ -660,12 +802,25 @@ onMounted(loadProjects)
   background: #f1f5f9;
 }
 
-.stat-item.pass { color: #16a34a; }
-.stat-item.fail { color: #dc2626; }
-.stat-item.block { color: #d97706; }
-.stat-item.skip { color: #64748b; }
-.stat-item.pending { color: #2563eb; }
-.stat-item.rate { color: #0f172a; font-weight: 600; }
+.stat-item.pass {
+  color: #16a34a;
+}
+.stat-item.fail {
+  color: #dc2626;
+}
+.stat-item.block {
+  color: #d97706;
+}
+.stat-item.skip {
+  color: #64748b;
+}
+.stat-item.pending {
+  color: #2563eb;
+}
+.stat-item.rate {
+  color: #0f172a;
+  font-weight: 600;
+}
 
 .execute-body {
   display: grid;

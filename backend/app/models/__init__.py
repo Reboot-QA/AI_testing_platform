@@ -1,22 +1,15 @@
-from app.models.department import Department
-from app.models.user import User
-from app.models.user_permission import UserMenuPermission
-from app.models.project import Project
-from app.models.requirement import Requirement
-from app.models.testcase import TestCase
-from app.models.system_setting import SystemSetting
-from app.models.llm_provider import LLMProvider
 from app.models.api_automation import (
     ApiEnvironment,
+    ApiScheduledTask,
+    ApiScheduledTaskSuite,
     ApiTestCase,
     ApiTestRun,
     ApiTestStepResult,
     ApiTestSuite,
-    ApiScheduledTask,
-    ApiScheduledTaskSuite,
 )
-from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.apifox import (
+    ApifoxAiGenTask,
+    ApifoxAiGenTaskItem,
     ApifoxCaseAssertion,
     ApifoxCaseExtract,
     ApifoxCaseScript,
@@ -27,12 +20,13 @@ from app.models.apifox import (
     ApifoxEndpointScript,
     ApifoxEnvironment,
     ApifoxEnvironmentServer,
-    ApifoxEnvironmentVarLocal,
     ApifoxEnvironmentVariable,
+    ApifoxEnvironmentVarLocal,
     ApifoxFolder,
     ApifoxGlobalParam,
     ApifoxGlobalVariable,
     ApifoxGlobalVarLocal,
+    ApifoxNotifyConfig,
     ApifoxRun,
     ApifoxRunStep,
     ApifoxScenario,
@@ -41,12 +35,27 @@ from app.models.apifox import (
     ApifoxSchema,
     ApifoxScript,
 )
+from app.models.department import Department
+from app.models.department_permission import DepartmentMenuPermission
+from app.models.llm_provider import LLMProvider
+from app.models.project import Project
+from app.models.project_member import ProjectMember
+from app.models.requirement import Requirement
+from app.models.system_setting import SystemSetting
+from app.models.test_execution import ManualTestRun, ManualTestRunCase
+from app.models.testcase import TestCase
+from app.models.user import User
+from app.models.user_permission import UserMenuPermission
+from app.models.user_project_pref import UserProjectPref
 
 __all__ = [
     "User",
     "UserMenuPermission",
+    "DepartmentMenuPermission",
     "Department",
     "Project",
+    "ProjectMember",
+    "UserProjectPref",
     "Requirement",
     "TestCase",
     "SystemSetting",
@@ -60,6 +69,9 @@ __all__ = [
     "ApiScheduledTaskSuite",
     "ManualTestRun",
     "ManualTestRunCase",
+    "ApifoxAiGenTask",
+    "ApifoxAiGenTaskItem",
+    "ApifoxNotifyConfig",
     "ApifoxFolder",
     "ApifoxEndpoint",
     "ApifoxEnvironment",

@@ -5,9 +5,8 @@
       <el-select v-model="row.type" size="small" style="width: 120px">
         <el-option v-for="t in TYPES" :key="t.value" :label="t.label" :value="t.value" />
       </el-select>
-      <el-input
+      <VarInput
         v-model="row.path"
-        size="small"
         :disabled="!needsPath(row.type)"
         :placeholder="pathPlaceholder(row.type)"
         style="width: 150px"
@@ -21,9 +20,8 @@
         <el-option v-for="o in OPERATORS" :key="o.value" :label="o.label" :value="o.value" />
       </el-select>
       <span v-else class="op-na">{{ impliedOp(row.type) }}</span>
-      <el-input
+      <VarInput
         v-model="row.expected"
-        size="small"
         :disabled="row.operator === 'exists' && needsOperator(row.type)"
         placeholder="期望值"
       />
@@ -31,12 +29,19 @@
         <el-icon><Delete /></el-icon>
       </el-button>
     </div>
-    <el-button link type="primary" size="small" @click="rows.push(emptyRow())">+ 添加断言</el-button>
+    <el-button link type="primary" size="small" @click="rows.push(emptyRow())"
+      >+ 添加断言</el-button
+    >
   </div>
 </template>
 
-<script setup>
-defineProps({ rows: { type: Array, required: true } })
+<script setup lang="ts">
+import type { Schemas } from '@/api/types'
+import VarInput from '@/components/apifox/common/VarInput.vue'
+
+type AssertionRow = Schemas['AssertionRow']
+
+defineProps<{ rows: AssertionRow[] }>()
 
 const TYPES = [
   { value: 'status_code', label: '状态码' },
@@ -60,25 +65,25 @@ const OPERATORS = [
 ]
 
 // 仅这三类走操作符比较；contains/response_time 操作符隐含
-function needsOperator(type) {
+function needsOperator(type: string) {
   return type === 'status_code' || type === 'json_path' || type === 'header'
 }
 
-function impliedOp(type) {
+function impliedOp(type: string) {
   return type === 'response_time' ? '≤' : '包含'
 }
 
-function needsPath(type) {
+function needsPath(type: string) {
   return type === 'json_path' || type === 'header'
 }
 
-function pathPlaceholder(type) {
+function pathPlaceholder(type: string) {
   if (type === 'json_path') return '$.code'
   if (type === 'header') return 'Header 名'
   return '（无需）'
 }
 
-function emptyRow() {
+function emptyRow(): AssertionRow {
   return { type: 'status_code', path: '', operator: 'eq', expected: '200', enabled: true }
 }
 </script>

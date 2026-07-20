@@ -1,20 +1,24 @@
 <template>
   <div class="condition-editor">
-    <el-input v-model="condition.left" size="small" placeholder="左值，支持 {{变量}}" class="cond-left" />
+    <VarInput v-model="condition.left" placeholder="左值，支持 {{变量}}" class="cond-left" />
     <el-select v-model="condition.operator" size="small" class="cond-op">
       <el-option v-for="op in OPERATORS" :key="op.value" :label="op.label" :value="op.value" />
     </el-select>
-    <el-input
+    <VarInput
       v-if="condition.operator !== 'exists'"
       v-model="condition.right"
-      size="small"
       placeholder="右值，支持 {{变量}}"
       class="cond-right"
     />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
+import type { ConditionConfig } from '@/types/apifox'
+import VarInput from '@/components/apifox/common/VarInput.vue'
+
+export type { ConditionConfig } from '@/types/apifox'
+
 const OPERATORS = [
   { value: 'eq', label: '等于' },
   { value: 'neq', label: '不等于' },
@@ -28,9 +32,7 @@ const OPERATORS = [
   { value: 'exists', label: '存在' },
 ]
 
-defineProps({
-  condition: { type: Object, required: true },
-})
+defineProps<{ condition: ConditionConfig }>()
 </script>
 
 <style scoped>

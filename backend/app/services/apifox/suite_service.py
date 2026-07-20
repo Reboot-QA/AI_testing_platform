@@ -19,6 +19,7 @@ from app.routers.apifox.suite_schemas import (
     SuiteOut,
     SuiteUpdate,
 )
+from app.services.apifox import versioning
 
 VALID_TARGET_TYPES = {"case", "scenario"}
 
@@ -80,6 +81,7 @@ def _out(db: Session, suite: ApifoxSuite) -> SuiteOut:
         description=suite.description,
         items=[_item_out(db, it) for it in repo.list_items(db, suite.id)],
         sort_order=suite.sort_order,
+        version=suite.version,
         created_at=suite.created_at,
         updated_at=suite.updated_at,
     )
@@ -111,7 +113,37 @@ def get_suite_out(db: Session, suite: ApifoxSuite) -> SuiteOut:
     return _out(db, suite)
 
 
+def _copy_name(db: Session, project_id: int, base: str) -> str:
+    candidate = f"{base} 副本"
+    n = 2
+    while repo.name_exists(db, project_id, candidate):
+        candidate = f"{base} 副本{n}"
+        n += 1
+    return candidate
+
+
+def copy_suite(db: Session, suite: ApifoxSuite) -> SuiteOut:
+    """复制套件：新建套件行 + 拷贝其全部条目（条目仍引用同一批用例/场景）。"""
+    new_suite = ApifoxSuite(
+        project_id=suite.project_id,
+        name=_copy_name(db, suite.project_id, suite.name),
+        description=suite.description,
+        sort_order=suite.sort_order,
+    )
+    repo.add(db, new_suite)
+    for item in repo.list_items(db, suite.id):
+        repo.add(db, ApifoxSuiteItem(
+            suite_id=new_suite.id, target_type=item.target_type, target_id=item.target_id,
+            enabled=item.enabled, sort_order=item.sort_order,
+        ))
+    db.commit()
+    db.refresh(new_suite)
+    return _out(db, new_suite)
+
+
 def update_suite(db: Session, suite: ApifoxSuite, data: SuiteUpdate) -> SuiteOut:
+    # 原子 CAS 先占坑版本（冲突则 rollback+ConflictError，任何字段改动前）
+    versioning.bump_version(db, ApifoxSuite, suite, data.expected_version)
     if data.name is not None:
         suite.name = data.name
     if "description" in data.model_fields_set:

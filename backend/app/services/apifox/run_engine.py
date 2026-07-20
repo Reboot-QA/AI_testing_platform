@@ -5,8 +5,9 @@
 脚本执行、作用域落库与单用例编排 execute_case，并 re-export 上述子模块的对外符号，
 保持既有导入路径（debug_service / run_service / scenario_service / 测试依赖之）不变。
 
-复用旧模块纯函数：断言判定 _evaluate_assertion、提取取值 _extract_value_by_source、
-脚本执行 run_pre_script/run_post_script。生成器编排与 run 落库在 run_service。
+复用同目录 apifox 纯函数（D1 已从老模块搬入）：断言判定 assertions._evaluate_assertion、
+提取取值 response_extract._extract_value_by_source、脚本执行 script_runner.run_pre/post_script。
+生成器编排与 run 落库在 run_service。
 提取的 environment/global 作用域写当前用户本地值（不污染团队远程值）。
 """
 
@@ -28,13 +29,13 @@ from app.repositories.apifox import (
     script_repo,
     variable_repo,
 )
-from app.services.api_response_extract import _extract_value_by_source
-from app.services.api_runner_service import _evaluate_assertion, _extract_json_path
-from app.services.api_script_runner import run_post_script, run_pre_script
 from app.services.apifox import contract_service, schema_ref, upload_service
+from app.services.apifox.assertions import _evaluate_assertion, _extract_json_path
 from app.services.apifox.flow_control import MAX_LOOP_ITERATIONS, evaluate_condition, loop_iterations
 from app.services.apifox.operators import CONDITION_OPERATORS, _apply_operator
 from app.services.apifox.request_builder import build_request
+from app.services.apifox.response_extract import _extract_value_by_source
+from app.services.apifox.script_runner import run_post_script, run_pre_script
 from app.services.apifox.variables import (
     _loads,
     apply_vars,
@@ -53,11 +54,21 @@ __all__ = [
     "build_request",
     "evaluate_assertions", "run_extracts", "run_script_links",
     "persist_scoped_extracts", "execute_case",
-    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT",
+    "HTTP_TIMEOUT", "MAX_BODY_SNAPSHOT", "make_http_client",
 ]
 
 HTTP_TIMEOUT = 30.0
 MAX_BODY_SNAPSHOT = 20000
+
+
+def make_http_client(plan: Dict[str, Any]) -> httpx.Client:
+    """按请求计划的 settings 构建 httpx 客户端：未设超时回落 HTTP_TIMEOUT；SSL/重定向所配即所用。"""
+    timeout = plan.get("timeout")
+    return httpx.Client(
+        timeout=timeout if timeout is not None else HTTP_TIMEOUT,
+        follow_redirects=plan.get("follow_redirects", True),
+        verify=plan.get("verify_ssl", True),
+    )
 
 _OP_WITH_OPERATOR = {"status_code", "json_path", "header"}
 
@@ -225,7 +236,219 @@ def _truncate(text: str, limit: int = MAX_BODY_SNAPSHOT) -> str:
     return text if len(text) <= limit else text[:limit] + "...(截断)"
 
 
+# ---------- 登录态跨步骤透传（场景级 cookie jar + token 自动捕获/注入） ----------
+# 响应体里常见的 token 字段名（大小写不敏感），含 data./result./body. 一层嵌套。
+_TOKEN_KEYS = {"token", "access_token", "accesstoken", "jwt", "id_token", "auth_token"}
+_TOKEN_NEST_KEYS = ("data", "result", "body")
+
+
+def _bearer_from_headers(headers: Dict[str, str]) -> Optional[str]:
+    """取手动写死的 Bearer token（去前缀）用于向后传递；非 Bearer 方案不转发（避免注成 Bearer Token xxx）。"""
+    for key, value in headers.items():
+        if key.lower() == "authorization":
+            val = (value or "").strip()
+            return val[7:].strip() or None if val.lower().startswith("bearer ") else None
+    return None
+
+
+def _has_authorization(headers: Dict[str, str]) -> bool:
+    """该步是否已显式设置 Authorization（任何方案）——手动优先，不自动注入。"""
+    return any(key.lower() == "authorization" for key in headers)
+
+
+def _find_token(obj: Dict[str, Any]) -> Optional[str]:
+    for key, value in obj.items():
+        if key.lower() in _TOKEN_KEYS and isinstance(value, str) and value.strip():
+            return value.strip()
+    for nest in _TOKEN_NEST_KEYS:
+        sub = obj.get(nest)
+        if isinstance(sub, dict):
+            found = _find_token(sub)
+            if found:
+                return found
+    return None
+
+
+def _capture_token_from_body(response: httpx.Response) -> Optional[str]:
+    try:
+        data = response.json()
+    except ValueError:
+        return None
+    return _find_token(data) if isinstance(data, dict) else None
+
+
+def _send_request(
+    plan: Dict[str, Any],
+    detail: Dict[str, Any],
+    cookie_jar: Optional[httpx.Cookies] = None,
+    auth_token: Optional[str] = None,
+) -> Optional[httpx.Response]:
+    """统一发送：Authorization 自动注入（手动优先）+ cookie jar 透传 + token 捕获。
+
+    记录 req/resp 快照与 detail["captured_token"]（供上层更新传递中的 token）。
+    网络错误时置 detail 并返回 None。cookie_jar/auth_token 为 None 即现状行为。
+    """
+    headers = plan["headers"]
+    if auth_token and not _has_authorization(headers):  # 该步未显式设 Authorization → 自动注入
+        headers["Authorization"] = f"Bearer {auth_token}"
+
+    detail["url"] = plan["url"]
+    detail["request_headers"] = headers
+    detail["request_body"] = plan["body_snapshot"]
+    detail["warnings"] = plan.get("warnings", [])
+
+    started = time.perf_counter()
+    try:
+        with make_http_client(plan) as client:
+            response = client.request(
+                plan["method"], plan["url"],
+                params=plan["params"] or None,
+                headers=headers or None,
+                cookies=cookie_jar,
+                **plan["request_kwargs"],
+            )
+    except httpx.RequestError as exc:
+        detail["duration_ms"] = (time.perf_counter() - started) * 1000
+        detail["error_message"] = f"请求失败: {exc}"
+        return None
+    detail["duration_ms"] = (time.perf_counter() - started) * 1000
+
+    if cookie_jar is not None:
+        cookie_jar.update(response.cookies)
+    # 传递中的 token：手动写死的 Bearer 优先更新；响应体新 token 再覆盖（refresh 场景）
+    captured = _capture_token_from_body(response) or _bearer_from_headers(headers)
+    detail["captured_token"] = captured
+
+    detail["response_status"] = response.status_code
+    detail["response_headers"] = dict(response.headers)
+    detail["response_body"] = _truncate(response.text)
+    return response
+
+
 # ---------- 单用例执行 ----------
+_MAX_PROC_WAIT_MS = 60000
+
+
+class _Op:
+    """有序处理器项（鸭子兼容 evaluate_assertions/run_extracts/run_script_links 的属性访问）。
+
+    不引 routers.schemas 的 ProcessorRow，避免 run_engine 触发 routers 包的循环导入。
+    """
+
+    __slots__ = (
+        "kind", "enabled", "script_id", "wait_ms", "type", "path", "operator",
+        "expected", "var_name", "source", "scope", "response_schema_id", "contract_strict",
+    )
+
+    def __init__(self, **kw):
+        self.kind = kw.get("kind")
+        self.enabled = kw.get("enabled", True)
+        self.script_id = kw.get("script_id")
+        self.wait_ms = kw.get("wait_ms")
+        self.type = kw.get("type")
+        self.path = kw.get("path")
+        self.operator = kw.get("operator") or "eq"
+        self.expected = kw.get("expected")
+        self.var_name = kw.get("var_name")
+        self.source = kw.get("source") or "response_json"
+        self.scope = kw.get("scope") or "temporary"
+        self.response_schema_id = kw.get("response_schema_id")
+        self.contract_strict = kw.get("contract_strict")
+
+
+def _parse_processors(raw) -> List["_Op"]:
+    data = _loads(raw, None)
+    if not isinstance(data, list):
+        return []
+    return [_Op(**x) for x in data if isinstance(x, dict)]
+
+
+def _script_op(link) -> "_Op":
+    return _Op(kind="script", script_id=link.script_id, enabled=link.enabled)
+
+
+def _fallback_pre_ops(pre_script_links) -> List["_Op"]:
+    """无前置处理器时，把旧前置脚本按序转成 script 处理器（保持旧行为）。"""
+    return [_script_op(link) for link in pre_script_links]
+
+
+def _fallback_post_ops(assertions, contract_schema_id, contract_strict, extracts, post_script_links):
+    """无后置处理器时，把旧的 断言→契约→提取→后置脚本 按旧固定顺序转成处理器列表。"""
+    ops: List[_Op] = [
+        _Op(kind="assertion", type=a.type, path=a.path, operator=a.operator,
+            expected=a.expected, enabled=a.enabled)
+        for a in assertions
+    ]
+    if contract_schema_id:
+        ops.append(_Op(kind="contract", response_schema_id=contract_schema_id,
+                       contract_strict=bool(contract_strict), enabled=True))
+    ops += [
+        _Op(kind="extract", var_name=e.var_name, source=e.source, path=e.path,
+            scope=e.scope, enabled=e.enabled)
+        for e in extracts
+    ]
+    ops += [_script_op(link) for link in post_script_links]
+    return ops
+
+
+def _run_pre_ops(db: Session, ops, variables: Dict[str, str], detail: Dict[str, Any]):
+    """按序执行前置 ops（script/wait）。返回 (variables, error)；脚本 error 短路。"""
+    for op in ops:
+        if not op.enabled:
+            continue
+        if op.kind == "script" and op.script_id:
+            variables, logs, error = run_script_links(db, [op], True, variables)
+            detail["script_logs"].extend(logs)
+            if error:
+                return variables, error
+        elif op.kind == "wait":
+            time.sleep(min(op.wait_ms or 0, _MAX_PROC_WAIT_MS) / 1000)
+    return variables, None
+
+
+def _run_post_ops(db, ops, response, detail, variables, request_snapshot, duration_ms, project_id):
+    """按序执行后置 ops（script/wait/assertion/extract/contract）。返回 passed。"""
+    passed = True
+    saw_assertion = False
+    for op in ops:
+        if not op.enabled:
+            continue
+        if op.kind == "assertion":
+            saw_assertion = True
+            ok, results = evaluate_assertions([op], response, duration_ms)
+            detail["assertion_results"].extend(results)
+            passed = passed and ok
+        elif op.kind == "extract":
+            extracted, scoped, results = run_extracts([op], response, request_snapshot, duration_ms)
+            detail["extracted"].update(extracted)
+            detail["scoped"].extend(scoped)
+            detail["extract_results"].extend(results)
+            variables.update(extracted)  # 立即注入，供后续 script op 使用
+        elif op.kind == "contract" and op.response_schema_id:
+            schema = schema_repo.get_schema(db, op.response_schema_id)
+            if schema and schema.project_id == project_id:
+                resolved = schema_ref.resolve_schema_text(db, project_id, schema.json_schema)
+                contract = contract_service.validate_response(resolved, response)
+                contract["schema_name"] = schema.name
+                detail["contract_result"] = contract
+                if op.contract_strict and not contract["passed"]:
+                    passed = False
+        elif op.kind == "script" and op.script_id:
+            variables, logs, error = run_script_links(
+                db, [op], False, variables, response=response, duration_ms=duration_ms
+            )
+            detail["script_logs"].extend(logs)
+            if error:
+                detail["script_logs"].append(f"后置脚本错误: {error}")
+        elif op.kind == "wait":
+            time.sleep(min(op.wait_ms or 0, _MAX_PROC_WAIT_MS) / 1000)
+    if not saw_assertion:  # 无断言 op → 沿用默认 2xx/3xx 校验
+        ok, results = evaluate_assertions([], response, duration_ms)
+        detail["assertion_results"].extend(results)
+        passed = passed and ok
+    return passed
+
+
 def execute_case(
     db: Session,
     case: ApifoxEndpointCase,
@@ -234,6 +457,8 @@ def execute_case(
     variables: Dict[str, str],
     assertions,
     extracts,
+    cookie_jar: Optional[httpx.Cookies] = None,
+    auth_token: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """执行一次用例（一组变量），返回 (passed|failed, detail 快照)。不落库。"""
     detail: Dict[str, Any] = {
@@ -250,10 +475,23 @@ def execute_case(
     ep_assertions = endpoint_repo.list_endpoint_assertions(db, endpoint.id)
     ep_extracts = endpoint_repo.list_endpoint_extracts(db, endpoint.id)
 
-    # 前置脚本（接口-pre 先于 用例-pre；error → failed）
-    pre_links = _phase_links(ep_scripts, "pre") + _phase_links(case_scripts, "pre")
-    variables, pre_logs, pre_error = run_script_links(db, pre_links, True, variables)
-    detail["script_logs"].extend(pre_logs)
+    # 有序处理器（自由混排）：任一层为空回退该层旧字段；四处皆空则完全走旧固定管线（零回归）
+    case_pre_procs = _parse_processors(case.pre_processors)
+    case_post_procs = _parse_processors(case.post_processors)
+    ep_pre_procs = _parse_processors(endpoint.pre_processors)
+    ep_post_procs = _parse_processors(endpoint.post_processors)
+    use_processors = bool(case_pre_procs or case_post_procs or ep_pre_procs or ep_post_procs)
+
+    # 前置（接口在前、用例在后）
+    if use_processors:
+        pre_ops = (ep_pre_procs or _fallback_pre_ops(_phase_links(ep_scripts, "pre"))) + (
+            case_pre_procs or _fallback_pre_ops(_phase_links(case_scripts, "pre"))
+        )
+        variables, pre_error = _run_pre_ops(db, pre_ops, variables, detail)
+    else:
+        pre_links = _phase_links(ep_scripts, "pre") + _phase_links(case_scripts, "pre")
+        variables, pre_logs, pre_error = run_script_links(db, pre_links, True, variables)
+        detail["script_logs"].extend(pre_logs)
     if pre_error:
         detail["error_message"] = f"前置脚本失败: {pre_error}"
         return "failed", detail
@@ -269,29 +507,29 @@ def execute_case(
         detail["error_message"] = str(exc)
         return "failed", detail
 
-    detail["url"] = plan["url"]
-    detail["request_headers"] = plan["headers"]
-    detail["request_body"] = plan["body_snapshot"]
-
-    started = time.perf_counter()
-    try:
-        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
-            response = client.request(
-                plan["method"], plan["url"],
-                params=plan["params"] or None,
-                headers=plan["headers"] or None,
-                **plan["request_kwargs"],
-            )
-    except httpx.RequestError as exc:
-        detail["duration_ms"] = (time.perf_counter() - started) * 1000
-        detail["error_message"] = f"请求失败: {exc}"
+    response = _send_request(plan, detail, cookie_jar=cookie_jar, auth_token=auth_token)
+    if response is None:
         return "failed", detail
-    duration_ms = (time.perf_counter() - started) * 1000
+    duration_ms = detail["duration_ms"]
 
-    detail["duration_ms"] = duration_ms
-    detail["response_status"] = response.status_code
-    detail["response_headers"] = dict(response.headers)
-    detail["response_body"] = _truncate(response.text)
+    request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
+
+    if use_processors:
+        # 后置按序自由混排（用例层在前、接口层在后；层内空则回退旧字段的固定子序）
+        post_ops = (
+            case_post_procs
+            or _fallback_post_ops(assertions, None, False, extracts, _phase_links(case_scripts, "post"))
+        ) + (
+            ep_post_procs
+            or _fallback_post_ops(
+                ep_assertions, endpoint.response_schema_id, endpoint.contract_strict,
+                ep_extracts, _phase_links(ep_scripts, "post"),
+            )
+        )
+        passed = _run_post_ops(
+            db, post_ops, response, detail, variables, request_snapshot, duration_ms, case.project_id
+        )
+        return ("passed" if passed else "failed"), detail
 
     # 断言并集：接口断言 + 用例断言都评估
     passed, assertion_results = evaluate_assertions(
@@ -311,7 +549,6 @@ def execute_case(
                 passed = False
 
     # 提取并集：接口提取在前，用例同名变量后写覆盖
-    request_snapshot = {"headers": plan["headers"], "body": plan["body_snapshot"]}
     extracted, scoped, extract_results = run_extracts(
         list(ep_extracts) + list(extracts), response, request_snapshot, duration_ms
     )
@@ -336,6 +573,8 @@ def execute_http_request(
     db: Session, project_id: int, method: str, path: str, server_name: Optional[str],
     request_spec: Dict[str, Any], assertions, extracts,
     environment: Optional[ApifoxEnvironment], variables: Dict[str, str],
+    cookie_jar: Optional[httpx.Cookies] = None,
+    auth_token: Optional[str] = None,
 ) -> Tuple[str, Dict[str, Any]]:
     """执行一个内联 HTTP 请求（场景裸步骤）：假 endpoint(鸭子类型) 复用 build_request + 断言 + 提取。
 
@@ -360,28 +599,10 @@ def execute_http_request(
         detail["error_message"] = str(exc)
         return "failed", detail
 
-    detail["url"] = plan["url"]
-    detail["request_headers"] = plan["headers"]
-    detail["request_body"] = plan["body_snapshot"]
-
-    started = time.perf_counter()
-    try:
-        with httpx.Client(timeout=HTTP_TIMEOUT, follow_redirects=True) as client:
-            response = client.request(
-                plan["method"], plan["url"],
-                params=plan["params"] or None, headers=plan["headers"] or None,
-                **plan["request_kwargs"],
-            )
-    except httpx.RequestError as exc:
-        detail["duration_ms"] = (time.perf_counter() - started) * 1000
-        detail["error_message"] = f"请求失败: {exc}"
+    response = _send_request(plan, detail, cookie_jar=cookie_jar, auth_token=auth_token)
+    if response is None:
         return "failed", detail
-    duration_ms = (time.perf_counter() - started) * 1000
-
-    detail["duration_ms"] = duration_ms
-    detail["response_status"] = response.status_code
-    detail["response_headers"] = dict(response.headers)
-    detail["response_body"] = _truncate(response.text)
+    duration_ms = detail["duration_ms"]
 
     passed, assertion_results = evaluate_assertions(assertions, response, duration_ms)
     detail["assertion_results"] = assertion_results

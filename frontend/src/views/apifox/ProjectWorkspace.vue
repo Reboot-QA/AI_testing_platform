@@ -1,5 +1,5 @@
 <template>
-  <div class="workspace">
+  <div class="ax-workspace workspace">
     <div class="ws-header">
       <el-button link @click="backToWorkbench">
         <el-icon><ArrowLeft /></el-icon> 工作台
@@ -28,51 +28,72 @@
       >
         <el-option v-for="e in store.environments" :key="e.id" :label="e.name" :value="e.id" />
       </el-select>
+      <el-button size="small" text title="环境管理" @click="envDialogVisible = true">
+        <el-icon><Setting /></el-icon>
+      </el-button>
     </div>
 
-    <el-tabs v-model="activeTab" @tab-change="onTabChange">
+    <el-dialog
+      v-model="envDialogVisible"
+      title="环境管理"
+      width="900px"
+      top="6vh"
+      destroy-on-close
+      class="env-dialog"
+    >
+      <EnvManage />
+    </el-dialog>
+
+    <el-tabs v-model="activeTab" class="ws-tabs" @tab-change="onTabChange">
       <el-tab-pane v-for="s in sections" :key="s.key" :label="s.label" :name="s.key" />
     </el-tabs>
 
-    <!-- 按 projectId 加 key：切项目时命中同一路由记录，强制子树重挂载以重载数据 -->
-    <router-view :key="projectId" />
+    <div class="ws-content">
+      <router-view :key="projectId" />
+    </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage } from 'element-plus'
+import type { Schemas } from '@/api/types'
+import { unwrapProjectList } from '@/api/project'
 import { projectApi } from '@/api'
 import { useWorkspaceStore } from '@/stores/workspace'
+import EnvManage from '@/views/apifox/sections/EnvManage.vue'
 
 const route = useRoute()
 const router = useRouter()
 const store = useWorkspaceStore()
+const envDialogVisible = ref(false)
 
 const sections = [
   { key: 'apis', label: '接口管理' },
   { key: 'datamodels', label: '数据模型' },
   { key: 'tests', label: '自动化测试' },
   { key: 'reports', label: '测试报告' },
+  { key: 'ai-jobs', label: 'AI 生成' },
   { key: 'environments', label: '环境' },
   { key: 'settings', label: '项目设置' },
-]
+] as const
 
-const projects = ref([])
-const projectId = computed(() => route.params.projectId)
+const projects = ref<Schemas['ProjectOut'][]>([])
+const projectId = useRouteParamId()
 const activeTab = computed(() => route.path.split('/').pop())
 
-function currentTab() {
+function currentTab(): string {
   const seg = route.path.split('/').pop()
-  return sections.some((s) => s.key === seg) ? seg : 'apis'
+  return sections.some((s) => s.key === seg) ? (seg as string) : 'apis'
 }
 
-function onTabChange(name) {
+function onTabChange(name: string | number) {
   router.push(`/apifox/project/${projectId.value}/${name}`)
 }
 
-function switchProject(id) {
+function switchProject(id: string) {
   if (id && id !== projectId.value) router.push(`/apifox/project/${id}/${currentTab()}`)
 }
 
@@ -81,7 +102,7 @@ function backToWorkbench() {
 }
 
 onMounted(async () => {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
 })
 
 watch(
@@ -95,16 +116,25 @@ watch(
       router.push('/apifox')
     }
   },
-  { immediate: true }
+  { immediate: true },
 )
 </script>
 
 <style scoped>
+.workspace {
+  height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .ws-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  gap: var(--ax-gap);
+  margin-bottom: var(--ax-gap);
+  flex: none;
 }
 
 .proj-switch {
@@ -117,10 +147,28 @@ watch(
 
 .env-label {
   color: var(--ax-text-secondary);
-  font-size: 13px;
+  font-size: var(--ax-font-sm);
 }
 
 .env-switch {
   width: 180px;
+}
+
+/* 弹窗内嵌整页环境管理：给 body 固定高度，EnvManage 的 flex 布局才能撑开 */
+.env-dialog :deep(.el-dialog__body) {
+  height: 72vh;
+  padding-top: 8px;
+  overflow: hidden;
+}
+
+.ws-content {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.ws-content > :deep(*) {
+  height: 100%;
+  min-height: 0;
 }
 </style>

@@ -8,21 +8,26 @@
 
     <!-- 用例 tab 用 v-show 常驻：切去看报告/文档再切回，编辑态不丢；报告/文档 v-if 懒挂载省请求 -->
     <EndpointCasesTab v-show="tab === 'cases'" :endpoint-id="endpointId" :project-id="projectId" />
-    <EndpointReportsTab v-if="tab === 'reports'" :endpoint-id="endpointId" :project-id="projectId" />
+    <EndpointReportsTab
+      v-if="tab === 'reports'"
+      :endpoint-id="endpointId"
+      :project-id="projectId"
+    />
     <EndpointDocTab v-else-if="tab === 'doc'" :endpoint-id="endpointId" />
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
+import type { Id } from '@/api/request'
 import EndpointCasesTab from '@/components/apifox/EndpointCasesTab.vue'
 import EndpointReportsTab from '@/components/apifox/EndpointReportsTab.vue'
 import EndpointDocTab from '@/components/apifox/EndpointDocTab.vue'
 
-defineProps({
-  endpointId: { type: [String, Number], required: true },
-  projectId: { type: [String, Number], required: true },
-})
+defineProps<{
+  endpointId: Id
+  projectId: Id
+}>()
 
 const tab = ref('cases')
 </script>

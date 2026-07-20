@@ -10,16 +10,22 @@
   <pre v-else class="raw">{{ text }}</pre>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 import VueJsonPretty from 'vue-json-pretty'
 import 'vue-json-pretty/lib/styles.css'
 
-const props = defineProps({
-  // 接受已解析对象/数组，或 JSON 字符串（自动解析）
-  data: { type: [String, Object, Array, Number, Boolean], default: '' },
-  deep: { type: Number, default: 2 },
-})
+const props = withDefaults(
+  defineProps<{
+    // 接受已解析对象/数组，或 JSON 字符串（自动解析）
+    data?: string | Record<string, unknown> | unknown[] | number | boolean
+    deep?: number
+  }>(),
+  {
+    data: '',
+    deep: 2,
+  },
+)
 
 const parsed = computed(() => {
   if (typeof props.data !== 'string') return props.data
@@ -31,7 +37,9 @@ const parsed = computed(() => {
 })
 
 const isJson = computed(() => parsed.value !== null && typeof parsed.value === 'object')
-const text = computed(() => (typeof props.data === 'string' ? props.data : JSON.stringify(props.data)))
+const text = computed(() =>
+  typeof props.data === 'string' ? props.data : JSON.stringify(props.data),
+)
 </script>
 
 <style scoped>

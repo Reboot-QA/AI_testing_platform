@@ -1,0 +1,54 @@
+/* 全站隐藏滚动条（滚轮 / 触控 / 键盘仍可滚动） */
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 与全局一致，保留工具类供语义化使用 */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Element Plus 内部滚动区域 */
+.el-table__body-wrapper,
+.el-table__body-wrapper .el-scrollbar__wrap,
+.el-dialog__body,
+.el-drawer__body,
+.el-select-dropdown__wrap,
+.el-cascader-menu__wrap,
+.el-tree,
+.el-textarea__inner,
+.el-main {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.el-table__body-wrapper::-webkit-scrollbar,
+.el-dialog__body::-webkit-scrollbar,
+.el-drawer__body::-webkit-scrollbar,
+.el-select-dropdown__wrap::-webkit-scrollbar,
+.el-textarea__inner::-webkit-scrollbar,
+.el-main::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Element Plus 虚拟滚动条轨道 */
+.el-scrollbar__bar {
+  display: none !important;
+}

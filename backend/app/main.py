@@ -10,7 +10,6 @@ from app.bootstrap import run_bootstrap
 from app.config import settings
 from app.request_logging import register_request_logging
 from app.routers import (
-    api_automation,
     assistant,
     auth,
     departments,
@@ -22,6 +21,8 @@ from app.routers import (
     users,
 )
 from app.routers import settings as settings_router
+from app.routers.apifox import ai_gen_tasks_router as apifox_ai_gen_tasks_router
+from app.routers.apifox import notify_router as apifox_notify_router
 from app.routers.apifox import cases_router as apifox_cases_router
 from app.routers.apifox import data_models_router as apifox_data_models_router
 from app.routers.apifox import databases_router as apifox_databases_router
@@ -38,7 +39,8 @@ from app.routers.apifox import suites_router as apifox_suites_router
 from app.routers.apifox import uploads_router as apifox_uploads_router
 from app.routers.apifox import variables_router as apifox_variables_router
 from app.routers.apifox import workbench_router as apifox_workbench_router
-from app.services.schedule_service import start_scheduler, stop_scheduler
+from app.services.apifox.ai_gen_worker import start_ai_gen_worker, stop_ai_gen_worker
+from app.services.apifox.scheduler import start_scheduler, stop_scheduler
 
 
 def setup_logging() -> None:
@@ -87,6 +89,7 @@ async def lifespan(app: FastAPI):
         if os.environ.get("APP_BOOTSTRAP_DONE") != "1":
             run_bootstrap()
         start_scheduler()
+        start_ai_gen_worker()
         _app_ready = True
         logging.getLogger(__name__).info("应用启动完成")
     except Exception as exc:
@@ -95,6 +98,7 @@ async def lifespan(app: FastAPI):
         raise
     yield
     stop_scheduler()
+    stop_ai_gen_worker()
     _app_ready = False
 
 
@@ -115,13 +119,14 @@ app.include_router(testcases.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
-app.include_router(api_automation.router, prefix="/api/v1")
 app.include_router(test_execution.router, prefix="/api/v1")
 app.include_router(logs.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
 app.include_router(apifox_router, prefix="/api/v1")
 app.include_router(apifox_variables_router, prefix="/api/v1")
 app.include_router(apifox_cases_router, prefix="/api/v1")
+app.include_router(apifox_ai_gen_tasks_router, prefix="/api/v1")
+app.include_router(apifox_notify_router, prefix="/api/v1")
 app.include_router(apifox_data_models_router, prefix="/api/v1")
 app.include_router(apifox_scripts_router, prefix="/api/v1")
 app.include_router(apifox_global_params_router, prefix="/api/v1")

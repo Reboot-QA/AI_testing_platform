@@ -1,179 +1,251 @@
 <template>
-  <div>
-    <el-card class="upload-card">
-      <template #header>
-        <span>上传需求文档</span>
-      </template>
-
-      <el-form label-width="90px">
-        <el-form-item label="项目">
-          <el-select v-model="projectId" placeholder="选择项目" style="width: 280px">
-            <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="大模型">
-          <el-select
-            v-model="providerId"
-            placeholder="请选择大模型"
-            style="width: 280px"
-            :loading="providersLoading"
-            :disabled="!llmProviders.length"
-          >
-            <el-option
-              v-for="item in llmProviders"
-              :key="item.id"
-              :label="formatProviderLabel(item)"
-              :value="item.id"
-            />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="文档文件">
-          <el-upload
-            drag
-            :auto-upload="false"
-            :limit="1"
-            accept=".txt,.md,.docx"
-            :on-change="handleFileChange"
-            :on-remove="handleFileRemove"
-          >
-            <el-icon class="upload-icon"><UploadFilled /></el-icon>
-            <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
-            <template #tip>
-              <div class="upload-tip">支持 .txt / .md / .docx，最大 50MB</div>
-            </template>
-          </el-upload>
-        </el-form-item>
-        <el-form-item>
-          <el-button
-            type="primary"
-            :loading="extracting"
-            :disabled="!projectId || !selectedFile"
-            @click="handleExtract"
-          >
-            <el-icon><MagicStick /></el-icon>
-            {{ extracting ? '正在解析，请稍候...' : 'AI 解析需求点' }}
-          </el-button>
-        </el-form-item>
-      </el-form>
-
-      <el-alert
-        :title="
-          mockMode
-            ? '当前为 Mock 模式，将使用本地规则提取需求点'
-            : '未配置 API Key 的模型无法解析，请先在系统管理中配置 Key 或开启 Mock 模式'
-        "
-        type="info"
-        :closable="false"
-        show-icon
-      />
-    </el-card>
-
-    <el-card v-if="extracting || extracted.length" class="result-card">
-      <template #header>
-        <div class="result-header">
-          <div>
-            <span>解析结果</span>
-            <el-tag
-              v-if="lastMode"
-              :type="lastMode === 'llm' ? 'success' : 'warning'"
-              size="small"
-              class="mode-tag"
-            >
-              {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
-            </el-tag>
-            <el-text v-if="extractMessage" type="info" size="small">{{ extractMessage }}</el-text>
-          </div>
-          <div v-if="!extracting" class="result-actions">
-            <el-button @click="toggleSelectAll">{{ allSelected ? '取消全选' : '全选' }}</el-button>
-            <el-button
-              type="primary"
-              :loading="importing"
-              :disabled="!selectedRows.length"
-              @click="handleImport"
-            >
-              导入到需求点{{ selectedRows.length ? ` (${selectedRows.length})` : '' }}
-            </el-button>
-          </div>
+  <div class="requirement-docs">
+    <div class="docs-grid">
+      <!-- 左侧：上传与配置 -->
+      <div class="panel config-panel">
+        <div class="panel-h">
+          <span class="panel-title">
+            <el-icon><Document /></el-icon>
+            上传需求文档
+          </span>
         </div>
-      </template>
+        <div class="panel-body">
+          <el-form label-width="72px" class="docs-form">
+            <el-form-item label="项目">
+              <el-select v-model="projectId" filterable placeholder="选择项目" style="width: 100%">
+                <el-option v-for="p in projects" :key="p.id" :label="p.name" :value="p.id" />
+              </el-select>
+            </el-form-item>
+            <el-form-item label="大模型">
+              <el-select
+                v-model="providerId"
+                placeholder="请选择大模型"
+                style="width: 100%"
+                :loading="providersLoading"
+                :disabled="!llmProviders.length"
+              >
+                <el-option
+                  v-for="item in llmProviders"
+                  :key="item.id"
+                  :label="formatProviderLabel(item)"
+                  :value="item.id"
+                />
+              </el-select>
+              <div v-if="!providersLoading && !llmProviders.length" class="form-tip">
+                暂无可用模型，请前往
+                <el-button link type="primary" @click="$router.push('/system/settings')">
+                  系统管理
+                </el-button>
+                添加配置
+              </div>
+            </el-form-item>
+            <el-form-item label="文档文件">
+              <el-upload
+                class="docs-upload"
+                drag
+                :auto-upload="false"
+                :limit="1"
+                accept=".txt,.md,.docx"
+                :on-change="handleFileChange"
+                :on-remove="handleFileRemove"
+              >
+                <el-icon class="upload-icon"><UploadFilled /></el-icon>
+                <div class="el-upload__text">拖拽文件到此处，或 <em>点击上传</em></div>
+                <template #tip>
+                  <div class="upload-tip">支持 .txt / .md / .docx，最大 50MB</div>
+                </template>
+              </el-upload>
+              <div v-if="selectedFile" class="file-chip">
+                <el-icon><Document /></el-icon>
+                <span class="file-chip-name" :title="selectedFile.name">{{
+                  selectedFile.name
+                }}</span>
+                <el-tag size="small" type="info">{{ formatFileSize(selectedFile.size) }}</el-tag>
+              </div>
+            </el-form-item>
+            <el-form-item>
+              <el-button
+                type="primary"
+                class="extract-btn"
+                :loading="extracting"
+                :disabled="!projectId || !selectedFile"
+                @click="handleExtract"
+              >
+                <el-icon><MagicStick /></el-icon>
+                {{ extracting ? '正在解析，请稍候...' : 'AI 解析需求点' }}
+              </el-button>
+            </el-form-item>
+          </el-form>
 
-      <div v-if="extracting" class="stream-progress">
-        <el-progress :percentage="progressPercent" :stroke-width="10" />
-        <p class="progress-text">{{ progressMessage }}</p>
+          <el-alert
+            class="mode-alert"
+            :title="
+              mockMode
+                ? '当前为 Mock 模式，将使用本地规则提取需求点'
+                : '未配置 API Key 的模型无法解析，请先在系统管理中配置 Key 或开启 Mock 模式'
+            "
+            type="info"
+            :closable="false"
+            show-icon
+          />
+        </div>
       </div>
 
-      <el-table
-        v-if="extracted.length"
-        ref="tableRef"
-        :data="extracted"
-        row-key="_key"
-        stripe
-        border
-        @selection-change="handleSelectionChange"
-      >
-        <el-table-column type="selection" width="45" />
-        <el-table-column label="标题" min-width="180">
-          <template #default="{ row }">
-            <el-input v-model="row.title" />
-          </template>
-        </el-table-column>
-        <el-table-column label="类型" width="130">
-          <template #default="{ row }">
-            <el-select v-model="row.req_type" style="width: 100%">
-              <el-option label="功能测试" value="functional" />
-              <el-option label="接口测试" value="api" />
-              <el-option label="性能测试" value="performance" />
-              <el-option label="安全测试" value="security" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="优先级" width="100">
-          <template #default="{ row }">
-            <el-select v-model="row.priority" style="width: 100%">
-              <el-option v-for="p in ['P0', 'P1', 'P2', 'P3']" :key="p" :label="p" :value="p" />
-            </el-select>
-          </template>
-        </el-table-column>
-        <el-table-column label="描述" min-width="280">
-          <template #default="{ row }">
-            <el-input v-model="row.description" type="textarea" :rows="2" />
-          </template>
-        </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
-          <template #default="{ row }">
-            <el-popconfirm title="确认删除该需求点？" @confirm="handleRemoveRow(row)">
-              <template #reference>
-                <el-button link type="danger">删除</el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-card>
+      <!-- 右侧：解析结果 -->
+      <div class="panel result-panel">
+        <div class="panel-h">
+          <span class="panel-title">解析结果</span>
+          <div class="result-tags">
+            <el-tag v-if="lastMode" :type="lastMode === 'llm' ? 'success' : 'warning'" size="small">
+              {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
+            </el-tag>
+            <el-tag v-if="extracted.length" type="primary" size="small">
+              {{ extracted.length }} 条
+            </el-tag>
+            <el-tag v-if="selectedRows.length" type="info" size="small">
+              已选 {{ selectedRows.length }}
+            </el-tag>
+          </div>
+        </div>
+
+        <div class="panel-body result-body">
+          <el-empty
+            v-if="!extracting && !extracted.length"
+            description="上传文档后点击「AI 解析需求点」"
+            :image-size="72"
+          />
+
+          <div v-if="extracting" class="stream-progress">
+            <el-progress :percentage="progressPercent" :stroke-width="8" striped striped-flow />
+            <p class="progress-text">{{ progressMessage }}</p>
+            <p v-if="extracted.length" class="saved-tip">
+              已提取 {{ extracted.length }} 条需求点，解析完成后可编辑并导入
+            </p>
+          </div>
+
+          <div v-if="extracted.length" class="table-wrap">
+            <el-table
+              ref="tableRef"
+              :data="extracted"
+              row-key="_key"
+              stripe
+              border
+              height="100%"
+              @selection-change="handleSelectionChange"
+            >
+              <el-table-column type="selection" width="45" fixed="left" />
+              <el-table-column label="标题" min-width="160" fixed="left">
+                <template #default="{ row }">
+                  <el-input v-model="row.title" />
+                </template>
+              </el-table-column>
+              <el-table-column label="类型" width="120">
+                <template #default="{ row }">
+                  <el-select v-model="row.req_type" style="width: 100%">
+                    <el-option label="功能测试" value="functional" />
+                    <el-option label="接口测试" value="api" />
+                    <el-option label="性能测试" value="performance" />
+                    <el-option label="安全测试" value="security" />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="优先级" width="90" align="center">
+                <template #default="{ row }">
+                  <el-select v-model="row.priority" style="width: 100%">
+                    <el-option
+                      v-for="p in ['P0', 'P1', 'P2', 'P3']"
+                      :key="p"
+                      :label="p"
+                      :value="p"
+                    />
+                  </el-select>
+                </template>
+              </el-table-column>
+              <el-table-column label="描述" min-width="240">
+                <template #default="{ row }">
+                  <el-input v-model="row.description" type="textarea" :rows="2" resize="none" />
+                </template>
+              </el-table-column>
+              <el-table-column label="操作" width="72" fixed="right" align="center">
+                <template #default="{ row }">
+                  <el-popconfirm title="确认删除该需求点？" @confirm="handleRemoveRow(row)">
+                    <template #reference>
+                      <el-button link type="danger" size="small">删除</el-button>
+                    </template>
+                  </el-popconfirm>
+                </template>
+              </el-table-column>
+            </el-table>
+          </div>
+
+          <div v-if="extracted.length && !extracting" class="result-footer">
+            <el-text v-if="extractMessage" type="info" size="small">{{ extractMessage }}</el-text>
+            <el-text v-else type="success" size="small">
+              共解析 {{ extracted.length }} 条需求点，勾选后导入到需求点
+            </el-text>
+            <div class="result-actions">
+              <el-button size="small" @click="toggleSelectAll">
+                {{ allSelected ? '取消全选' : '全选' }}
+              </el-button>
+              <el-button
+                type="primary"
+                size="small"
+                :loading="importing"
+                :disabled="!selectedRows.length"
+                @click="handleImport"
+              >
+                导入到需求点{{ selectedRows.length ? ` (${selectedRows.length})` : '' }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, ref, onMounted, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import type { TableInstance, UploadFile } from 'element-plus'
 import { projectApi, requirementApi, settingsApi } from '@/api'
+import { unwrapProjectList } from '@/api/project'
+import type { Schemas } from '@/api/types'
+import type { Project } from '@/types/common'
+
+type ExtractedRequirement = Schemas['ExtractedRequirement']
+
+interface ExtractedRow extends ExtractedRequirement {
+  _key: number
+}
+
+interface ExtractStreamEvent {
+  type: string
+  message?: string
+  current?: number
+  chunk?: number
+  chunk_total?: number
+  mode?: string
+  total?: number
+  data?: ExtractedRequirement
+}
 
 const router = useRouter()
-const projects = ref([])
-const llmProviders = ref([])
-const projectId = ref(null)
-const providerId = ref(null)
+const projects = ref<Project[]>([])
+const llmProviders = ref<Schemas['LLMProviderOptionOut'][]>([])
+const projectId = ref<number | null>(null)
+const providerId = ref<number | null>(null)
 const providersLoading = ref(false)
 const mockMode = ref(false)
-const selectedFile = ref(null)
+const selectedFile = ref<File | null>(null)
 const extracting = ref(false)
 const importing = ref(false)
-const extracted = ref([])
-const selectedRows = ref([])
+const extracted = ref<ExtractedRow[]>([])
+const selectedRows = ref<ExtractedRow[]>([])
 const lastMode = ref('')
 const extractMessage = ref('')
-const tableRef = ref()
+const tableRef = ref<TableInstance>()
 const progressMessage = ref('')
 const progressCurrent = ref(0)
 const progressChunk = ref(0)
@@ -193,7 +265,7 @@ const progressPercent = computed(() => {
   return 100
 })
 
-function formatProviderLabel(item) {
+function formatProviderLabel(item: Schemas['LLMProviderOptionOut']) {
   const tags = []
   if (item.is_default) tags.push('默认')
   if (!item.api_key_configured) tags.push('未配置Key')
@@ -201,8 +273,14 @@ function formatProviderLabel(item) {
   return `${item.name}${suffix}`
 }
 
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 async function loadProjects() {
-  projects.value = await projectApi.list()
+  projects.value = unwrapProjectList(await projectApi.list())
   if (projects.value.length && !projectId.value) {
     projectId.value = projects.value[0].id
   }
@@ -224,19 +302,19 @@ async function loadProviders() {
   }
 }
 
-function handleFileChange(uploadFile) {
-  selectedFile.value = uploadFile.raw
+function handleFileChange(uploadFile: UploadFile) {
+  selectedFile.value = uploadFile.raw ?? null
 }
 
 function handleFileRemove() {
   selectedFile.value = null
 }
 
-function handleSelectionChange(rows) {
+function handleSelectionChange(rows: ExtractedRow[]) {
   selectedRows.value = rows
 }
 
-function handleRemoveRow(row) {
+function handleRemoveRow(row: ExtractedRow) {
   extracted.value = extracted.value.filter((item) => item._key !== row._key)
   selectedRows.value = selectedRows.value.filter((item) => item._key !== row._key)
 }
@@ -246,7 +324,7 @@ function toggleSelectAll() {
   if (allSelected.value) {
     tableRef.value.clearSelection()
   } else {
-    extracted.value.forEach((row) => tableRef.value.toggleRowSelection(row, true))
+    extracted.value.forEach((row) => tableRef.value?.toggleRowSelection(row, true))
   }
 }
 
@@ -275,36 +353,37 @@ async function handleExtract() {
     await requirementApi.extractFromDocumentStream(
       projectId.value,
       selectedFile.value,
-      providerId.value,
-      async (event) => {
+      providerId.value ?? undefined,
+      async (event: ExtractStreamEvent) => {
         if (event.type === 'status') {
-          progressMessage.value = event.message
-          progressCurrent.value = event.current || progressCurrent.value
-          progressChunk.value = event.chunk || progressChunk.value
-          progressChunkTotal.value = event.chunk_total || progressChunkTotal.value
-        } else if (event.type === 'requirement') {
-          const row = { ...event.data, _key: ++tempKey }
+          progressMessage.value = event.message || ''
+          progressCurrent.value = event.current ?? progressCurrent.value
+          progressChunk.value = event.chunk ?? progressChunk.value
+          progressChunkTotal.value = event.chunk_total ?? progressChunkTotal.value
+        } else if (event.type === 'requirement' && event.data) {
+          const row: ExtractedRow = { ...event.data, _key: ++tempKey }
           extracted.value.push(row)
-          progressCurrent.value = event.current
-          progressChunk.value = event.chunk || progressChunk.value
-          progressChunkTotal.value = event.chunk_total || progressChunkTotal.value
+          progressCurrent.value = event.current ?? progressCurrent.value
+          progressChunk.value = event.chunk ?? progressChunk.value
+          progressChunkTotal.value = event.chunk_total ?? progressChunkTotal.value
           progressMessage.value = `已提取 ${event.current} 条需求点...`
           await nextTick()
           tableRef.value?.toggleRowSelection(row, true)
         } else if (event.type === 'done') {
-          lastMode.value = event.mode
-          progressCurrent.value = event.total
+          lastMode.value = event.mode || ''
+          progressCurrent.value = event.total ?? progressCurrent.value
           progressChunk.value = progressChunkTotal.value || progressChunk.value
-          progressMessage.value = event.message
-          extractMessage.value = event.message
+          progressMessage.value = event.message || ''
+          extractMessage.value = event.message || ''
           ElMessage.success(event.message || '解析完成')
         } else if (event.type === 'error') {
           throw new Error(event.message)
         }
       },
     )
-  } catch (error) {
-    ElMessage.error(error.message || '解析失败')
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : '解析失败'
+    ElMessage.error(message)
   } finally {
     extracting.value = false
   }
@@ -321,7 +400,7 @@ async function handleImport() {
   importing.value = true
   try {
     const res = await requirementApi.batchImport({
-      project_id: projectId.value,
+      project_id: projectId.value!,
       requirements: selectedRows.value.map((item) => ({
         title: item.title,
         description: item.description,
@@ -342,49 +421,216 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.upload-card {
-  margin-bottom: 20px;
+.requirement-docs {
+  height: calc(100vh - 100px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.upload-icon {
-  font-size: 48px;
-  color: #909399;
-  margin-bottom: 8px;
+.docs-grid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(320px, 2fr) minmax(0, 3fr);
+  gap: var(--ax-gap-sm);
 }
 
-.upload-tip {
-  color: #909399;
-  font-size: 13px;
+.panel {
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius-lg);
+  background: var(--ax-bg);
+  box-shadow: var(--ax-shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.result-card {
-  margin-top: 4px;
-}
-
-.result-header {
+.panel-h {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--ax-gap);
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--ax-border);
+  flex: none;
+}
+
+.panel-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ax-font);
+  font-weight: 600;
+  color: var(--ax-text);
+}
+
+.panel-title .el-icon {
+  color: var(--ax-brand);
+}
+
+.panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px;
+}
+
+.config-panel .panel-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-gap-sm);
+}
+
+.docs-form :deep(.el-form-item) {
+  margin-bottom: 14px;
+}
+
+.docs-form :deep(.el-form-item__label) {
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text-secondary);
+}
+
+.docs-upload :deep(.el-upload-dragger) {
+  padding: 20px 12px;
+  border-radius: var(--ax-radius);
+  border-color: var(--ax-border);
+  background: var(--ax-bg-subtle);
+  transition:
+    border-color var(--ax-transition),
+    background var(--ax-transition);
+}
+
+.docs-upload :deep(.el-upload-dragger:hover) {
+  border-color: var(--ax-brand);
+  background: var(--ax-brand-subtle);
+}
+
+.upload-icon {
+  font-size: 40px;
+  color: var(--ax-text-placeholder);
+  margin-bottom: 6px;
+}
+
+.upload-tip {
+  color: var(--ax-text-placeholder);
+  font-size: var(--ax-font-xs);
+  text-align: center;
+}
+
+.file-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: var(--ax-radius);
+  background: var(--ax-bg-subtle);
+  border: 1px solid var(--ax-border);
+}
+
+.file-chip-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text);
+}
+
+.extract-btn {
+  width: 100%;
+}
+
+.mode-alert {
+  flex: none;
+  margin-top: auto;
+}
+
+.result-tags {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex-wrap: wrap;
 }
 
-.mode-tag {
-  margin-left: 8px;
+.result-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.result-body :deep(.el-empty) {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.table-wrap {
+  flex: 1;
+  min-height: 0;
+}
+
+.table-wrap :deep(.el-table) {
+  font-size: var(--ax-font-sm);
+}
+
+.table-wrap :deep(.el-textarea__inner) {
+  font-size: var(--ax-font-sm);
+}
+
+.stream-progress {
+  flex: none;
+  margin-bottom: var(--ax-gap-sm);
+}
+
+.progress-text {
+  margin: 8px 0 0;
+  color: var(--ax-text-secondary);
+  font-size: var(--ax-font-sm);
+}
+
+.saved-tip {
+  margin: 6px 0 0;
+  color: var(--ax-success);
+  font-size: var(--ax-font-sm);
+}
+
+.result-footer {
+  flex: none;
+  margin-top: var(--ax-gap-sm);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ax-gap);
+  padding-top: 10px;
+  border-top: 1px solid var(--ax-border);
 }
 
 .result-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
-.stream-progress {
-  margin-bottom: 16px;
+.form-tip {
+  margin-top: 4px;
+  color: var(--ax-text-tertiary);
+  font-size: var(--ax-font-xs);
 }
 
-.progress-text {
-  margin: 10px 0 0;
-  color: #606266;
-  font-size: 13px;
+@media (max-width: 960px) {
+  .requirement-docs {
+    overflow: auto;
+  }
+
+  .docs-grid {
+    grid-template-columns: 1fr;
+    overflow-y: auto;
+  }
 }
 </style>

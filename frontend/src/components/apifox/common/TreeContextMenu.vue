@@ -1,30 +1,42 @@
 <template>
   <teleport to="body">
     <ul v-if="visible" class="tree-ctx" :style="{ left: x + 'px', top: y + 'px' }">
-      <li
-        v-for="it in items"
-        :key="it.key"
-        :class="{ danger: it.danger }"
-        @click="pick(it.key)"
-      >
+      <li v-for="it in items" :key="it.key" :class="{ danger: it.danger }" @click="pick(it.key)">
         {{ it.label }}
       </li>
     </ul>
   </teleport>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { onBeforeUnmount, watch } from 'vue'
 
-const props = defineProps({
-  visible: { type: Boolean, default: false },
-  x: { type: Number, default: 0 },
-  y: { type: Number, default: 0 },
-  items: { type: Array, default: () => [] },
-})
-const emit = defineEmits(['select', 'close'])
+export interface TreeContextMenuItem {
+  key: string
+  label: string
+  danger?: boolean
+}
 
-function pick(key) {
+const props = withDefaults(
+  defineProps<{
+    visible?: boolean
+    x?: number
+    y?: number
+    items?: TreeContextMenuItem[]
+  }>(),
+  {
+    visible: false,
+    x: 0,
+    y: 0,
+    items: () => [],
+  },
+)
+const emit = defineEmits<{
+  select: [key: string]
+  close: []
+}>()
+
+function pick(key: string) {
   emit('select', key)
   emit('close')
 }
@@ -38,7 +50,7 @@ watch(
   (v) => {
     if (v) document.addEventListener('click', onDocClick)
     else document.removeEventListener('click', onDocClick)
-  }
+  },
 )
 
 onBeforeUnmount(() => document.removeEventListener('click', onDocClick))

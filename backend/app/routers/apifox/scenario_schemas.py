@@ -6,9 +6,11 @@ StepOut 带展示字段（用例名/接口方法路径/子场景名）。
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
+
+ScenarioPriority = Literal["high", "medium", "low"]
 
 
 class StepIn(BaseModel):
@@ -37,17 +39,37 @@ class ScenarioRunConfig(BaseModel):
     loop_count: int = Field(default=1, ge=1, le=1000)
     # 绑定的项目数据集 id：设置后按数据集每行数据驱动整条场景各跑一遍
     dataset_id: Optional[int] = None
+    # 登录态跨步骤透传：共享 cookie jar + 自动捕获/注入 token；默认开（登录/refresh 免手动提取）
+    propagate_auth: bool = True
+
+
+class ScenarioFolderCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ScenarioFolderUpdate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+
+
+class ScenarioFolderOut(BaseModel):
+    id: int
+    name: str
+    scenario_count: int = 0
 
 
 class ScenarioCreate(BaseModel):
     name: str = Field(min_length=1, max_length=200)
     description: Optional[str] = None
+    priority: ScenarioPriority = "medium"
+    folder_id: Optional[int] = None
     steps: List[StepIn] = Field(default_factory=list)
 
 
 class ScenarioUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=200)
     description: Optional[str] = None
+    priority: Optional[ScenarioPriority] = None
+    folder_id: Optional[int] = None
     steps: Optional[List[StepIn]] = None
     sort_order: Optional[int] = None
     run_config: Optional[ScenarioRunConfig] = None
@@ -59,8 +81,21 @@ class ScenarioBrief(BaseModel):
     id: int
     name: str
     description: Optional[str] = None
+    priority: ScenarioPriority = "medium"
+    folder_id: Optional[int] = None
     step_count: int = 0
     sort_order: int
+
+
+class ScenarioReorderItem(BaseModel):
+    id: int
+    folder_id: Optional[int] = None  # None=未分组
+    sort_order: int
+
+
+class ScenarioReorderRequest(BaseModel):
+    # 拖拽后只下发受影响的组（组内重排=1组；跨组=源组+目标组），后端只更新这些 id
+    items: List[ScenarioReorderItem] = Field(min_length=1)
 
 
 class ScenarioOut(BaseModel):
@@ -68,6 +103,8 @@ class ScenarioOut(BaseModel):
     project_id: int
     name: str
     description: Optional[str] = None
+    priority: ScenarioPriority = "medium"
+    folder_id: Optional[int] = None
     steps: List[StepOut]
     sort_order: int
     run_config: ScenarioRunConfig = Field(default_factory=ScenarioRunConfig)

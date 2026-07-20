@@ -21,14 +21,18 @@
       <el-icon v-if="item.status === 'running'" class="is-loading" color="var(--ax-warning)">
         <Loading />
       </el-icon>
-      <el-icon v-else-if="item.status === 'passed'" color="var(--ax-success)"><CircleCheck /></el-icon>
+      <el-icon v-else-if="item.status === 'passed'" color="var(--ax-success)"
+        ><CircleCheck
+      /></el-icon>
       <el-icon v-else color="var(--ax-danger)"><CircleClose /></el-icon>
       <span class="rp-type">{{ item.target_type === 'scenario' ? '场景' : '用例' }}</span>
       <span class="rp-name">{{ item.index }}/{{ total }} {{ item.target_name }}</span>
       <span v-if="item.passed_count != null" class="rp-meta">
         {{ item.passed_count }}/{{ (item.passed_count || 0) + (item.failed_count || 0) }} 步
       </span>
-      <span v-if="item.duration_ms != null" class="rp-meta">{{ Math.round(item.duration_ms) }}ms</span>
+      <span v-if="item.duration_ms != null" class="rp-meta"
+        >{{ Math.round(item.duration_ms) }}ms</span
+      >
       <span v-if="item.error_message" class="rp-err">{{ item.error_message }}</span>
     </div>
 
@@ -36,29 +40,66 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
 
-const props = defineProps({
-  events: { type: Array, default: () => [] },
-  running: { type: Boolean, default: false },
-})
-defineEmits(['clear'])
+interface SuiteRunItem {
+  index: number
+  target_type?: string
+  target_name?: string
+  status?: string
+  passed_count?: number
+  failed_count?: number
+  duration_ms?: number | null
+  error_message?: string | null
+}
+
+interface SuiteRunEvent {
+  type: string
+  index?: number
+  total?: number
+  target_type?: string
+  target_name?: string
+  status?: string
+  passed_count?: number
+  failed_count?: number
+  pass_rate?: number
+  duration_ms?: number | null
+  error_message?: string | null
+  message?: string
+}
+
+const props = withDefaults(
+  defineProps<{
+    events?: SuiteRunEvent[]
+    running?: boolean
+  }>(),
+  {
+    events: () => [],
+    running: false,
+  },
+)
+defineEmits<{ clear: [] }>()
 
 const doneEvent = computed(() => props.events.find((e) => e.type === 'suite_done'))
 const errorEvent = computed(() => props.events.find((e) => e.type === 'error'))
 const total = computed(() => {
   const start = props.events.find((e) => e.type === 'suite_start')
-  return start ? start.total : 0
+  return start?.total ?? 0
 })
 
 // item_start 起一行(running)，item_done 覆盖为终态；按 index 归并保持顺序
 const items = computed(() => {
-  const map = new Map()
+  const map = new Map<number, SuiteRunItem>()
   for (const e of props.events) {
-    if (e.type === 'item_start') {
-      map.set(e.index, { index: e.index, target_type: e.target_type, target_name: e.target_name, status: 'running' })
-    } else if (e.type === 'item_done') {
+    if (e.type === 'item_start' && e.index != null) {
+      map.set(e.index, {
+        index: e.index,
+        target_type: e.target_type,
+        target_name: e.target_name,
+        status: 'running',
+      })
+    } else if (e.type === 'item_done' && e.index != null) {
       const prev = map.get(e.index) || { index: e.index, target_name: e.target_name }
       map.set(e.index, {
         ...prev,

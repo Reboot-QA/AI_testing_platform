@@ -6,6 +6,7 @@
         <span>AI 质量平台</span>
       </div>
       <el-menu
+        class="scrollbar-hidden"
         :default-active="activeMenu"
         :default-openeds="defaultOpeneds"
         router
@@ -35,7 +36,6 @@
             v-if="userStore.hasPermission('requirement_docs')"
             index="/requirement-docs"
           >
-            <el-icon><Upload /></el-icon>
             <span>AI分析需求</span>
           </el-menu-item>
           <el-menu-item
@@ -43,7 +43,6 @@
             index="/requirements"
             data-assistant="menu.requirements"
           >
-            <el-icon><Tickets /></el-icon>
             <span>需求点</span>
           </el-menu-item>
         </el-sub-menu>
@@ -58,7 +57,6 @@
             index="/ai-generate"
             data-assistant="menu.ai_generate"
           >
-            <el-icon><MagicStick /></el-icon>
             <span>AI生成用例</span>
           </el-menu-item>
           <el-menu-item
@@ -66,11 +64,9 @@
             index="/testcases"
             data-assistant="menu.testcases"
           >
-            <el-icon><Collection /></el-icon>
             <span>用例库</span>
           </el-menu-item>
           <el-menu-item v-if="userStore.hasPermission('test_execution')" index="/test-execution">
-            <el-icon><VideoPlay /></el-icon>
             <span>用例执行</span>
           </el-menu-item>
         </el-sub-menu>
@@ -82,32 +78,6 @@
           </template>
           <el-menu-item v-if="userStore.hasPermission('apifox_workbench')" index="/apifox">
             工作台
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_env')"
-            index="/api-automation/env"
-            data-assistant="menu.api_automation_env"
-          >
-            环境配置
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_suites')"
-            index="/api-automation/suites"
-            data-assistant="menu.api_automation_suites"
-          >
-            套件与用例
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_reports')"
-            index="/api-automation/reports"
-          >
-            测试报告
-          </el-menu-item>
-          <el-menu-item
-            v-if="userStore.hasPermission('api_automation_schedule')"
-            index="/api-automation/schedule"
-          >
-            定时任务
           </el-menu-item>
         </el-sub-menu>
 
@@ -231,7 +201,7 @@
   </el-container>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -240,6 +210,13 @@ import { useUserStore } from '@/stores/user'
 import { useAiGenerateStore } from '@/stores/aiGenerate'
 import { PAGE_TITLES, SUBMENU_INDEX_BY_PATH } from '@/config/menus'
 import AssistantPanel from '@/components/AssistantPanel.vue'
+import type { FormInstance, FormRuleItem, FormRules } from '@/types/element-plus'
+
+interface PasswordForm {
+  old_password: string
+  new_password: string
+  confirm_password: string
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -257,14 +234,7 @@ const showTestcaseMenu = computed(
     userStore.hasPermission('test_execution'),
 )
 
-const showAutomationMenu = computed(
-  () =>
-    userStore.hasPermission('apifox_workbench') ||
-    userStore.hasPermission('api_automation_env') ||
-    userStore.hasPermission('api_automation_suites') ||
-    userStore.hasPermission('api_automation_reports') ||
-    userStore.hasPermission('api_automation_schedule'),
-)
+const showAutomationMenu = computed(() => userStore.hasPermission('apifox_workbench'))
 
 const showLogMenu = computed(
   () => userStore.hasPermission('system_logs') || userStore.hasPermission('system_error_logs'),
@@ -286,7 +256,7 @@ const activeMenu = computed(() => {
 })
 
 const defaultOpeneds = computed(() => {
-  const open = []
+  const open: string[] = []
   if (
     route.path.startsWith('/system/settings') ||
     route.path.startsWith('/system/users') ||
@@ -311,15 +281,19 @@ const assistantPanelKey = computed(() => userStore.user?.id || userStore.token |
 
 const passwordDialogVisible = ref(false)
 const passwordSubmitting = ref(false)
-const passwordFormRef = ref()
+const passwordFormRef = ref<FormInstance>()
 
-const passwordForm = reactive({
+const passwordForm = reactive<PasswordForm>({
   old_password: '',
   new_password: '',
   confirm_password: '',
 })
 
-const validateConfirmPassword = (_rule, value, callback) => {
+const validateConfirmPassword: NonNullable<FormRuleItem['validator']> = (
+  _rule,
+  value,
+  callback,
+) => {
   if (!value) {
     callback(new Error('请再次输入新密码'))
     return
@@ -331,7 +305,7 @@ const validateConfirmPassword = (_rule, value, callback) => {
   callback()
 }
 
-const passwordRules = {
+const passwordRules: FormRules<PasswordForm> = {
   old_password: [{ required: true, message: '请输入原密码', trigger: 'blur' }],
   new_password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
@@ -348,7 +322,7 @@ function resetPasswordForm() {
 }
 
 async function handleChangePassword() {
-  await passwordFormRef.value.validate()
+  await passwordFormRef.value?.validate()
   passwordSubmitting.value = true
   try {
     await authApi.changePassword({
@@ -388,15 +362,6 @@ function handleLogout() {
   border-right: none;
   padding: 8px 10px;
   background: transparent !important;
-  /* 隐藏滚动条（滚轮/触控仍可滚动）——Firefox / 旧 Edge */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-/* 隐藏滚动条——Webkit（Chrome/Edge/Safari） */
-.aside :deep(.el-menu)::-webkit-scrollbar {
-  width: 0;
-  height: 0;
 }
 
 /* 菜单项圆角化 + 悬停/选中态更清晰 */

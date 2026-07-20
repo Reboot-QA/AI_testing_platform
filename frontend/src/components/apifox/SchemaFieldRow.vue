@@ -29,13 +29,20 @@
       <el-option v-for="m in models" :key="m.id" :label="m.name" :value="m.name" />
     </el-select>
 
-    <el-checkbox v-if="!isItem" v-model="field.required" size="small" class="f-req">必填</el-checkbox>
+    <el-checkbox v-if="!isItem" v-model="field.required" size="small" class="f-req"
+      >必填</el-checkbox
+    >
 
     <el-input v-model="field.description" size="small" placeholder="说明" class="f-desc" />
 
     <el-popover v-if="showConstraints" trigger="click" :width="300" placement="bottom-end">
       <template #reference>
-        <el-button link size="small" :type="hasConstraints ? 'primary' : ''" title="高级约束（枚举/正则/范围/示例等）">
+        <el-button
+          link
+          size="small"
+          :type="hasConstraints ? 'primary' : ''"
+          title="高级约束（枚举/正则/范围/示例等）"
+        >
           约束<span v-if="hasConstraints" class="c-dot">●</span>
         </el-button>
       </template>
@@ -66,25 +73,38 @@
   />
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { computed } from 'vue'
+import type { SchemaField } from '@/types/apifox'
 import { FIELD_TYPES, newField } from '@/composables/useJsonSchema'
+import type { Schemas } from '@/api/types'
 import SchemaConstraintsEditor from '@/components/apifox/SchemaConstraintsEditor.vue'
 
-const props = defineProps({
-  field: { type: Object, required: true },
-  list: { type: Array, default: null },
-  index: { type: Number, default: -1 },
-  depth: { type: Number, default: 0 },
-  isItem: { type: Boolean, default: false },
-  models: { type: Array, default: () => [] },
-})
+type SchemaBrief = Schemas['SchemaBrief']
+
+const props = withDefaults(
+  defineProps<{
+    field: SchemaField
+    list?: SchemaField[] | null
+    index?: number
+    depth?: number
+    isItem?: boolean
+    models?: SchemaBrief[]
+  }>(),
+  {
+    list: null,
+    index: -1,
+    depth: 0,
+    isItem: false,
+    models: () => [],
+  },
+)
 
 const CONSTRAINABLE = ['string', 'integer', 'number', 'array']
 const showConstraints = computed(() => CONSTRAINABLE.includes(props.field.type))
 const hasConstraints = computed(() => Object.keys(props.field.extra || {}).length > 0)
 
-function onTypeChange(type) {
+function onTypeChange(type: string) {
   if (type === 'array') props.field.children = [newField('string')]
   else props.field.children = []
   if (type !== 'ref') props.field.refName = ''

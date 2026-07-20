@@ -25,17 +25,47 @@
     <span class="rc-hint">
       {{ datasetId ? '按数据集每行数据各跑一遍整场景' : '整场景重复跑 N 遍' }}
     </span>
+    <el-checkbox
+      :model-value="propagateAuth"
+      size="small"
+      class="rc-auth"
+      @update:model-value="$emit('update:propagateAuth', $event)"
+    >
+      自动传递 token/cookie
+      <el-tooltip
+        content="开启后：登录/refresh 响应的 Set-Cookie 与 token 自动跨步骤透传，无需手动提取；某步手动写了 Authorization 则以手动为准。关闭则保持逐步手动提取。"
+        placement="top"
+      >
+        <el-icon class="rc-help"><QuestionFilled /></el-icon>
+      </el-tooltip>
+    </el-checkbox>
   </div>
 </template>
 
-<script setup>
-// 绑数据集时按行数据驱动整场景（循环次数忽略）；否则整场景重复跑循环次数遍
-defineProps({
-  datasets: { type: Array, default: () => [] },
-  loopCount: { type: Number, default: 1 },
-  datasetId: { type: [Number, String], default: null },
-})
-defineEmits(['update:loopCount', 'update:datasetId'])
+<script setup lang="ts">
+import type { Schemas } from '@/api/types'
+
+type DatasetBrief = Schemas['DatasetBrief']
+
+withDefaults(
+  defineProps<{
+    datasets?: DatasetBrief[]
+    loopCount?: number
+    datasetId?: number | string | null
+    propagateAuth?: boolean
+  }>(),
+  {
+    datasets: () => [],
+    loopCount: 1,
+    datasetId: null,
+    propagateAuth: true,
+  },
+)
+defineEmits<{
+  'update:loopCount': [value: number]
+  'update:datasetId': [value: number | null]
+  'update:propagateAuth': [value: boolean]
+}>()
 </script>
 
 <style scoped>

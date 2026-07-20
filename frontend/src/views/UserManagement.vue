@@ -1,50 +1,50 @@
 <template>
-  <PageCard>
+  <PageCard fill>
     <template #toolbar>
       <el-button type="primary" @click="openDialog()">
         <el-icon><Plus /></el-icon> 添加用户
       </el-button>
     </template>
 
-    <el-table v-loading="loading" :data="users" stripe border>
-      <el-table-column prop="id" label="ID" width="70" />
-      <el-table-column prop="username" label="用户名" width="140" />
-      <el-table-column prop="full_name" label="姓名" width="140">
-        <template #default="{ row }">{{ row.full_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="email" label="邮箱" min-width="180">
-        <template #default="{ row }">{{ row.email || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="role" label="角色" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.role === 'admin' ? 'danger' : 'info'" size="small">
-            {{ roleMap[row.role] || row.role }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="department_name" label="部门" width="120">
-        <template #default="{ row }">{{ row.department_name || '-' }}</template>
-      </el-table-column>
-      <el-table-column prop="is_active" label="状态" width="100">
-        <template #default="{ row }">
-          <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
-            {{ row.is_active ? '启用' : '禁用' }}
-          </el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column prop="created_at" label="创建时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
-      </el-table-column>
-      <el-table-column label="操作" width="280" fixed="right">
-        <template #default="{ row }">
-          <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
-          <el-button link type="warning" @click="openPasswordDialog(row)">重置密码</el-button>
-          <el-button v-if="row.id !== currentUserId" link type="danger" @click="handleDelete(row)">
-            删除
-          </el-button>
-        </template>
-      </el-table-column>
-    </el-table>
+    <div class="table-fill">
+      <el-table v-loading="loading" :data="users" stripe border height="100%">
+        <el-table-column prop="id" label="ID" width="70" />
+        <el-table-column prop="username" label="用户名" width="140" />
+        <el-table-column prop="full_name" label="姓名" width="140">
+          <template #default="{ row }">{{ row.full_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="email" label="邮箱" min-width="180">
+          <template #default="{ row }">{{ row.email || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="department_name" label="部门" width="140">
+          <template #default="{ row }">{{ row.department_name || '-' }}</template>
+        </el-table-column>
+        <el-table-column prop="is_active" label="状态" width="100">
+          <template #default="{ row }">
+            <el-tag :type="row.is_active ? 'success' : 'info'" size="small">
+              {{ row.is_active ? '启用' : '禁用' }}
+            </el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column prop="created_at" label="创建时间" width="170">
+          <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="280" fixed="right">
+          <template #default="{ row }">
+            <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+            <el-button link type="warning" @click="openPasswordDialog(row)">重置密码</el-button>
+            <el-button
+              v-if="row.id !== currentUserId"
+              link
+              type="danger"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+    </div>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用户' : '添加用户'" width="520px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -63,12 +63,6 @@
         </el-form-item>
         <el-form-item label="邮箱" prop="email">
           <el-input v-model="form.email" placeholder="选填" />
-        </el-form-item>
-        <el-form-item label="角色" prop="role">
-          <el-select v-model="form.role" style="width: 100%">
-            <el-option label="管理员" value="admin" />
-            <el-option label="测试员" value="tester" />
-          </el-select>
         </el-form-item>
         <el-form-item label="部门" prop="department_id">
           <el-select
@@ -119,32 +113,56 @@
   </PageCard>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { userApi, departmentApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
 import { useUserStore } from '@/stores/user'
 import PageCard from '@/components/PageCard.vue'
+import type { DateInput, Department, User } from '@/types/common'
+import type { FormInstance, FormRuleItem, FormRules } from '@/types/element-plus'
+
+interface UserForm {
+  username: string
+  password: string
+  full_name: string
+  email: string
+  department_id: number | null
+  is_active: boolean
+}
+
+interface ResetPasswordForm {
+  password: string
+}
 
 const userStore = useUserStore()
 const currentUserId = computed(() => userStore.user?.id)
 
-const users = ref([])
-const departments = ref([])
+const users = ref<User[]>([])
+const departments = ref<Department[]>([])
 const loading = ref(false)
 const dialogVisible = ref(false)
 const passwordDialogVisible = ref(false)
 const submitting = ref(false)
 const passwordSubmitting = ref(false)
-const editing = ref(null)
-const passwordTarget = ref(null)
-const formRef = ref()
-const passwordFormRef = ref()
+const editing = ref<User | null>(null)
+const passwordTarget = ref<User | null>(null)
+const formRef = ref<FormInstance>()
+const passwordFormRef = ref<FormInstance>()
 
-const roleMap = { admin: '管理员', tester: '测试员' }
 const USERNAME_PATTERN = /^[A-Za-z0-9_]+$/
 
-function validateUsername(_rule, value, callback) {
+const form = reactive<UserForm>({
+  username: '',
+  password: '',
+  full_name: '',
+  email: '',
+  department_id: null,
+  is_active: true,
+})
+
+const validateUsername: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
   if (!value) {
     callback(new Error('请输入用户名'))
     return
@@ -156,7 +174,7 @@ function validateUsername(_rule, value, callback) {
   callback()
 }
 
-function validateEmail(_rule, value, callback) {
+const validateEmail: NonNullable<FormRuleItem['validator']> = (_rule, value, callback) => {
   const email = (value || '').trim()
   if (!email) {
     callback()
@@ -170,37 +188,26 @@ function validateEmail(_rule, value, callback) {
   callback()
 }
 
-const form = reactive({
-  username: '',
-  password: '',
-  full_name: '',
-  email: '',
-  role: 'tester',
-  department_id: null,
-  is_active: true,
-})
-
-const passwordForm = reactive({
+const passwordForm = reactive<ResetPasswordForm>({
   password: '',
 })
 
-const rules = {
+const rules: FormRules<UserForm> = {
   username: [{ required: true, validator: validateUsername, trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }],
   email: [{ validator: validateEmail, trigger: 'blur' }],
-  role: [{ required: true, message: '请选择角色', trigger: 'change' }],
   department_id: [{ required: true, message: '请选择部门', trigger: 'change' }],
 }
 
-const passwordRules = {
+const passwordRules: FormRules<ResetPasswordForm> = {
   password: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
     { min: 6, message: '密码至少 6 位', trigger: 'blur' },
   ],
 }
 
-function formatTime(value) {
-  return value ? new Date(value).toLocaleString('zh-CN') : '-'
+function formatTime(value: DateInput) {
+  return formatBeijingTime(value)
 }
 
 async function loadDepartments() {
@@ -216,33 +223,31 @@ async function loadData() {
   }
 }
 
-function openDialog(row = null) {
+function openDialog(row: User | null = null) {
   editing.value = row
   form.username = row?.username || ''
   form.password = ''
   form.full_name = row?.full_name || ''
   form.email = row?.email || ''
-  form.role = row?.role || 'tester'
   form.department_id = row?.department_id ?? null
   form.is_active = row?.is_active ?? true
   dialogVisible.value = true
 }
 
-function openPasswordDialog(row) {
+function openPasswordDialog(row: User) {
   passwordTarget.value = row
   passwordForm.password = ''
   passwordDialogVisible.value = true
 }
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  await formRef.value?.validate()
   submitting.value = true
   try {
     if (editing.value) {
       await userApi.update(editing.value.id, {
         full_name: form.full_name,
         email: form.email.trim() || null,
-        role: form.role,
         department_id: form.department_id,
         is_active: form.is_active,
       })
@@ -253,8 +258,8 @@ async function handleSubmit() {
         password: form.password,
         full_name: form.full_name,
         email: form.email.trim() || undefined,
-        role: form.role,
         department_id: form.department_id,
+        role: 'tester',
       })
       ElMessage.success('创建成功')
     }
@@ -266,10 +271,10 @@ async function handleSubmit() {
 }
 
 async function handleResetPassword() {
-  await passwordFormRef.value.validate()
+  await passwordFormRef.value?.validate()
   passwordSubmitting.value = true
   try {
-    await userApi.resetPassword(passwordTarget.value.id, passwordForm.password)
+    await userApi.resetPassword(passwordTarget.value!.id, passwordForm.password)
     ElMessage.success('密码已重置')
     passwordDialogVisible.value = false
   } finally {
@@ -277,7 +282,7 @@ async function handleResetPassword() {
   }
 }
 
-async function handleDelete(row) {
+async function handleDelete(row: User) {
   await ElMessageBox.confirm(`确认删除用户「${row.username}」？此操作不可恢复。`, '提示', {
     type: 'warning',
   })
