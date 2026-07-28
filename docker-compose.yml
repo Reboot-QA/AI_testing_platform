@@ -1,0 +1,156 @@
+name: ai-testing-platform
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: ai-platform-mysql
+    restart: unless-stopped
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Set MYSQL_ROOT_PASSWORD in .env.docker}
+      MYSQL_DATABASE: ${DB_NAME:-ai_testcase}
+      MYSQL_USER: ${DB_USER:-ai_testcase}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./docker/mysql/healthcheck.sh:/healthcheck.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "sh /healthcheck.sh"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 60s
+    ports:
+      - "${MYSQL_PUBLISH_HOST:-0.0.0.0}:${MYSQL_PORT:-3245}:3306"
+    networks:
+      - app
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      network: ${DOCKER_BUILD_NETWORK:-default}
+    container_name: ai-platform-backend
+    restart: unless-stopped
+    environment:
+      APP_NAME: ${APP_NAME:-AI质量平台}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env.docker}
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-ai_testcase}
+      DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env.docker}
+      DB_NAME: ${DB_NAME:-ai_testcase}
+      LLM_API_BASE: ${LLM_API_BASE:-https://api.openai.com/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-gpt-4o-mini}
+      LLM_MOCK_MODE: ${LLM_MOCK_MODE:-true}
+      AI_GENERATE_BATCH_SIZE: ${AI_GENERATE_BATCH_SIZE:-8}
+      AI_GENERATE_CONCURRENCY: ${AI_GENERATE_CONCURRENCY:-4}
+      LOG_DIR: /app/logs
+      TZ: Asia/Shanghai
+    volumes:
+      - app-logs:/app/logs
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; r=urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=5); exit(0 if r.status==200 else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 180s
+    networks:
+      - app
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ai-platform-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "${HTTP_PORT:-5173}:80"
+    networks:
+      - app
+
+  loki:
+    profiles: ["monitoring"]
+    image: grafana/loki:3.0.0
+    container_name: ai-platform-loki
+    restart: unless-stopped
+    ports:
+      - "${LOKI_PORT:-3100}:3100"
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml:ro
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - monitoring
+
+  promtail:
+    profiles: ["monitoring"]
+    image: grafana/promtail:3.0.0
+    container_name: ai-platform-promtail
+    restart: unless-stopped
+    volumes:
+      - app-logs:/var/log/ai-platform:ro
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml:ro
+      - promtail-positions:/tmp
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+  grafana:
+    profiles: ["monitoring"]
+    image: grafana/grafana:11.0.0
+    container_name: ai-platform-grafana
+    restart: unless-stopped
+    ports:
+      - "${GRAFANA_PORT:-3000}:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-change-me-grafana-password}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_PROXY_ENABLED: "true"
+      GF_AUTH_PROXY_HEADER_NAME: X-WEBAUTH-USER
+      GF_AUTH_PROXY_HEADER_PROPERTY: username
+      GF_AUTH_PROXY_HEADERS: "Role:X-WEBAUTH-ROLE"
+      GF_AUTH_PROXY_AUTO_SIGN_UP: "true"
+      GF_USERS_AUTO_ASSIGN_ORG_ROLE: Viewer
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+      GF_SERVER_SERVE_FROM_SUB_PATH: "true"
+      GF_SERVER_ROOT_URL: ${GRAFANA_ROOT_URL:-http://127.0.0.1:5173/api/v1/logs/grafana}
+      GF_INSTALL_PLUGINS: ""
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - loki
+    networks:
+      - monitoring
+
+networks:
+  app:
+    driver: bridge
+  monitoring:
+    driver: bridge
+
+volumes:
+  mysql-data:
+  app-logs:
+  loki-data:
+  grafana-data:
+  promtail-positions:

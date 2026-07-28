@@ -1,0 +1,8 @@
+---
+description: Spec 驱动 + Issue/MR 半自主工作流（对齐 → 出规格发 Issue → 实施建 MR，纯 glab，合 dev，不自动关 Issue）
+alwaysApply: true
+---
+
+发起需求 / 提交改动时，遵循 Spec 驱动半自主工作流（单一事实来源，与 Claude Code 共用同一份）。Cursor 无技能机制，请按本文步骤手动复现「对齐 → 生成 Spec 发 Issue → 实施建 MR」：
+
+@.claude/rules/spec-workflow.md

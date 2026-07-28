@@ -1,0 +1,9 @@
+---
+description: 后端（FastAPI + SQLAlchemy）开发硬约束
+globs: backend/app/**/*.py
+alwaysApply: false
+---
+
+编辑后端代码前，遵循以下硬约束（单一事实来源，与 Claude Code 共用同一份，勿在此复制正文）：
+
+@.claude/rules/backend.md

@@ -1,0 +1,75 @@
+"""Apifox 重构 · 接口用例（单接口用例）模型。
+
+用例引用一个 Endpoint；断言/提取拆行表（可查询/可报表，拆 __meta 行为的核心）；
+请求/用例变量/数据驱动走结构化 JSON 列。脚本不在此（走后续项目级脚本库）。执行消费留 P4。
+"""
+
+from datetime import datetime
+from typing import Optional
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.database import Base
+
+
+class ApifoxEndpointCase(Base):
+    __tablename__ = "apifox_endpoint_cases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id"), index=True)
+    endpoint_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoints.id"), index=True)
+    name: Mapped[str] = mapped_column(String(100))
+    # 用例分类（对齐 Apifox）：positive正向 | negative逆向 | boundary边界值 | security安全性 | other其他
+    category: Mapped[str] = mapped_column(String(20), default="other", server_default="other")
+    # 来源：manual手工 | ai AI生成（供列表区分与批量清理）
+    origin: Mapped[str] = mapped_column(String(10), default="manual", server_default="manual")
+    # 结构化 JSON：request_spec(query/path/headers/body/auth)、用例变量、数据驱动
+    request_spec: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    variables: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    data_drive: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 有序处理器列表 JSON（对齐 Apifox 前/后置自由混排：script/wait/assertion/extract/contract）。
+    # 为空则回退旧固定管线（pre_scripts→请求→断言→契约→提取→post_scripts），零回归。
+    pre_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    post_processors: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # 乐观锁版本：每次保存 +1，多人并发编辑冲突检测
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    # 软删除时间戳：NULL=正常，非 NULL=在回收站（可还原/彻底删）
+    deleted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
+    # 软删除操作人 user id（回收站展示操作人；不设 FK 以免历史用户被删时约束报错）
+    deleted_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+
+
+class ApifoxCaseAssertion(Base):
+    __tablename__ = "apifox_case_assertions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoint_cases.id"), index=True)
+    # status_code | json_path | header | contains | response_time
+    type: Mapped[str] = mapped_column(String(20))
+    path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # eq|neq|contains|not_contains|gt|gte|lt|lte|regex|exists（仅 status_code/json_path/header 用）
+    operator: Mapped[str] = mapped_column(String(20), default="eq")
+    expected: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class ApifoxCaseExtract(Base):
+    __tablename__ = "apifox_case_extracts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("apifox_endpoint_cases.id"), index=True)
+    var_name: Mapped[str] = mapped_column(String(200))
+    # response_json | response_header | response_text | ...
+    source: Mapped[str] = mapped_column(String(30), default="response_json")
+    path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # temporary | environment | global
+    scope: Mapped[str] = mapped_column(String(20), default="temporary")
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)

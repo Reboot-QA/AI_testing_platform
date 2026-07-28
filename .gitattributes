@@ -1,0 +1,19 @@
+# Shell scripts must use LF on Linux; keep executable bit in git (100755)
+*.sh text eol=lf
+deploy.sh text eol=lf
+
+# Windows batch files keep CRLF
+*.bat text eol=crlf
+
+# Default for text files
+*.md text eol=lf
+*.py text eol=lf
+*.js text eol=lf
+*.vue text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# 合并时保留本分支版本，防止 test 等仍跟踪 node_modules 的分支合入时恢复依赖
+node_modules/** -merge
+frontend/node_modules/** -merge

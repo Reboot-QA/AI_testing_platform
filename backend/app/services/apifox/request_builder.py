@@ -1,0 +1,221 @@
+"""Apifox 执行引擎 · HTTP 请求构建（URL / 参数 / 头 / 认证 / body 拼装）。
+
+按接口 spec + 环境 + 变量拼装出可直接交给 httpx 的请求计划（含 body 快照）。
+纯函数、不发请求、不落库；依赖底层 variables（插值 / 行转字典）。
+"""
+
+import base64
+import json
+from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
+
+from app.models.apifox.endpoint import ApifoxEndpoint
+from app.models.apifox.variable import ApifoxEnvironment
+from app.services.apifox.default_headers import apply_default_headers
+from app.services.apifox.variables import _rows_to_dict, apply_vars
+
+
+def _encode_uri_path(path: str) -> str:
+    """路径分段百分号编码：仅对含非 ASCII 的分段编码，保留已编码片段。"""
+    parts: List[str] = []
+    for segment in path.split("/"):
+        if not segment:
+            parts.append("")
+            continue
+        try:
+            segment.encode("ascii")
+            parts.append(segment)
+        except UnicodeEncodeError:
+            parts.append(quote(segment, safe=":@&=+$,;?~-._!*'()"))
+    return "/".join(parts)
+
+
+def _encode_http_url(url: str) -> str:
+    """对 URL 的 path/query 做百分号编码，避免 httpx 发送时 UnicodeEncodeError。"""
+    if not url:
+        return url
+    parts = urlsplit(url)
+    if not parts.scheme and not parts.netloc:
+        return _encode_uri_path(url)
+    path = _encode_uri_path(parts.path)
+    query = urlencode(parse_qsl(parts.query, keep_blank_values=True), doseq=True) if parts.query else parts.query
+    return urlunsplit((parts.scheme, parts.netloc, path, query, parts.fragment))
+
+
+def _validate_latin1_header_values(headers: Dict[str, str]) -> None:
+    """HTTP 头值须为 Latin-1；含中文等字符时提前给出可读错误。"""
+    for name, value in headers.items():
+        try:
+            str(value).encode("latin-1")
+        except UnicodeEncodeError as exc:
+            raise ValueError(
+                f"请求头「{name}」的值含 HTTP 不支持的非 Latin-1 字符，请改用 ASCII 或百分号编码"
+            ) from exc
+
+
+def _get_header(headers: Dict[str, str], name: str) -> Optional[str]:
+    """按名（大小写不敏感）取请求头值；无则 None。"""
+    for k, v in headers.items():
+        if k.lower() == name.lower():
+            return v
+    return None
+
+
+def _select_base_url(environment: Optional[ApifoxEnvironment], server_name: Optional[str]) -> str:
+    """按接口选定的命名前置 URL 取 base_url；未选/未命中 → 环境默认前置 URL(base_url)。"""
+    if environment is None:
+        return ""
+    if server_name:
+        for server in environment.servers or []:
+            if server.name == server_name:
+                return (server.base_url or "").rstrip("/")
+    return (environment.base_url or "").rstrip("/")
+
+
+def build_request(
+    endpoint: ApifoxEndpoint,
+    spec: Dict[str, Any],
+    environment: Optional[ApifoxEnvironment],
+    variables: Dict[str, str],
+    global_params: List,
+    binary_loader: Optional[Callable[[int], Optional[Tuple[bytes, str]]]] = None,
+) -> Dict[str, Any]:
+    path = apply_vars(endpoint.path, variables)
+    for row in spec.get("path_params") or []:
+        key = str(row.get("key") or "").strip()
+        if key and row.get("enabled") is not False:
+            path = path.replace("{%s}" % key, apply_vars(str(row.get("value") or ""), variables))
+
+    if path.startswith("http://") or path.startswith("https://"):
+        url = path
+    else:
+        base = _select_base_url(environment, getattr(endpoint, "server_name", None))
+        if not base:
+            raise ValueError("未选择环境或环境未配置前置 URL，且接口路径不是绝对地址")
+        url = base + ("/" + path.lstrip("/") if path else "")
+
+    params = _rows_to_dict(spec.get("query") or [], variables)
+    headers = _rows_to_dict(spec.get("headers") or [], variables)
+    cookies = _rows_to_dict(spec.get("cookies") or [], variables)
+
+    # 全局参数附加（header/query/cookie；body 位置暂不支持）
+    for gp in global_params:
+        if not gp.enabled:
+            continue
+        value = apply_vars(gp.value or "", variables)
+        if gp.location == "header":
+            headers.setdefault(gp.key, value)
+        elif gp.location == "query":
+            params.setdefault(gp.key, value)
+        elif gp.location == "cookie":
+            cookies.setdefault(gp.key, value)
+
+    auth = spec.get("auth") or {}
+    auth_type = auth.get("type") or "none"
+    if auth_type == "bearer" and auth.get("token"):
+        headers["Authorization"] = "Bearer " + apply_vars(auth["token"], variables)
+    elif auth_type == "basic":
+        raw = f"{apply_vars(auth.get('username') or '', variables)}:{apply_vars(auth.get('password') or '', variables)}"
+        headers["Authorization"] = "Basic " + base64.b64encode(raw.encode("utf-8")).decode("ascii")
+
+    if cookies:
+        headers["Cookie"] = "; ".join(f"{k}={v}" for k, v in cookies.items())
+
+    body = spec.get("body") or {}
+    body_type = body.get("type") or "none"
+    request_kwargs: Dict[str, Any] = {}
+    body_snapshot = ""
+    warnings: List[str] = []
+    if body_type in ("json", "raw", "xml"):
+        content = apply_vars(body.get("raw") or "", variables)
+        if content:
+            request_kwargs["content"] = content
+            body_snapshot = content
+        if body_type == "json":
+            headers.setdefault("Content-Type", "application/json")
+        elif body_type == "xml":
+            headers.setdefault("Content-Type", "application/xml")
+    elif body_type == "graphql":
+        query = apply_vars(body.get("graphql_query") or "", variables)
+        raw_vars = apply_vars(body.get("graphql_variables") or "", variables).strip()
+        try:  # variables 为 JSON 文本；非法则按空对象发送，不因脏输入抛异常
+            parsed_vars = json.loads(raw_vars) if raw_vars else {}
+        except (ValueError, TypeError):
+            parsed_vars = {}
+        # graphql 选定即发（query 可为空），与其余类型的 if content 判空刻意不同
+        content = json.dumps({"query": query, "variables": parsed_vars}, ensure_ascii=False)
+        request_kwargs["content"] = content
+        body_snapshot = content
+        headers.setdefault("Content-Type", "application/json")
+    elif body_type == "binary":
+        file_id = body.get("file_id")
+        loaded = binary_loader(int(file_id)) if (file_id and binary_loader) else None
+        if loaded:
+            data, ctype = loaded
+            request_kwargs["content"] = data
+            if ctype:
+                headers.setdefault("Content-Type", ctype)
+            body_snapshot = f"<binary {len(data)} bytes>"
+        elif file_id:  # 孤儿引用：文件被 GC/删除，如实告警而非静默发空请求
+            warnings.append(
+                f"Binary 请求体引用的上传文件(id={file_id})不存在或已被清理，本次未发送文件内容；"
+                "请重新上传文件后再运行。"
+            )
+        else:
+            warnings.append("Binary 请求体未选择文件，本次未发送任何内容。")
+    elif body_type == "form-data":
+        form = _rows_to_dict(body.get("form") or [], variables)
+        if form:
+            request_kwargs["files"] = {k: (None, v) for k, v in form.items()}
+            body_snapshot = json.dumps(form, ensure_ascii=False)
+            # 测试工具「所配即所发」：不改动用户的 Content-Type。仅在与 form-data 明显冲突时给诊断警告
+            ct = _get_header(headers, "content-type")
+            ctl = (ct or "").lower()
+            if ct and "multipart/form-data" not in ctl:
+                warnings.append(
+                    f"Content-Type 为「{ct}」，但请求体类型是 form-data（multipart/form-data）。二者不一致，"
+                    "服务端很可能无法解析表单字段（常见表现：字段缺失/422）。"
+                    "已按你的配置原样发送；如非有意，请移除该 Content-Type 头（留空会自动生成正确的 multipart 头）或改为匹配值。"
+                )
+            elif ct and "boundary=" not in ctl:
+                warnings.append(
+                    f"Content-Type 为「{ct}」缺少 boundary 参数：multipart/form-data 需要 boundary 才能切分表单字段，"
+                    "服务端很可能无法解析。已按你的配置原样发送；建议移除该 Content-Type 头（留空会自动生成带 boundary 的正确头）。"
+                )
+    elif body_type == "urlencoded":
+        form = _rows_to_dict(body.get("form") or [], variables)
+        if form:
+            request_kwargs["data"] = form
+            body_snapshot = json.dumps(form, ensure_ascii=False)
+            ct = _get_header(headers, "content-type")
+            if ct and "x-www-form-urlencoded" not in ct.lower():
+                warnings.append(
+                    f"Content-Type 为「{ct}」，但请求体类型是 x-www-form-urlencoded。二者不一致，"
+                    "服务端很可能无法解析表单字段。已按你的配置原样发送；如非有意，请移除该 Content-Type 头或改为 application/x-www-form-urlencoded。"
+                )
+
+    # 注入固定默认头（User-Agent/Accept/Accept-Encoding/Connection）：用户已配置的不覆盖。
+    # 计算类头（Host/Content-Length/Cookie 等）不在此静态注入，发送时由 httpx/上文逻辑生成。
+    apply_default_headers(headers)
+    _validate_latin1_header_values(headers)
+    url = _encode_http_url(url)
+
+    settings = spec.get("settings") or {}
+    timeout_ms = settings.get("timeout_ms")
+    try:  # 无/非法/非正 → None，由调用方回落平台默认超时
+        timeout = float(timeout_ms) / 1000.0 if timeout_ms and float(timeout_ms) > 0 else None
+    except (TypeError, ValueError):
+        timeout = None
+
+    return {
+        "method": endpoint.method,
+        "url": url,
+        "params": params,
+        "headers": headers,
+        "request_kwargs": request_kwargs,
+        "body_snapshot": body_snapshot,
+        "warnings": warnings,
+        "timeout": timeout,
+        "verify_ssl": settings.get("verify_ssl", True) is not False,
+        "follow_redirects": settings.get("follow_redirects", True) is not False,
+    }

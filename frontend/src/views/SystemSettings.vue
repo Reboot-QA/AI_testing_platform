@@ -1,0 +1,411 @@
+<template>
+  <div class="page-col">
+    <PageCard class="global-card">
+      <div class="global-row">
+        <span class="global-label">Mock 模式</span>
+        <el-switch
+          v-model="settings.mock_mode"
+          active-text="开启"
+          inactive-text="关闭"
+          :loading="mockSaving"
+          @change="handleMockChange"
+        />
+        <el-tag :type="settings.mock_mode ? 'info' : 'success'" size="small">
+          {{ settings.mock_mode ? 'Mock 模式' : 'LLM 模式' }}
+        </el-tag>
+        <span class="form-tip">开启后所有 AI 生成使用本地模板，不调用大模型</span>
+      </div>
+      <div class="global-row">
+        <span class="global-label">AI 生成并发数</span>
+        <el-input-number
+          v-model="settings.ai_gen_concurrency"
+          :min="1"
+          :max="50"
+          :step="1"
+          :disabled="concurrencySaving"
+          @change="handleConcurrencyChange"
+        />
+        <span class="form-tip"
+          >接口用例 AI 生成时，同一任务内并发调用大模型的接口数上限（1–50）；调大更快，但需 provider
+          支持更高并发</span
+        >
+      </div>
+    </PageCard>
+
+    <PageCard fill class="providers-card">
+      <template #toolbar>
+        <span class="section-label">大模型配置</span>
+        <div class="page-card__spacer" />
+        <el-button type="primary" @click="openDialog()">
+          <el-icon><Plus /></el-icon> 添加模型
+        </el-button>
+      </template>
+
+      <div class="table-fill">
+        <el-table
+          v-loading="loading"
+          :data="providers"
+          stripe
+          border
+          height="100%"
+          empty-text="暂无模型配置，请点击添加模型"
+        >
+          <el-table-column prop="name" label="名称" min-width="160" />
+          <el-table-column prop="model" label="模型" min-width="140" show-overflow-tooltip />
+          <el-table-column
+            prop="api_base"
+            label="API Base URL"
+            min-width="280"
+            show-overflow-tooltip
+          />
+          <el-table-column label="API Key" width="120">
+            <template #default="{ row }">
+              <el-tag v-if="row.api_key_configured" type="success" size="small">已配置</el-tag>
+              <el-tag v-else type="warning" size="small">未配置</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag v-if="row.is_default" type="primary" size="small">当前使用</el-tag>
+              <el-tag v-else-if="row.enabled" type="info" size="small">可用</el-tag>
+              <el-tag v-else type="danger" size="small">已禁用</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="操作" width="260" fixed="right">
+            <template #default="{ row }">
+              <el-button
+                link
+                type="primary"
+                :disabled="row.is_default"
+                @click="handleActivate(row.id)"
+              >
+                设为当前
+              </el-button>
+              <el-button link type="primary" @click="openDialog(row)">编辑</el-button>
+              <el-button
+                link
+                type="primary"
+                :loading="testingId === row.id"
+                @click="handleTest(row)"
+              >
+                测试
+              </el-button>
+              <el-popconfirm title="确认删除该模型配置？" @confirm="handleDelete(row.id)">
+                <template #reference>
+                  <el-button link type="danger">删除</el-button>
+                </template>
+              </el-popconfirm>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+
+      <el-alert
+        class="preset-alert"
+        title="常用免费模型：智谱 glm-4-flash、硅基流动 Qwen/Qwen2.5-7B-Instruct"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+    </PageCard>
+
+    <el-dialog v-model="dialogVisible" :title="editing ? '编辑模型' : '添加模型'" width="560px">
+      <el-form ref="formRef" :model="form" :rules="rules" label-width="120px">
+        <el-form-item label="名称" prop="name">
+          <el-input
+            v-model="form.name"
+            :maxlength="TITLE_MAX_LEN"
+            placeholder="例如：智谱 GLM-4-Flash"
+          />
+        </el-form-item>
+        <el-form-item label="API Base URL" prop="api_base">
+          <el-input
+            v-model="form.api_base"
+            :maxlength="URL_MAX_LEN"
+            placeholder="https://open.bigmodel.cn/api/paas/v4"
+          />
+        </el-form-item>
+        <el-form-item label="API Key">
+          <el-input
+            v-model="form.api_key"
+            :maxlength="SECRET_MAX_LEN"
+            type="password"
+            show-password
+            :placeholder="
+              editing?.api_key_configured
+                ? `已配置 (${editing.api_key_masked})，留空则不修改`
+                : '请输入 API Key'
+            "
+          />
+        </el-form-item>
+        <el-form-item label="模型名称" prop="model">
+          <el-input v-model="form.model" :maxlength="VALUE_MAX_LEN" placeholder="glm-4-flash" />
+        </el-form-item>
+        <el-form-item label="启用">
+          <el-switch v-model="form.enabled" />
+        </el-form-item>
+        <el-form-item label="设为当前">
+          <el-switch v-model="form.is_default" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="dialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="handleSubmit">保存</el-button>
+        <el-button :loading="dialogTesting" @click="handleDialogTest">测试连接</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { SECRET_MAX_LEN, TITLE_MAX_LEN, URL_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
+import { ref, reactive, onMounted } from 'vue'
+import { ElMessage } from 'element-plus'
+import { settingsApi } from '@/api'
+import type { Schemas } from '@/api/types'
+import PageCard from '@/components/PageCard.vue'
+import type { LlmProvider } from '@/types/common'
+import type { FormInstance, FormRules } from '@/types/element-plus'
+
+interface LlmSettings {
+  mock_mode: boolean
+  active_provider_id: number | null
+  ai_gen_concurrency: number
+}
+
+interface LlmProviderForm {
+  name: string
+  api_base: string
+  api_key: string
+  model: string
+  enabled: boolean
+  is_default: boolean
+}
+
+const loading = ref(false)
+const saving = ref(false)
+const mockSaving = ref(false)
+const concurrencySaving = ref(false)
+const testingId = ref<number | null>(null)
+const dialogTesting = ref(false)
+const dialogVisible = ref(false)
+const editing = ref<LlmProvider | null>(null)
+const formRef = ref<FormInstance>()
+
+const settings = reactive<LlmSettings>({
+  mock_mode: true,
+  active_provider_id: null,
+  ai_gen_concurrency: 5,
+})
+
+const providers = ref<LlmProvider[]>([])
+
+const form = reactive<LlmProviderForm>({
+  name: '',
+  api_base: '',
+  api_key: '',
+  model: '',
+  enabled: true,
+  is_default: false,
+})
+
+const rules: FormRules<LlmProviderForm> = {
+  name: [{ required: true, message: '请输入名称', trigger: 'blur' }],
+  api_base: [{ required: true, message: '请输入 API Base URL', trigger: 'blur' }],
+  model: [{ required: true, message: '请输入模型名称', trigger: 'blur' }],
+}
+
+async function loadSettings() {
+  loading.value = true
+  try {
+    const data = await settingsApi.getLLM()
+    settings.mock_mode = data.mock_mode
+    settings.active_provider_id = data.active_provider_id ?? null
+    settings.ai_gen_concurrency = data.ai_gen_concurrency ?? 5
+    providers.value = data.providers || []
+  } finally {
+    loading.value = false
+  }
+}
+
+async function handleConcurrencyChange(value: number | undefined) {
+  if (value == null) return
+  concurrencySaving.value = true
+  try {
+    const data = await settingsApi.updateAiGenConcurrency(value)
+    settings.ai_gen_concurrency = data.ai_gen_concurrency ?? value
+    ElMessage.success('已更新 AI 生成并发数')
+  } catch {
+    await loadSettings() // 失败回滚到服务端值
+  } finally {
+    concurrencySaving.value = false
+  }
+}
+
+async function handleMockChange(value: boolean) {
+  mockSaving.value = true
+  try {
+    const data = await settingsApi.updateMockMode(value)
+    settings.mock_mode = data.mock_mode
+    settings.active_provider_id = data.active_provider_id ?? null
+    providers.value = data.providers || []
+    ElMessage.success(value ? '已开启 Mock 模式' : '已关闭 Mock 模式')
+  } catch {
+    settings.mock_mode = !value
+  } finally {
+    mockSaving.value = false
+  }
+}
+
+function openDialog(row: LlmProvider | null = null) {
+  editing.value = row
+  if (row) {
+    Object.assign(form, {
+      name: row.name,
+      api_base: row.api_base,
+      api_key: '',
+      model: row.model,
+      enabled: row.enabled,
+      is_default: row.is_default,
+    })
+  } else {
+    Object.assign(form, {
+      name: '',
+      api_base: 'https://open.bigmodel.cn/api/paas/v4',
+      api_key: '',
+      model: 'glm-4-flash',
+      enabled: true,
+      is_default: providers.value.length === 0,
+    })
+  }
+  dialogVisible.value = true
+}
+
+function buildPayload(): Schemas['LLMProviderCreate'] {
+  const payload: Schemas['LLMProviderCreate'] = {
+    name: form.name,
+    api_base: form.api_base,
+    model: form.model,
+    enabled: form.enabled,
+    is_default: form.is_default,
+  }
+  if (form.api_key.trim()) {
+    payload.api_key = form.api_key.trim()
+  }
+  return payload
+}
+
+async function handleSubmit() {
+  await formRef.value?.validate()
+  saving.value = true
+  try {
+    if (editing.value) {
+      await settingsApi.updateProvider(editing.value.id, buildPayload())
+      ElMessage.success('模型配置已更新')
+    } else {
+      await settingsApi.createProvider(buildPayload())
+      ElMessage.success('模型配置已添加')
+    }
+    dialogVisible.value = false
+    await loadSettings()
+  } finally {
+    saving.value = false
+  }
+}
+
+async function handleActivate(id: number) {
+  await settingsApi.activateProvider(id)
+  ElMessage.success('已切换当前使用模型')
+  await loadSettings()
+}
+
+async function handleDelete(id: number) {
+  await settingsApi.deleteProvider(id)
+  ElMessage.success('已删除')
+  await loadSettings()
+}
+
+async function handleTest(row: LlmProvider) {
+  testingId.value = row.id
+  try {
+    const result = await settingsApi.testLLM({ provider_id: row.id })
+    if (result.success) {
+      ElMessage.success(result.message)
+    } else {
+      ElMessage.warning(result.message)
+    }
+  } finally {
+    testingId.value = null
+  }
+}
+
+async function handleDialogTest() {
+  await formRef.value?.validate()
+  dialogTesting.value = true
+  try {
+    const payload: Record<string, unknown> = {
+      api_base: form.api_base,
+      model: form.model,
+      mock_mode: settings.mock_mode,
+    }
+    if (form.api_key.trim()) {
+      payload.api_key = form.api_key.trim()
+    } else if (editing.value) {
+      payload.provider_id = editing.value.id
+    }
+    const result = await settingsApi.testLLM(payload)
+    if (result.success) {
+      ElMessage.success(result.message)
+    } else {
+      ElMessage.warning(result.message)
+    }
+  } finally {
+    dialogTesting.value = false
+  }
+}
+
+onMounted(loadSettings)
+</script>
+
+<style scoped>
+.page-col {
+  gap: var(--ax-gap-lg);
+}
+
+.global-card {
+  flex: none;
+}
+
+.providers-card {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.global-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ax-gap-sm);
+}
+
+.global-label {
+  font-weight: 600;
+  color: var(--ax-text);
+}
+
+.section-label {
+  font-weight: 600;
+  color: var(--ax-text);
+}
+
+.form-tip {
+  color: var(--ax-text-secondary);
+  font-size: var(--ax-font-sm);
+}
+
+.preset-alert {
+  margin-top: var(--ax-gap-lg);
+  flex: none;
+}
+</style>

@@ -1,0 +1,24 @@
+/* 各域概览头部统计卡：图标尺寸与自动化概览对齐 */
+.overview-summary .tile-ic {
+  flex-shrink: 0;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.overview-summary .tile-ic svg {
+  width: 1em;
+  height: 1em;
+}
+
+.overview-summary .tile-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.overview-summary .tile-label {
+  margin-top: 2px;
+  font-size: var(--ax-font-xs);
+  color: var(--ax-text-secondary);
+}

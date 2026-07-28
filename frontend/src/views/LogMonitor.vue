@@ -1,0 +1,500 @@
+<template>
+  <div class="log-monitor">
+    <el-row :gutter="16" class="stats-row">
+      <el-col v-for="item in sources" :key="item.key" :xs="24" :sm="8">
+        <el-card
+          shadow="never"
+          class="stat-card"
+          :class="{ active: activeSource === item.key }"
+          @click="switchSource(item.key)"
+        >
+          <div class="stat-body">
+            <div class="stat-title">{{ item.label }}</div>
+            <div class="stat-content">
+              <div class="stat-meta">
+                <el-tag :type="item.exists ? 'success' : 'info'" size="small">
+                  {{ item.exists ? '在线' : '暂无文件' }}
+                </el-tag>
+                <span>{{ formatSize(item.size) }}</span>
+                <span>{{ item.line_count || 0 }} 行</span>
+              </div>
+            </div>
+            <div class="stat-footer">
+              <div class="stat-path">{{ item.filename }}</div>
+              <div class="stat-time">更新: {{ formatBeijingTime(item.modified_at) }}</div>
+            </div>
+          </div>
+        </el-card>
+      </el-col>
+    </el-row>
+
+    <el-card class="viewer-card">
+      <template #header>
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <el-segmented
+              v-model="activeSource"
+              :options="sourceOptions"
+              @change="handleSourceChange"
+            />
+            <el-select v-model="lineCount" style="width: 110px" @change="refreshLogs">
+              <el-option label="100 行" :value="100" />
+              <el-option label="200 行" :value="200" />
+              <el-option label="500 行" :value="500" />
+              <el-option label="1000 行" :value="1000" />
+            </el-select>
+            <el-select
+              v-model="levelFilter"
+              clearable
+              placeholder="级别"
+              style="width: 110px"
+              @change="refreshLogs"
+            >
+              <el-option label="ERROR" value="ERROR" />
+              <el-option label="WARN" value="WARN" />
+              <el-option label="INFO" value="INFO" />
+              <el-option label="DEBUG" value="DEBUG" />
+            </el-select>
+            <el-input
+              v-model="keyword"
+              :maxlength="SEARCH_MAX_LEN"
+              clearable
+              placeholder="搜索关键字"
+              style="width: 220px"
+              @keyup.enter="refreshLogs"
+              @clear="refreshLogs"
+            />
+          </div>
+          <div class="toolbar-right">
+            <el-switch
+              v-model="liveMode"
+              active-text="实时"
+              inactive-text="静态"
+              @change="handleLiveToggle"
+            />
+            <el-switch v-model="autoScroll" active-text="自动滚动" inactive-text="暂停滚动" />
+            <el-button :loading="loading" @click="refreshLogs">
+              <el-icon><Refresh /></el-icon>
+              刷新
+            </el-button>
+            <el-button @click="downloadLog">
+              <el-icon><Download /></el-icon>
+              下载
+            </el-button>
+          </div>
+        </div>
+      </template>
+
+      <div class="log-meta">
+        <span>目录: {{ logDir || '-' }}</span>
+        <span>匹配: {{ totalMatched }} 行</span>
+        <span v-if="liveMode" class="live-dot">实时监听中</span>
+      </div>
+
+      <div ref="logContainerRef" v-loading="loading" class="log-viewer">
+        <div v-if="!displayLines.length && !loading" class="empty-tip">暂无日志内容</div>
+        <div
+          v-for="(line, index) in displayLines"
+          :key="`${line.no || 'live'}-${index}-${line.text}`"
+          class="log-line"
+          :class="`level-${(line.level || 'INFO').toLowerCase()}`"
+        >
+          <span class="line-no">{{ line.no ?? '·' }}</span>
+          <span class="line-level">{{ line.level || 'INFO' }}</span>
+          <span class="line-text">{{ line.text }}</span>
+        </div>
+      </div>
+    </el-card>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { SEARCH_MAX_LEN } from '@/constants/limits'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { logsApi } from '@/api'
+import { formatBeijingTime } from '@/utils/datetime'
+
+interface LogSource {
+  key: string
+  label: string
+  exists: boolean
+  size: number
+  line_count: number
+  filename: string
+  modified_at?: string
+}
+
+interface LogLine {
+  no?: number
+  level?: string
+  text: string
+  type?: string
+}
+
+const sources = ref<LogSource[]>([])
+const logDir = ref('')
+const activeSource = ref('backend')
+const lineCount = ref(200)
+const keyword = ref('')
+const levelFilter = ref('')
+const loading = ref(false)
+const liveMode = ref(true)
+const autoScroll = ref(true)
+const displayLines = ref<LogLine[]>([])
+const totalMatched = ref(0)
+const logContainerRef = ref<HTMLElement | null>(null)
+
+let streamAbort: AbortController | null = null
+let refreshTimer: number | null = null
+
+const sourceOptions = computed(() =>
+  sources.value.map((item) => ({ label: item.label, value: item.key })),
+)
+
+function formatSize(size: number) {
+  if (!size) return '0 B'
+  if (size < 1024) return `${size} B`
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
+  return `${(size / (1024 * 1024)).toFixed(1)} MB`
+}
+
+async function loadSources() {
+  const data = await logsApi.sources()
+  sources.value = data.sources || []
+  logDir.value = data.log_dir || ''
+}
+
+async function refreshLogs() {
+  loading.value = true
+  try {
+    const data = await logsApi.tail({
+      source: activeSource.value,
+      lines: lineCount.value,
+      keyword: keyword.value || undefined,
+      level: levelFilter.value || undefined,
+    })
+    displayLines.value = data.lines || []
+    totalMatched.value = data.total_matched || 0
+    await scrollToBottom()
+  } finally {
+    loading.value = false
+  }
+}
+
+function scrollToBottom() {
+  if (!autoScroll.value) return
+  nextTick(() => {
+    const container = logContainerRef.value
+    if (container) {
+      container.scrollTop = container.scrollHeight
+    }
+  })
+}
+
+function stopStream() {
+  if (streamAbort) {
+    streamAbort.abort()
+    streamAbort = null
+  }
+}
+
+async function startStream() {
+  stopStream()
+  await refreshLogs()
+  streamAbort = new AbortController()
+  const token = localStorage.getItem('token')
+  const params = new URLSearchParams({ source: activeSource.value })
+  try {
+    const response = await fetch(`/api/v1/logs/stream?${params.toString()}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      signal: streamAbort.signal,
+    })
+    if (!response.ok) {
+      throw new Error('实时日志连接失败')
+    }
+    const reader = response.body!.getReader()
+    const decoder = new TextDecoder()
+    let buffer = ''
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      const chunks = buffer.split('\n\n')
+      buffer = chunks.pop() || ''
+      for (const chunk of chunks) {
+        const line = chunk.trim()
+        if (!line.startsWith('data:')) continue
+        const payload = JSON.parse(line.slice(5).trim()) as LogLine & { type?: string }
+        if (payload.type === 'line') {
+          displayLines.value.push(payload)
+          if (displayLines.value.length > 3000) {
+            displayLines.value.splice(0, displayLines.value.length - 3000)
+          }
+          totalMatched.value += 1
+          scrollToBottom()
+        }
+      }
+    }
+  } catch (error: unknown) {
+    if (error instanceof Error && error.name !== 'AbortError') {
+      ElMessage.warning(error.message || '实时日志连接中断')
+    }
+  }
+}
+
+function handleLiveToggle(enabled: boolean) {
+  if (enabled) {
+    startStream()
+  } else {
+    stopStream()
+    refreshLogs()
+  }
+}
+
+function switchSource(source: string) {
+  if (activeSource.value === source) return
+  activeSource.value = source
+  handleSourceChange()
+}
+
+function handleSourceChange() {
+  stopStream()
+  displayLines.value = []
+  if (liveMode.value) {
+    startStream()
+  } else {
+    refreshLogs()
+  }
+}
+
+async function downloadLog() {
+  const token = localStorage.getItem('token')
+  const params = new URLSearchParams({ source: activeSource.value })
+  const response = await fetch(`/api/v1/logs/download?${params.toString()}`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  })
+  if (!response.ok) {
+    ElMessage.error('下载失败')
+    return
+  }
+  const blob = await response.blob()
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${activeSource.value}.log`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+onMounted(async () => {
+  loading.value = true
+  try {
+    await loadSources()
+    if (liveMode.value) {
+      await startStream()
+    } else {
+      await refreshLogs()
+    }
+    refreshTimer = window.setInterval(async () => {
+      await loadSources()
+      if (!liveMode.value) {
+        await refreshLogs()
+      }
+    }, 10000)
+  } finally {
+    loading.value = false
+  }
+})
+
+onBeforeUnmount(() => {
+  stopStream()
+  if (refreshTimer) {
+    clearInterval(refreshTimer)
+  }
+})
+</script>
+
+<style scoped>
+.log-monitor {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-section-gap);
+}
+
+.stats-row {
+  flex: none;
+  align-items: stretch;
+}
+
+.stats-row :deep(.el-col) {
+  display: flex;
+}
+
+.viewer-card {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-card :deep(.el-card__body) {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.stat-card {
+  width: 100%;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s;
+}
+
+.stat-card :deep(.el-card__body) {
+  height: 100%;
+  padding: var(--ax-space-4) var(--ax-card-padding);
+}
+
+.stat-body {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-space-2);
+}
+
+.stat-card.active {
+  border-color: #409eff;
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.15);
+}
+
+.stat-title {
+  font-size: var(--ax-text-title-sm-size);
+  font-weight: 600;
+  line-height: var(--ax-leading-compact);
+}
+
+.stat-content {
+  flex: 1;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+}
+
+.stat-meta {
+  display: flex;
+  gap: var(--ax-space-3);
+  align-items: center;
+  flex-wrap: wrap;
+  color: #606266;
+  font-size: var(--ax-text-body-sm-size);
+}
+
+.stat-footer {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ax-space-1);
+}
+
+.stat-path,
+.stat-time {
+  color: #909399;
+  font-size: var(--ax-text-caption-size);
+  line-height: var(--ax-text-caption-line);
+  word-break: break-all;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--ax-toolbar-gap);
+  flex-wrap: wrap;
+}
+
+.toolbar-left,
+.toolbar-right {
+  display: flex;
+  gap: var(--ax-space-2-5);
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.log-meta {
+  display: flex;
+  gap: var(--ax-space-4);
+  color: #909399;
+  font-size: var(--ax-text-caption-size);
+  margin-bottom: var(--ax-space-3);
+  flex: none;
+}
+
+.live-dot {
+  color: #67c23a;
+}
+
+.live-dot::before {
+  content: '●';
+  margin-right: var(--ax-space-1);
+}
+
+.log-viewer {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #0f172a;
+  border-radius: 8px;
+  padding: var(--ax-space-3);
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  font-size: var(--ax-text-caption-size);
+  line-height: var(--ax-leading-relaxed);
+}
+
+.empty-tip {
+  color: #94a3b8;
+  text-align: center;
+  padding: var(--ax-space-12) 0;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: 56px 72px 1fr;
+  gap: var(--ax-space-2-5);
+  padding: var(--ax-space-0-5) 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+}
+
+.line-no,
+.line-level {
+  color: #64748b;
+}
+
+.line-text {
+  color: #e2e8f0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.level-error .line-level,
+.level-error .line-text {
+  color: #f87171;
+}
+
+.level-warn .line-level,
+.level-warn .line-text {
+  color: #fbbf24;
+}
+
+.level-info .line-level,
+.level-info .line-text {
+  color: #93c5fd;
+}
+
+.level-debug .line-level,
+.level-debug .line-text {
+  color: #86efac;
+}
+</style>

@@ -1,0 +1,121 @@
+/* 全站隐藏滚动条（滚轮 / 触控 / 键盘仍可滚动） */
+
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+*::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* 与全局一致，保留工具类供语义化使用 */
+.scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Element Plus 内部滚动区域 */
+.el-table__body-wrapper,
+.el-table__body-wrapper .el-scrollbar__wrap,
+.el-dialog__body,
+.el-drawer__body,
+.el-select-dropdown__wrap,
+.el-cascader-menu__wrap,
+.el-tree,
+.el-textarea__inner,
+.el-main {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.el-table__body-wrapper::-webkit-scrollbar,
+.el-dialog__body::-webkit-scrollbar,
+.el-drawer__body::-webkit-scrollbar,
+.el-select-dropdown__wrap::-webkit-scrollbar,
+.el-textarea__inner::-webkit-scrollbar,
+.el-main::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
+}
+
+/* Element Plus 虚拟滚动条轨道 */
+.el-scrollbar__bar {
+  display: none !important;
+}
+
+/*
+ * 宽表 / 抽屉等 Windows 鼠标场景需要可见横条：在容器上挂 .scrollbar-visible。
+ * 同时恢复内部 el-scrollbar 轨道（全局默认隐藏）。
+ */
+.scrollbar-visible {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-text-placeholder) transparent;
+  -ms-overflow-style: auto;
+}
+
+.scrollbar-visible::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  display: block;
+}
+
+.scrollbar-visible::-webkit-scrollbar-thumb {
+  background: var(--ax-text-placeholder);
+  border-radius: var(--ax-radius-sm);
+}
+
+.scrollbar-visible::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-visible .el-table__body-wrapper,
+.scrollbar-visible .el-table__body-wrapper .el-scrollbar__wrap,
+.scrollbar-visible .el-table__header-wrapper,
+.scrollbar-visible .el-table__footer-wrapper {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ax-text-placeholder) transparent;
+  -ms-overflow-style: auto;
+}
+
+.scrollbar-visible .el-table__body-wrapper::-webkit-scrollbar,
+.scrollbar-visible .el-table__body-wrapper .el-scrollbar__wrap::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  display: block;
+}
+
+.scrollbar-visible .el-table__body-wrapper::-webkit-scrollbar-thumb,
+.scrollbar-visible .el-table__body-wrapper .el-scrollbar__wrap::-webkit-scrollbar-thumb {
+  background: var(--ax-text-placeholder);
+  border-radius: var(--ax-radius-sm);
+}
+
+.scrollbar-visible .el-scrollbar__bar {
+  display: block !important;
+  /* 默认常显，避免 Windows 鼠标找不到横条 */
+  opacity: 1 !important;
+  z-index: 3;
+}
+
+.scrollbar-visible .el-scrollbar__bar.is-horizontal {
+  height: 10px !important;
+}
+
+.scrollbar-visible .el-scrollbar__bar.is-vertical {
+  width: 10px !important;
+}
+
+.scrollbar-visible .el-scrollbar__thumb {
+  background-color: color-mix(in srgb, var(--ax-text-placeholder) 85%, transparent);
+  border-radius: var(--ax-radius-sm);
+}

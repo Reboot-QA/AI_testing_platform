@@ -1,0 +1,4 @@
+# 只检查 frontend/src 下的暂存文件（lint-staged 配置见 frontend/package.json）
+# 注意：node_modules 历史上被 git 跟踪且含 pnpm 符号链接，lint-staged 的 stash 备份
+# 会在其上报错，故用 --no-stash（匹配模式已限定 src/**，不会触碰 node_modules）
+pnpm -C frontend exec lint-staged --no-stash

@@ -1,0 +1,40 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+    batchwait: 1s
+
+scrape_configs:
+  - job_name: ai-platform-backend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ai-platform
+          app: ai-testing-platform
+          source: backend
+          __path__: /var/log/ai-platform/backend.log
+    pipeline_stages:
+      - regex:
+          expression: '^\[(?P<timestamp>[^\]]+)\] \[(?P<level>[^\]]+)\]'
+      - labels:
+          level:
+      - regex:
+          expression: '^(?P<level>INFO|WARNING|ERROR|DEBUG|CRITICAL):'
+      - labels:
+          level:
+
+  - job_name: ai-platform-frontend
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: ai-platform
+          app: ai-testing-platform
+          source: frontend
+          __path__: /var/log/ai-platform/frontend.log

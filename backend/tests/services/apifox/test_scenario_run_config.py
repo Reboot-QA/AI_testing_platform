@@ -1,0 +1,325 @@
+"""P-C 场景运行配置 · 外层迭代解析 / 持久化往返 / 数据驱动执行。
+
+被测：
+- run_service._resolve_scenario_iterations（循环次数 / 绑数据集 → 外层迭代列表）
+- scenario_service 的 run_config 读写往返与绑定校验
+- iter_scenario_run 数据驱动整场景（步骤数 × 数据行数、每行注入独立 runtime）
+"""
+
+import json
+
+import pytest
+
+from app.models.apifox.dataset import ApifoxDatasetRow
+from app.models.apifox.run import ApifoxRunStep
+from app.repositories.apifox import run_repo
+from app.routers.apifox.dataset_schemas import DatasetCreate, DatasetRowIn
+from app.routers.apifox.scenario_schemas import (
+    ScenarioCreate,
+    ScenarioRunConfig,
+    ScenarioUpdate,
+    StepIn,
+)
+from app.services.apifox import dataset_service, run_engine, run_service
+from app.services.apifox import scenario_service as svc
+
+
+def _scenario(db, steps=None):
+    out = svc.create_scenario(db, project_id=1, data=ScenarioCreate(name="s", steps=steps or []))
+    return svc.repo.get_scenario(db, out.id)
+
+
+def _set_run_config(db, scenario, **cfg):
+    scenario.run_config = json.dumps(cfg, ensure_ascii=False)
+    db.commit()
+
+
+def _dataset(db, rows, project_id=1, name="ds"):
+    return dataset_service.create_dataset(
+        db, project_id, DatasetCreate(name=name, columns=["user"], rows=rows)
+    )
+
+
+# ---- _resolve_scenario_iterations：循环次数 ----
+
+def test_no_run_config_yields_single_empty_iteration(db):
+    scenario = _scenario(db)
+
+    assert run_service._resolve_scenario_iterations(db, scenario) == [{}]
+
+
+def test_loop_count_yields_n_empty_iterations(db):
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, loop_count=3)
+
+    assert run_service._resolve_scenario_iterations(db, scenario) == [{}, {}, {}]
+
+
+def test_loop_count_capped_at_max_iterations(db):
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, loop_count=run_engine.MAX_LOOP_ITERATIONS + 500)
+
+    assert len(run_service._resolve_scenario_iterations(db, scenario)) == run_engine.MAX_LOOP_ITERATIONS
+
+
+def test_non_numeric_loop_count_falls_back_to_single(db):
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, loop_count="abc")
+
+    assert run_service._resolve_scenario_iterations(db, scenario) == [{}]
+
+
+# ---- _resolve_scenario_iterations：绑数据集 ----
+
+def test_dataset_binding_injects_each_enabled_row(db):
+    ds = _dataset(db, rows=[
+        DatasetRowIn(values={"user": "a"}),
+        DatasetRowIn(values={"user": "b"}, enabled=False),
+        DatasetRowIn(values={"user": "c"}),
+    ])
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    injections = run_service._resolve_scenario_iterations(db, scenario)
+
+    assert injections == [{"user": "a"}, {"user": "c"}]
+
+
+def test_dataset_row_values_coerced_to_str(db):
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"})])
+    # 直插非字符串值，验证防御性 str 强转（None→""、数字→字符串）
+    db.add(ApifoxDatasetRow(dataset_id=ds.id, values=json.dumps({"age": 7, "note": None}), sort_order=1))
+    db.commit()
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    injections = run_service._resolve_scenario_iterations(db, scenario)
+
+    assert injections == [{"user": "a"}, {"age": "7", "note": ""}]
+
+
+def test_dataset_from_other_project_falls_back_to_single(db):
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"})], project_id=2)
+    scenario = _scenario(db)  # project_id=1
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    assert run_service._resolve_scenario_iterations(db, scenario) == [{}]
+
+
+def test_dataset_with_no_enabled_rows_falls_back_to_single(db):
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"}, enabled=False)])
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    assert run_service._resolve_scenario_iterations(db, scenario) == [{}]
+
+
+def test_nonexistent_dataset_falls_back_to_single(db):
+    scenario = _scenario(db)
+    _set_run_config(db, scenario, dataset_id=99999)
+
+    assert run_service._resolve_scenario_iterations(db, scenario) == [{}]
+
+
+# ---- run_config 持久化往返 + 绑定校验 ----
+
+def test_run_config_persisted_and_returned(db):
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"})])
+    scenario = _scenario(db)
+
+    out = svc.update_scenario(
+        db, scenario,
+        ScenarioUpdate(run_config=ScenarioRunConfig(loop_count=5, dataset_id=ds.id)),
+    )
+
+    assert out.run_config.loop_count == 5
+    assert out.run_config.dataset_id == ds.id
+
+
+def test_default_run_config_when_unset(db):
+    out = svc.get_scenario_out(db, _scenario(db))
+
+    assert out.run_config.loop_count == 1
+    assert out.run_config.dataset_id is None
+
+
+def test_binding_cross_project_dataset_rejected(db):
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"})], project_id=2)
+    scenario = _scenario(db)
+
+    with pytest.raises(ValueError, match="不属于本项目"):
+        svc.update_scenario(db, scenario, ScenarioUpdate(run_config=ScenarioRunConfig(dataset_id=ds.id)))
+
+
+# ---- 数据驱动整场景执行 ----
+
+def test_data_driven_scenario_runs_steps_times_rows(db, make_case, monkeypatch):
+    seen_vars = []
+
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
+        seen_vars.append(dict(variables))
+        return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
+
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"}), DatasetRowIn(values={"user": "b"})])
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    run_id = events[0]["run_id"]
+    steps = db.query(ApifoxRunStep).filter(ApifoxRunStep.run_id == run_id).all()
+    assert events[0]["total"] == 2  # 1 步 × 2 行
+    assert len(steps) == 2
+    assert [v.get("user") for v in seen_vars] == ["a", "b"]
+
+
+def test_scenario_binding_counts_toward_dataset_ref_and_blocks_delete(db):
+    # 回归：场景 run_config 绑定数据集应计入引用计数，删除被拦截（评审 #1）
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"})])
+    scenario = _scenario(db)
+    svc.update_scenario(db, scenario, ScenarioUpdate(run_config=ScenarioRunConfig(dataset_id=ds.id)))
+
+    briefs = {b.id: b for b in dataset_service.list_datasets(db, project_id=1)}
+    assert briefs[ds.id].ref_count == 1
+
+    with pytest.raises(ValueError, match="引用"):
+        dataset_service.delete_dataset(db, dataset_service.repo.get_dataset(db, ds.id))
+
+
+def test_iteration_failure_writes_failed_terminal_state(db, make_case, monkeypatch):
+    # 回归：迭代中途未预期异常不得让运行永久卡 running（评审 #2，并发硬规则）
+    def _boom(db, case, endpoint, environment, variables, assertions, extracts, **_):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(run_engine, "execute_case", _boom)
+
+    case = make_case(name="c")
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+    _set_run_config(db, scenario, loop_count=3)
+
+    gen = run_service.iter_scenario_run(db, scenario, None, "test", user_id=1)
+    start = next(gen)
+    with pytest.raises(RuntimeError):
+        list(gen)
+
+    run = run_repo.get_run(db, start["run_id"])
+    assert run.status == "failed"
+    assert run.finished_at is not None
+
+
+def _stub_pass(monkeypatch):
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
+        return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+
+
+def test_steps_tagged_with_iteration_and_meta_persisted(db, make_case, monkeypatch):
+    # 数据驱动分组展示：每步落所属轮次，run.iterations_meta 存每组注入数据
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"user": "a"}), DatasetRowIn(values={"user": "b"})])
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    run = run_repo.get_run(db, events[0]["run_id"])
+    steps = db.query(ApifoxRunStep).filter(ApifoxRunStep.run_id == run.id).order_by(ApifoxRunStep.id).all()
+    assert [s.iteration for s in steps] == [0, 1]  # 两组各一步
+    assert json.loads(run.iterations_meta) == [{"user": "a"}, {"user": "b"}]
+    assert events[0]["iterations"] == [{"user": "a"}, {"user": "b"}]
+
+
+def test_single_iteration_run_leaves_meta_empty(db, make_case, monkeypatch):
+    # 单轮运行：不落 meta、start 事件无 iterations，报告不分组（零视觉变化）
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    run = run_repo.get_run(db, events[0]["run_id"])
+    assert run.iterations_meta is None
+    assert "iterations" not in events[0]
+
+
+def test_iteration_tagging_correct_when_branch_varies_step_count(db, make_case, monkeypatch):
+    # 各轮步骤数不同（if 分支随数据变化）时，iteration 打标仍正确（钉死分组不变量）
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"flag": "yes"}), DatasetRowIn(values={"flag": "no"})])
+    if_step = StepIn(
+        type="if",
+        config={"condition": {"left": "{{flag}}", "operator": "eq", "right": "yes"}},
+        children=[StepIn(type="case", ref_case_id=case.id)],
+    )
+    always = StepIn(type="case", ref_case_id=case.id)
+    scenario = _scenario(db, steps=[if_step, always])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    events = list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    steps = (
+        db.query(ApifoxRunStep)
+        .filter(ApifoxRunStep.run_id == events[0]["run_id"])
+        .order_by(ApifoxRunStep.id)
+        .all()
+    )
+    # 第一组(flag=yes)：if 命中 + always = 2 步(iter 0)；第二组(flag=no)：仅 always = 1 步(iter 1)
+    assert [s.iteration for s in steps] == [0, 0, 1]
+
+
+def test_step_tree_not_requeried_per_iteration(db, make_case, monkeypatch):
+    # 评审#4 性能：直接数 apifox_scenario_steps 表的真实查询数（非某个 shim 的调用次数）。
+    # 步骤树快照按 run 缓存 + 脱离 ORM(不受 commit 后 expire 逐行补查影响)，
+    # 多步多轮下查询数应是小常量、不随「步骤数×轮数」增长。
+    from sqlalchemy import event
+
+    from app.database import engine
+    _stub_pass(monkeypatch)
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"u": "a"}), DatasetRowIn(values={"u": "b"}),
+                            DatasetRowIn(values={"u": "c"})])
+    scenario = _scenario(db, steps=[  # 2 叶子步骤 × 3 轮：若逐行补查会明显放大
+        StepIn(type="case", ref_case_id=case.id),
+        StepIn(type="wait", wait_ms=1),
+    ])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    queries = []
+
+    def _spy(conn, cursor, statement, params, context, executemany):
+        if "apifox_scenario_steps" in statement.lower():
+            queries.append(statement)
+
+    event.listen(engine, "before_cursor_execute", _spy)
+    try:
+        list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+    finally:
+        event.remove(engine, "before_cursor_execute", _spy)
+
+    # 计数路径 1 次 + 快照 1 次（3 轮共用）= 2；远小于 步骤×轮=6，且不随轮数增长
+    assert len(queries) == 2
+
+
+def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):
+    # 第一行注入的变量不得残留到第二行（每行独立 runtime）
+    seen_vars = []
+
+    def _fake(db, case, endpoint, environment, variables, assertions, extracts, **_):
+        seen_vars.append(dict(variables))
+        return "passed", {"method": endpoint.method, "url": endpoint.path, "extracted": {}, "scoped": []}
+
+    monkeypatch.setattr(run_engine, "execute_case", _fake)
+
+    case = make_case(name="c")
+    ds = _dataset(db, rows=[DatasetRowIn(values={"only_first": "x"}), DatasetRowIn(values={"user": "b"})])
+    scenario = _scenario(db, steps=[StepIn(type="case", ref_case_id=case.id)])
+    _set_run_config(db, scenario, dataset_id=ds.id)
+
+    list(run_service.iter_scenario_run(db, scenario, None, "test", user_id=1))
+
+    assert "only_first" not in seen_vars[1]

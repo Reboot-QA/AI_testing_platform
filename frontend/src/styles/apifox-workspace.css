@@ -1,0 +1,241 @@
+/* Apifox 项目工作区 UI 规范：字号/侧栏/列表项/Tab 区统一入口。
+   在 ProjectWorkspace 根节点挂 .ax-workspace 后生效；子组件 scoped 样式请引用 --ax-ws-* 变量。 */
+
+.ax-workspace,
+.ws-main {
+  --ax-ws-title: var(--ax-text-body-size); /* 14px 面板标题 */
+  --ax-ws-body: var(--ax-text-body-sm-size); /* 13px 密集正文/树节点 */
+  --ax-ws-meta: var(--ax-text-caption-size); /* 12px 次要/元信息 */
+  font-size: var(--ax-ws-body);
+  color: var(--ax-text);
+  line-height: var(--ax-leading-compact);
+}
+
+/* ── 顶栏 Tab ── */
+:where(.ax-workspace, .ws-main) .ws-tabs.el-tabs > .el-tabs__header {
+  margin-bottom: var(--ax-gap-sm);
+}
+
+:where(.ax-workspace, .ws-main) .ws-tabs .el-tabs__item {
+  font-size: var(--ax-ws-body);
+  height: 36px;
+  line-height: 36px;
+}
+
+/* ── 三级侧栏（list-panel / tree-panel + 头部）统一尺寸 ── */
+:where(.ax-workspace, .ws-main) .list-panel,
+:where(.ax-workspace, .ws-main) .tree-panel {
+  width: var(--ax-workspace-list-width);
+  flex-shrink: 0;
+  border-right: 1px solid var(--ax-border);
+  overflow: auto;
+  padding-right: var(--ax-space-2);
+}
+
+:where(.ax-workspace, .ws-main) .panel-head,
+:where(.ax-workspace, .ws-main) .list-toolbar,
+:where(.ax-workspace, .ws-main) .tree-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ax-space-2);
+  margin-bottom: var(--ax-space-2);
+}
+
+:where(.ax-workspace, .ws-main) .tree-toolbar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+:where(.ax-workspace, .ws-main) .panel-title,
+:where(.ax-workspace, .ws-main) .var-title,
+:where(.ax-workspace, .ws-main) .list-head,
+:where(.ax-workspace, .ws-main) .list-toolbar > span {
+  flex: none;
+  white-space: nowrap;
+  font-size: var(--ax-ws-title);
+  font-weight: 600;
+  line-height: var(--ax-leading-tight);
+  color: var(--ax-brand);
+}
+
+:where(.ax-workspace, .ws-main) .panel-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-1-5);
+  flex: none;
+}
+
+:where(.ax-workspace, .ws-main) .priority-filter,
+:where(.ax-workspace, .ws-main) .tree-search,
+:where(.ax-workspace, .ws-main) .schema-search {
+  width: 100%;
+  margin-bottom: var(--ax-space-2);
+}
+
+/* 三级侧栏筛选/搜索统一 small 高度（与头部按钮一致） */
+:where(.ax-workspace, .ws-main) .list-panel .el-input,
+:where(.ax-workspace, .ws-main) .tree-panel .el-input,
+:where(.ax-workspace, .ws-main) .list-panel .el-select,
+:where(.ax-workspace, .ws-main) .tree-panel .el-select {
+  --el-component-size: var(--ax-control-height-sm);
+}
+
+:where(.ax-workspace, .ws-main) .list-panel .el-input__wrapper,
+:where(.ax-workspace, .ws-main) .tree-panel .el-input__wrapper,
+:where(.ax-workspace, .ws-main) .list-panel .el-select__wrapper,
+:where(.ax-workspace, .ws-main) .tree-panel .el-select__wrapper {
+  min-height: var(--ax-control-height-sm);
+  font-size: var(--ax-ws-body);
+}
+
+:where(.ax-workspace, .ws-main) .editor-panel {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 四级编辑区控件统一 small 高度（与 --ax-control-height-sm / VarInput 对齐） */
+:where(.ax-workspace, .ws-main) .editor-panel .el-input,
+:where(.ax-workspace, .ws-main) .editor-panel .el-select,
+:where(.ax-workspace, .ws-main) .editor-panel .el-input-number,
+:where(.ax-workspace, .ws-main) .editor-panel .el-autocomplete {
+  --el-component-size: var(--ax-control-height-sm);
+}
+
+:where(.ax-workspace, .ws-main) .editor-panel .el-input__wrapper,
+:where(.ax-workspace, .ws-main) .editor-panel .el-select__wrapper,
+:where(.ax-workspace, .ws-main) .editor-panel .el-autocomplete .el-input__wrapper {
+  min-height: var(--ax-control-height-sm);
+  font-size: var(--ax-ws-body);
+}
+
+:where(.ax-workspace, .ws-main) .editor-panel .el-button:not(.is-link):not(.el-button--text) {
+  height: var(--ax-control-height-sm);
+  font-size: var(--ax-text-body-sm-size);
+}
+
+/* ── 编辑区主操作条（保存 / 运行 / 发送）── */
+:where(.ax-workspace, .ws-main) .row1 {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  flex-wrap: wrap;
+  margin-bottom: var(--ax-space-2-5);
+}
+
+:where(.ax-workspace, .ws-main) .run-hint {
+  color: var(--ax-text-placeholder);
+  font-size: var(--ax-font-xs);
+}
+
+/* ── 接口/场景 Tab 内容区撑满 ── */
+:where(.ax-workspace, .ws-main) .tab-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+:where(.ax-workspace, .ws-main) .endpoint-tabs,
+:where(.ax-workspace, .ws-main) .spec-tabs {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+:where(.ax-workspace, .ws-main) .endpoint-tabs > .el-tabs__content,
+:where(.ax-workspace, .ws-main) .spec-tabs > .el-tabs__content {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+:where(.ax-workspace, .ws-main) .endpoint-tabs > .el-tabs__content > .el-tab-pane,
+:where(.ax-workspace, .ws-main) .spec-tabs > .el-tabs__content > .el-tab-pane {
+  height: 100%;
+}
+
+/* ── 分组标题 / 子标题 ── */
+:where(.ax-workspace, .ws-main) .group-head,
+:where(.ax-workspace, .ws-main) .schema-head,
+:where(.ax-workspace, .ws-main) .sub-title,
+:where(.ax-workspace, .ws-main) .sec-title,
+:where(.ax-workspace, .ws-main) .group-title {
+  font-size: var(--ax-ws-meta);
+  font-weight: 600;
+  line-height: var(--ax-leading-tight);
+  color: var(--ax-text-secondary);
+}
+
+/* ── 列表项 ── */
+:where(.ax-workspace, .ws-main) .schema-item,
+:where(.ax-workspace, .ws-main) .env-item,
+:where(.ax-workspace, .ws-main) .suite-item,
+:where(.ax-workspace, .ws-main) .dataset-item,
+:where(.ax-workspace, .ws-main) .scenario-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-1-5);
+  padding: var(--ax-space-1-5) var(--ax-space-2);
+  border-radius: var(--ax-radius-sm);
+  cursor: pointer;
+  font-size: var(--ax-ws-body);
+  color: var(--ax-text);
+}
+
+:where(.ax-workspace, .ws-main) .schema-item:hover,
+:where(.ax-workspace, .ws-main) .env-item:hover,
+:where(.ax-workspace, .ws-main) .suite-item:hover,
+:where(.ax-workspace, .ws-main) .dataset-item:hover,
+:where(.ax-workspace, .ws-main) .scenario-row:hover {
+  background: var(--ax-bg-hover);
+}
+
+:where(.ax-workspace, .ws-main) .schema-item.active,
+:where(.ax-workspace, .ws-main) .env-item.active,
+:where(.ax-workspace, .ws-main) .suite-item.active,
+:where(.ax-workspace, .ws-main) .dataset-item.active,
+:where(.ax-workspace, .ws-main) .scenario-row.active {
+  background: var(--ax-bg-active);
+}
+
+:where(.ax-workspace, .ws-main) .schema-name,
+:where(.ax-workspace, .ws-main) .env-name,
+:where(.ax-workspace, .ws-main) .suite-name,
+:where(.ax-workspace, .ws-main) .dataset-name,
+:where(.ax-workspace, .ws-main) .scenario-name,
+:where(.ax-workspace, .ws-main) .node-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--ax-ws-body);
+}
+
+:where(.ax-workspace, .ws-main) .schema-ref,
+:where(.ax-workspace, .ws-main) .group-head-count,
+:where(.ax-workspace, .ws-main) .meta,
+:where(.ax-workspace, .ws-main) .sub,
+:where(.ax-workspace, .ws-main) .none-tip {
+  font-size: var(--ax-ws-meta);
+  color: var(--ax-text-tertiary);
+}
+
+/* ── 空状态 ── */
+:where(.ax-workspace, .ws-main) .el-empty__description {
+  font-size: var(--ax-ws-meta) !important;
+}
+
+/* ── 分割布局根 ── */
+:where(.ax-workspace, .ws-main) .ax-ws-split {
+  display: flex;
+  gap: var(--ax-gap-lg);
+  height: 100%;
+  min-height: 0;
+}
