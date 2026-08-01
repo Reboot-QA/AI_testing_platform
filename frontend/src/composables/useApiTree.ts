@@ -1,8 +1,9 @@
 // 接口管理树的数据与交互（构建/搜索过滤/拖拽移动排序）；CRUD 与编辑器留在组件。
-import { nextTick, ref, watch, type Ref } from 'vue'
+import { nextTick, ref, type Ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apifoxApi } from '@/api'
 import type { Schemas } from '@/api/types'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 type ApiFolder = Schemas['FolderOut']
 type ApiEndpoint = Schemas['EndpointBrief']
@@ -105,6 +106,7 @@ export function useApiTree(
   pid: Ref<number | string | null | undefined>,
   options?: UseApiTreeOptions,
 ) {
+  const workspace = useWorkspaceStore()
   const autoExpandLevels = options?.autoExpandLevels ?? 0
   let autoExpandApplied = false
   const folders = ref<ApiFolder[]>([])
@@ -240,10 +242,33 @@ export function useApiTree(
     return false
   }
 
-  watch(filterText, (v) => treeRef.value?.filter(v))
+  /** target 是否为 root 自身或其子孙（文件夹拖进自己内部会成环） */
+  function containsNode(root: ApiTreeNode, target: ApiTreeNode): boolean {
+    if (root.key === target.key) return true
+    return (root.children || []).some((c) => containsNode(c, target))
+  }
 
-  function allowDrop(_dragNode: unknown, dropNode: { data: ApiTreeNode }, type: string): boolean {
-    return !(type === 'inner' && dropNode.data.type === 'endpoint')
+  /**
+   * 放置规则：
+   * - 接口节点内部不能放东西（接口没有子级）。
+   * - 文件夹不能放进自己或自己的子孙（会成环，后端也会返 400）。三种 type 全 false 时
+   *   el-tree 会把 dropEffect 置为 none，浏览器直接给禁止光标。
+   * - 拖「接口」到文件夹行时禁掉 prev/next：el-tree 的命中区完全由 allowDrop 这三个返回值
+   *   决定（只留 inner 时上下阈值退化为 ∓∞），于是整行都判定为「放入」，不用再去对准行高
+   *   中间那 50%。这里零信息损失——接口与文件夹的 sort_order 本就各自独立计数
+   *   （见 buildReorderSnapshot），且同层内文件夹恒排在接口之前，「接口相对文件夹的前后
+   *   顺序」从来不会被持久化。
+   */
+  function allowDrop(
+    dragNode: { data: ApiTreeNode },
+    dropNode: { data: ApiTreeNode },
+    type: string,
+  ): boolean {
+    const drag = dragNode.data
+    const drop = dropNode.data
+    if (drag.type === 'folder' && containsNode(drag, drop)) return false
+    if (type === 'inner') return drop.type !== 'endpoint'
+    return !(drag.type === 'endpoint' && drop.type === 'folder')
   }
 
   function buildReorderSnapshot(): {
@@ -268,13 +293,29 @@ export function useApiTree(
     return { folders: foldersOut, endpoints: endpointsOut }
   }
 
-  async function onDrop(): Promise<void> {
+  async function onDrop(
+    _dragNode: unknown,
+    dropNode: { data: ApiTreeNode } | null,
+    dropType: string,
+  ): Promise<void> {
+    const target = dropType === 'inner' && dropNode?.data.type === 'folder' ? dropNode.data : null
     try {
-      await apifoxApi.reorderTree(pid.value!, buildReorderSnapshot())
-      ElMessage.success('已保存排序')
+      const result = await apifoxApi.reorderTree(pid.value!, {
+        expected_order_version: workspace.currentProject?.api_tree_order_version ?? 1,
+        ...buildReorderSnapshot(),
+      })
+      if (workspace.currentProject?.id === result.project_id) {
+        workspace.currentProject.api_tree_order_version = result.order_version
+      }
+      // 落进折叠的文件夹时刻意不自动展开，树上看不出结果，靠文案点明落到了哪里
+      ElMessage.success(target ? `已移入「${target.label}」` : '已保存排序')
     } catch (e) {
       const err = e as { message?: string }
-      ElMessage.error(err.message || '排序保存失败')
+      if (err.message?.includes('排序已被其他操作更新') && pid.value != null) {
+        await workspace.loadProject(pid.value, true)
+      }
+      // 下面的 reload 会把视图拉回服务端状态，等于撤销这次拖动，说清楚免得以为已生效
+      ElMessage.error(`${err.message || '排序保存失败'}，已恢复原位`)
     }
     await reload()
   }

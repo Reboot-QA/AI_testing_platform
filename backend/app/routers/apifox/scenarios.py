@@ -2,7 +2,7 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -18,6 +18,7 @@ from app.routers.apifox.scenario_schemas import (
     ScenarioFolderOut,
     ScenarioFolderUpdate,
     ScenarioOut,
+    ScenarioReorderOut,
     ScenarioReorderRequest,
     ScenarioUpdate,
 )
@@ -67,11 +68,11 @@ def rename_scenario_folder(
     return folder_service.rename_folder(db, folder, data.name)
 
 
-@router.delete("/scenario-folders/{fid}")
+@router.delete("/scenario-folders/{fid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scenario_folder(fid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     folder = _scenario_folder_checked(db, fid, user)
-    folder_service.delete_folder(db, folder)
-    return {"message": "已删除"}
+    folder_service.delete_folder(db, folder, deleted_by=user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/projects/{pid}/scenarios", response_model=List[ScenarioBrief])
@@ -80,16 +81,18 @@ def list_scenarios(pid: int, db: Session = Depends(get_db), user: User = Depends
     return service.list_scenarios(db, pid)
 
 
-@router.post("/projects/{pid}/scenarios/reorder")
+@router.post("/projects/{pid}/scenarios/reorder", response_model=ScenarioReorderOut)
 def reorder_scenarios(
     pid: int, data: ScenarioReorderRequest, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
     get_accessible_project(db, pid, user)
     try:
-        service.reorder_scenarios(db, pid, data.items)
+        order_version, updated_count = service.reorder_scenarios(db, pid, data.items, data.expected_order_version)
+    except service.OrderVersionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "已保存排序"}
+    return {"project_id": pid, "order_version": order_version, "updated_count": updated_count}
 
 
 @router.post("/projects/{pid}/scenarios", response_model=ScenarioOut)
@@ -122,11 +125,11 @@ def update_scenario(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/scenarios/{sid}")
+@router.delete("/scenarios/{sid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_scenario(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     scenario = _scenario_checked(db, sid, user)
     try:
         service.delete_scenario(db, scenario, deleted_by=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "场景已删除"}
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

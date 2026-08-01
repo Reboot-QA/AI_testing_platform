@@ -61,3 +61,14 @@ def test_debug_post_wait_sleeps(db, monkeypatch):
     )
 
     assert 1.5 in sleeps
+
+
+def test_debug_no_preurl_returns_error_not_raises(db):
+    # 未配环境/前置 URL + 相对路径：返回带 error 的结果（不抛 400），响应区给一条提示即可（7/22-#12）
+    result = debug_service.debug_send(
+        db, project_id=1, method="GET", path="/relative",
+        request_spec={}, environment_id=None, user_id=1,
+    )
+
+    assert result["status_code"] is None
+    assert result["error"] and "前置 URL" in result["error"]

@@ -1,14 +1,16 @@
 """Apifox 工作台 · 业务层（组装跨项目概览：统计磁贴 / 我的项目 / 运行中 / 最近报告）。"""
 
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Any, Dict, List, Tuple
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
+from app.models.apifox.ai_gen_task import ApifoxAiGenTask
+from app.models.hub_ai_task import HubAiTask
 from app.models.project import Project
 from app.models.user import User
-from app.repositories.apifox import workbench_repo
-from app.services import user_project_pref_service
+from app.repositories.apifox import ai_gen_task_repo, endpoint_repo, workbench_repo
+from app.services import hub_ai_task_service, user_project_pref_service
 from app.services.project_access_service import accessible_projects_query, is_admin
 
 
@@ -26,8 +28,30 @@ def _role_of(project: Project, user: User) -> str:
     return "成员"
 
 
+def _department_name(project: Project) -> str:
+    """项目创建时写入的 department_id，即创建人所属部门。"""
+    if project.department and project.department.name:
+        return project.department.name
+    return ""
+
+
+def _owner_name(project: Project) -> str:
+    """负责人可搜索名：用户名 + 真实姓名（与 /projects 后端搜索按 username/full_name 一致）。"""
+    owner = project.owner
+    if not owner:
+        return ""
+    parts = [owner.username]
+    if getattr(owner, "full_name", None):
+        parts.append(owner.full_name)
+    return " ".join(parts)
+
+
 def _project_context(db: Session, user: User) -> Tuple[List[Project], List[int], Dict[int, str], Dict[int, str]]:
-    projects = accessible_projects_query(db, user).all()
+    projects = (
+        accessible_projects_query(db, user)
+        .options(joinedload(Project.department), joinedload(Project.owner))
+        .all()
+    )
     project_ids = [p.id for p in projects]
     project_name = {p.id: p.name for p in projects}
     env_names = workbench_repo.environment_names(db, project_ids)
@@ -89,12 +113,13 @@ def get_project_stats(db: Session, project_id: int) -> dict:
     for i in range(6, -1, -1):
         day = today - timedelta(days=i)
         key = day.isoformat()
-        passed, total = trend_map.get(key, (0, 0))
+        passed, failed = trend_map.get(key, (0, 0))
+        total = passed + failed  # 实际执行数，见 workbench_repo.daily_trend
         trend.append(
             {
                 "date": key,
                 "passed": passed,
-                "failed": max(total - passed, 0),
+                "failed": failed,
                 "total": total,
                 "pass_rate": round(passed / total * 100, 1) if total else None,
             }
@@ -138,6 +163,8 @@ def get_overview(db: Session, user: User) -> dict:
             "scenario_count": scenario_cnt.get(p.id, 0),
             "case_count": case_cnt.get(p.id, 0),
             "role": _role_of(p, user),
+            "owner_name": _owner_name(p),
+            "department_name": _department_name(p),
         }
         for p in projects
     ]
@@ -236,3 +263,77 @@ def list_manual_page(db: Session, user: User, page: int, page_size: int) -> dict
         for r in runs
     ]
     return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+def _hub_ai_row(task: HubAiTask, project_name: Dict[int, str]) -> Dict[str, Any]:
+    title = (task.target or task.category_label or "AI 任务").strip() or "AI 任务"
+    return {
+        "task_key": f"hub:{task.id}",
+        "category": task.task_type,
+        "task_id": task.id,
+        "project_id": task.project_id,
+        "project_name": project_name.get(task.project_id, ""),
+        "title": title[:200],
+        "status": task.status,
+        "done_items": task.done_items or 0,
+        "total_items": task.total_items or 0,
+        "updated_at": task.updated_at,
+        "_sort": task.updated_at,
+    }
+
+
+def _endpoint_ai_title(db: Session, task: ApifoxAiGenTask, items) -> str:
+    if task.total_items == 1 and items:
+        endpoint = endpoint_repo.get_endpoint(db, items[0].endpoint_id)
+        if endpoint:
+            return f"{endpoint.method} {endpoint.path}"
+        return "(接口已删除)"
+    n = task.total_items or len(items) or 0
+    return f"批量·{n}接口"
+
+
+def _endpoint_ai_row(
+    db: Session, task: ApifoxAiGenTask, project_name: Dict[int, str], items
+) -> Dict[str, Any]:
+    return {
+        "task_key": f"endpoint:{task.id}",
+        "category": "endpoint",
+        "task_id": task.id,
+        "project_id": task.project_id,
+        "project_name": project_name.get(task.project_id, ""),
+        "title": _endpoint_ai_title(db, task, items)[:200],
+        "status": task.status,
+        "done_items": task.done_items or 0,
+        "total_items": task.total_items or 0,
+        "updated_at": task.updated_at,
+        "_sort": task.updated_at,
+    }
+
+
+def list_ai_tasks_page(db: Session, user: User, page: int, page_size: int) -> dict:
+    """跨项目 AI 任务分页（Hub + Apifox，按 updated_at 倒序合并）。"""
+    hub_ai_task_service.fail_stale_running_tasks(db)
+    _, project_ids, project_name, _ = _project_context(db, user)
+    hub_total = workbench_repo.count_hub_ai_tasks(db, project_ids)
+    apifox_total = workbench_repo.count_apifox_ai_gen_tasks(db, project_ids)
+    total = hub_total + apifox_total
+    if total == 0:
+        return {"items": [], "total": 0, "page": page, "page_size": page_size}
+
+    need = page * page_size
+    hub_rows = workbench_repo.list_hub_ai_tasks_recent(db, project_ids, need)
+    apifox_rows = workbench_repo.list_apifox_ai_gen_tasks_recent(db, project_ids, need)
+    merged: List[Dict[str, Any]] = [_hub_ai_row(t, project_name) for t in hub_rows]
+    items_by_task: dict[int, list] = {}
+    if apifox_rows:
+        for it in ai_gen_task_repo.list_items_by_task_ids(db, [t.id for t in apifox_rows]):
+            items_by_task.setdefault(it.task_id, []).append(it)
+    merged.extend(
+        _endpoint_ai_row(db, t, project_name, items_by_task.get(t.id, [])) for t in apifox_rows
+    )
+    merged.sort(key=lambda r: (r["_sort"], r["task_id"]), reverse=True)
+    start = (page - 1) * page_size
+    page_items = merged[start : start + page_size]
+    for row in page_items:
+        row.pop("_sort", None)
+    return {"items": page_items, "total": total, "page": page, "page_size": page_size}

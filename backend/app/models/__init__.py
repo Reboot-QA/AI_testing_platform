@@ -28,6 +28,9 @@ from app.models.apifox import (
 )
 from app.models.department import Department
 from app.models.department_permission import DepartmentMenuPermission
+from app.models.hub_ai_task import HubAiTask
+from app.models.hub_ai_task_case_item import HubAiTaskCaseItem
+from app.models.hub_ai_task_requirement_item import HubAiTaskRequirementItem
 from app.models.llm_provider import LLMProvider
 from app.models.project import Project
 from app.models.project_member import ProjectMember
@@ -47,6 +50,9 @@ __all__ = [
     "Project",
     "ProjectMember",
     "UserProjectPref",
+    "HubAiTask",
+    "HubAiTaskRequirementItem",
+    "HubAiTaskCaseItem",
     "Requirement",
     "TestCase",
     "SystemSetting",

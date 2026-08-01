@@ -57,6 +57,15 @@ def clear_folder_on_scenarios(db: Session, folder_id: int) -> None:
     )
 
 
+def list_folder_scenarios(db: Session, folder_id: int) -> List[ApifoxScenario]:
+    """该文件夹下未软删的场景（删文件夹级联软删时用）。"""
+    return (
+        db.query(ApifoxScenario)
+        .filter(ApifoxScenario.folder_id == folder_id, ApifoxScenario.deleted_at.is_(None))
+        .all()
+    )
+
+
 def get_scenario(db: Session, scenario_id: int) -> Optional[ApifoxScenario]:
     return db.query(ApifoxScenario).filter(ApifoxScenario.id == scenario_id).first()
 

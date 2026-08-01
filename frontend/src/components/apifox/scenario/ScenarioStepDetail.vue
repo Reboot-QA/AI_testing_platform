@@ -170,7 +170,6 @@ type DatasetBrief = Schemas['DatasetBrief']
 
 const props = withDefaults(
   defineProps<{
-    step: ScenarioEditorStep
     cases?: ProjectCaseBrief[]
     scenarios?: ScenarioBrief[]
     currentScenarioId?: number | null
@@ -189,6 +188,7 @@ const props = withDefaults(
     datasets: () => [],
   },
 )
+const step = defineModel<ScenarioEditorStep>('step', { required: true })
 
 const pid = useRouteParamId()
 const sqlHint = '支持 {{变量}} 插值；写操作(INSERT/UPDATE/DELETE)会实际在目标库执行'
@@ -196,8 +196,8 @@ const casePanelRef = ref<InstanceType<typeof ScenarioCaseStepPanel> | null>(null
 
 // db 步骤 config 由 addStep 初始化；防御性保证 extracts 为数组
 const dbConfig = computed(() => {
-  if (props.step.type !== 'db') return ensureDbConfig({ type: 'db', enabled: true })
-  return ensureDbConfig(props.step)
+  if (step.value.type !== 'db') return ensureDbConfig({ type: 'db', enabled: true })
+  return ensureDbConfig(step.value)
 })
 
 const dbExtracts = computed(() => dbConfig.value.extracts)
@@ -213,15 +213,15 @@ function openDbManage() {
   openDatabaseManage(workspaceStore.currentEnvironmentId, { create: props.databases.length === 0 })
 }
 
-const ifCondition = computed(() => ensureIfConfig(props.step).condition)
-const loopConfig = computed(() => ensureLoopConfig(props.step))
+const ifCondition = computed(() => ensureIfConfig(step.value).condition)
+const loopConfig = computed(() => ensureLoopConfig(step.value))
 const httpConfig = computed(() => {
-  if (props.step.type !== 'http') return ensureHttpConfig({ type: 'http', enabled: true })
-  return ensureHttpConfig(props.step)
+  if (step.value.type !== 'http') return ensureHttpConfig({ type: 'http', enabled: true })
+  return ensureHttpConfig(step.value)
 })
 
 function onElseToggle(enabled: boolean) {
-  if (enabled && !Array.isArray(props.step.elseChildren)) props.step.elseChildren = []
+  if (enabled && !Array.isArray(step.value.elseChildren)) step.value.elseChildren = []
 }
 
 const availableScenarios = computed(() =>
@@ -230,7 +230,7 @@ const availableScenarios = computed(() =>
 
 function onScenarioChange(id: number) {
   const s = props.scenarios.find((x) => x.id === id)
-  if (s) props.step.scenario_name = s.name
+  if (s) step.value.scenario_name = s.name
 }
 
 async function flushCase() {

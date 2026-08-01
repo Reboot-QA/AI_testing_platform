@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
+from app.constants.limits import PATH_MAX_LEN
 from app.database import get_db
 from app.models.user import User
 from app.repositories.apifox import variable_repo
@@ -27,7 +28,7 @@ class DebugInlineScript(BaseModel):
 
 class DebugRequest(BaseModel):
     method: str = "GET"
-    path: str = ""
+    path: str = Field(default="", max_length=PATH_MAX_LEN)
     server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
     environment_id: Optional[int] = None

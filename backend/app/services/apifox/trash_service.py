@@ -76,6 +76,7 @@ def _collect_trash_items(db: Session, project_id: int) -> List[TrashItem]:
                 deleted_at=su.deleted_at,
                 expires_at=_expires_at(su.deleted_at),
                 remaining_days=_remaining_days(su.deleted_at),
+                detail=su.description or None,  # 展示描述，空则前端显示 —
                 operator=op(su.deleted_by),
             )
         )
@@ -157,7 +158,7 @@ def _get_deleted(db: Session, project_id: int, kind: str, item_id: int):
     if not obj or obj.project_id != project_id:
         raise LookupError("回收站中无此项")
     if obj.deleted_at is None:
-        raise LookupError("回收站中无此项")
+        raise ValueError("资源当前不在回收站，无法还原或彻底删除")
     return obj
 
 

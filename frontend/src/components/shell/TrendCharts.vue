@@ -107,9 +107,12 @@ const execData = computed(() => ({
   ],
 }))
 
+const chartLayout = { padding: { top: 14, right: 6, left: 2, bottom: 4 } }
+
 const passRateOptions = computed<ChartOptions<'line'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  layout: chartLayout,
   plugins: { legend: { display: false } },
   scales: {
     x: {
@@ -119,17 +122,33 @@ const passRateOptions = computed<ChartOptions<'line'>>(() => ({
     },
     y: {
       min: 0,
-      max: 100,
+      // 用 suggestedMax 而非 max：常规数据仍是固定 0–100 量程，
+      // 万一出现超 100% 的数据也会自动扩展，不会把线画到画布外
+      suggestedMax: 100,
+      grace: '8%',
       grid: { color: cGrid() },
-      ticks: { color: cText(), font: { size: 11 } },
+      ticks: {
+        color: cText(),
+        font: { size: 11 },
+        callback: (v) => {
+          const n = typeof v === 'number' ? v : Number(v)
+          if (!Number.isFinite(n) || n > 100) return ''
+          return String(n)
+        },
+      },
       border: { display: false },
     },
+  },
+  elements: {
+    point: { hitRadius: 8 },
+    line: { borderJoinStyle: 'round', capBezierPoints: true },
   },
 }))
 
 const execOptions = computed<ChartOptions<'line'>>(() => ({
   responsive: true,
   maintainAspectRatio: false,
+  layout: chartLayout,
   plugins: {
     legend: {
       display: true,
@@ -177,10 +196,12 @@ const execOptions = computed<ChartOptions<'line'>>(() => ({
 .chart-host {
   height: 180px;
   position: relative;
+  overflow: hidden;
 }
 
 .chart-wrap {
   height: 100%;
+  min-height: 0;
 }
 
 .chart-empty {

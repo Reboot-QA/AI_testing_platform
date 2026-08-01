@@ -139,11 +139,14 @@ const statusRows = computed(() => [
 
 const loopStats = computed(() => {
   const steps = props.detail.steps || []
-  const iterSet = new Set(steps.map((s) => s.iteration ?? 0))
-  const executed = iterSet.size || (totalDone.value > 0 ? 1 : 0)
+  // 优先用 loop_round 统计内层循环(loop)的实际轮数；无 loop 步骤时回退到 iteration（数据驱动分组）
+  const loopRounds = new Set(steps.filter((s) => (s.loop_round ?? 0) > 0).map((s) => s.loop_round))
+  const key = loopRounds.size > 0 ? 'loop_round' : 'iteration'
+  const idSet = loopRounds.size > 0 ? loopRounds : new Set(steps.map((s) => s.iteration ?? 0))
+  const executed = idSet.size || (totalDone.value > 0 ? 1 : 0)
   let failed = 0
-  for (const idx of iterSet) {
-    if (steps.some((s) => (s.iteration ?? 0) === idx && s.status !== 'passed')) {
+  for (const id of idSet) {
+    if (steps.some((s) => (s[key] ?? 0) === id && s.status !== 'passed')) {
       failed += 1
     }
   }

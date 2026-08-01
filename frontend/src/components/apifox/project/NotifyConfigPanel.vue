@@ -1,14 +1,32 @@
 <template>
   <div v-loading="loading" class="notify-panel">
     <p class="hint">
-      配置本项目的失败通知渠道与收件人。定时任务、套件/场景执行、AI 生成失败时按此推送。
+      配置本项目的通知渠道与收件人。定时任务、套件/场景执行、AI 生成的成功/失败可分别通知。
     </p>
 
     <div class="block">
       <div class="block-title">通知场景</div>
-      <el-checkbox v-model="form.notify_schedule">定时任务失败</el-checkbox>
-      <el-checkbox v-model="form.notify_run">套件 / 场景执行失败</el-checkbox>
-      <el-checkbox v-model="form.notify_aigen">AI 任务失败</el-checkbox>
+      <div class="scene-row scene-head">
+        <span class="scene-lbl" />
+        <span class="scene-col">失败</span>
+        <span class="scene-col">成功</span>
+      </div>
+      <div class="scene-row">
+        <span class="scene-lbl">定时任务</span>
+        <el-checkbox v-model="form.notify_schedule" class="scene-col" />
+        <el-checkbox v-model="form.notify_schedule_success" class="scene-col" />
+      </div>
+      <div class="scene-row">
+        <span class="scene-lbl">套件 / 场景执行</span>
+        <el-checkbox v-model="form.notify_run" class="scene-col" />
+        <el-checkbox v-model="form.notify_run_success" class="scene-col" />
+      </div>
+      <div class="scene-row">
+        <span class="scene-lbl">AI 任务</span>
+        <el-checkbox v-model="form.notify_aigen" class="scene-col" />
+        <el-checkbox v-model="form.notify_aigen_success" class="scene-col" />
+      </div>
+      <p class="sub-hint">成功通知默认关闭；定时导入随「定时任务」开关。</p>
     </div>
 
     <div class="block">
@@ -16,7 +34,7 @@
       <div class="field">
         <span class="lbl">重试次数</span>
         <el-input-number v-model="form.retry_count" :min="0" :max="5" controls-position="right" />
-        <span class="sub-hint">0=不重试，最多 5 次；失败自动重跑，全部失败才通知</span>
+        <span class="sub-hint">0=不重试，最多 5 次；失败后自动重跑，重试用尽仍失败才通知</span>
       </div>
       <div class="field">
         <span class="lbl">重试间隔</span>
@@ -157,6 +175,9 @@ const form = reactive({
   notify_schedule: true,
   notify_run: true,
   notify_aigen: true,
+  notify_schedule_success: false,
+  notify_run_success: false,
+  notify_aigen_success: false,
   retry_count: 0,
   retry_interval_sec: 5,
   email_enabled: false,
@@ -180,6 +201,9 @@ const payload = computed<Schemas['NotifyConfigUpdate']>(() => {
     notify_schedule: form.notify_schedule,
     notify_run: form.notify_run,
     notify_aigen: form.notify_aigen,
+    notify_schedule_success: form.notify_schedule_success,
+    notify_run_success: form.notify_run_success,
+    notify_aigen_success: form.notify_aigen_success,
     retry_count: form.retry_count,
     retry_interval_sec: form.retry_interval_sec,
     email_enabled: form.email_enabled,
@@ -203,6 +227,9 @@ async function load() {
     form.notify_schedule = c.notify_schedule
     form.notify_run = c.notify_run
     form.notify_aigen = c.notify_aigen
+    form.notify_schedule_success = c.notify_schedule_success
+    form.notify_run_success = c.notify_run_success
+    form.notify_aigen_success = c.notify_aigen_success
     form.retry_count = c.retry_count
     form.retry_interval_sec = c.retry_interval_sec
     form.email_enabled = c.email_enabled
@@ -269,6 +296,31 @@ onMounted(load)
   gap: var(--ax-space-2);
   font-weight: 600;
   margin-bottom: var(--ax-space-2);
+}
+
+.scene-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-3);
+  margin-bottom: var(--ax-space-1);
+}
+
+.scene-lbl {
+  width: 140px;
+  flex-shrink: 0;
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text-secondary);
+}
+
+.scene-col {
+  width: 48px;
+  margin: 0;
+  text-align: center;
+}
+
+.scene-head .scene-col {
+  font-size: var(--ax-font-xs);
+  color: var(--ax-text-placeholder);
 }
 
 .field {

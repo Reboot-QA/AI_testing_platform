@@ -13,7 +13,7 @@ from app.models.apifox.ai_gen_task import ApifoxAiGenTask, ApifoxAiGenTaskItem
 from app.models.llm_provider import LLMProvider
 from app.models.user import User
 from app.repositories.apifox import ai_gen_task_repo as repo
-from app.repositories.apifox import endpoint_repo
+from app.repositories.apifox import case_repo, endpoint_repo
 from app.routers.apifox.ai_gen_task_schemas import (
     AiGenApplyResult,
     AiGenBatchApplyItem,
@@ -26,6 +26,8 @@ from app.routers.apifox.ai_gen_task_schemas import (
 )
 from app.routers.apifox.case_schemas import AiGenCategory, CaseCreate
 from app.services.apifox import case_service
+from app.services.llm_label import llm_task_model_column_from_provider
+from app.services.project_access_service import get_accessible_project_ids
 
 _TERMINAL = ("succeeded", "partial", "failed", "canceled")
 
@@ -47,9 +49,20 @@ def load_cases(text: Optional[str]) -> List[CaseCreate]:
     if not text:
         return []
     try:
-        return [CaseCreate(**x) for x in json.loads(text)]
-    except (ValueError, TypeError):
+        raw = json.loads(text)
+    except json.JSONDecodeError:
         return []
+    if not isinstance(raw, list):
+        return []
+    out: List[CaseCreate] = []
+    for x in raw:
+        if not isinstance(x, dict):
+            continue
+        try:
+            out.append(CaseCreate.model_validate(x))
+        except (ValueError, TypeError):
+            continue
+    return out
 
 
 # ---------- 建任务 ----------
@@ -79,8 +92,41 @@ def create_task(
 
 
 # ---------- 查询 ----------
+def _case_row_as_create(db: Session, case) -> CaseCreate:
+    out = case_service.get_case_out(db, case)
+    payload = out.model_dump(
+        exclude={"id", "project_id", "endpoint_id", "sort_order", "version", "created_at", "updated_at"}
+    )
+    return CaseCreate.model_validate(payload)
+
+
+def _backfill_applied_cases(db: Session, item: ApifoxAiGenTaskItem) -> List[CaseCreate]:
+    """无入库快照时，从接口下 AI 来源用例只读回填（供任务详情「已入库」展示）。"""
+    if item.applied_count <= 0:
+        return []
+    rows = [
+        c
+        for c in case_repo.list_cases(db, item.endpoint_id)
+        if c.origin == "ai" and c.deleted_at is None
+    ]
+    task = repo.get_task(db, item.task_id)
+    if task and rows:
+        rows = [c for c in rows if c.created_at >= task.created_at]
+    if not rows:
+        return []
+    rows.sort(key=lambda c: c.id, reverse=True)
+    take = min(item.applied_count, len(rows))
+    picked = list(reversed(rows[:take]))
+    return [_case_row_as_create(db, c) for c in picked]
+
+
 def _item_out(db: Session, item: ApifoxAiGenTaskItem) -> AiGenTaskItemOut:
     ep = endpoint_repo.get_endpoint(db, item.endpoint_id)
+    applied_cases = load_cases(item.applied_cases)
+    if item.applied_count > 0 and len(applied_cases) < item.applied_count:
+        backfill = _backfill_applied_cases(db, item)
+        if len(backfill) > len(applied_cases):
+            applied_cases = backfill
     return AiGenTaskItemOut(
         id=item.id,
         endpoint_id=item.endpoint_id,
@@ -91,6 +137,7 @@ def _item_out(db: Session, item: ApifoxAiGenTaskItem) -> AiGenTaskItemOut:
         applied_count=item.applied_count,
         error=item.error,
         cases=load_cases(item.result_cases),
+        applied_cases=applied_cases,
         discarded_cases=load_cases(item.discarded_cases),
     )
 
@@ -117,6 +164,7 @@ def task_out(db: Session, task: ApifoxAiGenTask) -> AiGenTaskOut:
         mode=task.mode,
         provider_id=task.provider_id,
         provider_name=_provider_name(db, task.provider_id),
+        model_label=_task_model_label(db, task),
         categories=load_categories(task.categories),
         creator_name=_creator_name(db, task.created_by),
         total_items=task.total_items,
@@ -128,6 +176,17 @@ def task_out(db: Session, task: ApifoxAiGenTask) -> AiGenTaskOut:
     )
 
 
+def _task_model_label(db: Session, task: ApifoxAiGenTask) -> str:
+    if task.mode == "mock":
+        return "Mock"
+    if task.provider_id:
+        provider = db.query(LLMProvider).filter(LLMProvider.id == task.provider_id).first()
+        label = llm_task_model_column_from_provider(provider)
+        if label:
+            return label
+    return ""
+
+
 def _brief(
     task: ApifoxAiGenTask,
     target: Optional[str] = None,
@@ -135,11 +194,13 @@ def _brief(
     generated_total: int = 0,
     applied_total: int = 0,
     creator_name: Optional[str] = None,
+    model_label: str = "",
 ) -> AiGenTaskBrief:
     return AiGenTaskBrief(
         id=task.id, status=task.status, mode=task.mode,
         target=target, categories=categories or [],
         generated_total=generated_total, applied_total=applied_total,
+        model_label=model_label,
         creator_name=creator_name,
         total_items=task.total_items, done_items=task.done_items,
         created_at=task.created_at, finished_at=task.finished_at,
@@ -161,7 +222,26 @@ def list_active(db: Session, project_id: int) -> List[AiGenTaskBrief]:
     tasks = repo.list_active_tasks(db, project_id)
     names = _creator_names(db, [t.created_by for t in tasks])
     return [
-        _brief(t, creator_name=names.get(t.created_by) if t.created_by else None)
+        _brief(
+            t,
+            creator_name=names.get(t.created_by) if t.created_by else None,
+            model_label=_task_model_label(db, t),
+        )
+        for t in tasks
+    ]
+
+
+def list_active_mine(db: Session, user: User) -> List[AiGenTaskBrief]:
+    """当前用户在所有可访问项目内的进行中 AI 生成任务（侧边栏角标等）。"""
+    project_ids = get_accessible_project_ids(db, user)
+    tasks = repo.list_active_tasks_for_creator(db, creator_id=user.id, project_ids=project_ids)
+    names = _creator_names(db, [t.created_by for t in tasks])
+    return [
+        _brief(
+            t,
+            creator_name=names.get(t.created_by) if t.created_by else None,
+            model_label=_task_model_label(db, t),
+        )
         for t in tasks
     ]
 
@@ -183,9 +263,10 @@ def list_tasks_page(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    task_id: Optional[int] = None,
 ) -> AiGenTaskPageOut:
     tasks = repo.list_project_tasks_page(
-        db, project_id, page, page_size, keyword, status, date_from, date_to
+        db, project_id, page, page_size, keyword, status, date_from, date_to, task_id
     )
     items_by_task: dict[int, List[ApifoxAiGenTaskItem]] = {}
     for it in repo.list_items_by_task_ids(db, [t.id for t in tasks]):
@@ -202,6 +283,7 @@ def list_tasks_page(
             generated_total=sum(i.generated_count for i in its),
             applied_total=sum(i.applied_count for i in its),
             creator_name=names.get(t.created_by) if t.created_by else None,
+            model_label=_task_model_label(db, t),
         ))
     return AiGenTaskPageOut(
         items=briefs,
@@ -239,6 +321,7 @@ def retry_item(db: Session, task: ApifoxAiGenTask, item: ApifoxAiGenTaskItem) ->
     item.error = None
     item.result_cases = None
     item.discarded_cases = None
+    item.applied_cases = None
     item.generated_count = 0
     task.status = "pending"
     task.finished_at = None
@@ -275,6 +358,9 @@ def apply_item(
         }
     else:
         drop = {i for i, c in enumerate(all_cases) if c.name not in failed_names}
+    archived = load_cases(item.applied_cases)
+    archived.extend(all_cases[i] for i in sorted(drop) if 0 <= i < len(all_cases))
+    item.applied_cases = dump_cases(archived) if archived else item.applied_cases
     remaining = [c for i, c in enumerate(all_cases) if i not in drop]
     item.result_cases = dump_cases(remaining) if remaining else None
     item.generated_count = len(remaining)

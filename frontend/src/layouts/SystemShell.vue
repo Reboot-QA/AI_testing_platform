@@ -54,8 +54,6 @@ const ALL = [
     perm: 'system_departments',
   },
   { label: '权限管理', path: '/system/permissions', icon: 'Key', perm: 'system_permissions' },
-  { label: '日志监控', path: '/system/logs', icon: 'Document', perm: 'system_logs' },
-  { label: '错误日志', path: '/system/error-logs', icon: 'Warning', perm: 'system_error_logs' },
 ]
 const menu = computed(() => ALL.filter((m) => userStore.hasPermission(m.perm)))
 

@@ -305,6 +305,38 @@ def test_step_tree_not_requeried_per_iteration(db, make_case, monkeypatch):
     assert len(queries) == 2
 
 
+def test_list_loop_total_count_reconciled_to_actual(db, make_case, monkeypatch):
+    # 7/24-#9：等待 + list 循环(3 项) → 实际 4 步；total_count 应回填为 4、通过率 100，
+    # 而非按估算(等待1+循环估1轮=2)导致「已完成 2 / 通过率 200%」。
+    from app.models.apifox.variable import ApifoxEnvironment, ApifoxEnvironmentVariable
+
+    _stub_pass(monkeypatch)
+    env = ApifoxEnvironment(project_id=1, name="dev")
+    db.add(env)
+    db.commit()
+    db.refresh(env)
+    db.add(ApifoxEnvironmentVariable(environment_id=env.id, key="items", remote_value='["a","b","c"]'))
+    db.commit()
+    case = make_case(name="c")
+    loop = StepIn(
+        type="loop",
+        config={"mode": "list", "list_var": "items", "item_var": "x"},
+        children=[StepIn(type="case", ref_case_id=case.id)],
+    )
+    scenario = _scenario(db, steps=[StepIn(type="wait", wait_ms=1), loop])
+
+    events = list(run_service.iter_scenario_run(db, scenario, env, "test", user_id=1))
+    run = run_repo.get_run(db, events[0]["run_id"])
+
+    assert run.total_count == 4  # 修复前 = 2（等待1 + 循环估 1 轮）
+    assert run.passed_count == 4
+    assert run.pass_rate == 100.0
+
+    # loop_round 打标：循环外的等待步为 0，循环内 3 轮各得唯一序号 1/2/3（供报告统计「循环数=3」）
+    rows = db.query(ApifoxRunStep).filter_by(run_id=run.id).all()
+    assert sorted(s.loop_round for s in rows) == [0, 1, 2, 3]
+
+
 def test_each_data_row_gets_isolated_runtime(db, make_case, monkeypatch):
     # 第一行注入的变量不得残留到第二行（每行独立 runtime）
     seen_vars = []

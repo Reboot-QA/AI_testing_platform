@@ -1,11 +1,7 @@
 import { computed, inject, provide, type ComputedRef, type InjectionKey, type Ref } from 'vue'
 import type { EditorVariable, KvRow } from '@/types/apifox'
 import type { Schemas } from '@/api/types'
-import {
-  collectProcessorExtractVariables,
-  normalizeExtractScope,
-  VARIABLE_SCOPE_LABELS,
-} from '@/utils/apiCaseConfig'
+import { collectProcessorExtractVariables, VARIABLE_SCOPE_LABELS } from '@/utils/apiCaseConfig'
 import { useResolvableVars, type VarMap } from '@/composables/useResolvableVars'
 
 export interface EditorVariableContext {
@@ -15,9 +11,8 @@ export interface EditorVariableContext {
 }
 
 const KEY: InjectionKey<ComputedRef<EditorVariable[]>> = Symbol('editorVariables')
-const PROJECT_PROCESSORS_KEY: InjectionKey<Ref<Schemas['ProcessorRow'][]>> = Symbol(
-  'projectPostProcessors',
-)
+const PROJECT_PROCESSORS_KEY: InjectionKey<Ref<Schemas['ProcessorRow'][]>> =
+  Symbol('projectPostProcessors')
 
 function fromResolvable(map: VarMap): EditorVariable[] {
   return Object.entries(map).map(([name, v]) => ({
@@ -67,7 +62,10 @@ export function provideProjectPostProcessors(getProcessors: () => Schemas['Proce
 
 export function provideEditorVariables(getCtx: () => EditorVariableContext) {
   const resolvable = useResolvableVars()
-  const projectProcessors = inject(PROJECT_PROCESSORS_KEY, computed(() => [] as Schemas['ProcessorRow'][]))
+  const projectProcessors = inject(
+    PROJECT_PROCESSORS_KEY,
+    computed(() => [] as Schemas['ProcessorRow'][]),
+  )
   const variables = computed(() => {
     const ctx = getCtx()
     return mergeEditorVariables(resolvable.value, {

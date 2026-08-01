@@ -8,6 +8,7 @@ from app.database import get_db
 from app.models.user import User
 from app.routers.apifox.workbench_schemas import (
     ProjectStatsOut,
+    WorkbenchAiTaskPageOut,
     WorkbenchManualPageOut,
     WorkbenchOverviewOut,
     WorkbenchReportPageOut,
@@ -88,3 +89,14 @@ def workbench_manual(
 ):
     """手工测试单（跨项目，最近在前）。"""
     return workbench_service.list_manual_page(db, user, page, page_size)
+
+
+@router.get("/workbench/ai-tasks", response_model=WorkbenchAiTaskPageOut)
+def workbench_ai_tasks(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=50),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """AI 任务（跨项目 Hub 需求/用例 + 接口 AI 生成，按更新时间倒序）。"""
+    return workbench_service.list_ai_tasks_page(db, user, page, page_size)

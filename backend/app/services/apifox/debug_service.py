@@ -148,14 +148,26 @@ def debug_send(
     endpoint = ApifoxEndpoint(
         method=(method or "GET").upper(), path=path or "", server_name=server_name
     )
-    plan = engine.build_request(
-        endpoint,
-        request_spec or {},
-        environment,
-        variables,
-        global_param_repo.list_params(db, project_id),
-        binary_loader=upload_service.make_binary_loader(db, project_id),
-    )
+    try:
+        plan = engine.build_request(
+            endpoint,
+            request_spec or {},
+            environment,
+            variables,
+            global_param_repo.list_params(db, project_id),
+            binary_loader=upload_service.make_binary_loader(db, project_id),
+        )
+    except ValueError as exc:
+        # 构建请求失败（如未配环境/前置 URL、路径非绝对）：返回带 error 的结果、不抛 400，
+        # 由响应区给一条操作提示即可，避免再弹一个 http 400 错误（Confluence 7/22-#12）
+        return {
+            "method": (method or "GET").upper(), "url": "", "request_headers": {}, "request_body": "",
+            "warnings": [], "status_code": None, "response_headers": {}, "response_body": "",
+            "duration_ms": 0.0, "error": str(exc),
+            "assertion_results": [], "extract_results": detail.get("extract_results", []),
+            "script_logs": detail["script_logs"], "console_db_logs": detail.get("console_db_logs", []),
+            "contract_result": None,
+        }
 
     result = _base_result(plan, detail["script_logs"])
     result["console_db_logs"] = detail.get("console_db_logs", [])

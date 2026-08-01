@@ -175,7 +175,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           }
@@ -209,7 +211,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           },
@@ -393,7 +397,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           },
@@ -535,6 +541,53 @@
         }
       }
     },
+    "/api/v1/projects/{project_id}/overview/ai-tasks": {
+      "get": {
+        "tags": [
+          "项目"
+        ],
+        "summary": "Ai Tasks Overview",
+        "operationId": "ai_tasks_overview_api_v1_projects__project_id__overview_ai_tasks_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Project Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiTasksOverviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/projects/{project_id}": {
       "get": {
         "tags": [
@@ -659,13 +712,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -887,11 +935,509 @@
           }
         ],
         "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{pid}/hub-ai-tasks": {
+      "get": {
+        "tags": [
+          "AI任务·需求/用例"
+        ],
+        "summary": "List Hub Ai Tasks",
+        "operationId": "list_hub_ai_tasks_api_v1_projects__pid__hub_ai_tasks_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "requirement | functional",
+              "title": "Task Type"
+            },
+            "description": "requirement | functional"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按任务 ID 精确查询",
+              "title": "Task Id"
+            },
+            "description": "按任务 ID 精确查询"
+          }
+        ],
+        "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/HubAiTaskPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}": {
+      "get": {
+        "tags": [
+          "AI任务·需求/用例"
+        ],
+        "summary": "Get Hub Ai Task",
+        "operationId": "get_hub_ai_task_api_v1_projects__pid__hub_ai_tasks__task_id__get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubAiTaskOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/cancel": {
+      "post": {
+        "tags": [
+          "AI任务·需求/用例"
+        ],
+        "summary": "Cancel Hub Ai Task",
+        "operationId": "cancel_hub_ai_task_api_v1_projects__pid__hub_ai_tasks__task_id__cancel_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubAiTaskBrief"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/requirements": {
+      "get": {
+        "tags": [
+          "AI任务·需求/用例"
+        ],
+        "summary": "List Hub Ai Task Requirements",
+        "operationId": "list_hub_ai_task_requirements_api_v1_projects__pid__hub_ai_tasks__task_id__requirements_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubAiTaskRequirementsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/requirements/discard": {
+      "post": {
+        "tags": [
+          "AI任务·需求/用例"
+        ],
+        "summary": "Discard Hub Ai Task Requirements",
+        "operationId": "discard_hub_ai_task_requirements_api_v1_projects__pid__hub_ai_tasks__task_id__requirements_discard_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HubAiTaskRequirementDiscard"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubAiTaskRequirementDiscardResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/cases": {
+      "get": {
+        "tags": [
+          "AI任务·需求/用例"
+        ],
+        "summary": "List Hub Ai Task Cases",
+        "operationId": "list_hub_ai_task_cases_api_v1_projects__pid__hub_ai_tasks__task_id__cases_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HubAiTaskCasesOut"
+                }
               }
             }
           },
@@ -951,70 +1497,6 @@
                 }
               ],
               "title": "Status"
-            }
-          },
-          {
-            "name": "source",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Source"
-            }
-          },
-          {
-            "name": "order",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Order"
-            }
-          },
-          {
-            "name": "unreviewed",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Unreviewed"
-            }
-          },
-          {
-            "name": "linked",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "boolean"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Linked"
             }
           },
           {
@@ -1507,6 +1989,54 @@
         ]
       }
     },
+    "/api/v1/requirements/import/template/excel": {
+      "get": {
+        "tags": [
+          "需求"
+        ],
+        "summary": "Download Requirements Import Template Excel",
+        "operationId": "download_requirements_import_template_excel_api_v1_requirements_import_template_excel_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/requirements/import/template/xmind": {
+      "get": {
+        "tags": [
+          "需求"
+        ],
+        "summary": "Download Requirements Import Template Xmind",
+        "operationId": "download_requirements_import_template_xmind_api_v1_requirements_import_template_xmind_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/requirements/{req_id}": {
       "get": {
         "tags": [
@@ -1631,13 +2161,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1680,7 +2205,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           },
@@ -2142,6 +2669,54 @@
         ]
       }
     },
+    "/api/v1/testcases/import/template/excel": {
+      "get": {
+        "tags": [
+          "用例"
+        ],
+        "summary": "Download Testcases Import Template Excel",
+        "operationId": "download_testcases_import_template_excel_api_v1_testcases_import_template_excel_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/testcases/import/template/xmind": {
+      "get": {
+        "tags": [
+          "用例"
+        ],
+        "summary": "Download Testcases Import Template Xmind",
+        "operationId": "download_testcases_import_template_xmind_api_v1_testcases_import_template_xmind_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/testcases/batch/review": {
       "post": {
         "tags": [
@@ -2358,13 +2933,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -2676,13 +3246,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -2973,13 +3538,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -3032,7 +3592,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           },
@@ -3077,7 +3639,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           },
@@ -3122,7 +3686,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResultOut"
+                }
               }
             }
           },
@@ -3329,6 +3895,7 @@
               "application/json": {
                 "schema": {
                   "items": {
+                    "additionalProperties": true,
                     "type": "object"
                   },
                   "type": "array",
@@ -3526,13 +4093,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -3642,6 +4204,145 @@
         }
       }
     },
+    "/api/v1/test-executions/page": {
+      "get": {
+        "tags": [
+          "用例执行"
+        ],
+        "summary": "List Runs Page",
+        "operationId": "list_runs_page_api_v1_test_executions_page_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "project_id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Project Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "waiting | running | finished",
+              "title": "Status"
+            },
+            "description": "waiting | running | finished"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 200
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ManualTestRunPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/test-executions/available-cases/list": {
       "get": {
         "tags": [
@@ -3705,7 +4406,13 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ManualTestRunAvailableCaseOut"
+                  },
+                  "title": "Response List Available Cases Api V1 Test Executions Available Cases List Get"
+                }
               }
             }
           },
@@ -3720,6 +4427,52 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/test-executions/batch/delete": {
+      "post": {
+        "tags": [
+          "用例执行"
+        ],
+        "summary": "Batch Delete Runs",
+        "operationId": "batch_delete_runs_api_v1_test_executions_batch_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ManualTestRunBatchDelete"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchDeleteResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/test-executions/{run_id}": {
@@ -3846,13 +4599,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -3917,456 +4665,6 @@
                 "schema": {
                   "$ref": "#/components/schemas/ManualTestRunCaseOut"
                 }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/logs/sources": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "List Log Sources",
-        "operationId": "list_log_sources_api_v1_logs_sources_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/logs/tail": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "Tail Logs",
-        "operationId": "tail_logs_api_v1_logs_tail_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "source",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "backend | frontend | ensure",
-              "title": "Source"
-            },
-            "description": "backend | frontend | ensure"
-          },
-          {
-            "name": "lines",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 2000,
-              "minimum": 1,
-              "default": 200,
-              "title": "Lines"
-            }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 200
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "name": "level",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^(ERROR|WARN|INFO|DEBUG)$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Level"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/logs/stream": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "Stream Logs",
-        "operationId": "stream_logs_api_v1_logs_stream_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "source",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "backend | frontend | ensure",
-              "title": "Source"
-            },
-            "description": "backend | frontend | ensure"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/logs/download": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "Download Log",
-        "operationId": "download_log_api_v1_logs_download_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "source",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "description": "backend | frontend | ensure",
-              "title": "Source"
-            },
-            "description": "backend | frontend | ensure"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/logs/errors/summary": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "Error Log Summary",
-        "operationId": "error_log_summary_api_v1_logs_errors_summary_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ]
-      }
-    },
-    "/api/v1/logs/errors/tail": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "Tail Error Logs",
-        "operationId": "tail_error_logs_api_v1_logs_errors_tail_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "category",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(application|api|all)$",
-              "default": "all",
-              "title": "Category"
-            }
-          },
-          {
-            "name": "lines",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "maximum": 2000,
-              "minimum": 1,
-              "default": 200,
-              "title": "Lines"
-            }
-          },
-          {
-            "name": "keyword",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "maxLength": 200
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Keyword"
-            }
-          },
-          {
-            "name": "status_min",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "maximum": 599,
-                  "minimum": 400
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Status Min"
-            }
-          },
-          {
-            "name": "method",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string",
-                  "pattern": "^(GET|POST|PUT|DELETE|PATCH|OPTIONS|HEAD)$"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Method"
-            }
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "default": 0,
-              "title": "Offset"
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page"
-            }
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "maximum": 2000,
-                  "minimum": 1
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Page Size"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/logs/errors/stream": {
-      "get": {
-        "tags": [
-          "日志监控"
-        ],
-        "summary": "Stream Error Logs",
-        "operationId": "stream_error_logs_api_v1_logs_errors_stream_get",
-        "security": [
-          {
-            "OAuth2PasswordBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "category",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "string",
-              "pattern": "^(application|api|all)$",
-              "default": "all",
-              "title": "Category"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
               }
             }
           },
@@ -4643,13 +4941,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -4894,13 +5187,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -4953,7 +5241,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TreeReorderOut"
+                }
               }
             }
           },
@@ -5155,13 +5445,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -5361,13 +5646,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -5567,13 +5847,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -5830,13 +6105,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -6304,13 +6574,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -6546,6 +6811,25 @@
               "title": "Date To"
             },
             "description": "创建时间上界（含当天）"
+          },
+          {
+            "name": "task_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按任务 ID 精确查询",
+              "title": "Task Id"
+            },
+            "description": "按任务 ID 精确查询"
           }
         ],
         "responses": {
@@ -6621,6 +6905,37 @@
             }
           }
         }
+      }
+    },
+    "/api/v1/apifox/ai-gen-tasks/mine/active": {
+      "get": {
+        "tags": [
+          "接口自动化v2·AI生成任务"
+        ],
+        "summary": "List My Active Ai Gen Tasks",
+        "description": "当前用户跨所有可访问项目的进行中 AI 生成任务（侧边栏角标）。",
+        "operationId": "list_my_active_ai_gen_tasks_api_v1_apifox_ai_gen_tasks_mine_active_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/AiGenTaskBrief"
+                  },
+                  "type": "array",
+                  "title": "Response List My Active Ai Gen Tasks Api V1 Apifox Ai Gen Tasks Mine Active Get"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
       }
     },
     "/api/v1/apifox/ai-gen-tasks/{tid}": {
@@ -6824,6 +7139,73 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/AiGenBatchApplyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apifox/ai-gen-tasks/{tid}/items/{iid}/discard": {
+      "post": {
+        "tags": [
+          "接口自动化v2·AI生成任务"
+        ],
+        "summary": "Discard Ai Gen Task Item",
+        "description": "从生成预览中废弃用例（未入库）；与 apply 相同 indexes 语义。",
+        "operationId": "discard_ai_gen_task_item_api_v1_apifox_ai_gen_tasks__tid__items__iid__discard_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Tid"
+            }
+          },
+          {
+            "name": "iid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Iid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AiGenApplyRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiGenDiscardResult"
                 }
               }
             }
@@ -7276,13 +7658,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -7589,13 +7966,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -7734,13 +8106,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -8032,13 +8399,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -8238,13 +8600,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -8444,13 +8801,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -8609,7 +8961,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/ScenarioReorderOut"
+                }
               }
             }
           },
@@ -8750,13 +9104,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -9288,13 +9637,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -9775,6 +10119,64 @@
         }
       }
     },
+    "/api/v1/apifox/projects/{pid}/import/openapi/preview": {
+      "post": {
+        "tags": [
+          "接口自动化v2·导入"
+        ],
+        "summary": "Import Openapi Preview",
+        "description": "导入前的只读预览：按 tag 分组列出待导入接口，标注已存在/契约有变更，供用户勾选。",
+        "operationId": "import_openapi_preview_api_v1_apifox_projects__pid__import_openapi_preview_post",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "pid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Pid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ImportRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImportPreviewOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/projects/{pid}/import/openapi": {
       "post": {
         "tags": [
@@ -9803,7 +10205,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/ImportRequest"
+                "$ref": "#/components/schemas/ImportOpenapiRequest"
               }
             }
           }
@@ -10133,13 +10535,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -10331,13 +10728,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -10699,13 +11091,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -11241,6 +11628,68 @@
         }
       }
     },
+    "/api/v1/apifox/workbench/ai-tasks": {
+      "get": {
+        "tags": [
+          "接口自动化v2·工作台"
+        ],
+        "summary": "Workbench Ai Tasks",
+        "description": "AI 任务（跨项目 Hub 需求/用例 + 接口 AI 生成，按更新时间倒序）。",
+        "operationId": "workbench_ai_tasks_api_v1_apifox_workbench_ai_tasks_get",
+        "security": [
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 50,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkbenchAiTaskPageOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/apifox/projects/{pid}/suites": {
       "get": {
         "tags": [
@@ -11471,13 +11920,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -11608,13 +12052,13 @@
             "schema": {
               "anyOf": [
                 {
-                  "type": "string",
                   "enum": [
                     "scenario",
                     "suite",
                     "case",
                     "endpoint"
-                  ]
+                  ],
+                  "type": "string"
                 },
                 {
                   "type": "null"
@@ -11799,7 +12243,9 @@
             "description": "Successful Response",
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/TrashRestoreOut"
+                }
               }
             }
           },
@@ -11849,13 +12295,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -12157,13 +12598,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -12363,13 +12799,8 @@
           }
         ],
         "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {}
-              }
-            }
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -12573,7 +13004,7 @@
           },
           "count": {
             "type": "integer",
-            "maximum": 100.0,
+            "maximum": 2000.0,
             "minimum": 1.0,
             "title": "Count",
             "default": 5
@@ -12643,6 +13074,20 @@
           "mode"
         ],
         "title": "AIGenerateResponse"
+      },
+      "ActionResultOut": {
+        "properties": {
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "message"
+        ],
+        "title": "ActionResultOut",
+        "description": "无实体返回的写操作统一响应。"
       },
       "AiGenApplyRequest": {
         "properties": {
@@ -12815,6 +13260,19 @@
         ],
         "title": "AiGenConcurrencyUpdate"
       },
+      "AiGenDiscardResult": {
+        "properties": {
+          "discarded": {
+            "type": "integer",
+            "title": "Discarded"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discarded"
+        ],
+        "title": "AiGenDiscardResult"
+      },
       "AiGenTaskBrief": {
         "properties": {
           "id": {
@@ -12864,6 +13322,11 @@
             "type": "integer",
             "title": "Applied Total",
             "default": 0
+          },
+          "model_label": {
+            "type": "string",
+            "title": "Model Label",
+            "default": ""
           },
           "creator_name": {
             "anyOf": [
@@ -12998,6 +13461,14 @@
             "title": "Cases",
             "default": []
           },
+          "applied_cases": {
+            "items": {
+              "$ref": "#/components/schemas/CaseCreate"
+            },
+            "type": "array",
+            "title": "Applied Cases",
+            "default": []
+          },
           "discarded_cases": {
             "items": {
               "$ref": "#/components/schemas/CaseCreate"
@@ -13065,6 +13536,11 @@
               }
             ],
             "title": "Provider Name"
+          },
+          "model_label": {
+            "type": "string",
+            "title": "Model Label",
+            "default": ""
           },
           "categories": {
             "items": {
@@ -13220,6 +13696,39 @@
           "cases"
         ],
         "title": "AiGenerateResult"
+      },
+      "AiTasksOverviewOut": {
+        "properties": {
+          "total_task_count": {
+            "type": "integer",
+            "title": "Total Task Count"
+          },
+          "requirement_task_count": {
+            "type": "integer",
+            "title": "Requirement Task Count"
+          },
+          "case_task_count": {
+            "type": "integer",
+            "title": "Case Task Count"
+          },
+          "api_task_count": {
+            "type": "integer",
+            "title": "Api Task Count"
+          },
+          "active_api_task_count": {
+            "type": "integer",
+            "title": "Active Api Task Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "total_task_count",
+          "requirement_task_count",
+          "case_task_count",
+          "api_task_count"
+        ],
+        "title": "AiTasksOverviewOut"
       },
       "ApiTokenCreate": {
         "properties": {
@@ -13686,24 +14195,6 @@
         ],
         "title": "Body_upload_file_api_v1_apifox_projects__pid__uploads_post"
       },
-      "CaseBatchDeleteRequest": {
-        "properties": {
-          "case_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "title": "Case Ids"
-          },
-          "detach_refs": {
-            "type": "boolean",
-            "title": "Detach Refs",
-            "default": false
-          }
-        },
-        "type": "object",
-        "title": "CaseBatchDeleteRequest"
-      },
       "CaseBatchDeleteBlockedItem": {
         "properties": {
           "name": {
@@ -13730,6 +14221,24 @@
           "name"
         ],
         "title": "CaseBatchDeleteBlockedItem"
+      },
+      "CaseBatchDeleteRequest": {
+        "properties": {
+          "case_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Case Ids"
+          },
+          "detach_refs": {
+            "type": "boolean",
+            "title": "Detach Refs",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "CaseBatchDeleteRequest"
       },
       "CaseBatchDeleteResult": {
         "properties": {
@@ -14887,6 +15396,7 @@
           },
           "rows": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -15161,6 +15671,7 @@
             "title": "Url"
           },
           "request_headers": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Request Headers"
           },
@@ -15187,6 +15698,7 @@
             "title": "Status Code"
           },
           "response_headers": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Response Headers"
           },
@@ -15211,6 +15723,7 @@
           },
           "assertion_results": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -15218,6 +15731,7 @@
           },
           "extract_results": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -15240,6 +15754,7 @@
           "contract_result": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -16483,6 +16998,472 @@
         "type": "object",
         "title": "HTTPValidationError"
       },
+      "HubAiTaskBrief": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "task_type": {
+            "type": "string",
+            "title": "Task Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "category_label": {
+            "type": "string",
+            "title": "Category Label"
+          },
+          "model_label": {
+            "type": "string",
+            "title": "Model Label",
+            "default": ""
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "done_items": {
+            "type": "integer",
+            "title": "Done Items"
+          },
+          "generated_total": {
+            "type": "integer",
+            "title": "Generated Total"
+          },
+          "applied_total": {
+            "type": "integer",
+            "title": "Applied Total"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name",
+            "default": ""
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "task_type",
+          "status",
+          "target",
+          "category_label",
+          "total_items",
+          "done_items",
+          "generated_total",
+          "applied_total",
+          "created_at"
+        ],
+        "title": "HubAiTaskBrief"
+      },
+      "HubAiTaskCaseBrief": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "link_id": {
+            "type": "integer",
+            "title": "Link Id",
+            "default": 0
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "case_type": {
+            "type": "string",
+            "title": "Case Type"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "preconditions": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preconditions"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "expected_results": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Results"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "requirement_title": {
+            "type": "string",
+            "title": "Requirement Title",
+            "default": ""
+          },
+          "review_status": {
+            "type": "string",
+            "title": "Review Status",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "case_type",
+          "priority"
+        ],
+        "title": "HubAiTaskCaseBrief"
+      },
+      "HubAiTaskCasesOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HubAiTaskCaseBrief"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "HubAiTaskCasesOut"
+      },
+      "HubAiTaskOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "task_type": {
+            "type": "string",
+            "title": "Task Type"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "category_label": {
+            "type": "string",
+            "title": "Category Label"
+          },
+          "model_label": {
+            "type": "string",
+            "title": "Model Label",
+            "default": ""
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items"
+          },
+          "done_items": {
+            "type": "integer",
+            "title": "Done Items"
+          },
+          "generated_total": {
+            "type": "integer",
+            "title": "Generated Total"
+          },
+          "applied_total": {
+            "type": "integer",
+            "title": "Applied Total"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "creator_name": {
+            "type": "string",
+            "title": "Creator Name",
+            "default": ""
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          },
+          "requirements": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/HubAiTaskRequirementItemOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirements"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "project_id",
+          "task_type",
+          "status",
+          "target",
+          "category_label",
+          "total_items",
+          "done_items",
+          "generated_total",
+          "applied_total",
+          "created_at"
+        ],
+        "title": "HubAiTaskOut"
+      },
+      "HubAiTaskPageOut": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HubAiTaskBrief"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "total",
+          "items"
+        ],
+        "title": "HubAiTaskPageOut"
+      },
+      "HubAiTaskRequirementDiscard": {
+        "properties": {
+          "item_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Item Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "item_ids"
+        ],
+        "title": "HubAiTaskRequirementDiscard"
+      },
+      "HubAiTaskRequirementDiscardResponse": {
+        "properties": {
+          "discarded": {
+            "type": "integer",
+            "title": "Discarded"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "discarded",
+          "message"
+        ],
+        "title": "HubAiTaskRequirementDiscardResponse"
+      },
+      "HubAiTaskRequirementItemOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "req_type": {
+            "type": "string",
+            "title": "Req Type",
+            "default": "functional"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority",
+            "default": "P1"
+          },
+          "requirement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Id"
+          },
+          "imported_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Imported At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "HubAiTaskRequirementItemOut"
+      },
+      "HubAiTaskRequirementsOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/HubAiTaskRequirementItemOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "HubAiTaskRequirementsOut"
+      },
       "ImportCaseRef": {
         "properties": {
           "case_id": {
@@ -16615,6 +17596,197 @@
         "type": "object",
         "title": "ImportDiffOut"
       },
+      "ImportOpenapiRequest": {
+        "properties": {
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Content"
+          },
+          "basic_auth": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/BasicAuth"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "git_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Git Token"
+          },
+          "target_folder_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Folder Id"
+          },
+          "selected_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Keys"
+          },
+          "on_conflict": {
+            "type": "string",
+            "title": "On Conflict",
+            "default": "skip"
+          },
+          "with_schemas": {
+            "type": "boolean",
+            "title": "With Schemas",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "ImportOpenapiRequest",
+        "description": "执行导入时附带用户在「预览 & 配置」里的选择。"
+      },
+      "ImportPreviewEndpoint": {
+        "properties": {
+          "key": {
+            "type": "string",
+            "title": "Key"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "exists": {
+            "type": "boolean",
+            "title": "Exists",
+            "default": false
+          },
+          "changed": {
+            "type": "boolean",
+            "title": "Changed",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "key",
+          "name",
+          "method",
+          "path"
+        ],
+        "title": "ImportPreviewEndpoint",
+        "description": "导入预览项：key 为「METHOD path」，前端按 key 回传勾选结果。"
+      },
+      "ImportPreviewFolder": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "endpoints": {
+            "items": {
+              "$ref": "#/components/schemas/ImportPreviewEndpoint"
+            },
+            "type": "array",
+            "title": "Endpoints"
+          }
+        },
+        "type": "object",
+        "title": "ImportPreviewFolder",
+        "description": "按文档 tag 分组；name 为空表示未分组接口。"
+      },
+      "ImportPreviewOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/ImportPreviewFolder"
+            },
+            "type": "array",
+            "title": "Folders"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total",
+            "default": 0
+          },
+          "exists_count": {
+            "type": "integer",
+            "title": "Exists Count",
+            "default": 0
+          },
+          "changed_count": {
+            "type": "integer",
+            "title": "Changed Count",
+            "default": 0
+          },
+          "schemas_total": {
+            "type": "integer",
+            "title": "Schemas Total",
+            "default": 0
+          },
+          "schemas_new": {
+            "type": "integer",
+            "title": "Schemas New",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ImportPreviewOut"
+      },
       "ImportRemovedEndpoint": {
         "properties": {
           "endpoint_id": {
@@ -16670,6 +17842,11 @@
           "created": {
             "type": "integer",
             "title": "Created"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated",
+            "default": 0
           },
           "skipped": {
             "type": "integer",
@@ -16742,6 +17919,84 @@
         },
         "type": "object",
         "title": "ImportRequest"
+      },
+      "ImportRunItem": {
+        "properties": {
+          "method": {
+            "type": "string",
+            "title": "Method"
+          },
+          "path": {
+            "type": "string",
+            "title": "Path"
+          },
+          "folder": {
+            "type": "string",
+            "title": "Folder",
+            "default": ""
+          },
+          "name": {
+            "type": "string",
+            "title": "Name",
+            "default": ""
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "method",
+          "path",
+          "status"
+        ],
+        "title": "ImportRunItem",
+        "description": "一次导入的逐条结果，供定时导入「上次结果」明细表展示。"
+      },
+      "ImportRunManifest": {
+        "properties": {
+          "added": {
+            "type": "integer",
+            "title": "Added",
+            "default": 0
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated",
+            "default": 0
+          },
+          "deleted": {
+            "type": "integer",
+            "title": "Deleted",
+            "default": 0
+          },
+          "kept_referenced": {
+            "type": "integer",
+            "title": "Kept Referenced",
+            "default": 0
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRunItem"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "ImportRunManifest",
+        "description": "上次运行逐条清单：counts + items（新增/更新/删除/保留/未变），供明细表展示。"
       },
       "ImportScheduleCreate": {
         "properties": {
@@ -16972,6 +18227,16 @@
             ],
             "title": "Last Run Detail"
           },
+          "last_run_manifest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImportRunManifest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "next_run_at": {
             "anyOf": [
               {
@@ -17177,6 +18442,11 @@
             "title": "Kept Referenced",
             "default": 0
           },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped",
+            "default": 0
+          },
           "schemas_created": {
             "type": "integer",
             "title": "Schemas Created",
@@ -17188,6 +18458,18 @@
             },
             "type": "array",
             "title": "Warnings"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ImportRunItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           }
         },
         "type": "object",
@@ -17646,6 +18928,74 @@
         "type": "object",
         "title": "LocalValueSet"
       },
+      "ManualTestRunAvailableCaseOut": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "priority": {
+            "type": "string",
+            "title": "Priority"
+          },
+          "case_type": {
+            "type": "string",
+            "title": "Case Type"
+          },
+          "requirement_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Requirement Id"
+          },
+          "sort_order": {
+            "type": "integer",
+            "title": "Sort Order"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "priority",
+          "case_type",
+          "requirement_id",
+          "sort_order"
+        ],
+        "title": "ManualTestRunAvailableCaseOut",
+        "description": "创建测试单时可选择的已评审用例。"
+      },
+      "ManualTestRunBatchDelete": {
+        "properties": {
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "run_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Run Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "run_ids"
+        ],
+        "title": "ManualTestRunBatchDelete"
+      },
       "ManualTestRunCaseOut": {
         "properties": {
           "id": {
@@ -18040,6 +19390,37 @@
         ],
         "title": "ManualTestRunDetailOut"
       },
+      "ManualTestRunPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ManualTestRunSummaryOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "ManualTestRunPageOut"
+      },
       "ManualTestRunSummaryOut": {
         "properties": {
           "id": {
@@ -18227,6 +19608,39 @@
           "group": {
             "type": "string",
             "title": "Group"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "parent_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Label"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
           }
         },
         "type": "object",
@@ -18365,6 +19779,18 @@
             "type": "boolean",
             "title": "Notify Aigen"
           },
+          "notify_schedule_success": {
+            "type": "boolean",
+            "title": "Notify Schedule Success"
+          },
+          "notify_run_success": {
+            "type": "boolean",
+            "title": "Notify Run Success"
+          },
+          "notify_aigen_success": {
+            "type": "boolean",
+            "title": "Notify Aigen Success"
+          },
           "retry_count": {
             "type": "integer",
             "title": "Retry Count"
@@ -18382,6 +19808,9 @@
           "notify_schedule",
           "notify_run",
           "notify_aigen",
+          "notify_schedule_success",
+          "notify_run_success",
+          "notify_aigen_success",
           "retry_count",
           "retry_interval_sec"
         ],
@@ -18489,6 +19918,21 @@
             "type": "boolean",
             "title": "Notify Aigen",
             "default": true
+          },
+          "notify_schedule_success": {
+            "type": "boolean",
+            "title": "Notify Schedule Success",
+            "default": false
+          },
+          "notify_run_success": {
+            "type": "boolean",
+            "title": "Notify Run Success",
+            "default": false
+          },
+          "notify_aigen_success": {
+            "type": "boolean",
+            "title": "Notify Aigen Success",
+            "default": false
           },
           "retry_count": {
             "type": "integer",
@@ -18909,6 +20353,16 @@
             "title": "Owner Seq",
             "default": 0
           },
+          "api_tree_order_version": {
+            "type": "integer",
+            "title": "Api Tree Order Version",
+            "default": 1
+          },
+          "scenario_order_version": {
+            "type": "integer",
+            "title": "Scenario Order Version",
+            "default": 1
+          },
           "owner_id": {
             "type": "integer",
             "title": "Owner Id"
@@ -19325,6 +20779,17 @@
             "type": "array",
             "minItems": 1,
             "title": "Requirements"
+          },
+          "hub_task_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hub Task Id"
           }
         },
         "type": "object",
@@ -19902,6 +21367,22 @@
             "type": "string",
             "title": "Triggered By"
           },
+          "retry_of_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Run Id"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "default": 1
+          },
           "started_at": {
             "type": "string",
             "format": "date-time",
@@ -19945,6 +21426,156 @@
           "started_at"
         ],
         "title": "RunBrief"
+      },
+      "RunBriefWithRetries": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "parent_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Run Id"
+          },
+          "target_type": {
+            "type": "string",
+            "title": "Target Type"
+          },
+          "target_id": {
+            "type": "integer",
+            "title": "Target Id"
+          },
+          "target_name": {
+            "type": "string",
+            "title": "Target Name"
+          },
+          "environment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Environment Id"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "total_count": {
+            "type": "integer",
+            "title": "Total Count"
+          },
+          "passed_count": {
+            "type": "integer",
+            "title": "Passed Count"
+          },
+          "failed_count": {
+            "type": "integer",
+            "title": "Failed Count"
+          },
+          "pass_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "triggered_by": {
+            "type": "string",
+            "title": "Triggered By"
+          },
+          "retry_of_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Run Id"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "default": 1
+          },
+          "started_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Started At"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "retries": {
+            "items": {
+              "$ref": "#/components/schemas/RunBrief"
+            },
+            "type": "array",
+            "title": "Retries"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "target_type",
+          "target_id",
+          "target_name",
+          "status",
+          "total_count",
+          "passed_count",
+          "failed_count",
+          "triggered_by",
+          "started_at"
+        ],
+        "title": "RunBriefWithRetries",
+        "description": "报告列表行：同一次触发的多次尝试折成一行。\n\n本行 = 最后一次尝试（整体结果），retries = 此前各次尝试（attempt 升序）；无重试时为空。\n分页与总条数按「行」（重试链）计，不按尝试次数计。"
       },
       "RunOut": {
         "properties": {
@@ -20028,6 +21659,22 @@
             "type": "string",
             "title": "Triggered By"
           },
+          "retry_of_run_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry Of Run Id"
+          },
+          "attempt": {
+            "type": "integer",
+            "title": "Attempt",
+            "default": 1
+          },
           "started_at": {
             "type": "string",
             "format": "date-time",
@@ -20072,6 +21719,7 @@
           },
           "iterations": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -20097,7 +21745,7 @@
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/RunBrief"
+              "$ref": "#/components/schemas/RunBriefWithRetries"
             },
             "type": "array",
             "title": "Items"
@@ -20142,6 +21790,11 @@
           "iteration": {
             "type": "integer",
             "title": "Iteration",
+            "default": 0
+          },
+          "loop_round": {
+            "type": "integer",
+            "title": "Loop Round",
             "default": 0
           },
           "case_id": {
@@ -20194,6 +21847,7 @@
             "title": "Response Status"
           },
           "request_headers": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Request Headers"
           },
@@ -20203,6 +21857,7 @@
             "default": ""
           },
           "response_headers": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Response Headers"
           },
@@ -20213,6 +21868,7 @@
           },
           "assertion_results": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -20220,6 +21876,7 @@
           },
           "extract_results": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -20235,6 +21892,7 @@
           "contract_result": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -20558,8 +22216,36 @@
         ],
         "title": "ScenarioReorderItem"
       },
+      "ScenarioReorderOut": {
+        "properties": {
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "order_version": {
+            "type": "integer",
+            "title": "Order Version"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "order_version",
+          "updated_count"
+        ],
+        "title": "ScenarioReorderOut"
+      },
       "ScenarioReorderRequest": {
         "properties": {
+          "expected_order_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Order Version"
+          },
           "items": {
             "items": {
               "$ref": "#/components/schemas/ScenarioReorderItem"
@@ -20571,6 +22257,7 @@
         },
         "type": "object",
         "required": [
+          "expected_order_version",
           "items"
         ],
         "title": "ScenarioReorderRequest"
@@ -21381,6 +23068,7 @@
             "default": 200
           },
           "response_headers": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Response Headers"
           }
@@ -21778,6 +23466,7 @@
           },
           "preview_rows": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -21968,6 +23657,7 @@
           "config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -22049,6 +23739,7 @@
           "config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -23033,8 +24724,77 @@
         ],
         "title": "TrashPageOut"
       },
+      "TrashRestoreOut": {
+        "properties": {
+          "entity_type": {
+            "type": "string",
+            "enum": [
+              "scenario",
+              "suite",
+              "case",
+              "endpoint"
+            ],
+            "title": "Entity Type"
+          },
+          "entity_id": {
+            "type": "integer",
+            "title": "Entity Id"
+          },
+          "restored_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Restored At"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "entity_type",
+          "entity_id",
+          "restored_at"
+        ],
+        "title": "TrashRestoreOut"
+      },
+      "TreeReorderOut": {
+        "properties": {
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "order_version": {
+            "type": "integer",
+            "title": "Order Version"
+          },
+          "updated_count": {
+            "type": "integer",
+            "title": "Updated Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "project_id",
+          "order_version",
+          "updated_count"
+        ],
+        "title": "TreeReorderOut"
+      },
       "TreeReorderRequest": {
         "properties": {
+          "expected_order_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Order Version"
+          },
           "folders": {
             "items": {
               "$ref": "#/components/schemas/ReorderFolder"
@@ -23051,6 +24811,9 @@
           }
         },
         "type": "object",
+        "required": [
+          "expected_order_version"
+        ],
         "title": "TreeReorderRequest"
       },
       "UploadOut": {
@@ -23668,6 +25431,97 @@
         "type": "object",
         "title": "VariableUpdate"
       },
+      "WorkbenchAiTask": {
+        "properties": {
+          "task_key": {
+            "type": "string",
+            "title": "Task Key"
+          },
+          "category": {
+            "type": "string",
+            "title": "Category"
+          },
+          "task_id": {
+            "type": "integer",
+            "title": "Task Id"
+          },
+          "project_id": {
+            "type": "integer",
+            "title": "Project Id"
+          },
+          "project_name": {
+            "type": "string",
+            "title": "Project Name"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "done_items": {
+            "type": "integer",
+            "title": "Done Items",
+            "default": 0
+          },
+          "total_items": {
+            "type": "integer",
+            "title": "Total Items",
+            "default": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "task_key",
+          "category",
+          "task_id",
+          "project_id",
+          "project_name",
+          "title",
+          "status",
+          "updated_at"
+        ],
+        "title": "WorkbenchAiTask",
+        "description": "跨项目 AI 任务（Hub 需求/用例 + Apifox 接口生成）。"
+      },
+      "WorkbenchAiTaskPageOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorkbenchAiTask"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "page": {
+            "type": "integer",
+            "title": "Page"
+          },
+          "page_size": {
+            "type": "integer",
+            "title": "Page Size"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "page",
+          "page_size"
+        ],
+        "title": "WorkbenchAiTaskPageOut"
+      },
       "WorkbenchManual": {
         "properties": {
           "run_id": {
@@ -23814,6 +25668,16 @@
           "role": {
             "type": "string",
             "title": "Role"
+          },
+          "owner_name": {
+            "type": "string",
+            "title": "Owner Name",
+            "default": ""
+          },
+          "department_name": {
+            "type": "string",
+            "title": "Department Name",
+            "default": ""
           },
           "pinned": {
             "type": "boolean",

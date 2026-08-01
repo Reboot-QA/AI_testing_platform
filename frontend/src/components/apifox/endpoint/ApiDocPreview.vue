@@ -1,27 +1,27 @@
 <template>
-  <div class="px-0.5 py-1">
+  <div class="px-2 py-2">
     <div class="flex items-center gap-2">
       <MethodTag :method="form.method" />
       <span class="font-mono text-foreground">{{ form.path || '/' }}</span>
     </div>
-    <div class="mt-2 mb-1 text-base font-semibold text-primary">{{ form.name }}</div>
-    <div v-if="form.description" class="mb-3 text-sm text-muted-foreground">
+    <div class="mt-1.5 mb-1 text-sm font-semibold text-primary">{{ form.name }}</div>
+    <div v-if="form.description" class="mb-2 text-sm text-muted-foreground">
       {{ form.description }}
     </div>
 
-    <section v-if="rows(spec.query).length" class="mt-4">
+    <section v-if="rows(spec.query).length" class="mt-3">
       <h4 class="mb-1.5 text-sm font-medium text-muted-foreground">Query 参数</h4>
       <ParamTable :rows="rows(spec.query)" />
     </section>
-    <section v-if="rows(spec.path_params).length" class="mt-4">
+    <section v-if="rows(spec.path_params).length" class="mt-3">
       <h4 class="mb-1.5 text-sm font-medium text-muted-foreground">Path 变量</h4>
       <ParamTable :rows="rows(spec.path_params)" />
     </section>
-    <section v-if="rows(spec.headers).length" class="mt-4">
+    <section v-if="rows(spec.headers).length" class="mt-3">
       <h4 class="mb-1.5 text-sm font-medium text-muted-foreground">Headers</h4>
       <ParamTable :rows="rows(spec.headers)" />
     </section>
-    <section v-if="spec.body && spec.body.type !== 'none'" class="mt-4">
+    <section v-if="spec.body && spec.body.type !== 'none'" class="mt-3">
       <h4 class="mb-1.5 text-sm font-medium text-muted-foreground">Body（{{ spec.body.type }}）</h4>
       <JsonView v-if="spec.body.type === 'json'" :data="spec.body.raw" :deep="3" />
       <pre
@@ -45,11 +45,11 @@
       </div>
       <ParamTable v-else :rows="rows(spec.body.form)" />
     </section>
-    <section v-if="spec.cookies && rows(spec.cookies).length" class="mt-4">
+    <section v-if="spec.cookies && rows(spec.cookies).length" class="mt-3">
       <h4 class="mb-1.5 text-sm font-medium text-muted-foreground">Cookies</h4>
       <ParamTable :rows="rows(spec.cookies)" />
     </section>
-    <section v-if="spec.auth && spec.auth.type !== 'none'" class="mt-4">
+    <section v-if="spec.auth && spec.auth.type !== 'none'" class="mt-3">
       <h4 class="mb-1.5 text-sm font-medium text-muted-foreground">Auth</h4>
       <div class="text-sm text-foreground">类型：{{ spec.auth.type }}</div>
     </section>

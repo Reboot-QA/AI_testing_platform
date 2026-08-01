@@ -6,8 +6,7 @@
 compute_diff 为纯只读预览；apply_sync 才写库、单次 commit。
 """
 
-import json
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
@@ -15,64 +14,23 @@ from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
 from app.repositories.apifox import case_repo, scenario_repo, script_repo, suite_repo
 from app.repositories.apifox import endpoint_repo as repo
 from app.routers.apifox.schemas import (
-    BodySpec,
     ImportCaseRef,
     ImportChangedEndpoint,
     ImportDiffEndpoint,
     ImportDiffOut,
     ImportRemovedEndpoint,
+    ImportRunItem,
     ImportSyncReport,
-    RequestSpec,
 )
 from app.services.apifox import import_service
 
+# 逐条清单落库上限，防单次同步大量接口撑爆 last_run_manifest 列
+_MAX_MANIFEST_ITEMS = 1000
 
-def _load_spec(text: Optional[str]) -> RequestSpec:
-    if not text:
-        return RequestSpec()
-    try:
-        return RequestSpec.model_validate_json(text)
-    except ValueError:
-        return RequestSpec()
-
-
-def _keys(rows) -> frozenset:
-    return frozenset(r.key for r in rows if r.key)
-
-
-def _typed_keys(rows) -> frozenset:
-    return frozenset((r.key, r.type) for r in rows if r.key)
-
-
-def _body_signature(body: BodySpec) -> Tuple[Any, ...]:
-    """请求体契约签名：忽略格式差异，识别结构变化（form 键 / json 结构 / 原文）。"""
-    if body.type in ("form-data", "urlencoded"):
-        return ("form", _keys(body.form))
-    if body.type == "graphql":
-        return ("graphql", (body.graphql_query or "").strip())
-    if body.type == "json":
-        raw = (body.raw or "").strip()
-        try:
-            return ("json", json.dumps(json.loads(raw), sort_keys=True, ensure_ascii=False))
-        except (ValueError, TypeError):
-            return ("json", raw)
-    if body.type in ("xml", "raw"):
-        return (body.type, (body.raw or "").strip())
-    return (body.type,)  # none | binary
-
-
-def _change_labels(new: RequestSpec, old: RequestSpec) -> List[str]:
-    """接口契约变更点（只看 import 能表达的结构，忽略示例值/enabled/desc 的本地编辑）。"""
-    labels: List[str] = []
-    if _typed_keys(new.query) != _typed_keys(old.query):
-        labels.append("Query 参数")
-    if _typed_keys(new.path_params) != _typed_keys(old.path_params):  # Params 带类型标注，需比 type
-        labels.append("Path 参数")
-    if _keys(new.headers) != _keys(old.headers):  # header 无类型语义，只比 key
-        labels.append("请求头")
-    if _body_signature(new.body) != _body_signature(old.body):
-        labels.append("请求体")
-    return labels
+# 契约装载/比对/覆盖与「导入时覆盖已存在接口」同一套语义，单一实现放在 import_service
+_load_spec = import_service.load_spec
+_change_labels = import_service.change_labels
+_apply_contract = import_service.apply_contract
 
 
 def _removed_endpoint(db: Session, ep: ApifoxEndpoint) -> ImportRemovedEndpoint:
@@ -138,18 +96,9 @@ def compute_diff(db: Session, project_id: int, doc: Dict[str, Any]) -> ImportDif
     )
 
 
-def _apply_contract(ep: ApifoxEndpoint, new_spec: RequestSpec, old_spec: RequestSpec) -> None:
-    """只覆盖请求契约字段，保留本地 cookies/auth/settings。"""
-    old_spec.query = new_spec.query
-    old_spec.path_params = new_spec.path_params
-    old_spec.headers = new_spec.headers
-    old_spec.body = new_spec.body
-    ep.request_spec = old_spec.model_dump_json()
-
-
 def _delete_endpoint_cascade(db: Session, ep: ApifoxEndpoint) -> None:
-    """删接口 + 其用例（用例已确认无引用）+ 两级处理器子表。"""
-    for case in case_repo.list_cases(db, ep.id):
+    """删接口 + 其全部用例（含回收站已软删，用例已确认无引用）+ 两级处理器子表。"""
+    for case in case_repo.list_cases_all(db, ep.id):
         case_repo.delete_children(db, case.id)
         script_repo.delete_case_scripts(db, case.id)
         case_repo.delete(db, case)
@@ -182,11 +131,22 @@ def apply_sync(
     }
 
     report = ImportSyncReport()
+    manifest: List[ImportRunItem] = []
+
+    def _add(method: str, path: str, folder: Optional[str], name: str, status: str) -> None:
+        if len(manifest) < _MAX_MANIFEST_ITEMS:
+            manifest.append(
+                ImportRunItem(method=method, path=path, folder=folder or "", name=name, status=status)
+            )
+        else:
+            report.truncated = True
+
     for key, item in parsed_by_key.items():
         ep = existing_by_key.get(key)
         if ep is None:
             import_service.create_endpoint_from_item(db, project_id, item, folder_by_name)
             report.added += 1
+            _add(item["method"], item["path"], item.get("folder"), item.get("name") or "", "added")
             continue
         old_spec = _load_spec(ep.request_spec)
         if _change_labels(item["request_spec"], old_spec):
@@ -194,6 +154,10 @@ def apply_sync(
             if case_repo.list_cases(db, ep.id):
                 ep.cases_stale = True  # 有用例则标记待复核，供树上提示
             report.updated += 1
+            _add(item["method"], item["path"], item.get("folder"), item.get("name") or "", "updated")
+        else:
+            report.skipped += 1
+            _add(item["method"], item["path"], item.get("folder"), item.get("name") or "", "skipped")
 
     for key, ep in existing_by_key.items():
         if key in parsed_by_key:
@@ -202,10 +166,13 @@ def apply_sync(
         if removed.referenced:
             report.kept_referenced += 1
             report.warnings.extend(_reference_warning(ep, ref) for ref in removed.references)
+            _add(ep.method, ep.path, None, ep.name or "", "kept")
         elif delete_unreferenced:
             _delete_endpoint_cascade(db, ep)
             report.deleted += 1
+            _add(ep.method, ep.path, None, ep.name or "", "deleted")
 
+    report.items = manifest
     report.schemas_created = import_service.import_schemas(db, project_id, doc)
     db.commit()
     return report

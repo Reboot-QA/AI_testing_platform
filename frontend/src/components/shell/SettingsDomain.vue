@@ -9,10 +9,10 @@
         <div class="menu-group-items">
           <div
             v-for="m in grp.items"
-            :key="m.key"
+            :key="m.name"
             class="menu-item"
-            :class="{ active: open === m.key }"
-            @click="emit('nav', m.key)"
+            :class="{ active: route.name === m.name }"
+            @click="go(m.name)"
           >
             <span>{{ m.label }}</span>
           </div>
@@ -21,39 +21,19 @@
     </nav>
 
     <div class="settings-body">
-      <ProjectSettings v-if="open === 'basic'" />
-      <ProjectScriptsPanel v-else-if="open === 'scripts'" :project-id="projectId" />
-      <ProjectSqlScriptsPanel v-else-if="open === 'sql-scripts'" :project-id="projectId" />
-      <DatasetPanel v-else-if="open === 'datasets'" />
-      <ProjectDatabasesPanel v-else-if="open === 'databases'" />
-      <NotifyConfigPanel v-else-if="open === 'notify'" :project-id="projectId" />
-      <EnvManage v-else-if="open === 'envs'" />
-      <ImportDataPanel v-else-if="open === 'import'" />
-      <ExportDataPanel v-else-if="open === 'export'" />
-      <ProjectMembersPanel v-else-if="open === 'members' && isManager" :project-id="projectId" />
-      <el-empty v-else description="无权限访问该设置页" :image-size="64" />
+      <RouterView />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { computed, watch } from 'vue'
-import type { SettingsSection } from '@/types/shell'
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useWorkspaceStore } from '@/stores/workspace'
-import ProjectSettings from '@/views/apifox/sections/ProjectSettings.vue'
-import EnvManage from '@/views/apifox/sections/EnvManage.vue'
-import ImportDataPanel from '@/components/apifox/import-export/ImportDataPanel.vue'
-import ExportDataPanel from '@/components/apifox/import-export/ExportDataPanel.vue'
-import ProjectScriptsPanel from '@/components/apifox/script/ProjectScriptsPanel.vue'
-import ProjectSqlScriptsPanel from '@/components/apifox/script/ProjectSqlScriptsPanel.vue'
-import DatasetPanel from '@/views/apifox/sections/DatasetPanel.vue'
-import ProjectDatabasesPanel from '@/components/apifox/project/ProjectDatabasesPanel.vue'
-import NotifyConfigPanel from '@/components/apifox/project/NotifyConfigPanel.vue'
-import ProjectMembersPanel from '@/components/apifox/project/ProjectMembersPanel.vue'
-
-const props = defineProps<{ open: SettingsSection; projectId: number }>()
-const emit = defineEmits<{ nav: [open: SettingsSection] }>()
+import { workspaceMenuGroups } from '@/router/workspace'
+const route = useRoute()
+const router = useRouter()
 
 const userStore = useUserStore()
 const workspace = useWorkspaceStore()
@@ -63,62 +43,13 @@ const isManager = computed(
   () => userStore.isAdmin || workspace.currentProject?.owner_id === userStore.user?.id,
 )
 
-interface MenuLeaf {
-  key: SettingsSection
-  label: string
-}
-interface MenuGroup {
-  title: string
-  icon: string
-  items: MenuLeaf[]
-}
-
-const MENU_GROUPS: MenuGroup[] = [
-  {
-    title: '系统设置',
-    icon: 'Setting',
-    items: [
-      { key: 'basic', label: '基本信息' },
-      { key: 'notify', label: '失败通知' },
-      { key: 'members', label: '成员管理' },
-      { key: 'envs', label: '环境管理' },
-    ],
-  },
-  {
-    title: '数据管理',
-    icon: 'Coin',
-    items: [
-      { key: 'import', label: '导入数据' },
-      { key: 'export', label: '导出数据' },
-    ],
-  },
-  {
-    title: '项目资源',
-    icon: 'FolderOpened',
-    items: [
-      { key: 'scripts', label: '脚本库' },
-      { key: 'sql-scripts', label: 'SQL 脚本' },
-      { key: 'datasets', label: '数据集' },
-      { key: 'databases', label: '数据库' },
-    ],
-  },
-]
-
 const menuGroups = computed(() =>
-  MENU_GROUPS.map((grp) => ({
-    ...grp,
-    items: grp.items.filter((m) => m.key !== 'members' || isManager.value),
-  })).filter((grp) => grp.items.length > 0),
+  workspaceMenuGroups('settings', userStore.hasPermission, isManager.value),
 )
 
-// 项目已加载且无权限却深链到 members 时回退到基本信息（避免 currentProject 未就绪时误踢负责人）
-watch(
-  () => [props.open, isManager.value, workspace.currentProject] as const,
-  ([open, manager, project]) => {
-    if (open === 'members' && project && !manager) emit('nav', 'basic')
-  },
-  { immediate: true },
-)
+function go(name: string) {
+  void router.push({ name, params: { projectId: route.params.projectId } })
+}
 </script>
 
 <style scoped>

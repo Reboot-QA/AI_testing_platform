@@ -154,7 +154,10 @@ export function useImportEndpointDialog(
     if (importMode.value === 'pick-suite-case' || importMode.value === 'pick-schedule-case') {
       return node.type === 'case'
     }
-    if (importMode.value === 'pick-suite-scenario' || importMode.value === 'pick-schedule-scenario') {
+    if (
+      importMode.value === 'pick-suite-scenario' ||
+      importMode.value === 'pick-schedule-scenario'
+    ) {
       return node.type === 'scenario'
     }
     if (importMode.value === 'pick-schedule-suite') return node.type === 'suite'
@@ -215,7 +218,10 @@ export function useImportEndpointDialog(
   async function loadTree() {
     loading.value = true
     try {
-      if (importMode.value === 'pick-suite-scenario' || importMode.value === 'pick-schedule-scenario') {
+      if (
+        importMode.value === 'pick-suite-scenario' ||
+        importMode.value === 'pick-schedule-scenario'
+      ) {
         const [scenarioFolders, scenarios] = await Promise.all([
           apifoxApi.listScenarioFolders(projectId.value),
           apifoxApi.listScenarios(projectId.value),
@@ -337,23 +343,17 @@ export function useImportEndpointDialog(
   function confirm() {
     if (importMode.value === 'pick-schedule-case') {
       const picked = pickedLeaves()
-      const c = picked
-        .map((n) => caseMap.value.get(n.id))
-        .find((x): x is CaseMeta => !!x)
+      const c = picked.map((n) => caseMap.value.get(n.id)).find((x): x is CaseMeta => !!x)
       if (!c) return
       emit({ mode: 'pick-schedule-case', case: c })
     } else if (importMode.value === 'pick-schedule-scenario') {
       const picked = pickedLeaves()
-      const s = picked
-        .map((n) => scenarioMap.value.get(n.id))
-        .find((x): x is ScenarioMeta => !!x)
+      const s = picked.map((n) => scenarioMap.value.get(n.id)).find((x): x is ScenarioMeta => !!x)
       if (!s) return
       emit({ mode: 'pick-schedule-scenario', scenario: s })
     } else if (importMode.value === 'pick-schedule-suite') {
       const picked = pickedLeaves()
-      const su = picked
-        .map((n) => suiteMap.value.get(n.id))
-        .find((x): x is ScenarioMeta => !!x)
+      const su = picked.map((n) => suiteMap.value.get(n.id)).find((x): x is ScenarioMeta => !!x)
       if (!su) return
       emit({ mode: 'pick-schedule-suite', suite: su })
     } else if (isPickSuiteMode(importMode.value)) {

@@ -5,6 +5,7 @@
       :scenarios="scenarios"
       :folders="folders"
       :active-id="activeId"
+      :loading="listLoading"
       @select="onSelectScenario"
       @del="delScenario"
       @reorder="onReorderScenarios"
@@ -78,9 +79,11 @@
             v-model:dataset-id="activeTab.form.run_config.dataset_id"
             v-model:propagate-auth="activeTab.form.run_config.propagate_auth"
             :datasets="datasets"
+            :disabled="!editorResourcesReady"
           />
           <div class="steps-title">步骤（按序执行 · 可用「分组」嵌套组织，拖拽移动）</div>
           <ScenarioStepsEditor
+            v-if="editorResourcesReady"
             ref="stepsEditorRef"
             :project-id="pid"
             :rows="activeTab.form.steps as ScenarioEditorStep[]"
@@ -92,6 +95,12 @@
             :server-names="serverNames"
             :datasets="datasets"
           />
+          <div v-else class="editor-resources-state">
+            <el-skeleton v-if="editorResourcesLoading" :rows="5" animated />
+            <el-empty v-else description="编辑资源加载失败，请重试" :image-size="60">
+              <el-button size="small" @click="ensureEditorResources">重新加载</el-button>
+            </el-empty>
+          </div>
           <RunProgress
             :events="activeTab.runEvents as RunProgressEvent[]"
             :running="activeTab.running"
@@ -142,10 +151,22 @@ const projectCases = ref<Schemas['ProjectCaseBrief'][]>([])
 const scripts = ref<Schemas['ScriptBrief'][]>([])
 const databases = ref<Schemas['DatabaseOut'][]>([])
 const datasets = ref<Schemas['DatasetBrief'][]>([])
+const listLoading = ref(false)
+const editorResourcesReady = ref(false)
+const editorResourcesLoading = ref(false)
+let editorResourcesPromise: Promise<void> | null = null
 
 const tabs = computed(() => tabsStore.tabsOf(pid.value))
 const activeId = computed(() => tabsStore.activeIdOf(pid.value))
 const activeTab = computed(() => tabsStore.findTab(pid.value, activeId.value))
+
+watch(
+  activeTab,
+  (tab) => {
+    if (tab) void ensureEditorResources()
+  },
+  { immediate: true },
+)
 
 // 路由级未保存守卫：切路由/切项目/退出前，有未保存改动则确认
 useTabsRouteGuard(() => tabsStore.hasAnyDirty(pid.value))
@@ -165,8 +186,24 @@ const { folders, loadFolders, createFolder, renameFolder, deleteFolder } = useSc
 const selectedFolderId = ref<number | null>(null)
 
 async function onReorderScenarios(items: Schemas['ScenarioReorderRequest']['items']) {
-  await apifoxApi.reorderScenarios(pid.value, { items }) // 快照：分组+排序一起落库
-  await loadScenarios()
+  try {
+    const result = await apifoxApi.reorderScenarios(pid.value, {
+      expected_order_version: store.currentProject?.scenario_order_version ?? 1,
+      items,
+    })
+    if (store.currentProject?.id === result.project_id) {
+      store.currentProject.scenario_order_version = result.order_version
+    }
+    await loadScenarios()
+  } catch (error) {
+    if (isConflict(error)) {
+      await store.loadProject(pid.value, true)
+      await loadScenarios()
+      ElMessage.warning('场景排序已被其他操作更新，已刷新最新顺序')
+      return
+    }
+    throw error
+  }
 }
 
 async function onCreateFolder() {
@@ -175,7 +212,7 @@ async function onCreateFolder() {
 }
 
 async function onDeleteFolder(folder: Schemas['ScenarioFolderOut']) {
-  await deleteFolder(folder) // 后端把其下场景移到未分组
+  await deleteFolder(folder) // 后端级联软删其下场景进回收站
   if (selectedFolderId.value === folder.id) selectedFolderId.value = null
   await loadScenarios()
 }
@@ -197,11 +234,43 @@ async function loadDatabases() {
     ? await apifoxApi.listDatabases(store.currentEnvironmentId)
     : []
 }
-watch(() => store.currentEnvironmentId, loadDatabases)
+watch(
+  () => store.currentEnvironmentId,
+  () => {
+    if (editorResourcesReady.value || editorResourcesLoading.value) void loadDatabases()
+  },
+)
+
+/** 编辑器依赖的数据仅在首次打开场景后并发加载，避免阻塞左侧场景列表的首屏展示。 */
+function ensureEditorResources(): Promise<void> {
+  if (editorResourcesReady.value) return Promise.resolve()
+  if (editorResourcesPromise) return editorResourcesPromise
+
+  editorResourcesLoading.value = true
+  editorResourcesPromise = Promise.all([
+    loadProjectCases(),
+    loadScripts(),
+    loadDatasets(),
+    loadDatabases(),
+  ])
+    .then(() => {
+      editorResourcesReady.value = true
+    })
+    .catch(() => {
+      // 请求层已提示具体错误；这里保留局部重试入口，避免编辑器长期停在加载态。
+      editorResourcesReady.value = false
+    })
+    .finally(() => {
+      editorResourcesLoading.value = false
+      editorResourcesPromise = null
+    })
+  return editorResourcesPromise
+}
 
 const { subscribeUpdated } = useDatabaseManageDrawer()
 
 async function onSelectScenario(id: number) {
+  void ensureEditorResources()
   try {
     await tabsStore.openScenario(pid.value, id)
   } catch {
@@ -356,14 +425,16 @@ function beforeUnloadHandler(e: BeforeUnloadEvent) {
 
 onMounted(async () => {
   window.addEventListener('beforeunload', beforeUnloadHandler)
-  const unsubDb = subscribeUpdated(() => void loadDatabases())
+  const unsubDb = subscribeUpdated(() => {
+    if (editorResourcesReady.value || editorResourcesLoading.value) void loadDatabases()
+  })
   onBeforeUnmount(unsubDb)
-  await loadScenarios()
-  await loadFolders()
-  await loadProjectCases()
-  await loadScripts()
-  await loadDatabases()
-  await loadDatasets()
+  listLoading.value = true
+  try {
+    await Promise.all([loadScenarios(), loadFolders()])
+  } finally {
+    listLoading.value = false
+  }
 })
 onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHandler))
 </script>
@@ -416,5 +487,13 @@ onBeforeUnmount(() => window.removeEventListener('beforeunload', beforeUnloadHan
   line-height: var(--ax-leading-compact);
   color: var(--ax-brand);
   margin-bottom: var(--ax-space-2-5);
+}
+
+.editor-resources-state {
+  min-height: 280px;
+  padding: var(--ax-space-3);
+  border: 1px solid var(--ax-border);
+  border-radius: var(--ax-radius);
+  background: var(--ax-bg-subtle);
 }
 </style>

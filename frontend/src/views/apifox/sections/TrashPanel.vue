@@ -1,11 +1,13 @@
 <template>
   <div class="trash-panel">
-    <div class="toolbar">
-      <span class="tip"
-        >回收站保留已删除的场景 / 测试套件 / 接口用例 /
-        单接口，保留一个月后自动彻底清理；可随时还原或彻底删除（彻底删除不可恢复）。</span
-      >
-      <div class="toolbar-actions">
+    <div class="panel-head trash-head">
+      <div class="trash-heading">
+        <span class="panel-title">回收站</span>
+        <span class="tip"
+          >已删除的场景、测试套件、接口用例和接口保留 30 天；可还原或彻底删除。</span
+        >
+      </div>
+      <div class="toolbar-actions items-center gap-1 flex">
         <el-input
           v-model="filterKeyword"
           :maxlength="SEARCH_MAX_LEN"
@@ -32,15 +34,15 @@
         </el-select>
         <template v-if="selected.length">
           <span class="sel-count">已选 {{ selected.length }} 项</span>
-          <el-button link type="primary" @click="clearSelection">取消选择</el-button>
-          <el-button :loading="batchBusy" @click="batchRestore">
+          <el-button link type="primary" size="small" @click="clearSelection">取消选择</el-button>
+          <el-button size="small" :loading="batchBusy" @click="batchRestore">
             <el-icon><RefreshLeft /></el-icon> 恢复
           </el-button>
-          <el-button type="danger" plain :loading="batchBusy" @click="batchPurge">
+          <el-button size="small" type="danger" plain :loading="batchBusy" @click="batchPurge">
             <el-icon><Delete /></el-icon> 删除
           </el-button>
         </template>
-        <el-button :loading="loading" @click="load">
+        <el-button size="small" :loading="loading" @click="load">
           <el-icon><Refresh /></el-icon> 刷新
         </el-button>
       </div>
@@ -346,7 +348,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.toolbar {
+.trash-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -355,11 +357,24 @@ onBeforeUnmount(() => {
   flex: none;
 }
 
+.trash-heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--ax-space-2);
+  min-width: 0;
+}
+
 .toolbar-actions {
   display: flex;
   align-items: center;
-  gap: var(--ax-space-2);
+  gap: var(--ax-space-1);
   flex: none;
+}
+
+.trash-head :deep(.el-input),
+.trash-head :deep(.el-select),
+.trash-head :deep(.el-button) {
+  --el-component-size: var(--ax-control-height-sm);
 }
 
 .search {

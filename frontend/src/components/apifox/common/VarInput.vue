@@ -4,7 +4,15 @@
     class="var-input"
     :class="[`is-${size}`, { 'is-focus': focused, 'is-disabled': disabled }]"
   >
-    <div ref="mirrorEl" class="vi-mirror" v-html="highlighted" />
+    <div ref="mirrorEl" class="vi-mirror">
+      <span
+        v-for="(segment, index) in highlightedSegments"
+        :key="index"
+        :class="segment.state ? ['vi-token', `vi-${segment.state}`] : undefined"
+        :title="segment.title"
+        >{{ segment.text }}</span
+      >
+    </div>
     <input
       ref="inputEl"
       class="vi-field"
@@ -133,34 +141,33 @@ function hitFor(name: string): { value: string; source: string } | null {
   return r ? { value: r.value, source: r.source } : null
 }
 
-function esc(s: string) {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-}
-function escAttr(s: string) {
-  return esc(s).replace(/"/g, '&quot;')
+interface HighlightSegment {
+  text: string
+  state?: 'ok' | 'bad'
+  title?: string
 }
 
-const highlighted = computed(() => {
+const highlightedSegments = computed<HighlightSegment[]>(() => {
   const raw = props.modelValue ?? ''
   const re = /\{\{([^}]*)\}\}/g
-  let out = ''
+  const segments: HighlightSegment[] = []
   let last = 0
   let m: RegExpExecArray | null
   while ((m = re.exec(raw))) {
-    out += esc(raw.slice(last, m.index))
+    if (m.index > last) segments.push({ text: raw.slice(last, m.index) })
     const name = m[1].trim()
     const hit = hitFor(name)
     if (hit) {
       const tip = `${m[0]} = ${hit.value || '(空)'}（${hit.source}）`
-      out += `<span class="vi-token vi-ok" title="${escAttr(tip)}">${esc(m[0])}</span>`
+      segments.push({ text: m[0], state: 'ok', title: tip })
     } else {
       const tip = `${m[0]} 未解析`
-      out += `<span class="vi-token vi-bad" title="${escAttr(tip)}">${esc(m[0])}</span>`
+      segments.push({ text: m[0], state: 'bad', title: tip })
     }
     last = m.index + m[0].length
   }
-  out += esc(raw.slice(last))
-  return out
+  if (last < raw.length) segments.push({ text: raw.slice(last) })
+  return segments
 })
 
 const fieldTitle = computed(() => {
@@ -362,8 +369,8 @@ onBeforeUnmount(() => {
   display: block;
   width: 100%;
   height: var(--ax-control-height-sm);
-  background: var(--el-fill-color-blank, #fff);
-  border: 1px solid var(--el-border-color, #dcdfe6);
+  background: var(--el-fill-color-blank, var(--ax-raw-hex-fff));
+  border: 1px solid var(--el-border-color, var(--ax-raw-hex-dcdfe6));
   border-radius: var(--el-border-radius-base, 4px);
   box-sizing: border-box;
   overflow: hidden;
@@ -372,10 +379,10 @@ onBeforeUnmount(() => {
   height: var(--ax-control-height);
 }
 .var-input.is-focus {
-  border-color: var(--el-color-primary, #409eff);
+  border-color: var(--el-color-primary, var(--ax-raw-hex-409eff));
 }
 .var-input.is-disabled {
-  background: var(--el-fill-color-light, #f5f7fa);
+  background: var(--el-fill-color-light, var(--ax-raw-hex-f5f7fa));
   cursor: not-allowed;
 }
 
@@ -397,7 +404,7 @@ onBeforeUnmount(() => {
 }
 
 .vi-mirror {
-  color: var(--el-text-color-regular, #606266);
+  color: var(--el-text-color-regular, var(--ax-raw-hex-606266));
   pointer-events: none;
   overflow: hidden;
 }
@@ -405,33 +412,33 @@ onBeforeUnmount(() => {
   width: 100%;
   background: transparent;
   color: transparent;
-  caret-color: var(--el-text-color-primary, #303133);
+  caret-color: var(--el-text-color-primary, var(--ax-raw-hex-303133));
   border: none;
   outline: none;
   overflow-x: auto;
 }
 .vi-field::placeholder {
-  color: var(--el-text-color-placeholder, #a8abb2);
+  color: var(--el-text-color-placeholder, var(--ax-raw-hex-a8abb2));
 }
 .vi-field::-webkit-scrollbar {
   display: none;
 }
 
 :deep(.vi-token.vi-ok) {
-  color: var(--el-color-primary, #409eff);
+  color: var(--el-color-primary, var(--ax-raw-hex-409eff));
 }
 :deep(.vi-token.vi-bad) {
-  color: var(--el-text-color-regular, #606266);
+  color: var(--el-text-color-regular, var(--ax-raw-hex-606266));
 }
 
 .variable-suggest-panel {
   position: fixed;
   z-index: 5000;
   display: flex;
-  background: #fff;
-  border: 1px solid #dcdfe6;
+  background: var(--ax-raw-hex-fff);
+  border: 1px solid var(--ax-raw-hex-dcdfe6);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px var(--ax-raw-rgba-0-0-0-0-12);
   overflow: hidden;
 }
 
@@ -439,7 +446,7 @@ onBeforeUnmount(() => {
   width: 220px;
   max-height: 260px;
   overflow: auto;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid var(--ax-raw-hex-ebeef5);
 }
 
 .variable-suggest-item {
@@ -453,18 +460,18 @@ onBeforeUnmount(() => {
 
 .variable-suggest-item:hover,
 .variable-suggest-item.active {
-  background: #ecf5ff;
+  background: var(--ax-raw-hex-ecf5ff);
 }
 
 .variable-name {
   font-size: var(--ax-text-body-sm-size);
-  color: #303133;
+  color: var(--ax-raw-hex-303133);
   font-family: Consolas, Monaco, monospace;
 }
 
 .variable-scope {
   font-size: var(--ax-text-caption-size);
-  color: #909399;
+  color: var(--ax-raw-hex-909399);
   white-space: nowrap;
 }
 
@@ -472,7 +479,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   padding: var(--ax-space-2-5) var(--ax-space-3);
-  background: #fafafa;
+  background: var(--ax-raw-hex-fafafa);
 }
 
 .detail-row {
@@ -488,12 +495,12 @@ onBeforeUnmount(() => {
 
 .detail-label {
   width: 42px;
-  color: #909399;
+  color: var(--ax-raw-hex-909399);
   flex-shrink: 0;
 }
 
 .detail-value {
-  color: #303133;
+  color: var(--ax-raw-hex-303133);
   word-break: break-all;
 }
 

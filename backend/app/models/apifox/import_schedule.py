@@ -8,7 +8,7 @@
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -36,6 +36,8 @@ class ApifoxImportSchedule(Base):
     last_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     last_run_status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
     last_run_detail: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    # 上次运行逐条清单 JSON（{items,truncated,...}），供「上次结果」明细表展示；仅存最近一次
+    last_run_manifest: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     next_run_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_by: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

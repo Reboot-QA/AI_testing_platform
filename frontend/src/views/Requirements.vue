@@ -44,6 +44,7 @@
         <el-option label="已关闭" value="closed" />
       </el-select>
       <el-button
+        type="primary"
         :disabled="!selectedIds.length || !batchStatus"
         :loading="batchUpdating"
         @click="handleBatchStatus"
@@ -87,7 +88,9 @@
       >
         <el-table-column type="selection" width="45" />
         <el-table-column label="序号" width="70" align="center">
-          <template #default="{ row }">{{ row.sort_order || '—' }}</template>
+          <template #default="{ row, $index }">{{
+            displayRequirementSortOrder(row, $index)
+          }}</template>
         </el-table-column>
         <el-table-column
           v-if="isAllProjects"
@@ -186,13 +189,31 @@
             <el-radio value="replace">覆盖</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-form-item label="模版下载">
+          <el-button
+            link
+            type="primary"
+            :loading="templateDownloading === 'excel'"
+            @click="downloadImportTemplate('excel')"
+          >
+            Excel 模版
+          </el-button>
+          <el-button
+            link
+            type="primary"
+            :loading="templateDownloading === 'xmind'"
+            @click="downloadImportTemplate('xmind')"
+          >
+            XMind 模版
+          </el-button>
+        </el-form-item>
       </el-form>
       <el-alert
         v-if="importMode === 'append'"
         type="info"
         :closable="false"
         show-icon
-        title="追加：在现有需求点后追加 Excel 全部行（允许标题重复）。"
+        title="追加：在现有需求点后追加 Excel 全部行（允许标题重复，序号自动续编）。"
         style="margin-bottom: var(--ax-space-4)"
       />
       <el-alert
@@ -200,7 +221,7 @@
         type="warning"
         :closable="false"
         show-icon
-        title="覆盖：清空当前项目全部需求点（关联用例解除绑定），以 Excel 为准重新导入。"
+        title="覆盖：删除当前项目无关联用例的需求点，已关联用例的需求点将保留；Excel 序号若与保留项冲突则自动避让续编。"
         style="margin-bottom: var(--ax-space-4)"
       />
       <el-upload
@@ -216,7 +237,8 @@
         <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
         <template #tip>
           <div class="el-upload__tip">
-            Excel 需包含「标题」列，Excel 有多少行就导入多少条（允许标题重复）；XMind 导入末级节点
+            Excel 需包含「标题」列，Excel
+            有多少行就导入多少条（允许标题重复）；追加模式下序号自动续编；XMind 导入末级节点
           </div>
         </template>
       </el-upload>
@@ -238,7 +260,8 @@
         <el-form-item label="标题" prop="title">
           <el-input
             v-model="form.title"
-            :maxlength="TITLE_MAX_LEN"
+            :maxlength="REQ_CASE_TITLE_MAX_LEN"
+            show-word-limit
             data-assistant="requirements.form.title"
           />
         </el-form-item>
@@ -295,7 +318,9 @@
     >
       <el-table v-loading="casesLoading" :data="linkedTestcases" stripe border max-height="420">
         <el-table-column label="序号" width="70" align="center">
-          <template #default="{ row }">{{ row.sort_order || '—' }}</template>
+          <template #default="{ row, $index }">{{
+            row.sort_order && row.sort_order > 0 ? row.sort_order : $index + 1
+          }}</template>
         </el-table-column>
         <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
         <el-table-column prop="priority" label="优先级" width="80" align="center" />
@@ -406,15 +431,24 @@
 </template>
 
 <script setup lang="ts">
-import { LONG_TEXT_MAX_LEN, SEARCH_MAX_LEN, TITLE_MAX_LEN } from '@/constants/limits'
+import { LONG_TEXT_MAX_LEN, REQ_CASE_TITLE_MAX_LEN, SEARCH_MAX_LEN } from '@/constants/limits'
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, requirementApi, testcaseApi } from '@/api'
 import type { ProjectPageOut } from '@/api/project'
-import { readWorkspaceListFilter } from '@/composables/useWorkspaceHash'
-import { formatBeijingTime } from '@/utils/datetime'
+import { readWorkspaceListFilter } from '@/composables/useWorkspaceQuery'
+import {
+  displayRequirementSortOrder as calculateRequirementSortOrder,
+  formatRequirementTime as formatTime,
+  requirementSourceLabel as sourceMap,
+  requirementStatusLabel as statusMap,
+  requirementStatusType as statusType,
+  requirementTypeLabel as typeMap,
+  reviewStatusLabel as reviewMap,
+  reviewStatusType as reviewType,
+} from '@/composables/useRequirementDisplay'
 import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
 import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
@@ -425,7 +459,6 @@ import {
 
 import {
   ALL_PROJECTS,
-  type DateInput,
   type Project,
   type ProjectFilter,
   type Requirement,
@@ -444,8 +477,8 @@ interface RequirementForm {
   status: string
 }
 
-function formatTime(value: DateInput) {
-  return formatBeijingTime(value)
+function displayRequirementSortOrder(row: Requirement, rowIndex: number): number {
+  return calculateRequirementSortOrder(row, rowIndex, currentPage.value, pageSize.value)
 }
 
 // scopedProjectId 传入时锁定该项目（新壳工作区场景）：隐藏项目下拉、关闭「全部项目」模式；
@@ -491,36 +524,7 @@ const formRef = ref<FormInstance>()
 const uploadRef = ref<UploadInstance>()
 const importFile = ref<UploadRawFile | null>(null)
 const importMode = ref<'append' | 'replace'>('append')
-
-const typeMap: Record<string, string> = {
-  functional: '功能',
-  api: '接口',
-  performance: '性能',
-  security: '安全',
-}
-const sourceMap: Record<string, string> = { manual: '手动', ai_document: '文档解析' }
-const statusMap: Record<RequirementStatus, string> = {
-  draft: '草稿',
-  approved: '已评审',
-  closed: '已关闭',
-}
-const statusType: Record<RequirementStatus, 'info' | 'success' | 'warning'> = {
-  draft: 'info',
-  approved: 'success',
-  closed: 'warning',
-}
-const reviewMap: Record<ReviewStatus, string> = {
-  draft: '草稿',
-  pending: '待评审',
-  approved: '已通过',
-  rejected: '已驳回',
-}
-const reviewType: Record<ReviewStatus, 'info' | 'warning' | 'success' | 'danger'> = {
-  draft: 'info',
-  pending: 'warning',
-  approved: 'success',
-  rejected: 'danger',
-}
+const templateDownloading = ref<'excel' | 'xmind' | ''>('')
 
 const form = reactive<RequirementForm>({
   title: '',
@@ -531,7 +535,14 @@ const form = reactive<RequirementForm>({
 })
 
 const rules: FormRules<RequirementForm> = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  title: [
+    { required: true, message: '请输入标题', trigger: 'blur' },
+    {
+      max: REQ_CASE_TITLE_MAX_LEN,
+      message: `标题不能超过 ${REQ_CASE_TITLE_MAX_LEN} 字`,
+      trigger: 'blur',
+    },
+  ],
 }
 
 function isProjectPage(data: Project[] | ProjectPageOut): data is ProjectPageOut {
@@ -634,6 +645,26 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
+async function downloadImportTemplate(format: 'excel' | 'xmind') {
+  templateDownloading.value = format
+  try {
+    const blob =
+      format === 'excel'
+        ? await requirementApi.downloadImportTemplateExcel()
+        : await requirementApi.downloadImportTemplateXmind()
+    downloadBlob(
+      blob,
+      format === 'excel'
+        ? 'requirements_import_template.xlsx'
+        : 'requirements_import_template.xmind',
+    )
+  } catch (e) {
+    ElMessage.error((e as Error).message || '模版下载失败')
+  } finally {
+    templateDownloading.value = ''
+  }
+}
+
 function currentProjectName() {
   return projects.value.find((item) => item.id === projectId.value)?.name || 'requirements'
 }
@@ -686,7 +717,7 @@ async function handleImport() {
   if (importMode.value === 'replace') {
     try {
       await ElMessageBox.confirm(
-        '覆盖导入将清空当前项目全部需求点（关联用例将解除绑定），并以 Excel 为准重新导入。是否继续？',
+        '覆盖导入将删除无关联用例的需求点；已关联用例的需求点会保留，并以 Excel 为准导入新需求。是否继续？',
         '确认覆盖导入',
         { type: 'warning', confirmButtonText: '覆盖导入', cancelButtonText: '取消' },
       )
@@ -771,8 +802,8 @@ async function handleDelete(row: Requirement) {
     confirmButtonText: '删除',
     cancelButtonText: '取消',
   })
-  const res = await requirementApi.delete(row.id)
-  ElMessage.success(res.message || '删除成功')
+  await requirementApi.delete(row.id)
+  ElMessage.success('删除成功')
   loadData()
 }
 
@@ -967,7 +998,7 @@ onUnmounted(() => {
 
 <style scoped>
 .empty-count {
-  color: #909399;
+  color: var(--ax-text-placeholder);
 }
 
 /* .table-fill / .pagination-bar 已提取为全局工具类（src/styles/layout.css） */

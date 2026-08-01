@@ -2,8 +2,10 @@
   <el-dialog
     v-model="visible"
     title="批量 AI 生成接口测试用例"
-    width="720px"
+    width="640px"
+    class="batch-ai-gen-dialog"
     :close-on-click-modal="false"
+    @closed="onClosed"
   >
     <div class="config">
       <div class="tip">
@@ -19,7 +21,7 @@
       />
       <div class="ep-block">
         <div class="ep-head">
-          <span>接口（{{ checked.length }}/{{ endpoints.length }}）</span>
+          <span>接口（{{ checkedCount }}/{{ endpoints.length }}）</span>
           <div class="ep-head-right">
             <el-checkbox v-model="onlyNeed" @change="onOnlyNeedChange">只看需生成</el-checkbox>
             <el-checkbox
@@ -34,26 +36,65 @@
           v-model="epKeyword"
           :maxlength="SEARCH_MAX_LEN"
           size="small"
-          placeholder="搜索接口名 / 路径"
+          placeholder="搜索接口名 / 路径 / 文件夹"
           clearable
-        />
-        <div v-loading="endpointsLoading" class="ep-list">
-          <el-checkbox-group v-model="checked">
-            <div v-for="ep in filteredEndpoints" :key="ep.id" class="ep-row">
-              <el-checkbox :value="ep.id">
-                <MethodTag :method="ep.method" />
-                <span class="ep-name">{{ ep.name }}</span>
-                <span class="ep-path">{{ ep.path }}</span>
-                <el-tag v-if="caseCount(ep.id) === 0" size="small" type="info" class="ep-flag"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
+        <div v-loading="endpointsLoading" class="tree-wrap">
+          <el-tree
+            ref="treeRef"
+            :data="treeData"
+            node-key="key"
+            show-checkbox
+            :props="{ disabled: 'disabled' }"
+            :default-expanded-keys="['root']"
+            :expand-on-click-node="false"
+            :filter-node-method="filterNode"
+            @check="syncChecked"
+          >
+            <template #default="{ data }">
+              <span class="tree-node">
+                <el-icon v-if="data.type === 'root'" class="node-icon node-icon--root"
+                  ><Box
+                /></el-icon>
+                <el-icon v-else-if="data.type === 'folder'" class="node-icon"><Folder /></el-icon>
+                <MethodTag
+                  v-else-if="data.type === 'endpoint'"
+                  :method="data.method"
+                  class="tree-method"
+                />
+                <span class="node-label">{{ data.label }}</span>
+                <span v-if="data.type === 'folder' || data.type === 'root'" class="node-count"
+                  >({{ data.endpointCount ?? 0 }})</span
+                >
+                <span v-if="data.type === 'endpoint' && data.path" class="node-path">{{
+                  data.path
+                }}</span>
+                <el-tag
+                  v-if="data.type === 'endpoint' && caseCount(data.id) === 0"
+                  size="small"
+                  type="info"
+                  class="ep-flag"
                   >无用例</el-tag
                 >
-                <el-tag v-else-if="ep.cases_stale" size="small" type="warning" class="ep-flag"
+                <el-tag
+                  v-else-if="data.type === 'endpoint' && endpointById.get(data.id)?.cases_stale"
+                  size="small"
+                  type="warning"
+                  class="ep-flag"
                   >待复核</el-tag
                 >
-              </el-checkbox>
-            </div>
-          </el-checkbox-group>
-          <el-empty v-if="!filteredEndpoints.length" description="无接口" :image-size="40" />
+              </span>
+            </template>
+          </el-tree>
+          <el-empty
+            v-if="!endpointsLoading && !treeData.length"
+            description="无接口"
+            :image-size="40"
+          />
         </div>
       </div>
     </div>
@@ -63,9 +104,9 @@
       <el-button
         type="primary"
         :loading="submitting"
-        :disabled="!anyChecked || !checked.length"
+        :disabled="!anyChecked || checkedCount === 0"
         @click="generate"
-        >生成（{{ checked.length }} 个接口）</el-button
+        >生成（{{ checkedCount }} 个接口）</el-button
       >
     </template>
   </el-dialog>
@@ -73,12 +114,20 @@
 
 <script setup lang="ts">
 import { SEARCH_MAX_LEN } from '@/constants/limits'
-import { computed, ref } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
+import { Box, Folder, Search } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
+import { buildApiTree } from '@/composables/useApiTree'
+import {
+  applyImportTreeDisabled,
+  filterImportTreeNode,
+  type ImportTreeNode,
+} from '@/composables/useImportCaseTree'
 import { useAiGenConfig } from '@/composables/useAiGenConfig'
 import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
+import { useWorkspaceStore } from '@/stores/workspace'
 import AiGenConfigFields from '@/components/apifox/ai/AiGenConfigFields.vue'
 import MethodTag from '@/components/apifox/common/MethodTag.vue'
 
@@ -87,6 +136,13 @@ const emit = defineEmits<{ created: [] }>()
 
 type Endpoint = Schemas['EndpointBrief']
 
+type TreeExpose = {
+  filter: (value: string) => void
+  getCheckedKeys: (leafOnly?: boolean) => (string | number)[]
+  setCheckedKeys: (keys: string[]) => void
+}
+
+const workspace = useWorkspaceStore()
 const store = useApifoxAiGenerateStore()
 const {
   categories,
@@ -103,87 +159,173 @@ const {
 const visible = ref(false)
 const submitting = ref(false)
 const endpoints = ref<Endpoint[]>([])
+const endpointById = ref(new Map<number, Endpoint>())
 const endpointsLoading = ref(false)
 const epKeyword = ref('')
-const checked = ref<number[]>([])
+const treeData = ref<ImportTreeNode[]>([])
+const treeRef = ref<TreeExpose | null>(null)
+const checkedCount = ref(0)
 const caseCounts = ref<Record<number, number>>({})
 const onlyNeed = ref(false)
-// 无预选（从 AI 任务中心/批量入口打开）时，加载完默认勾选「需生成」的接口
 const autoSelectNeed = ref(false)
 
 const caseCount = (id: number) => caseCounts.value[id] ?? 0
-// 需生成：没有用例（新增接口）或受 Swagger 更新影响待复核
 const needsGen = (ep: Endpoint) => caseCount(ep.id) === 0 || !!ep.cases_stale
 
-const filteredEndpoints = computed<Endpoint[]>(() => {
+function filterNode(value: string, data: ImportTreeNode): boolean {
+  if (onlyNeed.value && data.type === 'endpoint') {
+    const ep = endpointById.value.get(data.id)
+    if (ep && !needsGen(ep)) return false
+  }
+  return filterImportTreeNode(value, data)
+}
+
+watch([epKeyword, onlyNeed], () => {
+  treeRef.value?.filter(epKeyword.value)
+  syncChecked()
+})
+
+function pickedEndpointIds(): number[] {
+  const keys = new Set(treeRef.value?.getCheckedKeys(false) ?? [])
+  const out: number[] = []
+  const walk = (nodes: ImportTreeNode[], inherited: boolean) => {
+    for (const node of nodes) {
+      const checked = inherited || keys.has(node.key)
+      if (node.children?.length) walk(node.children, checked)
+      else if (checked && node.type === 'endpoint') out.push(node.id)
+    }
+  }
+  walk(treeData.value, false)
+  return out
+}
+
+function syncChecked() {
+  checkedCount.value = pickedEndpointIds().length
+}
+
+function eligibleEndpointIds(): number[] {
   const kw = epKeyword.value.trim().toLowerCase()
-  return endpoints.value.filter(
-    (e) =>
-      (!kw || e.name.toLowerCase().includes(kw) || e.path.toLowerCase().includes(kw)) &&
-      (!onlyNeed.value || needsGen(e)),
-  )
+  return endpoints.value
+    .filter((ep) => {
+      if (onlyNeed.value && !needsGen(ep)) return false
+      if (kw && !ep.name.toLowerCase().includes(kw) && !ep.path.toLowerCase().includes(kw))
+        return false
+      return true
+    })
+    .map((e) => e.id)
+}
+
+const allEpSelected = computed(() => {
+  const eligible = eligibleEndpointIds()
+  if (!eligible.length) return false
+  const picked = new Set(pickedEndpointIds())
+  return eligible.every((id) => picked.has(id))
+})
+
+const someEpSelected = computed(() => {
+  const n = checkedCount.value
+  return n > 0 && !allEpSelected.value
 })
 
 function onOnlyNeedChange() {
-  // 切到「只看需生成」时把不在列表里的已勾选清掉，保持勾选与可见一致
+  treeRef.value?.filter(epKeyword.value)
   if (onlyNeed.value) {
-    const visibleIds = new Set(filteredEndpoints.value.map((e) => e.id))
-    checked.value = checked.value.filter((id) => visibleIds.has(id))
+    const visible = new Set(eligibleEndpointIds())
+    const keys = pickedEndpointIds()
+      .filter((id) => visible.has(id))
+      .map((id) => `e-${id}`)
+    treeRef.value?.setCheckedKeys(keys)
   }
+  syncChecked()
 }
-const allEpSelected = computed(
-  () =>
-    filteredEndpoints.value.length > 0 &&
-    filteredEndpoints.value.every((e) => checked.value.includes(e.id)),
-)
-const someEpSelected = computed(() => checked.value.length > 0 && !allEpSelected.value)
 
 function toggleAllEndpoints(val: unknown) {
-  const ids = filteredEndpoints.value.map((e) => e.id)
-  if (val) checked.value = [...new Set([...checked.value, ...ids])]
-  else checked.value = checked.value.filter((id) => !ids.includes(id))
+  const eligible = eligibleEndpointIds()
+  const keys = eligible.map((id) => `e-${id}`)
+  if (val) {
+    const merged = new Set([...(treeRef.value?.getCheckedKeys(false) ?? []).map(String), ...keys])
+    treeRef.value?.setCheckedKeys([...merged])
+  } else {
+    const remove = new Set(keys)
+    const kept = (treeRef.value?.getCheckedKeys(false) ?? [])
+      .map(String)
+      .filter((k) => !remove.has(k))
+    treeRef.value?.setCheckedKeys(kept)
+  }
+  syncChecked()
 }
 
 async function loadEndpoints() {
   endpointsLoading.value = true
   try {
-    const [eps, cases] = await Promise.all([
+    const [folders, eps, cases] = await Promise.all([
+      apifoxApi.listFolders(props.projectId),
       apifoxApi.listEndpoints(props.projectId),
       apifoxApi.listProjectCases(props.projectId),
     ])
     endpoints.value = eps
+    endpointById.value = new Map(eps.map((e) => [e.id, e]))
     const counts: Record<number, number> = {}
     for (const c of cases) counts[c.endpoint_id] = (counts[c.endpoint_id] ?? 0) + 1
     caseCounts.value = counts
-    if (autoSelectNeed.value) checked.value = eps.filter(needsGen).map((e) => e.id)
+
+    treeData.value = [
+      {
+        key: 'root',
+        id: 0,
+        type: 'root',
+        label: workspace.currentProjectName || '当前项目',
+        endpointCount: eps.length,
+        children: buildApiTree(folders, eps) as ImportTreeNode[],
+      },
+    ]
+    applyImportTreeDisabled(treeData.value, 'endpoint')
+
+    await nextTick()
+    if (autoSelectNeed.value) {
+      treeRef.value?.setCheckedKeys(eps.filter(needsGen).map((e) => `e-${e.id}`))
+    }
+    if (epKeyword.value) treeRef.value?.filter(epKeyword.value)
+    syncChecked()
   } finally {
     endpointsLoading.value = false
   }
+}
+
+function onClosed() {
+  epKeyword.value = ''
+  onlyNeed.value = false
+  treeData.value = []
+  checkedCount.value = 0
+  endpoints.value = []
+  endpointById.value = new Map()
 }
 
 function open(preselect?: number[]) {
   resetCategories()
   const hasPreselect = !!preselect && preselect.length > 0
   autoSelectNeed.value = !hasPreselect
-  checked.value = hasPreselect ? [...preselect!] : []
   epKeyword.value = ''
   onlyNeed.value = false
   submitting.value = false
   loadProviders()
-  loadEndpoints()
   visible.value = true
+  void loadEndpoints().then(async () => {
+    if (hasPreselect) {
+      await nextTick()
+      treeRef.value?.setCheckedKeys(preselect!.map((id) => `e-${id}`))
+      syncChecked()
+    }
+  })
 }
 defineExpose({ open })
 
 async function generate() {
+  const ids = pickedEndpointIds()
+  if (!ids.length) return
   submitting.value = true
   try {
-    await store.start(
-      Number(props.projectId),
-      checked.value.slice(),
-      buildCategoriesPayload(),
-      providerId.value,
-    )
+    await store.start(Number(props.projectId), ids, buildCategoriesPayload(), providerId.value)
     ElMessage.success('已提交批量生成，请到「AI 任务中心」查看进度与结果')
     emit('created')
     visible.value = false
@@ -200,11 +342,6 @@ async function generate() {
   color: var(--ax-text-secondary);
   font-size: var(--ax-text-body-sm-size);
   margin-bottom: var(--ax-space-3);
-}
-
-.result {
-  max-height: 56vh;
-  overflow: auto;
 }
 
 .ep-block {
@@ -227,28 +364,72 @@ async function generate() {
 }
 
 .ep-flag {
-  margin-left: var(--ax-space-2);
+  margin-left: var(--ax-space-1);
 }
 
-.ep-list {
-  max-height: 240px;
+.tree-wrap {
+  min-height: 280px;
+  max-height: 360px;
   overflow: auto;
   border: 1px solid var(--ax-border);
-  border-radius: 4px;
-  padding: var(--ax-space-1-5) var(--ax-space-2);
+  border-radius: var(--ax-radius);
+  padding: var(--ax-space-2);
   margin-top: var(--ax-space-1-5);
 }
 
-.ep-row {
-  padding: var(--ax-space-0-5) 0;
+.tree-node {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ax-space-1-5);
+  min-width: 0;
+  font-size: var(--ax-font-sm);
+  line-height: var(--ax-leading-compact);
 }
 
-.ep-name {
-  margin: 0 var(--ax-space-2);
+.node-icon {
+  flex-shrink: 0;
+  font-size: 15px;
+  color: var(--ax-tag-orange-fg);
 }
 
-.ep-path {
+.node-icon--root {
+  color: var(--color-purple-6);
+}
+
+.tree-method {
+  flex-shrink: 0;
+}
+
+.node-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.node-count {
+  flex-shrink: 0;
   color: var(--ax-text-placeholder);
-  font-size: var(--ax-text-caption-size);
+  font-size: var(--ax-font-xs);
+}
+
+.node-path {
+  flex-shrink: 0;
+  margin-left: var(--ax-space-1);
+  color: var(--ax-text-placeholder);
+  font-size: var(--ax-font-xs);
+}
+
+.tree-wrap :deep(.el-tree-node__content) {
+  height: 32px;
+}
+
+.tree-wrap :deep(.el-tree-node__content:hover) {
+  background: var(--ax-bg-hover);
+}
+</style>
+
+<style>
+.batch-ai-gen-dialog .el-dialog__body {
+  padding-top: var(--ax-space-2);
 }
 </style>

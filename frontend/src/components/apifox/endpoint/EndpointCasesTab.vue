@@ -1,8 +1,8 @@
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden">
-    <div class="mb-2 flex flex-wrap items-center justify-between gap-2">
-      <div class="flex flex-wrap items-center gap-2">
-        <el-radio-group v-model="filter" size="small" class="flex-wrap">
+    <div class="cases-toolbar">
+      <div class="cases-toolbar__filters">
+        <el-radio-group v-model="filter" size="small" class="cases-toolbar__categories">
           <el-radio-button v-for="f in CATEGORY_FILTERS" :key="f.value" :value="f.value">
             {{ f.label }} ({{ catCount(f.value) }})
           </el-radio-button>
@@ -11,17 +11,17 @@
           <el-icon><Plus /></el-icon> 添加用例
         </el-button>
       </div>
-      <div class="flex items-center gap-1.5">
+      <div class="cases-toolbar__actions">
         <el-input
           v-model="keyword"
           :maxlength="SEARCH_MAX_LEN"
           size="small"
           placeholder="搜索用例名"
           clearable
-          class="w-40"
+          class="cases-toolbar__search"
         />
         <el-button v-if="!readonly" size="small" @click="aiGenerate">
-          <el-icon><MagicStick /></el-icon> AI 生成用例
+          <el-icon><MagicStick /></el-icon> AI 生成
         </el-button>
         <el-button
           v-if="!readonly && selected.size"
@@ -38,10 +38,7 @@
       </div>
     </div>
 
-    <div
-      v-if="!readonly && filteredCases.length"
-      class="case-list-head mb-1 flex items-center gap-2 px-1"
-    >
+    <div v-if="!readonly && filteredCases.length" class="case-list-head">
       <el-checkbox
         :model-value="allFilteredSelected"
         :indeterminate="someFilteredSelected"
@@ -57,10 +54,10 @@
       >
     </div>
 
-    <el-collapse v-model="expanded" class="min-h-0 flex-1 overflow-auto">
+    <el-collapse v-model="expanded" class="case-list min-h-0 flex-1 overflow-auto">
       <el-collapse-item v-for="(c, i) in filteredCases" :key="c.id" :name="c.id">
         <template #title>
-          <div class="flex w-full items-center gap-2 pr-2">
+          <div class="flex w-full items-center gap-1.5 pr-2">
             <el-checkbox
               v-if="!readonly"
               :model-value="selected.has(c.id)"
@@ -75,17 +72,34 @@
             <el-tag v-if="c.origin === 'ai'" size="small" type="warning" effect="plain">AI</el-tag>
             <span class="min-w-0 flex-1 truncate" :title="c.name">{{ c.name }}</span>
             <span
-              class="min-w-[132px] shrink-0 text-right text-xs tabular-nums text-muted-foreground"
+              class="case-last-run text-right text-xs tabular-nums text-muted-foreground"
               :title="c.last_run_at || '尚未运行'"
             >
               {{ c.last_run_at ? formatTime(c.last_run_at) : '—' }}
             </span>
-            <el-tag v-if="c.last_result" size="small" :type="resultTag(c.last_result)">
+            <span
+              v-if="c.last_result === 'passed' || c.last_result === 'failed'"
+              class="result-cell"
+              @click.stop
+            >
+              <el-tag
+                size="small"
+                class="result-tag"
+                :type="resultTag(c.last_result)"
+                @click="openRunDetail(c)"
+              >
+                {{ resultLabel(c.last_result) }}
+              </el-tag>
+              <button type="button" class="result-detail-btn" @click="openRunDetail(c)">
+                详情
+              </button>
+            </span>
+            <el-tag v-else-if="c.last_result" size="small" :type="resultTag(c.last_result)">
               {{ resultLabel(c.last_result) }}
             </el-tag>
-            <span v-if="!readonly" class="flex items-center gap-1">
+            <span v-if="!readonly" class="case-row-actions">
               <el-button link size="small" @click.stop="copyCase(c)">复制</el-button>
-              <el-button link type="danger" size="small" @click.stop="delCase(c)">删</el-button>
+              <el-button link type="danger" size="small" @click.stop="delCase(c)">删除</el-button>
             </span>
           </div>
         </template>
@@ -103,6 +117,22 @@
       </el-collapse-item>
     </el-collapse>
     <el-empty v-if="!filteredCases.length" description="暂无用例" :image-size="60" />
+
+    <el-drawer
+      v-model="runDrawerVisible"
+      :show-close="true"
+      :with-header="false"
+      size="65%"
+      class="run-report-drawer"
+      @closed="onRunDrawerClosed"
+    >
+      <div v-loading="runDetailLoading" class="run-drawer-body">
+        <RunReportDetail v-if="runDetail" :detail="runDetail" :environment-name="runEnvName">
+          <RunStepGroups :detail="runDetail" />
+        </RunReportDetail>
+        <el-empty v-else-if="!runDetailLoading" description="暂无运行详情" :image-size="64" />
+      </div>
+    </el-drawer>
   </div>
 </template>
 
@@ -119,6 +149,8 @@ import { emptySpec, normalizeSpec as normSpec } from '@/utils/apifoxSpec'
 import { CATEGORY_FILTERS, categoryLabel } from '@/utils/caseCategory'
 import { formatTime } from '@/utils/runFormat'
 import CaseEditorInline from '@/components/apifox/case/CaseEditorInline.vue'
+import RunReportDetail from '@/components/apifox/run/RunReportDetail.vue'
+import RunStepGroups from '@/components/apifox/run/RunStepGroups.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -128,7 +160,7 @@ const props = withDefaults(
   }>(),
   { readonly: false },
 )
-const emit = defineEmits<{ changed: []; 'open-ai-gen': [startDialog?: boolean] }>()
+const emit = defineEmits<{ changed: []; 'open-ai-gen': [startDialog?: boolean]; 'batch-run-done': [] }>()
 
 const store = useWorkspaceStore()
 const cases = ref<Schemas['CaseBrief'][]>([])
@@ -140,6 +172,63 @@ const keyword = ref('')
 const expanded = ref<number[]>([])
 const runningAll = ref(false)
 const selected = ref<Set<number>>(new Set())
+const runDrawerVisible = ref(false)
+const runDetail = ref<Schemas['RunOut'] | null>(null)
+const runDetailLoading = ref(false)
+
+const runEnvName = computed(() => {
+  const id = runDetail.value?.environment_id
+  if (id == null) return '-'
+  return store.environments.find((e) => e.id === id)?.name || '-'
+})
+
+async function resolveLatestRunId(c: Schemas['CaseBrief']): Promise<number | null> {
+  // 先在接口最近运行批次里按用例 id 找
+  try {
+    const batch = await apifoxApi.listEndpointRuns(props.endpointId)
+    const inBatch = batch.find((r) => r.target_type === 'case' && r.target_id === c.id)
+    if (inBatch) return inBatch.id
+  } catch {
+    /* 继续退到项目报告检索 */
+  }
+  // 再退：项目报告列表按用例名搜，精确匹配 target_id
+  try {
+    const page = await apifoxApi.listRunsPage(props.projectId, {
+      target_types: 'case',
+      keyword: c.name,
+      page_size: 50,
+    })
+    const hit = page.items.find((r) => r.target_id === c.id)
+    if (hit) return hit.id
+  } catch {
+    /* ignore */
+  }
+  return null
+}
+
+async function openRunDetail(c: Schemas['CaseBrief']) {
+  runDrawerVisible.value = true
+  runDetailLoading.value = true
+  runDetail.value = null
+  try {
+    const runId = await resolveLatestRunId(c)
+    if (!runId) {
+      ElMessage.info('暂无运行详情')
+      runDrawerVisible.value = false
+      return
+    }
+    runDetail.value = await apifoxApi.getRun(runId)
+  } catch {
+    ElMessage.error('加载运行详情失败')
+    runDrawerVisible.value = false
+  } finally {
+    runDetailLoading.value = false
+  }
+}
+
+function onRunDrawerClosed() {
+  runDetail.value = null
+}
 
 function toggleSelect(id: number) {
   const next = new Set(selected.value)
@@ -197,12 +286,17 @@ async function reload() {
   emit('changed')
 }
 
+// 供父级在 AI 入库后 / 切回本 tab 时拉新列表（不重复 emit changed）
+defineExpose({ loadCases, reload })
+
 function onCaseSaved(id: Id, name: string, category: string) {
   const c = cases.value.find((x) => x.id === Number(id))
   if (c) {
     c.name = name
     c.category = category
   }
+  // 保存用例后端会清接口的「待复核」标记，需通知上层 reload 树，否则红点一直不消
+  emit('changed')
 }
 
 function emptyCasePayload(name: string, category: string): Schemas['CaseCreate'] {
@@ -332,16 +426,17 @@ async function runAll() {
   if (!targets.length) return
   runningAll.value = true
   try {
-    for (const c of targets) {
-      // 顺序跑，事件丢弃，仅刷新结果；单条失败不中断其余
-      try {
-        await apifoxApi.runCaseStream(c.id, store.currentEnvironmentId ?? undefined, () => {})
-      } catch {
-        /* 单条运行失败，继续下一条 */
-      }
-    }
-    await loadCases() // 回填每条 last_result
+    await apifoxApi.runEndpointAllStream(
+      props.endpointId,
+      store.currentEnvironmentId ?? undefined,
+      targets.map((c) => c.id),
+      () => {},
+    )
+    await loadCases()
     ElMessage.success('全部运行完成')
+    emit('batch-run-done')
+  } catch (e) {
+    ElMessage.error((e as Error).message || '全部运行失败')
   } finally {
     runningAll.value = false
   }
@@ -363,3 +458,130 @@ apifoxApi.listScripts(props.projectId).then((r) => (scripts.value = r))
 apifoxApi.listDatasets(props.projectId).then((r) => (datasets.value = r))
 apifoxApi.listSchemas(props.projectId).then((r) => (schemas.value = r))
 </script>
+
+<style scoped>
+.cases-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ax-space-2);
+  margin-bottom: var(--ax-space-2);
+  padding-bottom: var(--ax-space-2);
+  border-bottom: 1px solid var(--el-border-color-lighter, var(--ax-raw-hex-ebeef5));
+}
+
+.cases-toolbar__filters,
+.cases-toolbar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ax-space-2);
+}
+
+.cases-toolbar__categories {
+  display: flex;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.cases-toolbar__categories::-webkit-scrollbar {
+  display: none;
+}
+
+.cases-toolbar__actions {
+  justify-content: flex-end;
+}
+
+.cases-toolbar__search {
+  width: 200px;
+}
+
+.cases-toolbar :deep(.el-input),
+.cases-toolbar :deep(.el-button) {
+  --el-component-size: var(--ax-control-height-sm);
+}
+
+.case-list-head {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  margin-bottom: var(--ax-space-1);
+  padding: 0 var(--ax-space-1);
+}
+
+.case-list :deep(.el-collapse-item__header) {
+  height: 36px;
+  padding: 0 var(--ax-space-2);
+  font-size: var(--ax-font-xs);
+  line-height: 36px;
+}
+
+.case-list :deep(.el-collapse-item__content) {
+  padding-bottom: var(--ax-space-2);
+}
+
+.case-last-run {
+  width: 96px;
+  flex-shrink: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.case-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ax-space-1);
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .cases-toolbar__actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .cases-toolbar__search {
+    flex: 1;
+    min-width: 180px;
+  }
+}
+
+.result-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ax-space-1);
+  min-width: 52px;
+}
+
+.result-tag {
+  cursor: pointer;
+}
+
+.result-detail-btn {
+  flex-shrink: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-blue-6);
+  font-size: var(--ax-font-xs);
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.result-detail-btn:hover {
+  text-decoration: underline;
+}
+
+.run-drawer-body {
+  min-height: 200px;
+}
+
+.run-report-drawer :deep(.el-drawer__body) {
+  padding: var(--ax-space-4);
+}
+</style>

@@ -141,6 +141,12 @@ class ProjectCaseBrief(BaseModel):
     endpoint_method: str
 
 
+class CaseRunAllRequest(BaseModel):
+    """接口「全部运行」：指定用例 id 列表；空列表表示跑该接口下全部用例。"""
+
+    case_ids: List[int] = Field(default_factory=list)
+
+
 class CaseOut(BaseModel):
     id: int
     project_id: int

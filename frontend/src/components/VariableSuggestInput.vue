@@ -268,10 +268,10 @@ onBeforeUnmount(() => {
   position: fixed;
   z-index: 5000;
   display: flex;
-  background: #fff;
-  border: 1px solid #dcdfe6;
+  background: var(--ax-raw-hex-fff);
+  border: 1px solid var(--ax-raw-hex-dcdfe6);
   border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+  box-shadow: 0 8px 24px var(--ax-raw-rgba-0-0-0-0-12);
   overflow: hidden;
 }
 
@@ -279,7 +279,7 @@ onBeforeUnmount(() => {
   width: 220px;
   max-height: 260px;
   overflow: auto;
-  border-right: 1px solid #ebeef5;
+  border-right: 1px solid var(--ax-raw-hex-ebeef5);
 }
 
 .variable-suggest-item {
@@ -293,18 +293,18 @@ onBeforeUnmount(() => {
 
 .variable-suggest-item:hover,
 .variable-suggest-item.active {
-  background: #ecf5ff;
+  background: var(--ax-raw-hex-ecf5ff);
 }
 
 .variable-name {
   font-size: var(--ax-text-body-sm-size);
-  color: #303133;
+  color: var(--ax-raw-hex-303133);
   font-family: Consolas, Monaco, monospace;
 }
 
 .variable-scope {
   font-size: var(--ax-text-caption-size);
-  color: #909399;
+  color: var(--ax-raw-hex-909399);
   white-space: nowrap;
 }
 
@@ -312,7 +312,7 @@ onBeforeUnmount(() => {
   flex: 1;
   min-width: 0;
   padding: var(--ax-space-2-5) var(--ax-space-3);
-  background: #fafafa;
+  background: var(--ax-raw-hex-fafafa);
 }
 
 .detail-row {
@@ -328,12 +328,12 @@ onBeforeUnmount(() => {
 
 .detail-label {
   width: 42px;
-  color: #909399;
+  color: var(--ax-raw-hex-909399);
   flex-shrink: 0;
 }
 
 .detail-value {
-  color: #303133;
+  color: var(--ax-raw-hex-303133);
   word-break: break-all;
 }
 

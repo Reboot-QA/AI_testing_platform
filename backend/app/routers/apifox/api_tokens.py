@@ -20,6 +20,9 @@ from app.services.apifox import api_token_service, export_service, import_servic
 from app.services.project_access_service import get_accessible_project
 
 router = APIRouter(prefix="/apifox", tags=["接口自动化v2·API Token"])
+# 通过 API 导入/导出：X-API-Token 自鉴权、不需要 JWT，单独一个路由，
+# 避免被 main.py 挂在 token 管理路由上的菜单权限依赖（要 JWT）误拦。
+public_router = APIRouter(prefix="/apifox", tags=["接口自动化v2·API Token"])
 
 # 外部 OpenAPI 文档结构不可控：解析畸形字段兜底为 422，避免裸 500
 _DOC_STRUCTURE_ERRORS = (KeyError, TypeError, AttributeError, IndexError)
@@ -54,14 +57,14 @@ def create_api_token(
     return _out(api_token_service.create_token(db, pid, data.name, user.id))
 
 
-@router.delete("/api-tokens/{tid}")
+@router.delete("/api-tokens/{tid}", status_code=204)
 def revoke_api_token(tid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     token = db.query(ApifoxApiToken).filter(ApifoxApiToken.id == tid).first()
     if not token:
         raise HTTPException(status_code=404, detail="API Token 不存在")
     get_accessible_project(db, token.project_id, user)
     api_token_service.revoke_token(db, token)
-    return {"detail": "已吊销"}
+    return None
 
 
 # ---------- 通过 API 导入/导出（X-API-Token） ----------
@@ -75,7 +78,7 @@ def _token_project(
     return row
 
 
-@router.post("/api/import")
+@public_router.post("/api/import")
 def import_via_token(
     data: ImportRequest,
     token: ApifoxApiToken = Depends(_token_project),
@@ -92,7 +95,7 @@ def import_via_token(
     return report
 
 
-@router.get("/api/export/openapi")
+@public_router.get("/api/export/openapi")
 def export_via_token(
     spec_version: str = Query("3.0", description="3.0 | 3.1 | swagger2"),
     file_format: str = Query("json", description="json | yaml"),

@@ -43,11 +43,12 @@
       <el-empty v-else-if="!loading" class="rec-empty" :description="emptyText" :image-size="72" />
     </div>
 
-    <footer v-if="total > pageSize" class="rec-foot">
+    <footer v-if="showPager" class="rec-foot">
       <el-pagination
         :current-page="page"
         class="rec-pager"
         background
+        size="small"
         layout="total, prev, pager, next"
         :page-size="pageSize"
         :total="total"
@@ -58,6 +59,8 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+
 export interface OverviewAiRow {
   id: number
   title: string
@@ -67,7 +70,7 @@ export interface OverviewAiRow {
   createdAt: string
 }
 
-defineProps<{
+const props = defineProps<{
   title: string
   loading: boolean
   rows: OverviewAiRow[]
@@ -77,6 +80,11 @@ defineProps<{
   emptyText: string
   showSubColumn?: boolean
 }>()
+
+/** 总数超页容量，或当前页未拉全（与后端默认 page_size 不一致时兜底） */
+const showPager = computed(
+  () => props.total > props.pageSize || props.total > props.rows.length,
+)
 
 const emit = defineEmits<{
   refresh: []

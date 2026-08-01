@@ -7,14 +7,15 @@
       readonly
       @select="onSelectEndpoint"
       @deleted="onDeleted"
-      @case-added="loadCounts"
+      @clear-selection="selectedEndpointId = null"
+      @case-added="onCasesChanged"
     />
     <ApiCasesPanel
       v-if="selectedEndpointId"
       :endpoint-id="selectedEndpointId"
       :project-id="projectId"
       class="min-w-0 flex-1 overflow-hidden"
-      @cases-changed="loadCounts"
+      @cases-changed="onCasesChanged"
     />
     <el-empty
       v-else
@@ -44,6 +45,12 @@ function onSelectEndpoint(id: number) {
 function onDeleted(id: number) {
   if (selectedEndpointId.value === id) selectedEndpointId.value = null
   loadCounts()
+}
+
+// 用例增删改后：刷用例数 + reload 接口树，让「待复核」红点(cases_stale)同步更新
+async function onCasesChanged() {
+  await loadCounts()
+  await treeRef.value?.reload()
 }
 
 // 左树接口用例数：按项目下接口聚合（与 listCases 一致，以 endpoint 归属为准）

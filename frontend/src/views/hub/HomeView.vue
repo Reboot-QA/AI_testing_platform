@@ -59,7 +59,8 @@
                   :key="action.label"
                   class="cursor-pointer"
                   type="button"
-                  @click="openCapability(action.hash)"
+                  :disabled="entering"
+                  @click="openCapability(action.routeName)"
                 >
                   {{ action.label }}
                   <el-icon><ArrowRight /></el-icon>
@@ -82,7 +83,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Button } from '@/components/ui/button'
@@ -92,7 +93,7 @@ import { useWorkspaceStore } from '@/stores/workspace'
 interface JourneyAction {
   label: string
   perm: string
-  hash: string
+  routeName: string
 }
 
 interface JourneyStage {
@@ -105,7 +106,7 @@ interface JourneyStage {
   actions: JourneyAction[]
 }
 
-const emit = defineEmits<{ goProjects: [] }>()
+const emit = defineEmits<{ goProjects: [options?: { create?: boolean }] }>()
 const router = useRouter()
 const userStore = useUserStore()
 const workspaceStore = useWorkspaceStore()
@@ -122,12 +123,12 @@ const STAGES: JourneyStage[] = [
       {
         label: 'AI 分析需求',
         perm: 'requirement_docs',
-        hash: '#domain=requirements&section=req-docs',
+        routeName: 'WorkspaceRequirementDocuments',
       },
       {
         label: '需求点',
         perm: 'requirements',
-        hash: '#domain=requirements&section=req-points',
+        routeName: 'WorkspaceRequirementPoints',
       },
     ],
   },
@@ -142,12 +143,12 @@ const STAGES: JourneyStage[] = [
       {
         label: 'AI 生成用例',
         perm: 'ai_generate',
-        hash: '#domain=functional&section=ai',
+        routeName: 'WorkspaceFunctionalAi',
       },
       {
         label: '功能用例库',
         perm: 'testcases',
-        hash: '#domain=functional&section=func-cases',
+        routeName: 'WorkspaceFunctionalCases',
       },
     ],
   },
@@ -161,7 +162,7 @@ const STAGES: JourneyStage[] = [
       {
         label: '手工执行',
         perm: 'test_execution',
-        hash: '#domain=functional&section=func-runs',
+        routeName: 'WorkspaceFunctionalRuns',
       },
     ],
   },
@@ -176,17 +177,17 @@ const STAGES: JourneyStage[] = [
       {
         label: '接口目录',
         perm: 'apifox_workbench',
-        hash: '#domain=automation&biz=apis&section=apis',
+        routeName: 'WorkspaceAutomationApis',
       },
       {
         label: '场景编排',
         perm: 'apifox_workbench',
-        hash: '#domain=automation&biz=autotest&section=scenarios',
+        routeName: 'WorkspaceAutomationScenarios',
       },
       {
         label: '测试套件',
         perm: 'apifox_workbench',
-        hash: '#domain=automation&biz=autotest&section=suites',
+        routeName: 'WorkspaceAutomationSuites',
       },
     ],
   },
@@ -200,12 +201,12 @@ const STAGES: JourneyStage[] = [
       {
         label: '定时任务',
         perm: 'apifox_workbench',
-        hash: '#domain=automation&biz=autotest&section=schedules',
+        routeName: 'WorkspaceAutomationSchedules',
       },
       {
         label: '测试报告',
         perm: 'apifox_workbench',
-        hash: '#domain=automation&biz=reports&section=reports',
+        routeName: 'WorkspaceAutomationReports',
       },
     ],
   },
@@ -218,14 +219,25 @@ const visibleStages = computed(() =>
   })).filter((stage) => stage.actions.length > 0),
 )
 
-function openCapability(hash: string) {
-  const projectId = workspaceStore.currentProject?.id
-  if (!projectId) {
-    emit('goProjects')
-    ElMessage.info('请先选择项目')
-    return
+// 快捷入口不再要求先选项目：直接进默认项目（置顶优先，其次工作台首个）；无项目时引导创建
+const entering = ref(false)
+
+async function openCapability(routeName: string) {
+  if (entering.value) return
+  entering.value = true
+  try {
+    const projectId = await workspaceStore.resolveDefaultProjectId()
+    if (!projectId) {
+      ElMessage.info('还没有项目，先创建一个项目再开始吧')
+      emit('goProjects', { create: true })
+      return
+    }
+    router.push({ name: routeName, params: { projectId } })
+  } catch {
+    // 全局拦截器已提示
+  } finally {
+    entering.value = false
   }
-  router.push({ path: `/hub/workspace/${projectId}`, hash })
 }
 </script>
 

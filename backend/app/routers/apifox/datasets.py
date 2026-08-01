@@ -67,11 +67,11 @@ def update_dataset(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/datasets/{did}")
+@router.delete("/datasets/{did}", status_code=204)
 def delete_dataset(did: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     dataset = _dataset_checked(db, did, user)
     try:
         service.delete_dataset(db, dataset)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "数据集已删除"}
+    return None

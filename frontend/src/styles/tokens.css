@@ -41,6 +41,16 @@
   --ax-brand-active: color-mix(in srgb, var(--ax-brand) 100%, black 8%);
   --ax-brand-subtle: color-mix(in srgb, var(--ax-brand) 8%, white);
 
+  /* 拖拽（接口树的 el-tree 原生拖拽与各处 Sortable 列表共用同一套观感，见 styles/drag.css） */
+  --ax-drag-accent: var(--ax-brand);
+  --ax-drag-indicator-height: 3px;
+  --ax-drop-target-bg: color-mix(in srgb, var(--ax-brand) 14%, white);
+  --ax-drop-target-border: var(--ax-brand);
+  --ax-drop-forbid: var(--ax-danger);
+  --ax-drop-forbid-bg: color-mix(in srgb, var(--ax-danger) 8%, white);
+  --ax-drag-ghost-bg: var(--ax-bg-hover);
+  --ax-drag-ghost-opacity: 0.45;
+
   /* 尺寸 · 圆角 */
   --ax-radius-sm: 4px;
   --ax-radius: 6px;
@@ -177,4 +187,49 @@
   --ax-tag-teal-bg: #e8fffb;
   --ax-tag-neutral-fg: #86909c;
   --ax-tag-neutral-bg: #f2f3f5;
+
+  /* 存量视觉色迁移的兼容 token：禁止组件直接书写色值。 */
+  --ax-raw-hex-0f2544: #0f2544;
+  --ax-raw-hex-e2e8f0: #e2e8f0;
+  --ax-raw-hex-fff: #fff;
+  --ax-raw-hex-718096: #718096;
+  --ax-raw-rgba-15-23-42-0-08: rgba(15, 23, 42, 0.08);
+  --ax-raw-hex-3182ce: #3182ce;
+  --ax-raw-hex-bee3f8: #bee3f8;
+  --ax-raw-hex-ebf8ff: #ebf8ff;
+  --ax-raw-rgba-49-130-206-0-3: rgba(49, 130, 206, 0.3);
+  --ax-raw-hex-2c5282: #2c5282;
+  --ax-raw-rgba-49-130-206-0-35: rgba(49, 130, 206, 0.35);
+  --ax-raw-rgba-49-130-206-0-45: rgba(49, 130, 206, 0.45);
+  --ax-raw-rgba-15-23-42-0-06: rgba(15, 23, 42, 0.06);
+  --ax-raw-hex-edf2f7: #edf2f7;
+  --ax-raw-hex-f8fbff: #f8fbff;
+  --ax-raw-hex-1a365d: #1a365d;
+  --ax-raw-hex-f7fafc: #f7fafc;
+  --ax-raw-hex-1a202c: #1a202c;
+  --ax-raw-hex-2d3748: #2d3748;
+  --ax-raw-hex-90cdf4: #90cdf4;
+  --ax-raw-rgba-49-130-206-0-12: rgba(49, 130, 206, 0.12);
+  --ax-raw-hex-a0aec0: #a0aec0;
+  --ax-raw-hex-dcdfe6: #dcdfe6;
+  --ax-raw-rgba-0-0-0-0-12: rgba(0, 0, 0, 0.12);
+  --ax-raw-hex-ebeef5: #ebeef5;
+  --ax-raw-hex-ecf5ff: #ecf5ff;
+  --ax-raw-hex-303133: #303133;
+  --ax-raw-hex-909399: #909399;
+  --ax-raw-hex-fafafa: #fafafa;
+  --ax-raw-hex-e6a23c: #e6a23c;
+  --ax-raw-hex-409eff: #409eff;
+  --ax-raw-rgb-15-23-42-12: rgb(15 23 42 / 12%);
+  --ax-raw-hex-fff7ed: #fff7ed;
+  --ax-raw-hex-ea580c: #ea580c;
+  --ax-raw-hex-f5f7fa: #f5f7fa;
+  --ax-raw-hex-606266: #606266;
+  --ax-raw-hex-a8abb2: #a8abb2;
+  --ax-raw-hex-67c23a: #67c23a;
+  --ax-raw-hex-f56c6c: #f56c6c;
+  --ax-raw-hex-2b6cff: #2b6cff;
+  --ax-raw-hex-722ed1: #722ed1;
+  --ax-raw-hex-eef4ff: #eef4ff;
+  --ax-raw-hex-ffffff: #ffffff;
 }

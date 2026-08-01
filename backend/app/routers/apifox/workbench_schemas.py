@@ -23,6 +23,8 @@ class WorkbenchProject(BaseModel):
     scenario_count: int
     case_count: int
     role: str  # 管理员 / 负责人 / 成员（派生自全局角色与 owner，无项目内角色）
+    owner_name: str = ""  # 负责人（owner）用户名 + 真实姓名，供列表按负责人搜索
+    department_name: str = ""  # 创建人所属部门（项目 department_id）
     pinned: bool = False  # 当前用户是否置顶
 
 
@@ -97,6 +99,28 @@ class WorkbenchSchedulePageOut(BaseModel):
 
 class WorkbenchManualPageOut(BaseModel):
     items: List[WorkbenchManual]
+    total: int
+    page: int
+    page_size: int
+
+
+class WorkbenchAiTask(BaseModel):
+    """跨项目 AI 任务（Hub 需求/用例 + Apifox 接口生成）。"""
+
+    task_key: str  # hub:{id} | endpoint:{id}
+    category: str  # requirement | functional | endpoint
+    task_id: int
+    project_id: int
+    project_name: str
+    title: str
+    status: str
+    done_items: int = 0
+    total_items: int = 0
+    updated_at: datetime
+
+
+class WorkbenchAiTaskPageOut(BaseModel):
+    items: List[WorkbenchAiTask]
     total: int
     page: int
     page_size: int

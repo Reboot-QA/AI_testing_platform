@@ -30,7 +30,7 @@ const OPERATORS = [
   { value: 'exists', label: '存在' },
 ]
 
-defineProps<{ condition: ConditionConfig }>()
+const condition = defineModel<ConditionConfig>('condition', { required: true })
 </script>
 
 <style scoped>

@@ -12,11 +12,11 @@ export const authApi = {
   },
   register: (data: Schemas['UserCreate']) => post<Schemas['UserOut']>('/auth/register', data),
   me: () => get<Schemas['UserOut']>('/auth/me'),
-  updateProfile: (data: Schemas['UserProfileUpdate']) =>
-    put<Schemas['UserOut']>('/auth/me', data),
+  updateProfile: (data: Schemas['UserProfileUpdate']) => put<Schemas['UserOut']>('/auth/me', data),
   logout: (token?: string) =>
     post<{ message: string }>('/auth/logout', undefined, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     }),
-  changePassword: (data: Schemas['UserPasswordChange']) => put<any>('/auth/password', data),
+  changePassword: (data: Schemas['UserPasswordChange']) =>
+    put<Schemas['ActionResultOut']>('/auth/password', data),
 }

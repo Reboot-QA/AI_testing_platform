@@ -1,4 +1,5 @@
 from app.routers.apifox.ai_gen_tasks import router as ai_gen_tasks_router
+from app.routers.apifox.api_tokens import public_router as api_tokens_public_router
 from app.routers.apifox.api_tokens import router as api_tokens_router
 from app.routers.apifox.cases import router as cases_router
 from app.routers.apifox.data_models import router as data_models_router
@@ -36,6 +37,7 @@ __all__ = [
     "imports_router",
     "import_schedules_router",
     "api_tokens_router",
+    "api_tokens_public_router",
     "schedules_router",
     "debug_router",
     "workbench_router",

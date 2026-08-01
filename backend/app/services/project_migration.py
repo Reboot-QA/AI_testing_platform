@@ -105,3 +105,24 @@ def migrate_project_owner_seq(db: Session) -> None:
 
     db.expire_all()
     logger.info("projects.owner_seq 迁移完成")
+
+
+def migrate_project_order_versions(db: Session) -> None:
+    """为两个独立排序域补齐项目级乐观锁版本。"""
+    try:
+        if "projects" not in inspect(engine).get_table_names():
+            return
+        missing = {"api_tree_order_version", "scenario_order_version"} - _project_columns()
+        if not missing:
+            return
+        with engine.connect() as conn:
+            if engine.dialect.name == "mysql":
+                conn.execute(text("SET SESSION lock_wait_timeout = 5"))
+            for column in sorted(missing):
+                conn.execute(text(f"ALTER TABLE projects ADD COLUMN {column} INTEGER NOT NULL DEFAULT 1"))
+            conn.commit()
+        inspect(engine).clear_cache()
+        db.expire_all()
+        logger.info("projects 排序版本列迁移完成")
+    except Exception:  # noqa: BLE001 - 结构迁移失败不得阻断应用启动
+        logger.exception("projects 排序版本列迁移失败，已跳过（不阻断启动）")

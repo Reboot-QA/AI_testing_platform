@@ -20,13 +20,26 @@ class RunBrief(BaseModel):
     pass_rate: Optional[float] = None
     duration_ms: Optional[float] = None
     triggered_by: str
+    # 定时任务失败重试链：retry_of_run_id 指向链头 run（首次为 None），attempt 为第几次尝试(1 基)
+    retry_of_run_id: Optional[int] = None
+    attempt: int = 1
     started_at: datetime
     finished_at: Optional[datetime] = None
     error_message: Optional[str] = None
 
 
+class RunBriefWithRetries(RunBrief):
+    """报告列表行：同一次触发的多次尝试折成一行。
+
+    本行 = 最后一次尝试（整体结果），retries = 此前各次尝试（attempt 升序）；无重试时为空。
+    分页与总条数按「行」（重试链）计，不按尝试次数计。
+    """
+
+    retries: List[RunBrief] = Field(default_factory=list)
+
+
 class RunPageOut(BaseModel):
-    items: List[RunBrief]
+    items: List[RunBriefWithRetries]
     total: int
     page: int
     page_size: int
@@ -47,6 +60,7 @@ class RunStepOut(BaseModel):
     step_type: str
     depth: int = 0
     iteration: int = 0
+    loop_round: int = 0
     case_id: Optional[int] = None
     case_name: str
     method: str

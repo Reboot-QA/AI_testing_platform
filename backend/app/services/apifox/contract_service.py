@@ -24,7 +24,10 @@ def validate_response(json_schema_text: str, response: httpx.Response) -> Dict[s
         return _fail("响应体不是 JSON，无法按契约校验")
 
     try:
-        validate = fastjsonschema.compile(schema)
+        # use_formats=False：契约只校验结构/类型，忽略 format 注解。
+        # OpenAPI 专有 format（password/binary/int64 等）不是 JSON Schema 校验规则，
+        # 默认开启会让 fastjsonschema 编译期抛 Unknown format，误报"契约 schema 无效"。
+        validate = fastjsonschema.compile(schema, use_formats=False)
     except Exception as exc:  # fastjsonschema 编译错误类型多样，统一兜底
         return _fail(f"契约 schema 无效：{exc}")
 

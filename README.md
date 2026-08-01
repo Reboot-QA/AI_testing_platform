@@ -1,6 +1,4 @@
-# AI 测试平台
-
-演示地址：http://43.160.226.39:5173/login
+# AI 测试平台（testhub）
 
 基于 **Python FastAPI + Vue 3** 的智能质量与测试管理平台，覆盖需求管理、功能用例、AI 生成、手工执行与 **Apifox 式接口自动化**（`apifox` 模块）。
 

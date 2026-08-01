@@ -1,6 +1,7 @@
 import logging
 
 from app.database import Base, SessionLocal, engine
+from app.services import hub_ai_task_service
 from app.services.api_automation_migration import (
     drop_legacy_api_automation_tables,
     migrate_department_permissions,
@@ -11,8 +12,9 @@ from app.services.api_automation_migration import (
 )
 from app.services.apifox.ai_gen_worker import init_ai_gen_tasks_on_startup
 from app.services.apifox.migration import (
-    migrate_apifox_assertion_operator,
+    migrate_apifox_ai_gen_applied_cases,
     migrate_apifox_ai_gen_discarded_cases,
+    migrate_apifox_assertion_operator,
     migrate_apifox_case_category,
     migrate_apifox_case_origin,
     migrate_apifox_deleted_by,
@@ -20,13 +22,18 @@ from app.services.apifox.migration import (
     migrate_apifox_endpoint_contract,
     migrate_apifox_endpoint_server_name,
     migrate_apifox_folder_kind,
+    migrate_apifox_import_schedule_manifest,
     migrate_apifox_notify_retry,
+    migrate_apifox_notify_success,
     migrate_apifox_optimistic_version,
     migrate_apifox_ordered_processors,
+    migrate_apifox_run_chain_head_id,
     migrate_apifox_run_iteration,
     migrate_apifox_run_parent,
+    migrate_apifox_run_retry_chain,
     migrate_apifox_run_step_contract,
     migrate_apifox_run_step_depth,
+    migrate_apifox_run_step_loop_round,
     migrate_apifox_run_step_warnings,
     migrate_apifox_scenario_folder,
     migrate_apifox_scenario_priority,
@@ -37,10 +44,17 @@ from app.services.apifox.migration import (
 )
 from app.services.apifox.run_service import recover_orphan_runs
 from app.services.apifox.scheduler import init_schedules_on_startup
+from app.services.hub_ai_task_migration import (
+    migrate_hub_ai_requirement_item_imported_at,
+    migrate_hub_ai_requirement_item_requirement_id,
+    migrate_hub_ai_task_progress_at,
+    migrate_hub_ai_tasks_columns,
+)
 from app.services.permission_service import migrate_all_user_permissions
 from app.services.project_migration import (
     migrate_project_last_import_url,
     migrate_project_members_columns,
+    migrate_project_order_versions,
     migrate_project_owner_seq,
 )
 from app.services.seed import seed_demo_data
@@ -59,6 +73,7 @@ def run_bootstrap() -> None:
     steps = [
         ("初始化数据库表", lambda db: Base.metadata.create_all(bind=engine)),
         ("迁移项目负责人序号", migrate_project_owner_seq),
+        ("迁移项目排序版本列", migrate_project_order_versions),
         ("清除老接口自动化遗留表", drop_legacy_api_automation_tables),
         ("迁移用户邮箱", lambda db: migrate_user_optional_email()),
         ("迁移用户强制改密标记", migrate_user_must_change_password),
@@ -68,12 +83,18 @@ def run_bootstrap() -> None:
         ("迁移需求展示序号", migrate_requirement_sort_order),
         ("迁移用例创建人", migrate_testcase_created_by),
         ("迁移用例展示序号", migrate_testcase_sort_order),
+        ("迁移 Hub AI 任务列", migrate_hub_ai_tasks_columns),
+        ("迁移 Hub AI 任务 progress_at", migrate_hub_ai_task_progress_at),
+        ("迁移 Hub 需求明细入库标记", migrate_hub_ai_requirement_item_imported_at),
+        ("迁移 Hub 需求明细 requirement_id", migrate_hub_ai_requirement_item_requirement_id),
         ("迁移接口前置URL名列", migrate_apifox_endpoint_server_name),
         ("迁移断言操作符列", migrate_apifox_assertion_operator),
         ("迁移接口响应契约列", migrate_apifox_endpoint_contract),
         ("迁移运行步骤契约结果列", migrate_apifox_run_step_contract),
         ("迁移场景步骤树列", migrate_apifox_scenario_step_tree),
         ("迁移运行步骤深度列", migrate_apifox_run_step_depth),
+        ("迁移运行步骤循环轮次列", migrate_apifox_run_step_loop_round),
+        ("迁移定时导入清单列", migrate_apifox_import_schedule_manifest),
         ("迁移运行父运行列", migrate_apifox_run_parent),
         ("迁移乐观锁版本列", migrate_apifox_optimistic_version),
         ("迁移场景运行配置列", migrate_apifox_scenario_run_config),
@@ -86,7 +107,11 @@ def run_bootstrap() -> None:
         ("迁移场景文件夹列", migrate_apifox_scenario_folder),
         ("迁移运行步骤告警列", migrate_apifox_run_step_warnings),
         ("迁移失败通知重试列", migrate_apifox_notify_retry),
+        ("迁移成功通知开关列", migrate_apifox_notify_success),
+        ("迁移运行重试链列", migrate_apifox_run_retry_chain),
+        ("迁移运行链头id列与报告分页索引", migrate_apifox_run_chain_head_id),
         ("迁移AI生成废弃预览列", migrate_apifox_ai_gen_discarded_cases),
+        ("迁移AI生成已入库归档列", migrate_apifox_ai_gen_applied_cases),
         ("迁移有序处理器列", migrate_apifox_ordered_processors),
         ("迁移接口用例待复核列", migrate_apifox_endpoint_cases_stale),
         ("迁移软删除回收站列", migrate_apifox_soft_delete),
@@ -99,6 +124,7 @@ def run_bootstrap() -> None:
         ("初始化定时任务", init_schedules_on_startup),
         ("恢复残留AI生成任务", init_ai_gen_tasks_on_startup),
         ("回收残留运行", lambda db: recover_orphan_runs(db)),
+        ("回收超时 Hub AI 任务", lambda db: hub_ai_task_service.fail_stale_running_tasks(db)),
     ]
 
     import app.models  # noqa: F401
@@ -108,6 +134,9 @@ def run_bootstrap() -> None:
         for label, step in steps:
             logger.info("启动步骤: %s", label)
             step(db)
+            # bootstrap 共用 Session：只做读/inspect 的步骤也会开隐式事务，不 rollback 会占着 MySQL 元数据锁，
+            # 同进程内后续 engine.begin() 的 ALTER 可能无限等待，表现为 entrypoint 卡住、8000 无监听。
+            db.rollback()
             logger.info("启动步骤完成: %s", label)
     finally:
         db.close()

@@ -77,3 +77,33 @@ def test_manual_runs_scoped_and_recent_first(db):
     assert repo.count_manual_runs(db, [1]) == 2
     items = repo.list_manual_runs_page(db, [1], 1, 20)
     assert [m.name for m in items] == ["第二轮", "第一轮"]
+
+
+def test_ai_tasks_merged_by_updated_at(db):
+    from app.models.apifox.ai_gen_task import ApifoxAiGenTask
+    from app.models.hub_ai_task import HubAiTask
+
+    base = datetime(2026, 1, 1, 10, 0, 0)
+    h = HubAiTask(
+        project_id=1,
+        task_type="requirement",
+        status="succeeded",
+        target="PRD-A",
+        updated_at=base,
+    )
+    a = ApifoxAiGenTask(
+        project_id=1,
+        status="running",
+        categories="[]",
+        total_items=2,
+        updated_at=base + timedelta(hours=1),
+    )
+    db.add_all([h, a])
+    db.commit()
+
+    assert repo.count_hub_ai_tasks(db, [1]) == 1
+    assert repo.count_apifox_ai_gen_tasks(db, [1]) == 1
+    hub = repo.list_hub_ai_tasks_recent(db, [1], 5)
+    apifox = repo.list_apifox_ai_gen_tasks_recent(db, [1], 5)
+    assert len(hub) == 1 and hub[0].target == "PRD-A"
+    assert len(apifox) == 1 and apifox[0].status == "running"

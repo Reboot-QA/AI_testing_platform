@@ -41,7 +41,7 @@ import VarInput from '@/components/apifox/common/VarInput.vue'
 
 type AssertionRow = Schemas['AssertionRow']
 
-defineProps<{ rows: AssertionRow[] }>()
+const rows = defineModel<AssertionRow[]>('rows', { required: true })
 
 const TYPES = [
   { value: 'status_code', label: '状态码' },

@@ -4,6 +4,8 @@
 apply 建新增/只改契约保留本地/删无引用/保留并告警被引用、无效 openapi 异常。
 """
 
+from datetime import datetime
+
 import pytest
 
 from app.models.apifox.case import ApifoxCaseAssertion, ApifoxCaseExtract, ApifoxEndpointCase
@@ -255,6 +257,36 @@ def test_apply_deletes_unreferenced_when_flag_true(db):
     assert db.query(ApifoxEndpointScript).filter_by(endpoint_id=old.id).count() == 0
 
 
+def test_apply_deletes_endpoint_with_soft_deleted_case(db):
+    # 回收站里存有该接口的已软删用例：删接口时必须一并清掉，否则残留 endpoint_id 外键，
+    # 在 MySQL(强制 FK) 上触发 1451「Cannot delete a parent row」，定时导入整批抛异常回滚
+    _endpoint(db, "GET", "/keep")
+    old = _endpoint(db, "GET", "/old")
+    trashed = _case(db, old, name="回收站用例")
+    trashed.deleted_at = datetime.utcnow()  # 软删（移入回收站）
+    db.commit()
+
+    report = sync.apply_sync(db, PID, _build_doc([{"method": "GET", "path": "/keep"}]), True)
+
+    assert report.deleted == 1
+    assert db.query(ApifoxEndpoint).filter_by(path="/old").count() == 0
+    # 软删用例也必须删掉，不留悬空外键
+    assert db.query(ApifoxEndpointCase).filter_by(endpoint_id=old.id).count() == 0
+
+
+def test_apply_keeps_trashed_case_of_kept_endpoint(db):
+    # 回收站安全性：被保留（仍在 Swagger）的接口，其回收站里的软删用例不受同步影响、不被误删
+    keep = _endpoint(db, "GET", "/keep")
+    trashed = _case(db, keep, name="回收站用例")
+    trashed.deleted_at = datetime.utcnow()
+    db.commit()
+    trashed_id = trashed.id
+
+    sync.apply_sync(db, PID, _build_doc([{"method": "GET", "path": "/keep"}]), True)
+
+    assert db.query(ApifoxEndpointCase).filter_by(id=trashed_id).count() == 1
+
+
 def test_apply_keeps_unreferenced_when_flag_false(db):
     _endpoint(db, "GET", "/keep")
     _endpoint(db, "GET", "/old")
@@ -320,3 +352,27 @@ def test_create_case_clears_stale(db):
 
     db.refresh(ep)
     assert ep.cases_stale is False
+
+
+def test_apply_sync_manifest_classifies_each_endpoint(db):
+    # 逐条清单：新增/更新/未变(跳过)/删除，各归其类，供定时导入「上次结果」明细表展示
+    _endpoint(db, "GET", "/keep")
+    _endpoint(db, "GET", "/change")
+    _endpoint(db, "GET", "/gone")
+    doc = _build_doc(
+        [
+            {"method": "GET", "path": "/keep"},
+            {"method": "GET", "path": "/change", "query": ["page"]},
+            {"method": "GET", "path": "/new"},
+        ]
+    )
+    report = sync.apply_sync(db, PID, doc, True)  # delete_unreferenced=True
+
+    by_status: dict[str, set[str]] = {}
+    for it in report.items:
+        by_status.setdefault(it.status, set()).add(it.path)
+    assert by_status.get("added") == {"/new"}
+    assert by_status.get("updated") == {"/change"}
+    assert by_status.get("skipped") == {"/keep"}
+    assert by_status.get("deleted") == {"/gone"}
+    assert report.truncated is False

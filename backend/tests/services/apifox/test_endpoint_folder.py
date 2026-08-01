@@ -28,6 +28,34 @@ def test_delete_folder_cascades_endpoints_to_trash(db):
     assert endpoint_repo.list_endpoints(db, 1) == []
 
 
+def test_delete_nested_folders_under_sqlite_fk(db):
+    """嵌套文件夹：SQLAlchemy 会把多行 DELETE 打成 executemany 且按 id 序（父先于子）。
+
+    不开 FK 时（pytest 默认）测不出来；开启后若未先断开 parent_id，会 IntegrityError。
+    """
+    from sqlalchemy import text
+
+    parent = svc.create_folder(db, 1, FolderCreate(name="父", parent_id=None))
+    child = svc.create_folder(db, 1, FolderCreate(name="子", parent_id=parent.id))
+    gchild = svc.create_folder(db, 1, FolderCreate(name="孙", parent_id=child.id))
+    svc.create_endpoint(
+        db, 1, EndpointCreate(name="e", method="GET", path="/x", folder_id=gchild.id)
+    )
+
+    try:
+        db.execute(text("PRAGMA foreign_keys=ON"))
+        assert db.execute(text("PRAGMA foreign_keys")).scalar() == 1
+        svc.delete_folder(db, endpoint_repo.get_folder(db, parent.id))
+    finally:
+        # 连接可能被池化复用，务必关回，避免污染同进程后续用例
+        db.execute(text("PRAGMA foreign_keys=OFF"))
+
+    assert endpoint_repo.get_folder(db, parent.id) is None
+    assert endpoint_repo.get_folder(db, child.id) is None
+    assert endpoint_repo.get_folder(db, gchild.id) is None
+    assert endpoint_repo.list_endpoints(db, 1) == []
+
+
 def test_delete_empty_folder_still_works(db):
     folder = svc.create_folder(db, 1, FolderCreate(name="空夹", parent_id=None))
 

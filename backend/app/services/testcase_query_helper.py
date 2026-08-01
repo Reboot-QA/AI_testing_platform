@@ -51,8 +51,8 @@ def apply_testcase_list_options(query: Query) -> Query:
 
 def apply_testcase_list_order(query: Query) -> Query:
     if testcase_has_sort_order_column():
-        return query.order_by(TestCase.sort_order.desc(), TestCase.id.desc())
-    return query.order_by(TestCase.id.desc())
+        return query.order_by(TestCase.sort_order.asc(), TestCase.id.asc())
+    return query.order_by(TestCase.id.asc())
 
 
 def testcase_sort_order_value(case: TestCase) -> int:
@@ -62,13 +62,13 @@ def testcase_sort_order_value(case: TestCase) -> int:
 
 
 def sort_testcases_for_display(cases: List[TestCase]) -> List[TestCase]:
-    """与列表 API 一致：sort_order 降序，同序号再按 id 降序。"""
+    """与列表 API 一致：sort_order 升序（1 在上），同序号再按 id 升序。"""
     if testcase_has_sort_order_column():
         return sorted(
             cases,
             key=lambda item: (
-                -(testcase_sort_order_value(item) or item.id),
-                -item.id,
+                testcase_sort_order_value(item) or item.id,
+                item.id,
             ),
         )
-    return sorted(cases, key=lambda item: -item.id)
+    return sorted(cases, key=lambda item: item.id)

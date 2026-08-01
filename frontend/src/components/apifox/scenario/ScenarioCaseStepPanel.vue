@@ -63,7 +63,6 @@ type DatasetBrief = Schemas['DatasetBrief']
 
 const props = withDefaults(
   defineProps<{
-    step: ScenarioEditorStep
     cases?: ProjectCaseBrief[]
     scripts?: ScriptBrief[]
     datasets?: DatasetBrief[]
@@ -74,6 +73,7 @@ const props = withDefaults(
     datasets: () => [],
   },
 )
+const step = defineModel<ScenarioEditorStep>('step', { required: true })
 
 const pid = useRouteParamId()
 const workspaceStore = useWorkspaceStore()
@@ -110,17 +110,17 @@ async function loadEndpointMeta(endpointId: number, fallbackMethod = '') {
     endpointMeta.method = ep.method
     endpointMeta.path = ep.path
     endpointMeta.server_name = ep.server_name ?? null
-    props.step.endpoint_method = ep.method
-    props.step.endpoint_path = ep.path
+    step.value.endpoint_method = ep.method
+    step.value.endpoint_path = ep.path
   } catch {
-    endpointMeta.method = fallbackMethod || props.step.endpoint_method || ''
-    endpointMeta.path = props.step.endpoint_path || ''
+    endpointMeta.method = fallbackMethod || step.value.endpoint_method || ''
+    endpointMeta.path = step.value.endpoint_path || ''
     endpointMeta.server_name = null
   }
 }
 
 watch(
-  () => props.step.ref_case_id,
+  () => step.value.ref_case_id,
   (id) => {
     if (!id) {
       clearEndpointMeta()
@@ -130,9 +130,9 @@ watch(
     if (brief) {
       endpointMeta.method = brief.endpoint_method
       void loadEndpointMeta(brief.endpoint_id, brief.endpoint_method)
-    } else if (props.step.endpoint_path) {
-      endpointMeta.method = props.step.endpoint_method || ''
-      endpointMeta.path = props.step.endpoint_path
+    } else if (step.value.endpoint_path) {
+      endpointMeta.method = step.value.endpoint_method || ''
+      endpointMeta.path = step.value.endpoint_path
     }
   },
   { immediate: true },
@@ -141,13 +141,13 @@ watch(
 function onCaseChange(id: number) {
   const c = props.cases.find((x) => x.id === id)
   if (c) {
-    props.step.case_name = c.name
-    props.step.endpoint_method = c.endpoint_method
+    step.value.case_name = c.name
+    step.value.endpoint_method = c.endpoint_method
   }
 }
 
 function onCaseSaved(_id: Id, name: string) {
-  props.step.case_name = name
+  step.value.case_name = name
 }
 
 async function flushCase() {

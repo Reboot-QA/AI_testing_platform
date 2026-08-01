@@ -168,7 +168,7 @@ defineExpose({ format, insert })
 
 /* Monaco 行内装饰类由编辑器自建 DOM 渲染，用 :deep 穿透 scoped */
 :deep(.mono-var-ok) {
-  color: var(--el-color-primary, #409eff);
+  color: var(--el-color-primary, var(--ax-raw-hex-409eff));
   font-weight: 600;
 }
 </style>

@@ -57,6 +57,15 @@ export default [
       'vue/multi-word-component-names': 'off',
     },
   },
+  // Vitest：测试目录注入 describe/it/expect 等全局变量
+  {
+    files: ['tests/**/*.{ts,vue}'],
+    languageOptions: {
+      globals: {
+        ...globals.vitest,
+      },
+    },
+  },
   // 关闭与 Prettier 冲突的格式类规则（必须放最后）
   eslintConfigPrettier,
 ]

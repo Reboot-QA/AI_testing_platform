@@ -88,8 +88,8 @@ def test_database_config(
     return DatabaseTestResult(passed=result["passed"], message=result.get("error") or "连接成功")
 
 
-@router.delete("/env-databases/{cid}")
+@router.delete("/env-databases/{cid}", status_code=204)
 def delete_database(cid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     conn = _conn_checked(db, cid, user)
     service.delete_database(db, conn)
-    return {"message": "数据库连接已删除"}
+    return None

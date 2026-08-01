@@ -124,6 +124,16 @@ def test_list_runs_page_filters_by_status(db):
     assert {r.status for r in run_repo.list_runs_page(db, 1, 1, 10, status="failed")} == {"failed"}
 
 
+def test_list_runs_page_filters_by_run_id(db):
+    hit = _run(db, 1, "failed")
+    _run(db, 1, "passed")
+    db.commit()
+
+    assert run_repo.count_runs(db, 1, run_id=hit.id) == 1
+    assert [r.id for r in run_repo.list_runs_page(db, 1, 1, 10, run_id=hit.id)] == [hit.id]
+    assert run_repo.count_runs(db, 1, run_id=999999) == 0
+
+
 def test_list_runs_page_filters_by_date_range(db):
     def _at(day: int) -> ApifoxRun:
         run = ApifoxRun(
@@ -152,16 +162,85 @@ def test_list_runs_page_filters_by_date_range(db):
     assert d10.id  # 引用避免未使用告警
 
 
+def _retry_of(db, head: ApifoxRun, attempt: int, status: str = "failed") -> ApifoxRun:
+    run = ApifoxRun(
+        project_id=head.project_id,
+        target_type=head.target_type,
+        target_id=head.target_id,
+        target_name=head.target_name,
+        status=status,
+        retry_of_run_id=head.id,
+        attempt=attempt,
+    )
+    db.add(run)
+    db.flush()
+    return run
+
+
+def test_pagination_counts_retry_chain_as_one_row(db):
+    head = _run(db, 1, "failed")
+    _retry_of(db, head, 2)
+    last = _retry_of(db, head, 3, "passed")
+    other = _run(db, 1)
+    db.commit()
+
+    # 一条链只占一行：总数 2（不是 4 次尝试），每页返回的是各链最后一次尝试
+    assert run_repo.count_runs(db, 1) == 2
+    assert [r.id for r in run_repo.list_runs_page(db, 1, 1, 20)] == [other.id, last.id]
+    # 首页装满 page_size 行，不会因折叠而缩水
+    assert [r.id for r in run_repo.list_runs_page(db, 1, 1, 1)] == [other.id]
+    assert [r.id for r in run_repo.list_runs_page(db, 1, 2, 1)] == [last.id]
+
+
+def test_status_filter_matches_final_attempt_of_chain(db):
+    head = _run(db, 1, "failed")
+    _retry_of(db, head, 2)
+    last = _retry_of(db, head, 3, "passed")
+    db.commit()
+
+    # 整链最终通过 → 归入「通过」，不再因首次失败而出现在「失败」里
+    assert [r.id for r in run_repo.list_runs_page(db, 1, 1, 10, status="passed")] == [last.id]
+    assert run_repo.count_runs(db, 1, status="failed") == 0
+
+
+def test_list_retry_chains_returns_earlier_attempts_only(db):
+    head = _run(db, 1, "failed")
+    second = _retry_of(db, head, 2)
+    last = _retry_of(db, head, 3, "passed")
+    plain = _run(db, 1)
+    db.commit()
+
+    chains = run_repo.list_retry_chains(db, [head.id, plain.id])
+    # 代表行（最后一次尝试）不重复出现在子行里；无重试的链不返回
+    assert [r.id for r in chains[head.id]] == [head.id, second.id]
+    assert last.id not in {r.id for r in chains[head.id]}
+    assert plain.id not in chains
+
+
+def test_chain_head_id_populated_on_create_and_mark_retry(db):
+    # 报告分页排序/折叠依赖 chain_head_id：非重试=自身 id，重试经 mark_retry 归入链头 id
+    head = _run(db, 1, "failed")
+    retry = _run(db, 1, "failed")
+    run_repo.mark_retry(db, retry.id, head.id, 2)
+    db.commit()
+    db.expire_all()
+
+    assert run_repo.get_run(db, head.id).chain_head_id == head.id
+    assert run_repo.get_run(db, retry.id).chain_head_id == head.id
+
+
 def test_delete_runs_removes_steps_and_child_runs(db):
     parent = _run(db, 1, "failed")
     child = _run(db, 1, "failed", parent_run_id=parent.id)
     _failed_step(db, child.id, "子运行失败")
     db.commit()
 
-    deleted = run_repo.delete_runs(db, [parent.id])
+    parent_id, child_id = parent.id, child.id  # 删除后 ORM 实例失效，先存 id 再断言
+
+    deleted = run_repo.delete_runs(db, [parent_id])
     db.commit()
 
     assert deleted == 2
-    assert run_repo.get_run(db, parent.id) is None
-    assert run_repo.get_run(db, child.id) is None
-    assert run_repo.list_steps(db, child.id) == []
+    assert run_repo.get_run(db, parent_id) is None
+    assert run_repo.get_run(db, child_id) is None
+    assert run_repo.list_steps(db, child_id) == []

@@ -125,7 +125,7 @@ async function send() {
     resp.value = await apifoxApi.debugSend(props.projectId, {
       method: form.method,
       path: form.path,
-      server_name: form.server_name,
+      server_name: form.server_name || null,
       request_spec: form.request_spec as Schemas['DebugRequest']['request_spec'],
       environment_id: store.currentEnvironmentId,
       pre_processors: form.pre_processors,

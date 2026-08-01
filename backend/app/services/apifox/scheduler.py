@@ -29,12 +29,13 @@ def _maybe_sweep_trash(db: Session) -> None:
     today = date.today()
     if _last_trash_sweep == today:
         return
-    from app.services.apifox import trash_service
+    from app.services.apifox import run_retention_service, trash_service
 
     purged = trash_service.purge_expired(db)
     _last_trash_sweep = today
     if purged:
         logger.info("回收站到期清理：彻底删除 %s 项", purged)
+    run_retention_service.purge_expired_case_runs(db)
 
 
 def _scheduler_thread_loop() -> None:

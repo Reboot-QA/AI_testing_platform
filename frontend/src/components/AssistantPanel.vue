@@ -2,7 +2,7 @@
   <div class="assistant-root">
     <transition name="assistant-slide">
       <aside v-if="open" class="assistant-panel">
-        <header class="panel-header">
+        <header class="panel-header flex items-center justify-between">
           <div class="panel-title">
             <el-icon class="title-icon"><MagicStick /></el-icon>
             <span>AI 助手</span>
@@ -36,7 +36,13 @@
 
           <div v-for="msg in messages" :key="msg.id" class="message-row" :class="msg.role">
             <div class="bubble">
-              <div v-if="msg.content" v-html="formatContent(msg.content)" />
+              <template v-if="msg.content">
+                <template v-for="(segment, index) in contentSegments(msg.content)" :key="index">
+                  <strong v-if="segment.kind === 'strong'">{{ segment.text }}</strong>
+                  <br v-else-if="segment.kind === 'linebreak'" />
+                  <template v-else>{{ segment.text }}</template>
+                </template>
+              </template>
             </div>
           </div>
 
@@ -68,7 +74,9 @@
               <el-icon><Promotion /></el-icon>
             </el-button>
           </div>
-          <p class="footer-tip">平台相关问题将结合系统菜单作答；复杂问题需已配置大模型</p>
+          <p class="footer-tip">
+            平台相关问题将结合系统菜单与功能知识库作答；复杂问题需已配置大模型
+          </p>
         </footer>
       </aside>
     </transition>
@@ -118,6 +126,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { assistantApi } from '@/api'
+import type { SSEEvent } from '@/api/request'
 import { useUserStore } from '@/stores/user'
 import {
   ASSISTANT_GUIDES,
@@ -138,7 +147,7 @@ interface StreamChatOptions {
   displayText?: string
 }
 
-interface AssistantStreamEvent {
+type AssistantStreamEvent = SSEEvent & {
   type: 'meta' | 'token' | 'error'
   mode?: string
   provider_name?: string
@@ -216,14 +225,23 @@ function assistantPagePath(): string {
   return route.fullPath
 }
 
-function formatContent(text: string) {
-  if (!text) return ''
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\n/g, '<br>')
+type ContentSegment =
+  { kind: 'text'; text: string } | { kind: 'strong'; text: string } | { kind: 'linebreak' }
+
+function contentSegments(text: string): ContentSegment[] {
+  const segments: ContentSegment[] = []
+  const parts = text.split(/(\*\*[^*]+\*\*|\n)/g)
+  for (const part of parts) {
+    if (!part) continue
+    if (part === '\n') {
+      segments.push({ kind: 'linebreak' })
+    } else if (part.startsWith('**') && part.endsWith('**')) {
+      segments.push({ kind: 'strong', text: part.slice(2, -2) })
+    } else {
+      segments.push({ kind: 'text', text: part })
+    }
+  }
+  return segments
 }
 
 function scrollToBottom() {
@@ -418,7 +436,7 @@ async function streamChat(question: string, options: StreamChatOptions = {}) {
   const findAssistantMessage = () => messages.value.find((item) => item.id === assistantId)
 
   try {
-    await assistantApi.chatStream(
+    await assistantApi.chatStream<AssistantStreamEvent>(
       {
         messages: buildChatPayload(assistantId),
         page_path: assistantPagePath(),
@@ -521,15 +539,15 @@ function sendSuggestion(item: AssistantGuide) {
 .fab-collapse-btn {
   width: 22px;
   height: 22px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--ax-raw-hex-e2e8f0);
   border-radius: 50%;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #fff;
-  color: #718096;
-  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.08);
+  background: var(--ax-raw-hex-fff);
+  color: var(--ax-raw-hex-718096);
+  box-shadow: 0 2px 8px var(--ax-raw-rgba-15-23-42-0-08);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -537,9 +555,9 @@ function sendSuggestion(item: AssistantGuide) {
 }
 
 .fab-collapse-btn:hover {
-  color: #3182ce;
-  border-color: #bee3f8;
-  background: #ebf8ff;
+  color: var(--ax-raw-hex-3182ce);
+  border-color: var(--ax-raw-hex-bee3f8);
+  background: var(--ax-raw-hex-ebf8ff);
 }
 
 .fab-collapse-btn .el-icon {
@@ -552,7 +570,7 @@ function sendSuggestion(item: AssistantGuide) {
   width: 100%;
   height: 100%;
   border-radius: 50%;
-  background: rgba(49, 130, 206, 0.3);
+  background: var(--ax-raw-rgba-49-130-206-0-3);
   animation: fabPulse 2.4s ease-out infinite;
   pointer-events: none;
 }
@@ -576,12 +594,12 @@ function sendSuggestion(item: AssistantGuide) {
 .fab-label {
   padding: var(--ax-space-1-5) var(--ax-space-3);
   border-radius: 999px;
-  background: linear-gradient(135deg, #3182ce, #2c5282);
-  color: #fff;
+  background: linear-gradient(135deg, var(--ax-raw-hex-3182ce), var(--ax-raw-hex-2c5282));
+  color: var(--ax-raw-hex-fff);
   font-size: var(--ax-text-caption-size);
   font-weight: 600;
   letter-spacing: 0.3px;
-  box-shadow: 0 4px 16px rgba(49, 130, 206, 0.3);
+  box-shadow: 0 4px 16px var(--ax-raw-rgba-49-130-206-0-3);
   white-space: nowrap;
   opacity: 0;
   max-width: 0;
@@ -607,11 +625,11 @@ function sendSuggestion(item: AssistantGuide) {
   z-index: 1;
   width: 48px;
   height: 48px;
-  border: 2px solid #fff;
+  border: 2px solid var(--ax-raw-hex-fff);
   border-radius: 50%;
   padding: 0;
-  background: #ebf8ff;
-  box-shadow: 0 6px 20px rgba(49, 130, 206, 0.35);
+  background: var(--ax-raw-hex-ebf8ff);
+  box-shadow: 0 6px 20px var(--ax-raw-rgba-49-130-206-0-35);
   cursor: grab;
   overflow: hidden;
   touch-action: none;
@@ -634,7 +652,7 @@ function sendSuggestion(item: AssistantGuide) {
 
 .assistant-fab-wrap:hover .assistant-fab {
   transform: scale(1.05);
-  box-shadow: 0 8px 24px rgba(49, 130, 206, 0.45);
+  box-shadow: 0 8px 24px var(--ax-raw-rgba-49-130-206-0-45);
 }
 
 .assistant-fab-wrap.fab-compact:not(:hover) .fab-pulse,
@@ -666,9 +684,9 @@ function sendSuggestion(item: AssistantGuide) {
   max-width: min(520px, calc(100vw - 48px));
   height: min(calc(100vh - 80px), 680px);
   min-height: 360px;
-  background: #fff;
-  border-left: 1px solid #e2e8f0;
-  box-shadow: -4px 0 20px rgba(15, 23, 42, 0.06);
+  background: var(--ax-raw-hex-fff);
+  border-left: 1px solid var(--ax-raw-hex-e2e8f0);
+  box-shadow: -4px 0 20px var(--ax-raw-rgba-15-23-42-0-06);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -679,8 +697,8 @@ function sendSuggestion(item: AssistantGuide) {
   align-items: center;
   justify-content: space-between;
   padding: var(--ax-space-3) var(--ax-space-3-5);
-  border-bottom: 1px solid #edf2f7;
-  background: linear-gradient(180deg, #f8fbff 0%, #fff 100%);
+  border-bottom: 1px solid var(--ax-raw-hex-edf2f7);
+  background: linear-gradient(180deg, var(--ax-raw-hex-f8fbff) 0%, var(--ax-raw-hex-fff) 100%);
   flex-shrink: 0;
 }
 
@@ -690,11 +708,11 @@ function sendSuggestion(item: AssistantGuide) {
   gap: var(--ax-space-2);
   font-size: var(--ax-text-title-sm-size);
   font-weight: 600;
-  color: #1a365d;
+  color: var(--ax-raw-hex-1a365d);
 }
 
 .title-icon {
-  color: #3182ce;
+  color: var(--ax-raw-hex-3182ce);
 }
 
 .panel-body {
@@ -703,7 +721,7 @@ function sendSuggestion(item: AssistantGuide) {
   overflow-y: auto;
   overflow-x: hidden;
   padding: var(--ax-space-4);
-  background: #f7fafc;
+  background: var(--ax-raw-hex-f7fafc);
 }
 
 .welcome {
@@ -716,8 +734,8 @@ function sendSuggestion(item: AssistantGuide) {
   height: 72px;
   margin: 0 auto var(--ax-space-3);
   border-radius: 50%;
-  background: #fff;
-  border: 3px solid #bee3f8;
+  background: var(--ax-raw-hex-fff);
+  border: 3px solid var(--ax-raw-hex-bee3f8);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -733,12 +751,12 @@ function sendSuggestion(item: AssistantGuide) {
 .welcome h3 {
   margin: 0 0 var(--ax-space-2);
   font-size: var(--ax-text-title-size);
-  color: #1a202c;
+  color: var(--ax-raw-hex-1a202c);
 }
 
 .welcome p {
   margin: 0 0 var(--ax-space-5);
-  color: #718096;
+  color: var(--ax-raw-hex-718096);
   font-size: var(--ax-text-body-size);
   line-height: var(--ax-leading-relaxed);
 }
@@ -756,10 +774,10 @@ function sendSuggestion(item: AssistantGuide) {
   gap: var(--ax-space-2);
   width: 100%;
   padding: var(--ax-space-3) var(--ax-space-3-5);
-  border: 1px solid #e2e8f0;
+  border: 1px solid var(--ax-raw-hex-e2e8f0);
   border-radius: 10px;
-  background: #fff;
-  color: #2d3748;
+  background: var(--ax-raw-hex-fff);
+  color: var(--ax-raw-hex-2d3748);
   font-size: var(--ax-text-body-sm-size);
   cursor: pointer;
   transition:
@@ -768,8 +786,8 @@ function sendSuggestion(item: AssistantGuide) {
 }
 
 .suggestion-btn:hover:not(:disabled) {
-  border-color: #90cdf4;
-  box-shadow: 0 2px 8px rgba(49, 130, 206, 0.12);
+  border-color: var(--ax-raw-hex-90cdf4);
+  box-shadow: 0 2px 8px var(--ax-raw-rgba-49-130-206-0-12);
 }
 
 .suggestion-btn:disabled {
@@ -800,15 +818,15 @@ function sendSuggestion(item: AssistantGuide) {
 }
 
 .message-row.user .bubble {
-  background: #3182ce;
-  color: #fff;
+  background: var(--ax-raw-hex-3182ce);
+  color: var(--ax-raw-hex-fff);
   border-bottom-right-radius: 4px;
 }
 
 .message-row.assistant .bubble {
-  background: #fff;
-  color: #2d3748;
-  border: 1px solid #e2e8f0;
+  background: var(--ax-raw-hex-fff);
+  color: var(--ax-raw-hex-2d3748);
+  border: 1px solid var(--ax-raw-hex-e2e8f0);
   border-bottom-left-radius: 4px;
 }
 
@@ -823,7 +841,7 @@ function sendSuggestion(item: AssistantGuide) {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #a0aec0;
+  background: var(--ax-raw-hex-a0aec0);
   animation: blink 1.2s infinite ease-in-out;
 }
 
@@ -850,14 +868,14 @@ function sendSuggestion(item: AssistantGuide) {
 
 .panel-footer {
   padding: var(--ax-space-3) var(--ax-space-4) var(--ax-space-4);
-  border-top: 1px solid #edf2f7;
-  background: #fff;
+  border-top: 1px solid var(--ax-raw-hex-edf2f7);
+  background: var(--ax-raw-hex-fff);
 }
 
 .mode-tag {
   margin-bottom: var(--ax-space-2);
   font-size: var(--ax-text-caption-size);
-  color: #718096;
+  color: var(--ax-raw-hex-718096);
 }
 
 .input-wrap {
@@ -880,7 +898,7 @@ function sendSuggestion(item: AssistantGuide) {
 .footer-tip {
   margin: var(--ax-space-2) 0 0;
   font-size: var(--ax-text-caption-size);
-  color: #a0aec0;
+  color: var(--ax-raw-hex-a0aec0);
   text-align: center;
 }
 

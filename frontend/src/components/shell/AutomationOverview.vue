@@ -14,7 +14,7 @@
           type="button"
           class="tile"
           :class="{ pulse: t.pulse && t.value }"
-          @click="emit('nav', t.nav)"
+          @click="onNav(t.nav)"
         >
           <el-icon class="tile-ic" :style="{ color: t.color }"><component :is="t.icon" /></el-icon>
           <div class="tile-main">
@@ -28,7 +28,7 @@
         <span class="flow-title">推荐工作流</span>
         <div class="flow-steps">
           <template v-for="(f, i) in FLOW" :key="f.section">
-            <button type="button" class="flow-step" @click="emit('nav', f.section)">
+            <button type="button" class="flow-step" @click="onNav(f.section)">
               <span class="flow-idx">{{ i + 1 }}</span>
               <span class="flow-label">{{ f.label }}</span>
             </button>
@@ -57,7 +57,7 @@
           :data="runs"
           size="small"
           class="rec-table"
-          @row-click="() => emit('nav', 'reports')"
+          @row-click="(row: Schemas['RunBrief']) => onNav('reports', undefined, { run: String(row.id) })"
         >
           <el-table-column label="目标" min-width="180">
             <template #default="{ row }">
@@ -117,9 +117,10 @@ import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { formatTime, statusLabel, statusTag } from '@/utils/runFormat'
 import TrendCharts from '@/components/shell/TrendCharts.vue'
+import { useWorkspaceOverviewNav } from '@/composables/useWorkspaceOverviewNav'
 
 const props = defineProps<{ projectId: number }>()
-const emit = defineEmits<{ nav: [section: string] }>()
+const { navigate: onNav } = useWorkspaceOverviewNav(() => props.projectId, 'automation')
 
 const FLOW = [
   { label: '维护接口', section: 'apis' },
@@ -131,7 +132,6 @@ const FLOW = [
 
 const loading = ref(false)
 const stats = ref<Schemas['ProjectStatsOut'] | null>(null)
-const aiTaskCount = ref(0)
 const runs = ref<Schemas['RunBrief'][]>([])
 const runTotal = ref(0)
 const page = ref(1)
@@ -178,14 +178,6 @@ const tiles = computed(() => [
     pulse: true,
   },
   {
-    key: 'ai',
-    nav: 'ai',
-    label: 'AI 任务',
-    value: aiTaskCount.value,
-    icon: 'MagicStick',
-    color: 'var(--ax-rail-active-bg)',
-  },
-  {
     key: 'rate',
     nav: 'reports',
     label: '今日通过率',
@@ -210,13 +202,9 @@ async function load() {
   loading.value = true
   page.value = 1
   try {
-    const [st, ai] = await Promise.all([
-      apifoxApi.projectStats(props.projectId),
-      apifoxApi.listActiveAiGenTasks(props.projectId),
-      loadRuns(),
-    ])
+    const st = await apifoxApi.projectStats(props.projectId)
     stats.value = st
-    aiTaskCount.value = ai.length
+    await loadRuns()
   } catch {
     // 全局拦截器已提示
   } finally {

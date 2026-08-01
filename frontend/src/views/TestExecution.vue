@@ -14,19 +14,35 @@
       <el-button v-if="!executingRun" type="primary" @click="openCreateDialog">
         <el-icon><Plus /></el-icon> 新建测试单
       </el-button>
+      <el-button
+        v-if="!executingRun"
+        type="danger"
+        plain
+        :disabled="!selectedRunIds.length"
+        :loading="batchDeleting"
+        @click="handleBatchDeleteRuns"
+      >
+        <el-icon><Delete /></el-icon> 批量删除{{
+          selectedRunIds.length ? ` (${selectedRunIds.length})` : ''
+        }}
+      </el-button>
       <el-button v-if="executingRun" @click="backToList">返回测试单</el-button>
     </div>
 
     <!-- 测试单列表 -->
     <el-card v-if="!executingRun" shadow="never" class="list-card">
       <el-table
+        ref="runsTableRef"
         v-loading="runsLoading"
         :data="runs"
         stripe
         border
         class="runs-table"
         height="100%"
+        row-key="id"
+        @selection-change="handleRunSelectionChange"
       >
+        <el-table-column type="selection" width="45" reserve-selection />
         <el-table-column label="测试单" min-width="180">
           <template #default="{ row }">
             <div class="run-name-cell">
@@ -308,10 +324,11 @@
             placeholder="请输入测试单名称"
           />
         </el-form-item>
-        <el-form-item label="版本/构建">
+        <el-form-item label="版本/构建" prop="build_name">
           <el-input
             v-model="createForm.build_name"
-            :maxlength="VALUE_MAX_LEN"
+            :maxlength="BUILD_NAME_MAX_LEN"
+            show-word-limit
             placeholder="例如：V1.2.0"
           />
         </el-form-item>
@@ -415,10 +432,10 @@
             formatTime(detailRun.created_at)
           }}</el-descriptions-item>
           <el-descriptions-item label="开始时间">{{
-            formatTime(detailRun.started_at)
+            formatWallTime(detailRun.started_at)
           }}</el-descriptions-item>
           <el-descriptions-item label="结束时间">{{
-            formatTime(detailRun.finished_at)
+            formatWallTime(detailRun.finished_at)
           }}</el-descriptions-item>
           <el-descriptions-item label="耗时">{{ runDurationText(detailRun) }}</el-descriptions-item>
           <el-descriptions-item label="说明" :span="2">{{
@@ -445,7 +462,7 @@
           </el-table-column>
           <el-table-column prop="executor_name" label="执行人" width="90" />
           <el-table-column label="执行时间" width="160">
-            <template #default="{ row }">{{ formatTime(row.executed_at) }}</template>
+            <template #default="{ row }">{{ formatWallTime(row.executed_at) }}</template>
           </el-table-column>
           <el-table-column label="操作" width="72" fixed="right">
             <template #default="{ row }">
@@ -462,16 +479,26 @@
 </template>
 
 <script setup lang="ts">
-import { LONG_TEXT_MAX_LEN, TITLE_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
+import { BUILD_NAME_MAX_LEN, LONG_TEXT_MAX_LEN, TITLE_MAX_LEN } from '@/constants/limits'
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 import type { TableInstance } from 'element-plus'
 import { projectApi, requirementApi, testExecutionApi } from '@/api'
 import { unwrapProjectList } from '@/api/project'
 import type { Schemas } from '@/api/types'
-import { formatBeijingTime } from '@/utils/datetime'
+import {
+  formatTime,
+  formatWallTime,
+  resultLabel,
+  resultType,
+  runProgress,
+  runStatusLabel,
+  runStatusType,
+} from '@/composables/useTestExecutionDisplay'
+import { parseShanghaiNaiveDateTime } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
-import type { DateInput, Project, Requirement, TestCase } from '@/types/common'
+import type { Project, Requirement, TestCase } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
 import RunCaseDetailDrawer from '@/components/testexec/RunCaseDetailDrawer.vue'
 
@@ -505,6 +532,9 @@ const runsLoading = ref(false)
 const runsPage = ref(1)
 const runsPageSize = ref(20)
 const runsTotal = ref(0)
+const runsTableRef = ref<TableInstance>()
+const selectedRunIds = ref<number[]>([])
+const batchDeleting = ref(false)
 
 const executingRun = ref<TestRunDetail | null>(null)
 const currentCase = ref<TestRunCase | null>(null)
@@ -524,6 +554,13 @@ const createForm = reactive<CreateRunForm>({
 const createRules: FormRules<CreateRunForm> = {
   project_id: [{ required: true, message: '请选择项目', trigger: 'change' }],
   name: [{ required: true, message: '请输入测试单名称', trigger: 'blur' }],
+  build_name: [
+    {
+      max: BUILD_NAME_MAX_LEN,
+      message: `版本/构建不能超过 ${BUILD_NAME_MAX_LEN} 个字符`,
+      trigger: 'blur',
+    },
+  ],
   requirement_ids: [
     {
       type: 'array',
@@ -534,7 +571,8 @@ const createRules: FormRules<CreateRunForm> = {
     },
   ],
 }
-const availableCases = ref<TestCase[]>([])
+type AvailableCase = Schemas['ManualTestRunAvailableCaseOut']
+const availableCases = ref<AvailableCase[]>([])
 const casesLoading = ref(false)
 const selectedCaseIds = ref<number[]>([])
 const creating = ref(false)
@@ -545,31 +583,6 @@ const detailDrawerVisible = ref(false)
 const detailRun = ref<TestRunDetail | null>(null)
 const caseDetailVisible = ref(false)
 const caseDetailItem = ref<TestRunCase | null>(null)
-
-const runStatusLabel: Record<string, string> = {
-  waiting: '待开始',
-  running: '执行中',
-  finished: '已完成',
-}
-const runStatusType: Record<string, string> = {
-  waiting: 'info',
-  running: 'warning',
-  finished: 'success',
-}
-const resultLabel: Record<string, string> = {
-  pending: '待测',
-  pass: '通过',
-  fail: '失败',
-  blocked: '阻塞',
-  skip: '跳过',
-}
-const resultType: Record<string, string> = {
-  pending: 'info',
-  pass: 'success',
-  fail: 'danger',
-  blocked: 'warning',
-  skip: '',
-}
 
 const filteredCases = computed(() => {
   if (!executingRun.value?.cases) return []
@@ -607,15 +620,6 @@ const allRequirementsSelected = computed(
     createForm.requirement_ids.length === createRequirements.value.length,
 )
 
-function formatTime(value: DateInput) {
-  return formatBeijingTime(value)
-}
-
-function runProgress(run: TestRunSummary | TestRunDetail | null) {
-  if (!run?.total_count) return 0
-  return Math.round(((run.total_count - run.pending_count) / run.total_count) * 100)
-}
-
 async function loadProjects() {
   projects.value = unwrapProjectList(await projectApi.list())
   if (projects.value.length && !projectId.value) {
@@ -627,6 +631,8 @@ async function loadProjects() {
 async function handleProjectChange() {
   executingRun.value = null
   currentCase.value = null
+  selectedRunIds.value = []
+  runsTableRef.value?.clearSelection()
   if (!projectId.value) return
   runsPage.value = 1
   await loadRuns()
@@ -703,9 +709,10 @@ function openCaseDetail(row: TestRunCase) {
 /** 测试单耗时：结束-开始，缺任一端返回 '-' */
 function runDurationText(run: TestRunDetail | null) {
   if (!run?.started_at || !run.finished_at) return '-'
-  const start = new Date(run.started_at).getTime()
-  const end = new Date(run.finished_at).getTime()
-  if (Number.isNaN(start) || Number.isNaN(end) || end < start) return '-'
+  const start = parseShanghaiNaiveDateTime(run.started_at)?.getTime()
+  const end = parseShanghaiNaiveDateTime(run.finished_at)?.getTime()
+  if (start == null || end == null || Number.isNaN(start) || Number.isNaN(end) || end < start)
+    return '-'
   const totalSec = Math.round((end - start) / 1000)
   if (totalSec < 60) return `${totalSec} 秒`
   const min = Math.floor(totalSec / 60)
@@ -719,7 +726,34 @@ function runDurationText(run: TestRunDetail | null) {
 async function removeRun(row: TestRunSummary) {
   await testExecutionApi.deleteRun(row.id)
   ElMessage.success('已删除')
+  selectedRunIds.value = selectedRunIds.value.filter((id) => id !== row.id)
   await loadRuns()
+}
+
+function handleRunSelectionChange(rows: TestRunSummary[]) {
+  selectedRunIds.value = rows.map((row) => row.id)
+}
+
+async function handleBatchDeleteRuns() {
+  if (!projectId.value || !selectedRunIds.value.length) return
+  await ElMessageBox.confirm(
+    `确认删除选中的 ${selectedRunIds.value.length} 个测试单？删除后不可恢复。`,
+    '批量删除',
+    { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
+  )
+  batchDeleting.value = true
+  try {
+    const res = await testExecutionApi.batchDeleteRuns({
+      project_id: projectId.value,
+      run_ids: selectedRunIds.value,
+    })
+    ElMessage.success(res.message || '批量删除成功')
+    selectedRunIds.value = []
+    runsTableRef.value?.clearSelection()
+    await loadRuns()
+  } finally {
+    batchDeleting.value = false
+  }
 }
 
 function selectCase(item: TestRunCase | null) {

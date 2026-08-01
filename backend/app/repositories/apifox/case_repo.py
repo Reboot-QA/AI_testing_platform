@@ -77,6 +77,12 @@ def list_cases(db: Session, endpoint_id: int) -> List[ApifoxEndpointCase]:
     )
 
 
+def list_cases_all(db: Session, endpoint_id: int) -> List[ApifoxEndpointCase]:
+    """接口下所有用例（含回收站里已软删的）——硬删接口时须清空子表，否则残留
+    endpoint_id 外键，在 MySQL 上触发 1451 外键约束报错。"""
+    return db.query(ApifoxEndpointCase).filter(ApifoxEndpointCase.endpoint_id == endpoint_id).all()
+
+
 def name_exists(db: Session, endpoint_id: int, name: str) -> bool:
     return (
         db.query(ApifoxEndpointCase.id)

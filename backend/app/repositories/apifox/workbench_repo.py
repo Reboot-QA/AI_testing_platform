@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.models.apifox.ai_gen_task import ApifoxAiGenTask
 from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.endpoint import ApifoxEndpoint
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
@@ -13,6 +14,7 @@ from app.models.apifox.scenario import ApifoxScenario
 from app.models.apifox.schedule import ApifoxSchedule
 from app.models.apifox.suite import ApifoxSuite
 from app.models.apifox.variable import ApifoxEnvironment
+from app.models.hub_ai_task import HubAiTask
 from app.models.test_execution import ManualTestRun
 
 
@@ -45,9 +47,13 @@ def count_suites(db: Session, project_ids: List[int]) -> Dict[int, int]:
 
 
 def daily_trend(db: Session, project_id: int, days: int = 7) -> Dict[str, Tuple[int, int]]:
-    """近 days 天按日聚合（通过用例数之和, 总用例数之和）。仅统计已结束 run（passed/failed）。
+    """近 days 天按日聚合（通过数之和, 失败数之和）。仅统计已结束 run（passed/failed）。
 
-    返回 {日期字符串: (passed_sum, total_sum)}；缺失的日期由 service 补零。DATE() 在 sqlite/mysql 均可用。
+    分母取「实际执行数 = passed + failed」而非 total_count：total_count 是建 run 时的计划条数，
+    循环/重试等流程控制会让实际执行数超过它，用它当分母会算出 >100% 的通过率（图会被 y 轴截断）。
+    与单次 run 自身的 pass_rate 口径一致。
+
+    返回 {日期字符串: (passed_sum, failed_sum)}；缺失的日期由 service 补零。DATE() 在 sqlite/mysql 均可用。
     """
     since = (datetime.utcnow() - timedelta(days=days - 1)).replace(
         hour=0, minute=0, second=0, microsecond=0
@@ -56,7 +62,7 @@ def daily_trend(db: Session, project_id: int, days: int = 7) -> Dict[str, Tuple[
         db.query(
             func.date(ApifoxRun.started_at),
             func.coalesce(func.sum(ApifoxRun.passed_count), 0),
-            func.coalesce(func.sum(ApifoxRun.total_count), 0),
+            func.coalesce(func.sum(ApifoxRun.failed_count), 0),
         )
         .filter(
             ApifoxRun.project_id == project_id,
@@ -66,7 +72,7 @@ def daily_trend(db: Session, project_id: int, days: int = 7) -> Dict[str, Tuple[
         .group_by(func.date(ApifoxRun.started_at))
         .all()
     )
-    return {str(d): (int(p or 0), int(t or 0)) for d, p, t in rows}
+    return {str(d): (int(p or 0), int(f or 0)) for d, p, f in rows}
 
 
 def list_running(db: Session, project_ids: List[int]) -> List[ApifoxRun]:
@@ -264,13 +270,16 @@ def list_manual_runs_page(
 
 
 def today_totals(db: Session, project_ids: List[int], since: datetime) -> Tuple[int, int]:
-    """当日已结束 run 的（通过数之和, 总数之和），用于今日通过率。"""
+    """当日已结束 run 的（通过数之和, 实际执行数之和），用于今日通过率。
+
+    实际执行数 = passed + failed，同 daily_trend，不用 total_count 这个计划数当分母。
+    """
     if not project_ids:
         return (0, 0)
-    passed_sum, total_sum = (
+    passed_sum, failed_sum = (
         db.query(
             func.coalesce(func.sum(ApifoxRun.passed_count), 0),
-            func.coalesce(func.sum(ApifoxRun.total_count), 0),
+            func.coalesce(func.sum(ApifoxRun.failed_count), 0),
         )
         .filter(
             ApifoxRun.project_id.in_(project_ids),
@@ -279,7 +288,56 @@ def today_totals(db: Session, project_ids: List[int], since: datetime) -> Tuple[
         )
         .one()
     )
-    return (int(passed_sum or 0), int(total_sum or 0))
+    passed = int(passed_sum or 0)
+    return (passed, passed + int(failed_sum or 0))
+
+
+def count_hub_ai_tasks(db: Session, project_ids: List[int]) -> int:
+    if not project_ids:
+        return 0
+    return (
+        db.query(func.count(HubAiTask.id))
+        .filter(HubAiTask.project_id.in_(project_ids))
+        .scalar()
+        or 0
+    )
+
+
+def count_apifox_ai_gen_tasks(db: Session, project_ids: List[int]) -> int:
+    if not project_ids:
+        return 0
+    return (
+        db.query(func.count(ApifoxAiGenTask.id))
+        .filter(ApifoxAiGenTask.project_id.in_(project_ids))
+        .scalar()
+        or 0
+    )
+
+
+def list_hub_ai_tasks_recent(db: Session, project_ids: List[int], limit: int) -> List[HubAiTask]:
+    if not project_ids or limit <= 0:
+        return []
+    return (
+        db.query(HubAiTask)
+        .filter(HubAiTask.project_id.in_(project_ids))
+        .order_by(HubAiTask.updated_at.desc(), HubAiTask.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def list_apifox_ai_gen_tasks_recent(
+    db: Session, project_ids: List[int], limit: int
+) -> List[ApifoxAiGenTask]:
+    if not project_ids or limit <= 0:
+        return []
+    return (
+        db.query(ApifoxAiGenTask)
+        .filter(ApifoxAiGenTask.project_id.in_(project_ids))
+        .order_by(ApifoxAiGenTask.updated_at.desc(), ApifoxAiGenTask.id.desc())
+        .limit(limit)
+        .all()
+    )
 
 
 def environment_names(db: Session, project_ids: List[int]) -> Dict[int, str]:

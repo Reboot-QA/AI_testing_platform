@@ -1,7 +1,7 @@
 <template>
   <div class="activity">
     <div class="panel-head">
-      <div class="panel-title">活动</div>
+      <div class="panel-title">动态</div>
     </div>
     <el-tabs v-model="activeTab" class="activity-tabs">
       <el-tab-pane name="fail">
@@ -20,7 +20,7 @@
               :reason="r.error_message"
               :status-text="statusText(r)"
               status-class="bad"
-              @click="emit('open', r.project_id)"
+              @click="openAutomationRun(r)"
             />
           </div>
           <ActivityEmpty
@@ -60,7 +60,7 @@
               status-text="运行中"
               status-class="run"
               live
-              @click="emit('open', r.project_id)"
+              @click="openAutomationRun(r)"
             />
           </div>
           <ActivityEmpty
@@ -99,7 +99,7 @@
               :reason="r.error_message"
               :status-text="statusText(r)"
               :status-class="statusClass(r)"
-              @click="emit('open', r.project_id)"
+              @click="openAutomationRun(r)"
             />
           </div>
           <ActivityEmpty
@@ -135,7 +135,7 @@
               :key="s.schedule_id"
               :title="s.name"
               :sub="`${s.project_name} · 下次 ${fullTime(s.next_run_at)}`"
-              @click="emit('open', s.project_id)"
+              @click="openSchedule(s)"
             />
           </div>
           <ActivityEmpty
@@ -173,7 +173,7 @@
               :sub="`${m.project_name} · ${rel(m.created_at)}`"
               :status-text="manualStatusText(m)"
               :status-class="manualStatusClass(m)"
-              @click="emit('open', m.project_id)"
+              @click="openManualRun(m)"
             />
           </div>
           <ActivityEmpty
@@ -195,6 +195,45 @@
           </div>
         </div>
       </el-tab-pane>
+
+      <el-tab-pane name="ai">
+        <template #label>
+          <span class="tl"
+            >AI 任务<span v-if="aiTotal" class="badge">{{ aiTotal }}</span></span
+          >
+        </template>
+        <div v-loading="aiLoading" class="tab-body">
+          <div v-if="aiTasks.length" class="list">
+            <ActivityRow
+              v-for="t in aiTasks"
+              :key="t.task_key"
+              :title="t.title"
+              :sub="`${aiCategoryLabel(t.category)} · ${t.project_name} · ${rel(t.updated_at)}`"
+              :status-text="aiStatusText(t)"
+              :status-class="aiStatusClass(t)"
+              :live="t.status === 'running'"
+              @click="onAiTaskClick(t)"
+            />
+          </div>
+          <ActivityEmpty
+            v-else-if="!aiLoading"
+            icon="MagicStick"
+            title="暂无 AI 任务"
+            hint="需求解析、用例生成或接口 AI 生成后会在此汇总"
+          />
+          <div v-if="aiTotal > pageSize" class="pager">
+            <el-pagination
+              v-model:current-page="pages.ai"
+              :page-size="pageSize"
+              :total="aiTotal"
+              layout="prev, pager, next"
+              small
+              background
+              @current-change="loadAiTasks"
+            />
+          </div>
+        </div>
+      </el-tab-pane>
     </el-tabs>
   </div>
 </template>
@@ -202,13 +241,23 @@
 <script setup lang="ts">
 import { reactive, ref } from 'vue'
 import type { Schemas } from '@/api/types'
-import type { WorkbenchManualItem, WorkbenchReportItem, WorkbenchScheduleItem } from '@/api/apifox'
+import type {
+  WorkbenchAiTaskItem,
+  WorkbenchManualItem,
+  WorkbenchReportItem,
+  WorkbenchScheduleItem,
+} from '@/api/apifox'
 import { apifoxApi } from '@/api'
 import { formatBeijingTime, formatRelativeTime } from '@/utils/datetime'
+import { hubStatusText } from '@/utils/hubAiTaskStatus'
+import { type WorkspaceNavPayload } from '@/composables/useWorkspaceOverviewNav'
+import type { WorkspaceDomain } from '@/types/shell'
 import ActivityRow from './ActivityRow.vue'
 import ActivityEmpty from './ActivityEmpty.vue'
 
-const emit = defineEmits<{ open: [projectId: number] }>()
+export type ActivityOpenNav = WorkspaceNavPayload
+
+const emit = defineEmits<{ open: [projectId: number, nav?: ActivityOpenNav] }>()
 
 const pageSize = 20
 const pages = reactive({
@@ -217,6 +266,7 @@ const pages = reactive({
   reports: 1,
   schedules: 1,
   manual: 1,
+  ai: 1,
 })
 const activeTab = ref('fail') // 默认「失败聚焦」——专业测试人员的首要关注
 
@@ -235,6 +285,9 @@ const schedulesLoading = ref(false)
 const manual = ref<WorkbenchManualItem[]>([])
 const manualTotal = ref(0)
 const manualLoading = ref(false)
+const aiTasks = ref<WorkbenchAiTaskItem[]>([])
+const aiTotal = ref(0)
+const aiLoading = ref(false)
 
 const TYPE_LABEL: Record<string, string> = { scenario: '场景', case: '单接口', suite: '套件' }
 const typeLabel = (t: string) => TYPE_LABEL[t] || '用例'
@@ -259,6 +312,66 @@ const manualStatusText = (m: WorkbenchManualItem) => {
 }
 const manualStatusClass = (m: WorkbenchManualItem) =>
   m.failed_count > 0 ? 'bad' : m.status === 'running' ? 'run' : 'ok'
+
+const AI_CATEGORY_LABEL: Record<string, string> = {
+  requirement: 'AI 需求',
+  functional: 'AI 用例',
+  endpoint: 'AI 接口',
+}
+const aiCategoryLabel = (c: string) => AI_CATEGORY_LABEL[c] || 'AI'
+
+const AI_SECTION: Record<string, string> = {
+  requirement: 'ai-req',
+  functional: 'ai-case',
+  endpoint: 'ai-api',
+}
+
+function aiStatusText(t: WorkbenchAiTaskItem) {
+  const label = hubStatusText(t.status)
+  const total = t.total_items ?? 0
+  if (t.status === 'pending') {
+    return total > 0 ? `${label} · 0/${total}` : label
+  }
+  if (t.status === 'running' && total > 0) {
+    return `${label} ${t.done_items ?? 0}/${total}`
+  }
+  return label
+}
+
+function aiStatusClass(t: WorkbenchAiTaskItem) {
+  if (t.status === 'running') return 'run'
+  if (t.status === 'pending') return 'run'
+  if (t.status === 'failed') return 'bad'
+  if (t.status === 'partial') return 'bad'
+  return 'ok'
+}
+
+function openActivityNav(
+  projectId: number,
+  domain: WorkspaceDomain,
+  section: string,
+  query?: Record<string, string>,
+) {
+  emit('open', projectId, { domain, section, query })
+}
+
+/** 与自动化概览「最近执行记录」一致：跳转测试报告并打开 run 详情。 */
+function openAutomationRun(item: { project_id: number; run_id: number }) {
+  openActivityNav(item.project_id, 'automation', 'reports', { run: String(item.run_id) })
+}
+
+function openSchedule(item: WorkbenchScheduleItem) {
+  openActivityNav(item.project_id, 'automation', 'schedules')
+}
+
+function openManualRun(item: WorkbenchManualItem) {
+  openActivityNav(item.project_id, 'functional', 'func-runs')
+}
+
+function onAiTaskClick(t: WorkbenchAiTaskItem) {
+  const section = AI_SECTION[t.category] || 'ai-overview'
+  openActivityNav(t.project_id, 'ai_tasks', section, { task: String(t.task_id) })
+}
 
 async function loadPage<T>(
   fn: (p: { page: number; page_size: number }) => Promise<{ items: T[]; total: number }>,
@@ -295,9 +408,18 @@ const loadSchedules = () =>
   )
 const loadManual = () =>
   loadPage(apifoxApi.workbenchManual, manual, manualTotal, manualLoading, pages.manual)
+const loadAiTasks = () =>
+  loadPage(apifoxApi.workbenchAiTasks, aiTasks, aiTotal, aiLoading, pages.ai)
 
 async function refresh() {
-  await Promise.all([loadFailures(), loadRunning(), loadReports(), loadSchedules(), loadManual()])
+  await Promise.all([
+    loadFailures(),
+    loadRunning(),
+    loadReports(),
+    loadSchedules(),
+    loadManual(),
+    loadAiTasks(),
+  ])
 }
 
 defineExpose({ refresh })

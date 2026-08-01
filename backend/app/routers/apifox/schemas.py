@@ -8,7 +8,7 @@ from typing import List, Optional
 
 from pydantic import BaseModel, Field
 
-from app.constants.limits import DESC_MAX_LEN, TITLE_MAX_LEN
+from app.constants.limits import DESC_MAX_LEN, PATH_MAX_LEN, TITLE_MAX_LEN
 
 
 # ---------- request_spec 子结构 ----------
@@ -156,7 +156,7 @@ class FolderOut(BaseModel):
 class EndpointCreate(BaseModel):
     name: str = Field(min_length=1, max_length=TITLE_MAX_LEN)
     method: str = "GET"
-    path: str = ""
+    path: str = Field(default="", max_length=PATH_MAX_LEN)
     folder_id: Optional[int] = None
     server_name: Optional[str] = None
     request_spec: RequestSpec = Field(default_factory=RequestSpec)
@@ -174,7 +174,7 @@ class EndpointCreate(BaseModel):
 class EndpointUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=TITLE_MAX_LEN)
     method: Optional[str] = None
-    path: Optional[str] = None
+    path: Optional[str] = Field(default=None, max_length=PATH_MAX_LEN)
     folder_id: Optional[int] = None
     server_name: Optional[str] = None
     request_spec: Optional[RequestSpec] = None
@@ -242,8 +242,15 @@ class ReorderEndpoint(BaseModel):
 
 
 class TreeReorderRequest(BaseModel):
+    expected_order_version: int = Field(ge=1)
     folders: List[ReorderFolder] = Field(default_factory=list)
     endpoints: List[ReorderEndpoint] = Field(default_factory=list)
+
+
+class TreeReorderOut(BaseModel):
+    project_id: int
+    order_version: int
+    updated_count: int
 
 
 # ---------- 更新 Swagger（增量同步）：先出 diff 预览，再确认应用 ----------
@@ -294,10 +301,53 @@ class ImportDiffOut(BaseModel):
     schemas_added: int = 0
 
 
+class ImportPreviewEndpoint(BaseModel):
+    """导入预览项：key 为「METHOD path」，前端按 key 回传勾选结果。"""
+
+    key: str
+    name: str
+    method: str
+    path: str
+    folder: str = ""  # 文档 tag，空串= 未分组
+    exists: bool = False  # 项目里已有同 (method, path) 的接口
+    changed: bool = False  # 已存在且请求契约与文档不一致
+
+
+class ImportPreviewFolder(BaseModel):
+    """按文档 tag 分组；name 为空表示未分组接口。"""
+
+    name: str = ""
+    endpoints: List[ImportPreviewEndpoint] = Field(default_factory=list)
+
+
+class ImportPreviewOut(BaseModel):
+    title: str = ""  # 文档 info.title
+    folders: List[ImportPreviewFolder] = Field(default_factory=list)
+    total: int = 0
+    exists_count: int = 0
+    changed_count: int = 0
+    schemas_total: int = 0
+    schemas_new: int = 0
+
+
+class ImportRunItem(BaseModel):
+    """一次导入的逐条结果，供定时导入「上次结果」明细表展示。"""
+
+    method: str
+    path: str
+    folder: str = ""  # 文档 tag，空串= 未分组/已移除项
+    name: str = ""
+    status: str  # added | updated | skipped | deleted | kept
+
+
 class ImportSyncReport(BaseModel):
     added: int = 0
     updated: int = 0
     deleted: int = 0
     kept_referenced: int = 0  # 有引用被保留的移除项
+    skipped: int = 0  # 存在且无变化（未导入动作）
     schemas_created: int = 0
     warnings: List[str] = Field(default_factory=list)  # 被引用移除项的修改提示
+    # 逐条清单（新增/更新/删除/保留/未变）；超过上限截断，truncated 标记
+    items: List[ImportRunItem] = Field(default_factory=list)
+    truncated: bool = False

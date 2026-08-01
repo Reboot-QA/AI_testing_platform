@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     # 可直接设置 DATABASE_URL；留空则使用下方 DB_* 参数拼接 MySQL 连接
     database_url: str = ""
     db_host: str = "127.0.0.1"
-    db_port: int = 3245
+    db_port: int = 3306
     db_user: str = "root"
     db_password: str = ""
     db_name: str = "ai_testcase"
@@ -22,8 +22,6 @@ class Settings(BaseSettings):
     llm_mock_mode: bool = True
     ai_generate_batch_size: int = 8
     ai_generate_concurrency: int = 4
-    # apifox 接口用例 AI 生成：同任务内 LLM 并发扇出上限（限流护 provider）
-    apifox_ai_gen_concurrency: int = 5
 
     log_dir: str = ""
 

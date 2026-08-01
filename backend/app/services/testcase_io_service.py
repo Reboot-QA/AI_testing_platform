@@ -10,6 +10,7 @@ from openpyxl.styles import Alignment, Font
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
+from app.constants.limits import normalize_req_case_title, normalize_requirement_point_ref
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
@@ -26,7 +27,6 @@ from app.services.requirement_io_service import (
     dedupe_import_rows,
     normalize_priority,
     parse_import_sort_order,
-    summarize_import_rows,
 )
 from app.services.test_execution_service import delete_testcases_with_execution_cleanup
 from app.services.testcase_query_helper import (
@@ -324,14 +324,23 @@ def _find_requirement_id(
     title: str,
     requirement_map: Optional[Dict[str, int]] = None,
 ) -> Optional[int]:
-    clean = (title or "").strip()
-    if not clean or clean in {"未关联需求", "-"}:
+    raw = (title or "").strip()
+    ref = normalize_requirement_point_ref(title)
+    if not ref:
         return None
     if requirement_map is not None:
-        return requirement_map.get(clean)
+        hit = requirement_map.get(ref)
+        if hit is not None:
+            return hit
+        if raw:
+            return requirement_map.get(raw)
+        return None
     requirement = (
         db.query(Requirement)
-        .filter(Requirement.project_id == project_id, Requirement.title == clean)
+        .filter(
+            Requirement.project_id == project_id,
+            Requirement.title.in_([raw, ref]) if raw != ref else Requirement.title == ref,
+        )
         .first()
     )
     return requirement.id if requirement else None
@@ -339,7 +348,17 @@ def _find_requirement_id(
 
 def _build_requirement_map(db: Session, project_id: int) -> Dict[str, int]:
     requirements = db.query(Requirement).filter(Requirement.project_id == project_id).all()
-    return {req.title.strip(): req.id for req in requirements if req.title}
+    result: Dict[str, int] = {}
+    for req in requirements:
+        if not req.title:
+            continue
+        full = req.title.strip()
+        short = normalize_req_case_title(full)
+        if full:
+            result[full] = req.id
+        if short:
+            result[short] = req.id
+    return result
 
 
 def list_project_testcases(db: Session, project_id: int) -> List[TestCase]:
@@ -391,6 +410,99 @@ def export_testcases_excel(project: Project, cases: List[TestCase]) -> Tuple[Byt
     return buffer, filename
 
 
+def build_testcases_import_template_excel() -> Tuple[BytesIO, str]:
+    """功能用例导入 Excel 模板（含表头与一行示例）。"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "测试用例"
+    ws.append(EXCEL_HEADERS)
+    for col in range(1, len(EXCEL_HEADERS) + 1):
+        cell = ws.cell(1, col)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    _configure_excel_sheet(ws)
+    ws.append(
+        [
+            1,
+            "示例需求点",
+            "示例用例",
+            "功能",
+            "P1",
+            "1. 用户已登录",
+            "1. 打开页面\n2. 执行操作",
+            "1. 操作成功",
+            "",
+            "手动",
+            "草稿",
+        ]
+    )
+    row_num = ws.max_row
+    _apply_multiline_cell_style(ws, row_num, 6, ws.cell(row_num, 6).value)
+    _apply_multiline_cell_style(ws, row_num, 7, ws.cell(row_num, 7).value)
+    _apply_multiline_cell_style(ws, row_num, 8, ws.cell(row_num, 8).value)
+    _autosize_excel_row(ws, row_num)
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer, "testcases_import_template.xlsx"
+
+
+def build_testcases_import_template_xmind() -> Tuple[BytesIO, str]:
+    """XMind 用例导入模板：末级主题为用例，上级可表示需求点/优先级。"""
+    notes = (
+        "前置条件：\n1. 用户已登录\n\n"
+        "测试步骤：\n1. 打开页面\n2. 执行操作\n\n"
+        "预期结果：\n1. 操作成功"
+    )
+    leaf = _build_xmind_topic("示例用例", notes=notes)
+    priority_node = _build_xmind_topic("P1", children=[leaf])
+    req_node = _build_xmind_topic("示例需求点", children=[priority_node])
+    root = _build_xmind_topic(
+        "用例导入模板",
+        children=[req_node],
+        structure_class="org.xmind.ui.logic.right",
+    )
+    sheet_id = _topic_id()
+    sheet = {
+        "id": sheet_id,
+        "class": "sheet",
+        "title": "测试用例",
+        "rootTopic": root,
+        "theme": {
+            "map": {
+                "id": _topic_id(),
+                "properties": {
+                    "svg:fill": "#ffffff",
+                    "multi-line-colors": "",
+                    "color-list": "",
+                },
+            }
+        },
+    }
+    metadata = {
+        "dataStructureVersion": "2",
+        "layoutEngineVersion": "3",
+        "creator": {"name": "AI质量平台", "version": "1.0.0"},
+        "activeSheetId": sheet_id,
+        "modifier": "",
+    }
+    manifest = {
+        "file-entries": {
+            "content.json": {},
+            "metadata.json": {},
+            "Thumbnails/thumbnail.png": {},
+        }
+    }
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("content.json", json.dumps([sheet], ensure_ascii=False))
+        archive.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False))
+        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False))
+        archive.writestr("Thumbnails/thumbnail.png", _XMIND_THUMBNAIL_PNG)
+    buffer.seek(0)
+    return buffer, "testcases_import_template.xmind"
+
+
 def _group_testcases(cases: List[TestCase]) -> Dict[str, Dict[str, List[TestCase]]]:
     grouped: Dict[str, Dict[str, List[TestCase]]] = {}
     for case in cases:
@@ -416,8 +528,8 @@ def export_testcases_xmind(project: Project, cases: List[TestCase]) -> Tuple[Byt
                 for item in sorted(
                     items,
                     key=lambda row: (
-                        -(testcase_sort_order_value(row) or row.id),
-                        -row.id,
+                        testcase_sort_order_value(row) or row.id,
+                        row.id,
                     ),
                 )
             ]
@@ -595,7 +707,7 @@ def import_testcases_from_rows(
     requirement_map = _build_requirement_map(db, project.id)
 
     for row in deduped_rows:
-        title = row.get("标题", "").strip()
+        title = normalize_req_case_title(row.get("标题", ""))
         if not title:
             skipped += 1
             continue

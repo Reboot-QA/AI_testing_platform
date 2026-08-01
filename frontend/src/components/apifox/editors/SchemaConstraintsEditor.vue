@@ -134,7 +134,7 @@ import { LONG_TEXT_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
 import { computed } from 'vue'
 import type { SchemaField } from '@/types/apifox'
 
-const props = defineProps<{ field: SchemaField }>()
+const field = defineModel<SchemaField>('field', { required: true })
 
 const FORMATS = [
   'date-time',
@@ -152,10 +152,10 @@ const FORMATS = [
 
 function boolFlag(key: string) {
   return computed({
-    get: () => !!props.field.extra[key],
+    get: () => !!field.value.extra[key],
     set: (v) => {
-      if (v) props.field.extra[key] = true
-      else delete props.field.extra[key]
+      if (v) field.value.extra[key] = true
+      else delete field.value.extra[key]
     },
   })
 }
@@ -165,7 +165,7 @@ const uniqueItems = boolFlag('uniqueItems')
 
 // 按字段类型把文本值转回正确 JSON 类型（integer/number→数字、boolean→布尔、其余→字符串）
 function coerce(s: string) {
-  const t = props.field.type
+  const t = field.value.type
   if (t === 'integer' || t === 'number') {
     const n = Number(s)
     return Number.isNaN(n) ? s : n
@@ -178,13 +178,13 @@ function coerce(s: string) {
 function typedField(key: string) {
   return computed({
     get: () => {
-      const v = props.field.extra[key]
+      const v = field.value.extra[key]
       return v === undefined || v === null ? '' : String(v)
     },
     set: (raw) => {
       const s = String(raw)
-      if (s === '') delete props.field.extra[key]
-      else props.field.extra[key] = coerce(s)
+      if (s === '') delete field.value.extra[key]
+      else field.value.extra[key] = coerce(s)
     },
   })
 }
@@ -194,7 +194,7 @@ const exampleVal = typedField('example')
 
 const enumText = computed({
   get: () => {
-    const e = props.field.extra.enum
+    const e = field.value.extra.enum
     return Array.isArray(e) ? e.join('\n') : e || ''
   },
   set: (v) => {
@@ -203,8 +203,8 @@ const enumText = computed({
       .map((s) => s.trim())
       .filter(Boolean)
       .map(coerce)
-    if (arr.length) props.field.extra.enum = arr
-    else delete props.field.extra.enum
+    if (arr.length) field.value.extra.enum = arr
+    else delete field.value.extra.enum
   },
 })
 </script>

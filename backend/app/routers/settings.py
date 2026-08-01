@@ -114,7 +114,7 @@ def update_provider(
     return provider
 
 
-@router.delete("/llm/providers/{provider_id}")
+@router.delete("/llm/providers/{provider_id}", status_code=204)
 def delete_provider(
     provider_id: int,
     db: Session = Depends(get_db),
@@ -122,7 +122,7 @@ def delete_provider(
 ):
     if not delete_llm_provider(db, provider_id):
         raise HTTPException(status_code=404, detail="模型配置不存在")
-    return {"message": "删除成功"}
+    return None
 
 
 @router.put("/llm/providers/{provider_id}/activate", response_model=LLMProviderOut)

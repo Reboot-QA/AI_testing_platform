@@ -1,31 +1,53 @@
+# 部署产物与本地进度文档
 .deploy/
 文档/
-# 内部进度文档，不入库
 接口自动化重构_进度与计划.md
-monitoring/.env
+
+# 环境变量与本地配置（保留可提交的示例文件）
+.env
+.env.*
+!.env.example
+!.env.*.example
 backend/.env
-.env.docker
+monitoring/.env
+CLAUDE.local.md
+Codex.local.md
+.claude/settings.local.json
+frontend/.claude/
+
+# 本地数据库
 backend/ai_testcase.db
 backend/*.db
 *.db-journal
 
-# 前端构建产物（部署从源码 npm build，不入库）
-frontend/dist/
-frontend/.claude
-
-# Claude Code 项目私有层（层3），只在本地生效，不入库
-CLAUDE.local.md
-
-# 依赖目录（任意层级；pnpm install / dev 会在其下产生缓存，勿入库）
+# 前端依赖、构建产物与工具缓存
 node_modules/
-
-# node_modules 内 dev 工具运行时缓存（Vite 预构建、各类 bundler cache 等）
+frontend/dist/
 **/.vite/
 **/.cache/
 **/.turbo/
 **/.eslintcache
 
-# 编辑器 / IDE 产生的文件
+# Python 字节码、虚拟环境与质量工具缓存
+__pycache__/
+*.py[cod]
+*$py.class
+venv*/
+.venv*/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+coverage/
+
+# 日志与临时文件
+*.log
+.tmp/
+out/
+
+# 编辑器与操作系统文件
 .vscode/
 !.vscode/extensions.json
 .idea/
@@ -34,13 +56,3 @@ node_modules/
 *~
 .DS_Store
 Thumbs.db
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.pyc
-
-# 本地虚拟环境（不入库）
-venv*/
-.venv*/

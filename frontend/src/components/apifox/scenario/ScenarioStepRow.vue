@@ -19,6 +19,7 @@
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
+        ghost-class="ax-drag-ghost"
         class="group-drop"
         :class="{ 'group-drop--empty': children.length === 0 }"
       >
@@ -48,6 +49,7 @@
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
+        ghost-class="ax-drag-ghost"
         class="group-drop"
         :class="{ 'group-drop--empty': children.length === 0 }"
       >
@@ -76,6 +78,7 @@
           :group="{ name: 'scenario-steps' }"
           handle=".drag-handle"
           :animation="150"
+          ghost-class="ax-drag-ghost"
           class="group-drop"
           :class="{ 'group-drop--empty': elseChildren.length === 0 }"
         >
@@ -106,6 +109,7 @@
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
+        ghost-class="ax-drag-ghost"
         class="group-drop"
         :class="{ 'group-drop--empty': children.length === 0 }"
       >
@@ -153,14 +157,12 @@ defineOptions({ name: 'ScenarioStepRow' })
 type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 type ScenarioBrief = Schemas['ScenarioBrief']
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    row: ScenarioEditorStep
     index?: number
     cases?: ProjectCaseBrief[]
     scenarios?: ScenarioBrief[]
     currentScenarioId?: number | null
-    selection: ScenarioStepSelection
   }>(),
   {
     index: 0,
@@ -169,6 +171,8 @@ const props = withDefaults(
     currentScenarioId: null,
   },
 )
+const row = defineModel<ScenarioEditorStep>('row', { required: true })
+const selection = defineModel<ScenarioStepSelection>('selection', { required: true })
 
 // add：容器内联「添加步骤」，把命令与目标子列表冒泡给 ScenarioStepsEditor 统一新建（递归层层转发）
 const emit = defineEmits<{
@@ -179,17 +183,17 @@ const emit = defineEmits<{
 // 拖动结束时 VueDraggable 会整体赋一个新数组；这里原地 splice 回原数组，
 // 保持数组引用稳定（内联「添加步骤」记下的落点、外部持有的引用都不会失效）
 const children = computed({
-  get: () => ensureStepChildren(props.row),
+  get: () => ensureStepChildren(row.value),
   set: (value: ScenarioEditorStep[]) => {
-    const list = ensureStepChildren(props.row)
+    const list = ensureStepChildren(row.value)
     list.splice(0, list.length, ...value)
   },
 })
 
 const elseChildren = computed({
-  get: () => ensureElseChildren(props.row),
+  get: () => ensureElseChildren(row.value),
   set: (value: ScenarioEditorStep[]) => {
-    const list = ensureElseChildren(props.row)
+    const list = ensureElseChildren(row.value)
     list.splice(0, list.length, ...value)
   },
 })
@@ -207,7 +211,7 @@ const typeLabel = computed(
       continue: '跳过本轮',
       db: '数据库',
       http: 'HTTP',
-    })[props.row.type] || props.row.type,
+    })[row.value.type] || row.value.type,
 )
 const typeTag = computed(
   () =>
@@ -222,36 +226,36 @@ const typeTag = computed(
       continue: 'info',
       db: 'primary',
       http: 'success',
-    })[props.row.type] || 'info',
+    })[row.value.type] || 'info',
 )
 
 const displayName = computed(() => {
-  const row = props.row
-  if (row.type === 'if') {
-    const c = ensureIfConfig(row).condition
+  const value = row.value
+  if (value.type === 'if') {
+    const c = ensureIfConfig(value).condition
     return `如果 ${c.left || '?'} ${c.operator || 'eq'} ${c.operator === 'exists' ? '' : (c.right ?? '')}`.trim()
   }
-  if (row.type === 'loop') {
-    const c = ensureLoopConfig(row)
+  if (value.type === 'loop') {
+    const c = ensureLoopConfig(value)
     if (c.mode === 'list') return `遍历 ${c.list_var || '?'}`
     if (c.mode === 'while')
       return `当 ${c.condition?.left || '?'} ${c.condition?.operator || ''} … 时循环`
     return `循环 ${c.count ?? '?'} 次`
   }
-  if (row.type === 'break') return '跳出循环'
-  if (row.type === 'continue') return '跳过本轮'
-  if (row.type === 'http') {
-    const c = row.config as HttpStepConfig | undefined
-    return `[${c?.method || 'GET'}] ${c?.path || row.name || 'HTTP'}`.trim()
+  if (value.type === 'break') return '跳出循环'
+  if (value.type === 'continue') return '跳过本轮'
+  if (value.type === 'http') {
+    const c = value.config as HttpStepConfig | undefined
+    return `[${c?.method || 'GET'}] ${c?.path || value.name || 'HTTP'}`.trim()
   }
-  if (row.name) return row.name
-  if (row.type === 'case') {
-    const prefix = row.endpoint_method ? `[${row.endpoint_method}] ` : ''
-    return `${prefix}${row.case_name || `用例#${row.ref_case_id}`}`
+  if (value.name) return value.name
+  if (value.type === 'case') {
+    const prefix = value.endpoint_method ? `[${value.endpoint_method}] ` : ''
+    return `${prefix}${value.case_name || `用例#${value.ref_case_id}`}`
   }
-  if (row.type === 'wait') return `等待 ${row.wait_ms} ms`
-  if (row.type === 'group') return `分组（${row.children?.length || 0}）`
-  return row.scenario_name || `场景#${row.ref_scenario_id}`
+  if (value.type === 'wait') return `等待 ${value.wait_ms} ms`
+  if (value.type === 'group') return `分组（${value.children?.length || 0}）`
+  return value.scenario_name || `场景#${value.ref_scenario_id}`
 })
 </script>
 

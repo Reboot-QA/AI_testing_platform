@@ -194,7 +194,7 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   background: var(--ax-bg);
   border: 1px solid var(--ax-border);
   border-radius: var(--ax-radius-md, 8px);
-  box-shadow: 0 8px 24px rgb(15 23 42 / 12%);
+  box-shadow: 0 8px 24px var(--ax-raw-rgb-15-23-42-12);
 }
 
 .tree-ctx.sub {
@@ -250,8 +250,8 @@ onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
   min-width: 30px;
   padding: 0 4px;
   border-radius: 3px;
-  background: #fff7ed;
-  color: #ea580c;
+  background: var(--ax-raw-hex-fff7ed);
+  color: var(--ax-raw-hex-ea580c);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;

@@ -9,6 +9,7 @@
       @deleted="onDeleted"
       @renamed="onRenamed"
       @new-draft="onNewDraft"
+      @clear-selection="onClearSelection"
       @generate-ai="(ids: number[]) => batchAiRef?.open(ids)"
     />
 
@@ -112,7 +113,7 @@ const store = useWorkspaceStore()
 
 // 导入能力已收敛到「设置 → 导入数据」，空状态「导入」卡片跳转过去
 function goDataManage() {
-  router.push({ hash: '#domain=settings&open=import' })
+  void router.push({ name: 'WorkspaceSettingsImport', params: { projectId: pid.value } })
 }
 const tabsStore = useApiTabsStore()
 const aiGenStore = useApifoxAiGenerateStore()
@@ -179,7 +180,8 @@ function endpointCreatePayload(
     method: form.method,
     path: form.path,
     folder_id: folderId,
-    server_name: form.server_name,
+    // el-select clearable 清空后是 undefined，JSON 会省略字段；后端靠 fields_set 判断，须显式 null
+    server_name: form.server_name || null,
     description: form.description,
     request_spec: form.request_spec as Schemas['EndpointCreate']['request_spec'],
     contract_strict: legacy.contract_strict,
@@ -199,7 +201,8 @@ function endpointPayload(form: EndpointEditorForm): Schemas['EndpointUpdate'] {
     name: form.name,
     method: form.method,
     path: form.path,
-    server_name: form.server_name,
+    // 同上：清空前置 URL 必须带 null，否则刷新后仍是旧值
+    server_name: form.server_name || null,
     description: form.description,
     request_spec: form.request_spec as Schemas['EndpointUpdate']['request_spec'],
     // 有序处理器为单一事实来源：清空旧分列字段；契约字段从处理器同步（供 debug 直发与回退）
@@ -288,6 +291,9 @@ async function onTabRemove(id: number) {
 
 function onDeleted(id: number) {
   tabsStore.closeTab(pid.value, id)
+}
+function onClearSelection() {
+  tabsStore.deactivate(pid.value)
 }
 function onRenamed(id: number, name: string, version?: number) {
   tabsStore.onRenamed(pid.value, id, name, version)

@@ -60,26 +60,32 @@
 
 <script setup lang="ts">
 import { VALUE_MAX_LEN } from '@/constants/limits'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import ConditionEditor from '@/components/apifox/editors/ConditionEditor.vue'
 import type { LoopConfig } from '@/types/apifox'
 
-const props = defineProps<{ config: LoopConfig }>()
+const config = defineModel<LoopConfig>('config', { required: true })
 
-const whileCondition = computed(() => {
-  if (!props.config.condition) props.config.condition = { left: '', operator: 'eq', right: '' }
-  return props.config.condition
+const EMPTY_CONDITION = { left: '', operator: 'eq', right: '' } as const
+const whileCondition = computed(() => config.value.condition ?? EMPTY_CONDITION)
+
+function ensureWhileCondition() {
+  if (!config.value.condition) config.value.condition = { ...EMPTY_CONDITION }
+}
+
+onMounted(() => {
+  if (config.value.mode === 'while') ensureWhileCondition()
 })
 
 function onModeChange(mode: string) {
-  const c = props.config
+  const c = config.value
   if (mode === 'count' && c.count == null) c.count = 1
   if (mode === 'list') {
     if (!c.item_var) c.item_var = 'item'
     if (!c.index_var) c.index_var = 'index'
   }
   if (mode === 'while') {
-    if (!c.condition) c.condition = { left: '', operator: 'eq', right: '' }
+    ensureWhileCondition()
     if (c.max_iterations == null) c.max_iterations = 10
   }
 }

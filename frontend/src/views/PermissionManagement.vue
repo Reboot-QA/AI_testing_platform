@@ -34,20 +34,39 @@
 
       <div v-if="selectedDepartmentId" v-loading="permissionLoading">
         <div class="menu-group">
-          <div class="group-title">业务菜单</div>
-          <el-checkbox-group v-model="selectedMenus">
-            <el-checkbox v-for="item in standaloneBusinessMenus" :key="item.key" :value="item.key">
-              {{ item.label }}
-            </el-checkbox>
-          </el-checkbox-group>
-          <div v-for="group in businessMenuGroups" :key="group.key" class="menu-subgroup">
-            <div class="subgroup-title">{{ group.label }}</div>
-            <el-checkbox-group v-model="selectedMenus">
-              <el-checkbox v-for="item in group.items" :key="item.key" :value="item.key">
+          <div class="group-title">{{ hubMenuGroup.label }}</div>
+          <div class="perm-grid">
+            <div v-for="item in hubMenuGroup.items" :key="item.key" class="perm-item">
+              <el-checkbox :model-value="selectedMenus.includes(item.key)" @change="toggleMenu(item.key, $event)">
                 {{ item.label }}
               </el-checkbox>
-            </el-checkbox-group>
+              <p v-if="item.hint" class="perm-hint">{{ item.hint }}</p>
+            </div>
           </div>
+        </div>
+
+        <div v-for="group in workspacePermissionGroups" :key="group.key" class="menu-group">
+          <div class="group-title">{{ group.label }}</div>
+          <div class="perm-grid">
+            <div v-for="item in group.items" :key="item.key" class="perm-item">
+              <el-checkbox :model-value="selectedMenus.includes(item.key)" @change="toggleMenu(item.key, $event)">
+                {{ item.label }}
+              </el-checkbox>
+              <p v-if="item.hint" class="perm-hint">{{ item.hint }}</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="menu-group">
+          <div class="group-title">AI 任务（项目工作区）</div>
+          <el-alert type="info" :closable="false" show-icon class="ai-task-alert">
+            <template #title>AI 任务域无单独权限项，由上方对应能力授权后自动可用</template>
+            <ul class="ai-task-list">
+              <li v-for="note in aiTaskNotes" :key="note.label">
+                <strong>{{ note.label }}</strong> → 需「{{ note.requires }}」
+              </li>
+            </ul>
+          </el-alert>
         </div>
 
         <div class="menu-group">
@@ -57,17 +76,6 @@
               {{ item.label }}
             </el-checkbox>
           </el-checkbox-group>
-        </div>
-
-        <div class="menu-group">
-          <div class="group-title">日志管理</div>
-          <div v-for="group in logMenuGroups" :key="group.key" class="menu-subgroup">
-            <el-checkbox-group v-model="selectedMenus">
-              <el-checkbox v-for="item in group.items" :key="item.key" :value="item.key">
-                {{ item.label }}
-              </el-checkbox>
-            </el-checkbox-group>
-          </div>
         </div>
 
         <div class="actions">
@@ -86,11 +94,11 @@ import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { departmentApi } from '@/api'
 import {
-  BUSINESS_MENUS,
-  BUSINESS_MENU_GROUPS,
-  LOG_MENU_GROUPS,
-  STANDALONE_BUSINESS_MENUS,
+  AI_TASK_PERMISSION_NOTES,
+  DEFAULT_BUSINESS_MENU_KEYS,
+  HUB_MENU_GROUP,
   SYSTEM_MENUS,
+  WORKSPACE_PERMISSION_GROUPS,
 } from '@/config/menus'
 import type { Department } from '@/types/common'
 
@@ -100,11 +108,22 @@ const selectedMenus = ref<string[]>([])
 const permissionLoading = ref(false)
 const saving = ref(false)
 
-const standaloneBusinessMenus = STANDALONE_BUSINESS_MENUS
-const businessMenuGroups = BUSINESS_MENU_GROUPS
+const hubMenuGroup = HUB_MENU_GROUP
+const workspacePermissionGroups = WORKSPACE_PERMISSION_GROUPS
 const systemMenus = SYSTEM_MENUS
-const logMenuGroups = LOG_MENU_GROUPS
-const defaultMenus = BUSINESS_MENUS.map((item) => item.key)
+const aiTaskNotes = AI_TASK_PERMISSION_NOTES
+const defaultMenus = DEFAULT_BUSINESS_MENU_KEYS
+
+function toggleMenu(key: string, checked: boolean | string | number) {
+  const enabled = checked === true
+  if (enabled) {
+    if (!selectedMenus.value.includes(key)) {
+      selectedMenus.value = [...selectedMenus.value, key]
+    }
+    return
+  }
+  selectedMenus.value = selectedMenus.value.filter((item) => item !== key)
+}
 
 async function loadDepartments() {
   departments.value = await departmentApi.list()
@@ -165,14 +184,35 @@ onMounted(loadDepartments)
 }
 
 .menu-subgroup {
-  margin-top: var(--ax-space-4);
+  margin-top: var(--ax-space-2);
 }
 
-.subgroup-title {
-  font-size: var(--ax-text-body-size);
-  font-weight: 600;
+.perm-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--ax-space-4);
+}
+
+.perm-item {
+  min-width: 0;
+}
+
+.perm-hint {
+  margin: var(--ax-space-1) 0 0 24px;
+  font-size: var(--ax-text-caption-size);
   color: var(--ax-text-tertiary);
-  margin-bottom: var(--ax-space-2);
+  line-height: 1.5;
+}
+
+.ai-task-alert {
+  margin-top: var(--ax-space-2);
+}
+
+.ai-task-list {
+  margin: var(--ax-space-2) 0 0;
+  padding-left: 1.2em;
+  color: var(--ax-text-secondary);
+  line-height: 1.7;
 }
 
 .el-checkbox-group {

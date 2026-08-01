@@ -55,37 +55,48 @@
       <el-button :disabled="isAllProjects" :loading="importing" @click="openImportDialog">
         导入
       </el-button>
-      <el-button
-        plain
-        :disabled="!canBatchSubmit"
-        :loading="batchReviewing"
-        @click="handleBatchReview('pending')"
+      <el-dropdown
+        popper-class="testcases-batch-dropdown"
+        :disabled="isAllProjects || !selectedIds.length"
+        @command="handleBatchApprovalCommand"
       >
-        批量审批{{ batchSubmitCount ? ` (${batchSubmitCount})` : '' }}
-      </el-button>
-      <el-button
-        type="success"
-        plain
-        :disabled="!canBatchApprove"
-        :loading="batchReviewing"
-        @click="handleBatchReview('approved')"
-      >
-        批量通过{{ batchApproveCount ? ` (${batchApproveCount})` : '' }}
-      </el-button>
-      <el-button
-        type="warning"
-        plain
-        :disabled="!canBatchReject"
-        :loading="batchReviewing"
-        @click="handleBatchReview('rejected')"
-      >
-        批量驳回{{ batchRejectCount ? ` (${batchRejectCount})` : '' }}
-      </el-button>
-      <el-button type="danger" plain :disabled="!selectedIds.length" @click="handleBatchDelete">
-        <el-icon><Delete /></el-icon> 批量删除{{
-          selectedIds.length ? ` (${selectedIds.length})` : ''
-        }}
-      </el-button>
+        <el-button
+          type="primary"
+          :disabled="isAllProjects || !selectedIds.length"
+          :loading="batchReviewing || batchDeleting"
+        >
+          批量审批{{ selectedIds.length ? ` (${selectedIds.length})` : '' }}
+          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+        </el-button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              command="pending"
+              :disabled="!canBatchSubmit"
+              class="batch-action-primary"
+            >
+              提交评审{{ batchSubmitCount ? ` (${batchSubmitCount})` : '' }}
+            </el-dropdown-item>
+            <el-dropdown-item
+              command="approved"
+              :disabled="!canBatchApprove"
+              class="batch-action-success"
+            >
+              批量通过{{ batchApproveCount ? ` (${batchApproveCount})` : '' }}
+            </el-dropdown-item>
+            <el-dropdown-item
+              command="rejected"
+              :disabled="!canBatchReject"
+              class="batch-action-warning"
+            >
+              批量驳回{{ batchRejectCount ? ` (${batchRejectCount})` : '' }}
+            </el-dropdown-item>
+            <el-dropdown-item divided command="delete" class="batch-action-danger">
+              批量删除{{ selectedIds.length ? ` (${selectedIds.length})` : '' }}
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
     </template>
 
     <div class="table-fill">
@@ -185,7 +196,7 @@
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑用例' : '添加用例'" width="640px">
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="标题" prop="title">
-          <el-input v-model="form.title" :maxlength="TITLE_MAX_LEN" />
+          <el-input v-model="form.title" :maxlength="REQ_CASE_TITLE_MAX_LEN" show-word-limit />
         </el-form-item>
         <el-form-item label="优先级">
           <el-select v-model="form.priority" style="width: 120px">
@@ -238,6 +249,24 @@
             <el-radio value="replace">覆盖</el-radio>
           </el-radio-group>
         </el-form-item>
+        <el-form-item label="模版下载">
+          <el-button
+            link
+            type="primary"
+            :loading="templateDownloading === 'excel'"
+            @click="downloadImportTemplate('excel')"
+          >
+            Excel 模版
+          </el-button>
+          <el-button
+            link
+            type="primary"
+            :loading="templateDownloading === 'xmind'"
+            @click="downloadImportTemplate('xmind')"
+          >
+            XMind 模版
+          </el-button>
+        </el-form-item>
       </el-form>
       <el-alert
         v-if="importMode === 'append'"
@@ -288,14 +317,19 @@
 </template>
 
 <script setup lang="ts">
-import { LONG_TEXT_MAX_LEN, SEARCH_MAX_LEN, TITLE_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
+import {
+  LONG_TEXT_MAX_LEN,
+  REQ_CASE_TITLE_MAX_LEN,
+  SEARCH_MAX_LEN,
+  VALUE_MAX_LEN,
+} from '@/constants/limits'
 import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowDown, Search, UploadFilled } from '@element-plus/icons-vue'
 import { projectApi, testcaseApi } from '@/api'
 import type { ProjectPageOut } from '@/api/project'
-import { readWorkspaceListFilter } from '@/composables/useWorkspaceHash'
+import { readWorkspaceListFilter } from '@/composables/useWorkspaceQuery'
 import { formatBeijingTime } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
 import PageCard from '@/components/PageCard.vue'
@@ -313,7 +347,6 @@ import {
   type ProjectFilter,
   type ReviewStatus,
   type TestCase,
-  type TestCasePage,
 } from '@/types/common'
 import type { FormInstance, FormRules } from '@/types/element-plus'
 import type { UploadInstance, UploadRawFile } from 'element-plus'
@@ -348,6 +381,7 @@ const pageSize = ref(DEFAULT_PAGE_SIZE)
 const total = ref(0)
 const loading = ref(false)
 const batchReviewing = ref(false)
+const batchDeleting = ref(false)
 const exporting = ref(false)
 const importing = ref(false)
 const dialogVisible = ref(false)
@@ -360,6 +394,7 @@ const formRef = ref<FormInstance>()
 const uploadRef = ref<UploadInstance>()
 const importFile = ref<UploadRawFile | null>(null)
 const importMode = ref<'append' | 'replace'>('append')
+const templateDownloading = ref<'excel' | 'xmind' | ''>('')
 
 const reviewMap: Record<ReviewStatus, string> = {
   draft: '草稿',
@@ -384,7 +419,14 @@ const form = reactive<TestCaseForm>({
 })
 
 const rules: FormRules<TestCaseForm> = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  title: [
+    { required: true, message: '请输入标题', trigger: 'blur' },
+    {
+      max: REQ_CASE_TITLE_MAX_LEN,
+      message: `标题不能超过 ${REQ_CASE_TITLE_MAX_LEN} 字`,
+      trigger: 'blur',
+    },
+  ],
 }
 
 function isProjectPage(data: Project[] | ProjectPageOut): data is ProjectPageOut {
@@ -459,7 +501,7 @@ registerAssistantHandler('testcases.ensureProject', async () => {
 async function loadData() {
   loading.value = true
   try {
-    const params: Record<string, unknown> = {
+    const params: Record<string, unknown> & { page: number; page_size: number } = {
       page: currentPage.value,
       page_size: pageSize.value,
     }
@@ -469,7 +511,7 @@ async function loadData() {
     if (filterStatus.value) params.review_status = filterStatus.value
     if (filterSource.value) params.source = filterSource.value
     if (keyword.value.trim()) params.keyword = keyword.value.trim()
-    const data = (await testcaseApi.list(params)) as TestCasePage
+    const data = await testcaseApi.listPage(params)
     testcases.value = data.items || []
     total.value = data.total || 0
     const maxPage = Math.max(1, Math.ceil(total.value / pageSize.value) || 1)
@@ -610,6 +652,14 @@ async function handleBatchReview(
   }
 }
 
+async function handleBatchApprovalCommand(command: 'pending' | 'approved' | 'rejected' | 'delete') {
+  if (command === 'delete') {
+    await handleBatchDelete()
+    return
+  }
+  await handleBatchReview(command)
+}
+
 async function handleBatchDelete() {
   if (!selectedIds.value.length) return
   await ElMessageBox.confirm(
@@ -617,17 +667,22 @@ async function handleBatchDelete() {
     '批量删除',
     { type: 'warning', confirmButtonText: '删除', cancelButtonText: '取消' },
   )
-  const groups = groupRowsByProject(selectedRows.value)
-  let message = ''
-  for (const [pid, rows] of groups) {
-    const res = await testcaseApi.batchDelete({
-      project_id: Number(pid),
-      case_ids: rows.map((row) => row.id),
-    })
-    message = res.message || message
+  batchDeleting.value = true
+  try {
+    const groups = groupRowsByProject(selectedRows.value)
+    let message = ''
+    for (const [pid, rows] of groups) {
+      const res = await testcaseApi.batchDelete({
+        project_id: Number(pid),
+        case_ids: rows.map((row) => row.id),
+      })
+      message = res.message || message
+    }
+    ElMessage.success(message || '批量删除成功')
+    loadData()
+  } finally {
+    batchDeleting.value = false
   }
-  ElMessage.success(message || '批量删除成功')
-  loadData()
 }
 
 async function handleExport(format: string) {
@@ -658,6 +713,24 @@ function downloadBlob(blob: Blob, filename: string) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(url)
+}
+
+async function downloadImportTemplate(format: 'excel' | 'xmind') {
+  templateDownloading.value = format
+  try {
+    const blob =
+      format === 'excel'
+        ? await testcaseApi.downloadImportTemplateExcel()
+        : await testcaseApi.downloadImportTemplateXmind()
+    downloadBlob(
+      blob,
+      format === 'excel' ? 'testcases_import_template.xlsx' : 'testcases_import_template.xmind',
+    )
+  } catch (e) {
+    ElMessage.error((e as Error).message || '模版下载失败')
+  } finally {
+    templateDownloading.value = ''
+  }
 }
 
 function openImportDialog() {
@@ -749,3 +822,45 @@ onUnmounted(() => {
   unregisterAssistantHandler('testcases.ensureProject')
 })
 </script>
+
+<style>
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-primary:not(.is-disabled) {
+  color: var(--el-color-primary);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-success:not(.is-disabled) {
+  color: var(--el-color-success);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-warning:not(.is-disabled) {
+  color: var(--el-color-warning);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-danger:not(.is-disabled) {
+  color: var(--el-color-danger);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-primary:not(.is-disabled):hover,
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-primary:not(.is-disabled):focus {
+  color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-success:not(.is-disabled):hover,
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-success:not(.is-disabled):focus {
+  color: var(--el-color-success);
+  background-color: var(--el-color-success-light-9);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-warning:not(.is-disabled):hover,
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-warning:not(.is-disabled):focus {
+  color: var(--el-color-warning);
+  background-color: var(--el-color-warning-light-9);
+}
+
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-danger:not(.is-disabled):hover,
+.testcases-batch-dropdown .el-dropdown-menu__item.batch-action-danger:not(.is-disabled):focus {
+  color: var(--el-color-danger);
+  background-color: var(--el-color-danger-light-9);
+}
+</style>

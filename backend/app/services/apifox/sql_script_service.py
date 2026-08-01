@@ -101,6 +101,10 @@ def delete_script(db: Session, script: ApifoxSqlScript) -> None:
 def validate_processor_refs(db: Session, project_id: int, rows) -> None:
     """保存用例/接口时校验前后置里 database_script 引用：缺 sql_script_id 或脚本不存在/不属本项目 → ValueError。"""
     for row in rows or []:
+        # 未启用（未勾选）的处理器不参与校验：与执行时 `if not op.enabled: continue` 一致，
+        # 否则加了个空的、未勾选的 database_script 后置项，保存/发送就误报（Confluence 7/23-#4）
+        if getattr(row, "enabled", True) is False:
+            continue
         if getattr(row, "kind", None) != "database_script":
             continue
         sid = getattr(row, "sql_script_id", None)

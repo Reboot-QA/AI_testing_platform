@@ -12,7 +12,7 @@ export const settingsApi = {
     post<Schemas['LLMProviderOut']>('/settings/llm/providers', data),
   updateProvider: (id: Id, data: Schemas['LLMProviderUpdate']) =>
     put<Schemas['LLMProviderOut']>(`/settings/llm/providers/${id}`, data),
-  deleteProvider: (id: Id) => del<any>(`/settings/llm/providers/${id}`), // 无 response_model（技术债）
+  deleteProvider: (id: Id) => del<void>(`/settings/llm/providers/${id}`),
   activateProvider: (id: Id) =>
     put<Schemas['LLMProviderOut']>(`/settings/llm/providers/${id}/activate`),
   testLLM: (data?: Schemas['LLMTestRequest']) =>

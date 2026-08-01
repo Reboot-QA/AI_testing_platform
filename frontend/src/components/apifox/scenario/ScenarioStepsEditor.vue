@@ -17,6 +17,7 @@
         :group="{ name: 'scenario-steps' }"
         handle=".drag-handle"
         :animation="150"
+        ghost-class="ax-drag-ghost"
       >
         <ScenarioStepRow
           v-for="(row, i) in rows"
@@ -108,9 +109,8 @@ type ScriptBrief = Schemas['ScriptBrief']
 type DatabaseOut = Schemas['DatabaseOut']
 type DatasetBrief = Schemas['DatasetBrief']
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    rows: ScenarioEditorStep[]
     projectId: Id
     cases?: ProjectCaseBrief[]
     scenarios?: ScenarioBrief[]
@@ -130,6 +130,7 @@ const props = withDefaults(
     datasets: () => [],
   },
 )
+const rows = defineModel<ScenarioEditorStep[]>('rows', { required: true })
 
 // 供父级（场景整体保存）调用：把当前选中步骤详情里未落库的引用用例编辑一并保存
 const detailRef = ref<InstanceType<typeof ScenarioStepDetail> | null>(null)
@@ -162,10 +163,10 @@ function ensureUids(rows: ScenarioEditorStep[]) {
     stepChildLists(r).forEach(ensureUids)
   })
 }
-onMounted(() => ensureUids(props.rows))
+onMounted(() => ensureUids(rows.value))
 watch(
-  () => props.rows.length,
-  () => ensureUids(props.rows),
+  () => rows.value.length,
+  () => ensureUids(rows.value),
 )
 
 // VueDraggable 拖动结束时是「整体赋新数组」（onUpdate/onRemove 内 modelValue = [...]），
@@ -173,9 +174,9 @@ watch(
 // 表现为循环体外的原步骤还在（保存后重复一份）。这里用可写 computed 原地 splice，
 // 保持父级持有的同一个数组引用。
 const rowList = computed<ScenarioEditorStep[]>({
-  get: () => props.rows,
+  get: () => rows.value,
   set: (value) => {
-    props.rows.splice(0, props.rows.length, ...value)
+    rows.value.splice(0, rows.value.length, ...value)
   },
 })
 
@@ -195,11 +196,11 @@ function findByUid(
   }
   return null
 }
-const selectedStep = computed(() => findByUid(props.rows, selection.uid))
+const selectedStep = computed(() => findByUid(rows.value, selection.uid))
 
 function removeTop(i: number) {
-  if (props.rows[i]?._uid === selection.uid) selection.uid = null
-  props.rows.splice(i, 1)
+  if (rows.value[i]?._uid === selection.uid) selection.uid = null
+  rows.value.splice(i, 1)
 }
 
 /** 步骤总数（含分组/条件/循环内的子步骤），与「全部移除」的确认文案口径一致 */
@@ -211,11 +212,11 @@ function countSteps(rows: ScenarioEditorStep[]): number {
   }
   return n
 }
-const totalStepCount = computed(() => countSteps(props.rows))
+const totalStepCount = computed(() => countSteps(rows.value))
 
 // 一键清空所有步骤（参考 apifox）：仅改内存态，需再点「保存」才落库
 async function removeAllSteps() {
-  if (props.rows.length === 0) return
+  if (rows.value.length === 0) return
   try {
     await ElMessageBox.confirm(
       `确认移除全部 ${totalStepCount.value} 个步骤？含分组/条件/循环内的子步骤，保存后生效。`,
@@ -226,7 +227,7 @@ async function removeAllSteps() {
     return // 用户取消
   }
   selection.uid = null
-  props.rows.splice(0, props.rows.length)
+  rows.value.splice(0, rows.value.length)
 }
 
 const importEndpointRef = ref<InstanceType<typeof ImportEndpointTreeDialog> | null>(null)
@@ -245,11 +246,11 @@ function selectStep(step: ScenarioEditorStep) {
 // 导入类命令要先开对话框，回调时已脱离事件上下文，故用变量把落点记下来。
 let addTarget: ScenarioEditorStep[] | null = null
 function targetList(): ScenarioEditorStep[] {
-  return addTarget ?? props.rows
+  return addTarget ?? rows.value
 }
 
 function onAddCommand(command: ScenarioAddStepCommand, target?: ScenarioEditorStep[]) {
-  addTarget = target ?? props.rows
+  addTarget = target ?? rows.value
   if (command === 'import-endpoint' || command === 'import-case' || command === 'import-debug') {
     openImportEndpointDialog(command)
     return
@@ -268,8 +269,8 @@ function onAddCommand(command: ScenarioAddStepCommand, target?: ScenarioEditorSt
 function onImportConfirm(payload: ImportConfirmPayload) {
   if (payload.mode === 'import-case') {
     importFromCases(payload.cases, payload.importAs)
-  } else if (payload.mode !== 'pick-suite-item') {
-    // pick-suite-item 是套件面板专用模式，场景侧不会触发
+  } else if (payload.mode === 'import-endpoint' || payload.mode === 'import-debug') {
+    // pick-suite-item / pick-schedule-* 分别是套件、定时任务面板专用模式，场景侧不会触发
     importFromEndpoint(payload.endpointIds)
   }
 }

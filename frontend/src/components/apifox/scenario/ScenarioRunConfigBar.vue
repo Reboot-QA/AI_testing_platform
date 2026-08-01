@@ -4,6 +4,7 @@
     <el-select
       :model-value="datasetId"
       clearable
+      :disabled="disabled"
       placeholder="不绑定（按循环次数）"
       size="small"
       style="width: 220px"
@@ -16,7 +17,7 @@
       :model-value="loopCount"
       :min="1"
       :max="1000"
-      :disabled="!!datasetId"
+      :disabled="disabled || !!datasetId"
       size="small"
       controls-position="right"
       style="width: 130px"
@@ -27,6 +28,7 @@
     </span>
     <el-checkbox
       :model-value="propagateAuth"
+      :disabled="disabled"
       size="small"
       class="rc-auth"
       @update:model-value="$emit('update:propagateAuth', $event)"
@@ -50,12 +52,14 @@ type DatasetBrief = Schemas['DatasetBrief']
 withDefaults(
   defineProps<{
     datasets?: DatasetBrief[]
+    disabled?: boolean
     loopCount?: number
     datasetId?: number | string | null
     propagateAuth?: boolean
   }>(),
   {
     datasets: () => [],
+    disabled: false,
     loopCount: 1,
     datasetId: null,
     propagateAuth: true,

@@ -67,11 +67,11 @@ def update_schema(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/schemas/{sid}")
+@router.delete("/schemas/{sid}", status_code=204)
 def delete_schema(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     schema = _schema_checked(db, sid, user)
     try:
         service.delete_schema(db, schema)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "数据模型已删除"}
+    return None

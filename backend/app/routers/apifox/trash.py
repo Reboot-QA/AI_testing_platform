@@ -1,14 +1,15 @@
 """Apifox 回收站 · 路由（项目作用域，软删除的场景/套件/用例统一列出 / 还原 / 彻底删）。"""
 
+from datetime import datetime
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
 from app.database import get_db
 from app.models.user import User
-from app.routers.apifox.trash_schemas import TrashBatchIn, TrashBatchOut, TrashKind, TrashPageOut
+from app.routers.apifox.trash_schemas import TrashBatchIn, TrashBatchOut, TrashKind, TrashPageOut, TrashRestoreOut
 from app.services.apifox import trash_service as service
 from app.services.project_access_service import get_accessible_project
 
@@ -55,7 +56,7 @@ def batch_purge_trash(
     return service.batch_purge(db, pid, data.items)
 
 
-@router.post("/trash/{kind}/{item_id}/restore")
+@router.post("/trash/{kind}/{item_id}/restore", response_model=TrashRestoreOut)
 def restore_item(
     kind: str, item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
@@ -66,11 +67,16 @@ def restore_item(
     except LookupError:
         raise HTTPException(status_code=404, detail="回收站中无此项") from None
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"message": "已还原"}
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return {
+        "entity_type": kind,
+        "entity_id": item_id,
+        "restored_at": datetime.utcnow(),
+        "version": getattr(obj, "version", None),
+    }
 
 
-@router.delete("/trash/{kind}/{item_id}")
+@router.delete("/trash/{kind}/{item_id}", status_code=status.HTTP_204_NO_CONTENT)
 def purge_item(
     kind: str, item_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
@@ -81,8 +87,8 @@ def purge_item(
     except LookupError:
         raise HTTPException(status_code=404, detail="回收站中无此项") from None
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return {"message": "已彻底删除"}
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 def _project_id_for(db: Session, kind: str, item_id: int, user: User) -> int:

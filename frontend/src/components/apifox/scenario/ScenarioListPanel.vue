@@ -22,99 +22,125 @@
       <el-option v-for="p in PRIORITY_OPTIONS" :key="p.value" :label="p.label" :value="p.value" />
     </el-select>
 
-    <!-- 分组列表 -->
-    <div v-for="grp in localGroups" :key="grp.key" class="mb-0.5">
-      <!-- 文件夹 header：可点选，新建场景落到当前选中分组 -->
-      <div
-        class="group-head"
-        :class="[
-          grp.folder ? 'group-head--folder' : 'group-head--ungrouped',
-          isFolderSelected(grp) ? 'group-head--selected' : '',
-        ]"
-        @click="selectFolder(grp.folder?.id ?? null)"
-      >
-        <el-icon class="group-head-icon"
-          ><component :is="grp.folder ? 'Folder' : 'Files'"
-        /></el-icon>
-        <span class="group-head-name">
-          {{ grp.folder ? grp.folder.name : '未分组' }}
-        </span>
-        <span class="group-head-count">{{ grp.scenarios.length }}</span>
-        <el-dropdown
-          v-if="grp.folder"
-          trigger="click"
-          @command="(c: 'rename' | 'delete') => onFolderCmd(c, grp.folder!)"
-        >
-          <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
-            <MoreFilled />
-          </el-icon>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="rename">重命名</el-dropdown-item>
-              <el-dropdown-item command="delete">删除</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-      </div>
+    <div class="scenario-list-body">
+      <el-skeleton v-if="loading" :rows="8" animated class="scenario-list-skeleton" />
 
-      <!-- 场景行（可拖拽，跨分组移动） -->
-      <VueDraggable
-        :key="`drag-${grp.key}`"
-        v-model="grp.scenarios"
-        :data-gkey="grp.key"
-        :group="{ name: 'scenarios', pull: true, put: true }"
-        handle=".drag-handle"
-        :animation="150"
-        ghost-class="scenario-ghost"
-        :class="grp.scenarios.length === 0 ? 'scenario-drop-empty' : 'scenario-drop'"
-        @end="onDragEnd"
-      >
-        <div
-          v-for="s in grp.scenarios"
-          :key="s.id"
-          :data-scenario-id="s.id"
-          class="scenario-row group"
-          :class="s.id === activeId ? 'scenario-row--active' : ''"
-          @click="onSelectScenario(s)"
-        >
-          <!-- 拖拽手柄：按住可拖到其他分组 -->
-          <span class="drag-handle" title="按住拖动到其他分组" @click.stop>
-            <el-icon><Rank /></el-icon>
-          </span>
-
-          <!-- 名称（截断 + tooltip 全称） -->
-          <el-tooltip :content="s.name" placement="right" :show-after="600">
-            <span class="scenario-name">{{ s.name }}</span>
-          </el-tooltip>
-
-          <!-- 步数 -->
-          <span class="scenario-meta">{{ s.step_count }} 步</span>
-
-          <!-- 优先级：文字 + 语义色（高=红 / 中=橙 / 低=灰） -->
-          <el-tooltip
-            :content="`优先级：${priorityMeta(s.priority).label}`"
-            placement="right"
-            :show-after="300"
+      <!-- 分组列表 -->
+      <template v-else>
+        <div v-for="grp in localGroups" :key="grp.key" class="mb-0.5">
+          <!-- 文件夹 header：可点选，新建场景落到当前选中分组 -->
+          <div
+            class="group-head"
+            :class="[
+              grp.folder ? 'group-head--folder' : 'group-head--ungrouped',
+              isFolderSelected(grp) ? 'group-head--selected' : '',
+            ]"
+            @click="selectFolder(grp.folder?.id ?? null)"
           >
-            <span
-              class="priority-label shrink-0"
-              :style="{ color: `var(--el-color-${priorityMeta(s.priority).type})` }"
+            <el-button
+              link
+              class="group-toggle"
+              :aria-label="`${isGroupExpanded(grp.key) ? '收起' : '展开'}${groupLabel(grp)}场景`"
+              :title="`${isGroupExpanded(grp.key) ? '收起' : '展开'}场景`"
+              @click.stop="toggleGroup(grp.key)"
             >
-              {{ priorityMeta(s.priority).label }}
+              <el-icon :class="{ 'group-toggle--collapsed': !isGroupExpanded(grp.key) }">
+                <ArrowDown />
+              </el-icon>
+            </el-button>
+            <el-icon class="group-head-icon"
+              ><component :is="grp.folder ? 'Folder' : 'Files'"
+            /></el-icon>
+            <span class="group-head-name">
+              {{ grp.folder ? grp.folder.name : '未分组' }}
             </span>
-          </el-tooltip>
+            <span class="group-head-count">{{ grp.scenarios.length }}</span>
+            <el-dropdown
+              v-if="grp.folder"
+              trigger="click"
+              @command="(c: 'rename' | 'delete') => onFolderCmd(c, grp.folder!)"
+            >
+              <el-icon class="cursor-pointer text-[var(--ax-text-tertiary)]" @click.stop>
+                <MoreFilled />
+              </el-icon>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="rename">重命名</el-dropdown-item>
+                  <el-dropdown-item command="delete">删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
 
-          <!-- 删除：常驻 icon，hover 变红 -->
-          <el-icon class="scenario-del" title="删除场景" @click.stop="$emit('del', s)">
-            <Delete />
-          </el-icon>
+          <div v-show="isGroupExpanded(grp.key)">
+            <!-- 场景行（可拖拽，跨分组移动） -->
+            <VueDraggable
+              :key="`drag-${grp.key}`"
+              v-model="grp.scenarios"
+              :data-gkey="grp.key"
+              :group="{ name: 'scenarios', pull: true, put: true }"
+              handle=".drag-handle"
+              :animation="150"
+              ghost-class="ax-drag-ghost"
+              :class="grp.scenarios.length === 0 ? 'scenario-drop-empty' : 'scenario-drop'"
+              @end="onDragEnd"
+            >
+              <div
+                v-for="s in grp.scenarios"
+                :key="s.id"
+                :data-scenario-id="s.id"
+                class="scenario-row group"
+                :class="s.id === activeId ? 'scenario-row--active' : ''"
+                @click="onSelectScenario(s)"
+              >
+                <!-- 拖拽手柄：按住可拖到其他分组 -->
+                <span
+                  class="drag-handle"
+                  tabindex="0"
+                  role="img"
+                  aria-label="拖拽手柄：使用鼠标拖动场景到其他分组或调整顺序"
+                  title="按住拖动到其他分组"
+                  @click.stop
+                >
+                  <el-icon><Rank /></el-icon>
+                </span>
+
+                <!-- 名称（截断 + tooltip 全称） -->
+                <el-tooltip :content="s.name" placement="right" :show-after="600">
+                  <span class="scenario-name">{{ s.name }}</span>
+                </el-tooltip>
+
+                <!-- 步数 -->
+                <span class="scenario-meta">{{ s.step_count }} 步</span>
+
+                <!-- 优先级：文字 + 语义色（高=红 / 中=橙 / 低=灰） -->
+                <el-tooltip
+                  :content="`优先级：${priorityMeta(s.priority).label}`"
+                  placement="right"
+                  :show-after="300"
+                >
+                  <span
+                    class="priority-label shrink-0"
+                    :style="{ color: `var(--el-color-${priorityMeta(s.priority).type})` }"
+                  >
+                    {{ priorityMeta(s.priority).label }}
+                  </span>
+                </el-tooltip>
+
+                <!-- 删除：常驻 icon，hover 变红 -->
+                <el-icon class="scenario-del" title="删除场景" @click.stop="$emit('del', s)">
+                  <Delete />
+                </el-icon>
+              </div>
+            </VueDraggable>
+
+            <div v-if="grp.scenarios.length === 0" class="empty-hint">拖动场景到此分组</div>
+          </div>
         </div>
-      </VueDraggable>
 
-      <div v-if="grp.scenarios.length === 0" class="empty-hint">拖动场景到此分组</div>
+        <el-empty v-if="scenarios.length === 0" description="暂无场景" :image-size="60" />
+      </template>
     </div>
-
-    <el-empty v-if="scenarios.length === 0" description="暂无场景" :image-size="60" />
   </div>
 </template>
 
@@ -142,11 +168,13 @@ const props = withDefaults(
     scenarios?: ScenarioBrief[]
     folders?: ScenarioFolderOut[]
     activeId?: number | string | null
+    loading?: boolean
   }>(),
   {
     scenarios: () => [],
     folders: () => [],
     activeId: null,
+    loading: false,
   },
 )
 const emit = defineEmits<{
@@ -163,6 +191,29 @@ const emit = defineEmits<{
 const selectedFolderId = defineModel<number | null>('selectedFolderId', { default: null })
 
 const { priorityFilter, visibleScenarios } = useScenarioPriorityFilter(toRef(props, 'scenarios'))
+const collapsedGroups = ref<Set<string>>(new Set())
+
+function isGroupExpanded(key: string): boolean {
+  return !collapsedGroups.value.has(key)
+}
+
+function toggleGroup(key: string) {
+  const next = new Set(collapsedGroups.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  collapsedGroups.value = next
+}
+
+function expandGroup(key: string) {
+  if (!collapsedGroups.value.has(key)) return
+  const next = new Set(collapsedGroups.value)
+  next.delete(key)
+  collapsedGroups.value = next
+}
+
+function groupLabel(grp: ScenarioGroup): string {
+  return grp.folder?.name ?? '未分组'
+}
 
 function isFolderSelected(grp: ScenarioGroup): boolean {
   return selectedFolderId.value === (grp.folder?.id ?? null)
@@ -175,6 +226,7 @@ function selectFolder(id: number | null) {
 function onSelectScenario(s: ScenarioBrief) {
   // 点场景时同步所属分组，便于在同组继续新建（对齐接口树点目录后新建接口）
   selectedFolderId.value = s.folder_id ?? null
+  expandGroup(s.folder_id != null ? `f${s.folder_id}` : 'ungrouped')
   emit('select', s.id)
 }
 
@@ -255,6 +307,19 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 /* 字号阶梯：面板标题 14 > 分组标题 12 > 场景名 12 > 元信息 11 */
 /* list-panel / panel-head / panel-title / priority-filter 见 apifox-workspace.css */
 
+.list-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.scenario-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .group-head {
   display: flex;
   align-items: center;
@@ -290,6 +355,22 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
 .group-head-icon {
   flex-shrink: 0;
   font-size: var(--ax-font-sm);
+}
+
+.group-toggle {
+  flex-shrink: 0;
+  width: var(--ax-space-4);
+  min-height: var(--ax-space-4);
+  padding: 0;
+  color: var(--ax-text-tertiary);
+}
+
+.group-toggle :deep(.el-icon) {
+  transition: transform 0.15s ease;
+}
+
+.group-toggle--collapsed {
+  transform: rotate(-90deg);
 }
 
 .group-head-name {
@@ -364,6 +445,12 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
   color: var(--ax-brand);
 }
 
+.drag-handle:focus-visible {
+  outline: 2px solid var(--ax-focus-ring);
+  outline-offset: 2px;
+  opacity: 1;
+}
+
 .drag-handle:active {
   cursor: grabbing;
 }
@@ -402,9 +489,7 @@ function onFolderCmd(cmd: 'rename' | 'delete', folder: ScenarioFolderOut) {
   min-height: 28px;
 }
 
-:global(.scenario-ghost) {
-  opacity: 0.45;
-  background: var(--ax-bg-hover);
-  border-radius: 4px;
+.scenario-list-skeleton {
+  padding: var(--ax-space-2);
 }
 </style>

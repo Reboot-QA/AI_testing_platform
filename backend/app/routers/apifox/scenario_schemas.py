@@ -96,8 +96,15 @@ class ScenarioReorderItem(BaseModel):
 
 
 class ScenarioReorderRequest(BaseModel):
+    expected_order_version: int = Field(ge=1)
     # 拖拽后只下发受影响的组（组内重排=1组；跨组=源组+目标组），后端只更新这些 id
     items: List[ScenarioReorderItem] = Field(min_length=1)
+
+
+class ScenarioReorderOut(BaseModel):
+    project_id: int
+    order_version: int
+    updated_count: int
 
 
 class ScenarioOut(BaseModel):

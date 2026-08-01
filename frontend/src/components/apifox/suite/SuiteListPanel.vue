@@ -1,6 +1,6 @@
 <template>
   <div class="list-panel">
-    <div class="panel-head">
+    <div class="panel-head flex items-center justify-between">
       <span class="panel-title">测试套件</span>
       <el-button type="primary" size="small" title="新建套件" @click="$emit('add')">
         <el-icon><Plus /></el-icon>

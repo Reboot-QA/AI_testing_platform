@@ -11,6 +11,7 @@ from app.models.project import Project
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.user import User
 from app.schemas import (
+    ActionResultOut,
     MenuDefinitionOut,
     UserCreateByAdmin,
     UserOut,
@@ -145,7 +146,7 @@ def update_user(
     return _user_out(user, db)
 
 
-@router.put("/{user_id}/password")
+@router.put("/{user_id}/password", response_model=ActionResultOut)
 def reset_password(
     user_id: int,
     data: UserPasswordReset,
@@ -162,7 +163,7 @@ def reset_password(
     return {"message": "密码已重置"}
 
 
-@router.post("/{user_id}/login-lock")
+@router.post("/{user_id}/login-lock", response_model=ActionResultOut)
 def lock_user_login(
     user_id: int,
     db: Session = Depends(get_db),
@@ -178,7 +179,7 @@ def lock_user_login(
     return {"message": "账号已锁定"}
 
 
-@router.post("/{user_id}/login-unlock")
+@router.post("/{user_id}/login-unlock", response_model=ActionResultOut)
 def unlock_user_login(
     user_id: int,
     db: Session = Depends(get_db),
@@ -192,7 +193,7 @@ def unlock_user_login(
     return {"message": "账号已解锁"}
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", status_code=204)
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
@@ -222,7 +223,7 @@ def delete_user(
 
     db.delete(user)
     db.commit()
-    return {"message": "用户已删除"}
+    return None
 
 
 @router.get("/{user_id}/permissions", response_model=UserPermissionsOut)

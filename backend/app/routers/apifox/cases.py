@@ -134,11 +134,11 @@ def update_case(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/cases/{cid}")
+@router.delete("/cases/{cid}", status_code=204)
 def delete_case(cid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     case = _case_checked(db, cid, user)
     try:
         service.delete_case(db, case, deleted_by=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "用例已删除"}
+    return None

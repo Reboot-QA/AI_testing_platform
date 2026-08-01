@@ -30,7 +30,9 @@ def test_execute_success_records_status_and_next_run(db, monkeypatch):
     monkeypatch.setattr(
         svc.import_sync_service,
         "apply_sync",
-        lambda *a, **k: SimpleNamespace(added=2, updated=1, deleted=0, kept_referenced=0),
+        lambda *a, **k: SimpleNamespace(
+            added=2, updated=1, deleted=0, kept_referenced=0, skipped=0, truncated=False, items=[]
+        ),
     )
 
     svc.execute_schedule(db, task)
@@ -47,7 +49,7 @@ def test_execute_failure_records_failed(db, monkeypatch):
         raise ValueError("拉取导入源失败")
 
     monkeypatch.setattr(svc.import_service, "fetch_source", boom)
-    monkeypatch.setattr(svc, "_notify_import_failure", lambda *a, **k: None)
+    monkeypatch.setattr(svc, "_notify_import", lambda *a, **k: None)
 
     svc.execute_schedule(db, task)
 

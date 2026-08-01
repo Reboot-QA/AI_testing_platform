@@ -57,6 +57,24 @@ def list_active_tasks(db: Session, project_id: int) -> List[ApifoxAiGenTask]:
     )
 
 
+def list_active_tasks_for_creator(
+    db: Session, *, creator_id: int, project_ids: List[int]
+) -> List[ApifoxAiGenTask]:
+    """当前用户在可访问项目内进行中的 AI 生成任务（跨项目，供全局角标）。"""
+    if not project_ids:
+        return []
+    return (
+        db.query(ApifoxAiGenTask)
+        .filter(
+            ApifoxAiGenTask.project_id.in_(project_ids),
+            ApifoxAiGenTask.created_by == creator_id,
+            ApifoxAiGenTask.status.in_(("pending", "running")),
+        )
+        .order_by(ApifoxAiGenTask.id.desc())
+        .all()
+    )
+
+
 def list_project_tasks(db: Session, project_id: int, limit: int = 20) -> List[ApifoxAiGenTask]:
     return (
         db.query(ApifoxAiGenTask)
@@ -74,9 +92,12 @@ def _filtered_tasks_query(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    task_id: Optional[int] = None,
 ):
     """项目任务列表的统一过滤（count 与 page 共用，保证 total 与 items 一致）。"""
     query = db.query(ApifoxAiGenTask).filter(ApifoxAiGenTask.project_id == project_id)
+    if task_id is not None:
+        query = query.filter(ApifoxAiGenTask.id == task_id)
     if status:
         query = query.filter(ApifoxAiGenTask.status == status)
     if date_from:
@@ -114,8 +135,11 @@ def count_project_tasks(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    task_id: Optional[int] = None,
 ) -> int:
-    return _filtered_tasks_query(db, project_id, keyword, status, date_from, date_to).count()
+    return _filtered_tasks_query(
+        db, project_id, keyword, status, date_from, date_to, task_id
+    ).count()
 
 
 def list_project_tasks_page(
@@ -127,9 +151,10 @@ def list_project_tasks_page(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    task_id: Optional[int] = None,
 ) -> List[ApifoxAiGenTask]:
     return (
-        _filtered_tasks_query(db, project_id, keyword, status, date_from, date_to)
+        _filtered_tasks_query(db, project_id, keyword, status, date_from, date_to, task_id)
         .order_by(ApifoxAiGenTask.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
@@ -138,13 +163,23 @@ def list_project_tasks_page(
 
 
 def claim_next_pending(db: Session) -> Optional[ApifoxAiGenTask]:
-    """worker 取一个待处理任务（按 id 升序，先到先跑）。单 worker 线程，无需行锁。"""
-    return (
+    """worker 取一个待处理任务：同模型同时仅 1 个 running，不同模型可并行。"""
+    running = db.query(ApifoxAiGenTask).filter(ApifoxAiGenTask.status == "running").all()
+    busy_providers = {
+        int(t.provider_id) if t.provider_id is not None else 0 for t in running
+    }
+
+    pending = (
         db.query(ApifoxAiGenTask)
         .filter(ApifoxAiGenTask.status == "pending")
         .order_by(ApifoxAiGenTask.id)
-        .first()
+        .all()
     )
+    for task in pending:
+        key = int(task.provider_id) if task.provider_id is not None else 0
+        if key not in busy_providers:
+            return task
+    return None
 
 
 def reset_running_to_pending(db: Session) -> int:

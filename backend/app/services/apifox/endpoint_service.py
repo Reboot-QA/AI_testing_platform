@@ -17,6 +17,7 @@ from app.models.apifox.endpoint import (
     ApifoxFolder,
 )
 from app.models.apifox.script import ApifoxEndpointScript
+from app.models.project import Project
 from app.repositories.apifox import case_repo, scenario_repo, schema_repo, script_repo
 from app.repositories.apifox import endpoint_repo as repo
 from app.routers.apifox.schemas import (
@@ -36,6 +37,10 @@ from app.routers.apifox.schemas import (
     TreeReorderRequest,
 )
 from app.services.apifox import sql_script_service, upload_service, versioning
+
+
+class OrderVersionConflictError(Exception):
+    """排序快照已过期，需要客户端刷新后重试。"""
 
 
 def _load_spec(text: str | None) -> RequestSpec:
@@ -214,7 +219,12 @@ def list_folders(db: Session, project_id: int) -> List[FolderOut]:
 
 def create_folder(db: Session, project_id: int, data: FolderCreate) -> FolderOut:
     _require_folder_in_project(db, data.parent_id, project_id)
-    folder = ApifoxFolder(project_id=project_id, parent_id=data.parent_id, name=data.name)
+    folder = ApifoxFolder(
+        project_id=project_id,
+        parent_id=data.parent_id,
+        name=data.name,
+        sort_order=repo.next_folder_sort_order(db, project_id, data.parent_id),
+    )
     repo.create_folder(db, folder)
     db.commit()
     db.refresh(folder)
@@ -297,6 +307,18 @@ def delete_folder(db: Session, folder: ApifoxFolder, deleted_by: Optional[int] =
         ep.deleted_by = deleted_by
         ep.folder_id = None  # 解除 FK，MySQL 下否则无法删除 apifox_folders 行
 
+    # 回收站里仍挂在该子树下的接口也要解除 FK（否则 MySQL 报 1451 外键违反 → 500）；
+    # 只动 folder_id，保留原本的删除时间与操作人，回收站展示不受影响
+    for ep in repo.list_deleted_endpoints(db, folder.project_id):
+        if ep.folder_id in subtree_ids:
+            ep.folder_id = None
+
+    # 先断开子树内 parent_id 自引用：SQLAlchemy 会把多行 DELETE 打成 executemany，
+    # 按主键顺序删（父先于子）→ MySQL/SQLite FK 1451；断开后再删则与顺序无关。
+    for fid in subtree_ids:
+        folders_by_id[fid].parent_id = None
+    db.flush()
+
     for fid in _folders_deepest_first(subtree_ids, folders_by_id):
         repo.delete_folder(db, folders_by_id[fid])
     db.commit()
@@ -330,6 +352,7 @@ def create_endpoint(db: Session, project_id: int, data: EndpointCreate) -> Endpo
         method=data.method,
         path=data.path,
         server_name=data.server_name,
+        sort_order=repo.next_endpoint_sort_order(db, project_id, data.folder_id),
         request_spec=data.request_spec.model_dump_json(),
         description=data.description,
         response_schema_id=data.response_schema_id,
@@ -432,7 +455,13 @@ def purge_endpoint(db: Session, endpoint: ApifoxEndpoint) -> None:
 
 
 # ---------- 树拖拽重排（原子：一次落库全部 parent/folder + sort_order） ----------
-def reorder_tree(db: Session, project_id: int, data: TreeReorderRequest) -> None:
+def reorder_tree(db: Session, project_id: int, data: TreeReorderRequest) -> tuple[int, int]:
+    project = db.query(Project).filter(Project.id == project_id).with_for_update().first()
+    if project is None:
+        raise ValueError("项目不存在")
+    if project.api_tree_order_version != data.expected_order_version:
+        raise OrderVersionConflictError("接口树排序已被其他操作更新，请刷新后重试")
+
     folders_by_id = {f.id: f for f in repo.list_folders(db, project_id)}
     endpoints_by_id = {e.id: e for e in repo.list_endpoints(db, project_id)}
 
@@ -458,4 +487,6 @@ def reorder_tree(db: Session, project_id: int, data: TreeReorderRequest) -> None
         endpoint.folder_id = e_item.folder_id
         endpoint.sort_order = e_item.sort_order
 
+    project.api_tree_order_version += 1
     db.commit()
+    return project.api_tree_order_version, len(data.folders) + len(data.endpoints)

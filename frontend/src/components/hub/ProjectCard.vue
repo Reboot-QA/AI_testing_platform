@@ -62,7 +62,11 @@
     </p>
 
     <div class="quick">
-      <span class="role" :class="roleClass">{{ project.role }}</span>
+      <span
+        class="role"
+        :class="roleClass"
+        :title="project.department_name ? undefined : '未关联部门'"
+      >{{ project.department_name || '—' }}</span>
       <div class="links">
         <a @click.stop="emit('enter', project.id, 'requirements')">需求</a>
         <a @click.stop="emit('enter', project.id, 'functional')">功能</a>
@@ -110,7 +114,6 @@ const roleClass = computed(
       负责人: 'r-owner',
     })[props.project.role] || 'r-member',
 )
-
 const canDelete = computed(() => ['管理员', '负责人'].includes(props.project.role))
 
 const pnRef = ref<HTMLElement | null>(null)
@@ -302,6 +305,10 @@ function onCommand(cmd: 'pin' | 'rename' | 'edit' | 'delete') {
   font-weight: 500;
   padding: var(--ax-space-0-5) var(--ax-space-1-5);
   border-radius: var(--ax-radius-sm);
+  max-width: 8em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .r-admin {

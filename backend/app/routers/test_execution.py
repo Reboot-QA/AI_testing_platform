@@ -1,6 +1,8 @@
+from datetime import date, datetime, time
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session, joinedload
 
 from app.auth import get_current_user
@@ -9,6 +11,9 @@ from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.testcase import TestCase
 from app.models.user import User
 from app.schemas import (
+    BatchDeleteResponse,
+    ManualTestRunAvailableCaseOut,
+    ManualTestRunBatchDelete,
     ManualTestRunCaseOut,
     ManualTestRunCaseResultUpdate,
     ManualTestRunCreate,
@@ -16,6 +21,11 @@ from app.schemas import (
     ManualTestRunPageOut,
     ManualTestRunSummaryOut,
     ManualTestRunUpdate,
+)
+from app.services.manual_run_export_service import (
+    build_content_disposition,
+    build_export_filename,
+    build_manual_run_export,
 )
 from app.services.project_access_service import get_accessible_project
 from app.services.test_execution_service import (
@@ -124,14 +134,26 @@ def list_runs_page(
     project_id: int,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None, description="waiting | running | finished"),
+    keyword: Optional[str] = Query(None, max_length=200),
+    date_from: Optional[date] = Query(None),
+    date_to: Optional[date] = Query(None),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     _check_project(db, project_id, current_user)
     q = db.query(ManualTestRun).filter(ManualTestRun.project_id == project_id)
+    if status:
+        q = q.filter(ManualTestRun.status == status)
+    if keyword and keyword.strip():
+        q = q.filter(ManualTestRun.name.ilike(f"%{keyword.strip()}%"))
+    if date_from is not None:
+        q = q.filter(ManualTestRun.finished_at >= datetime.combine(date_from, time.min))
+    if date_to is not None:
+        q = q.filter(ManualTestRun.finished_at <= datetime.combine(date_to, time.max))
     total = q.count()
     runs = (
-        q.order_by(ManualTestRun.id.desc())
+        q.order_by(ManualTestRun.finished_at.desc(), ManualTestRun.id.desc())
         .offset((page - 1) * page_size)
         .limit(page_size)
         .all()
@@ -187,7 +209,7 @@ def create_run(
     return _detail_out(db, run)
 
 
-@router.get("/available-cases/list")
+@router.get("/available-cases/list", response_model=List[ManualTestRunAvailableCaseOut])
 def list_available_cases(
     project_id: int,
     requirement_id: Optional[int] = Query(None),
@@ -219,6 +241,30 @@ def list_available_cases(
     ]
 
 
+@router.post("/batch/delete", response_model=BatchDeleteResponse)
+def batch_delete_runs(
+    data: ManualTestRunBatchDelete,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    _check_project(db, data.project_id, current_user)
+    runs = (
+        db.query(ManualTestRun)
+        .filter(
+            ManualTestRun.id.in_(data.run_ids),
+            ManualTestRun.project_id == data.project_id,
+        )
+        .all()
+    )
+    if not runs:
+        raise HTTPException(status_code=404, detail="未找到可删除的测试单")
+    for run in runs:
+        db.delete(run)
+    db.commit()
+    deleted = len(runs)
+    return BatchDeleteResponse(deleted_count=deleted, message=f"成功删除 {deleted} 个测试单")
+
+
 @router.get("/{run_id}", response_model=ManualTestRunDetailOut)
 def get_run(
     run_id: int,
@@ -227,6 +273,33 @@ def get_run(
 ):
     run = _get_owned_run(db, run_id, current_user)
     return _detail_out(db, run)
+
+
+@router.get("/{run_id}/export")
+def export_run(
+    run_id: int,
+    format: str = "excel",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """导出功能测试单报告为 Excel / Word / PDF。"""
+    run = _get_owned_run(db, run_id, current_user)
+    report = _detail_out(db, run)
+    try:
+        content, media_type, ext = build_manual_run_export(report, format)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"导出失败: {exc}") from exc
+    body = content.getvalue() if hasattr(content, "getvalue") else content
+    filename = build_export_filename(report, ext)
+    return Response(
+        content=body,
+        media_type=media_type,
+        headers={"Content-Disposition": build_content_disposition(filename, f"report.{ext}")},
+    )
 
 
 @router.put("/{run_id}", response_model=ManualTestRunSummaryOut)
@@ -248,7 +321,7 @@ def update_run(
     return _summary_out(db, run)
 
 
-@router.delete("/{run_id}")
+@router.delete("/{run_id}", status_code=204)
 def delete_run(
     run_id: int,
     db: Session = Depends(get_db),
@@ -257,7 +330,7 @@ def delete_run(
     run = _get_owned_run(db, run_id, current_user)
     db.delete(run)
     db.commit()
-    return {"message": "测试单已删除"}
+    return None
 
 
 @router.put("/{run_id}/cases/{case_row_id}", response_model=ManualTestRunCaseOut)

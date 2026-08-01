@@ -1,13 +1,15 @@
 import { defineStore } from 'pinia'
 import { apifoxApi } from '@/api'
 import { normalizeSteps } from '@/utils/scenarioSteps'
+import type { Schemas } from '@/api/types'
+import type { ScenarioEditorStep } from '@/types/apifox'
 
 interface ScenarioForm {
   id: number
   name: string
   description: string
   priority: string
-  steps: unknown[]
+  steps: ScenarioEditorStep[]
   run_config: { loop_count: number; dataset_id: number | null; propagate_auth: boolean }
 }
 
@@ -28,7 +30,7 @@ interface ProjectTabsState {
   lastActiveId: number | null
 }
 
-function scenarioToForm(s: any): ScenarioForm {
+function scenarioToForm(s: Schemas['ScenarioOut']): ScenarioForm {
   return {
     id: s.id,
     name: s.name,
@@ -55,7 +57,7 @@ const snap = (f: ScenarioForm): string =>
 
 const _pending = new Set<string>()
 
-function newTab(s: any): ScenarioTab {
+function newTab(s: Schemas['ScenarioOut']): ScenarioTab {
   const form = scenarioToForm(s)
   return {
     id: s.id,
@@ -147,6 +149,11 @@ export const useScenarioTabsStore = defineStore('scenarioTabs', {
       t.name = name
       t.form.name = name
       t.snapshot = snap(t.form)
+    },
+
+    /** 切换账号/退出登录时清空：tab 按项目缓存，不清会把上个用户的场景带到新会话 */
+    resetAll(): void {
+      this.byProject = {}
     },
   },
 })

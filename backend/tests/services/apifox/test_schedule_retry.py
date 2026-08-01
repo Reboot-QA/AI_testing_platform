@@ -7,6 +7,9 @@ import types
 
 from app.services.apifox import schedule_service
 
+# 用字符串路径 patch，避免在 schedule_service 之前 import run_repo 触发既有循环依赖
+_MARK_RETRY = "app.repositories.apifox.run_repo.mark_retry"
+
 
 class FakeDB:
     def commit(self):
@@ -37,11 +40,14 @@ def _patch(monkeypatch, retry, run_seq):
 
     monkeypatch.setattr(schedule_service, "_retry_config", lambda db, pid: retry)
     monkeypatch.setattr(schedule_service, "_run_schedule_once", run_once)
-    monkeypatch.setattr(schedule_service, "_notify_schedule_failure", lambda db, task: notified.append(1))
+    # 每次 execute 结束恰调一次 _notify_schedule（成功/失败均调，是否真发由开关在 notify_event 内决定）
+    monkeypatch.setattr(schedule_service, "_notify_schedule", lambda db, task: notified.append(task.last_run_status))
+    # 默认 no-op，避免 FakeDB 上打标查库；需要断言打标的测试自行再 patch 记录
+    monkeypatch.setattr(_MARK_RETRY, lambda db, rid, head, att: None)
     return calls, notified
 
 
-def test_retry_stops_on_first_success_no_notify(monkeypatch):
+def test_retry_stops_on_first_success(monkeypatch):
     calls, notified = _patch(monkeypatch, (3, 0), [("failed", 10), ("passed", 11)])
     task = _task()
 
@@ -50,7 +56,7 @@ def test_retry_stops_on_first_success_no_notify(monkeypatch):
     assert len(calls) == 2  # 第 2 次成功即停，不再重试
     assert task.last_run_status == "passed"
     assert task.last_run_id == 11
-    assert notified == []  # 成功不通知
+    assert notified == ["passed"]  # 成功也通知一次（是否真发由成功开关决定）
 
 
 def test_retry_exhausted_notifies_once(monkeypatch):
@@ -61,7 +67,7 @@ def test_retry_exhausted_notifies_once(monkeypatch):
 
     assert len(calls) == 3  # 1 次首跑 + 2 次重试
     assert task.last_run_status == "failed"
-    assert notified == [1]  # 全失败才通知一次
+    assert notified == ["failed"]  # 全失败通知一次
 
 
 def test_no_retry_single_attempt_notifies(monkeypatch):
@@ -71,7 +77,7 @@ def test_no_retry_single_attempt_notifies(monkeypatch):
     schedule_service.execute_schedule(FakeDB(), task)
 
     assert len(calls) == 1  # 不重试只跑一次
-    assert notified == [1]
+    assert notified == ["failed"]
 
 
 def test_attempt_exception_counts_as_failed_and_retries(monkeypatch):
@@ -83,7 +89,21 @@ def test_attempt_exception_counts_as_failed_and_retries(monkeypatch):
     assert len(calls) == 2  # 首跑异常算失败，第 2 次成功
     assert task.last_run_status == "passed"
     assert task.last_run_id == 9
-    assert notified == []
+    assert notified == ["passed"]
+
+
+def test_retry_chain_marks_head_and_attempts(monkeypatch):
+    # 重试链打标：首次 run 为链头(不打标)，后续各次指向链头 + 记 attempt(2,3...)
+    marks: list = []
+    _patch(monkeypatch, (2, 0), [("failed", 10), ("failed", 11), ("passed", 12)])
+    monkeypatch.setattr(_MARK_RETRY, lambda db, rid, head, att: marks.append((rid, head, att)))
+    task = _task()
+
+    schedule_service.execute_schedule(FakeDB(), task)
+
+    assert marks == [(11, 10, 2), (12, 10, 3)]  # 10 为链头未打标；11→链头 att2；12→链头 att3
+    assert task.last_run_id == 12
+    assert task.last_run_status == "passed"
 
 
 def test_retry_config_reads_project_and_caps_interval(db):

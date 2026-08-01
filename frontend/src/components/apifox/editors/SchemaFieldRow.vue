@@ -92,8 +92,6 @@ type SchemaBrief = Schemas['SchemaBrief']
 
 const props = withDefaults(
   defineProps<{
-    field: SchemaField
-    list?: SchemaField[] | null
     index?: number
     depth?: number
     isItem?: boolean
@@ -107,24 +105,26 @@ const props = withDefaults(
     models: () => [],
   },
 )
+const field = defineModel<SchemaField>('field', { required: true })
+const list = defineModel<SchemaField[] | null>('list', { default: null })
 
 const CONSTRAINABLE = ['string', 'integer', 'number', 'array']
-const showConstraints = computed(() => CONSTRAINABLE.includes(props.field.type))
-const hasConstraints = computed(() => Object.keys(props.field.extra || {}).length > 0)
+const showConstraints = computed(() => CONSTRAINABLE.includes(field.value.type))
+const hasConstraints = computed(() => Object.keys(field.value.extra || {}).length > 0)
 
 function onTypeChange(type: string) {
-  if (type === 'array') props.field.children = [newField('string')]
-  else props.field.children = []
-  if (type !== 'ref') props.field.refName = ''
-  props.field.extra = {} // 换类型清空旧类型的约束，避免残留非法约束（如 integer 上残留 minLength）
+  if (type === 'array') field.value.children = [newField('string')]
+  else field.value.children = []
+  if (type !== 'ref') field.value.refName = ''
+  field.value.extra = {} // 换类型清空旧类型的约束，避免残留非法约束（如 integer 上残留 minLength）
 }
 
 function addChild() {
-  props.field.children.push(newField('string'))
+  field.value.children.push(newField('string'))
 }
 
 function remove() {
-  if (props.list && props.index >= 0) props.list.splice(props.index, 1)
+  if (list.value && props.index >= 0) list.value.splice(props.index, 1)
 }
 </script>
 

@@ -33,6 +33,34 @@ def test_create_task_makes_pending_task_with_one_item_per_endpoint(db, make_endp
     assert {i.endpoint_id for i in repo.list_items(db, task.id)} == {ep1.id, ep2.id}
 
 
+def test_claim_next_pending_serializes_same_provider_only(db, make_endpoint):
+    ep1 = make_endpoint(project_id=1, path="/a")
+    ep2 = make_endpoint(project_id=1, path="/b")
+    ep3 = make_endpoint(project_id=1, path="/c")
+    t1 = service.create_task(
+        db, 1, 1, _create([ep1.id], categories=[AiGenCategory(category="positive", count=1)])
+    )
+    t1.provider_id = 10
+    t2 = service.create_task(
+        db, 1, 1, _create([ep2.id], categories=[AiGenCategory(category="positive", count=1)])
+    )
+    t2.provider_id = 20
+    t3 = service.create_task(
+        db, 1, 1, _create([ep3.id], categories=[AiGenCategory(category="positive", count=1)])
+    )
+    t3.provider_id = 10
+    db.commit()
+    t1.status = "running"
+    db.commit()
+
+    nxt = repo.claim_next_pending(db)
+    assert nxt is not None and nxt.id == t2.id
+
+    t2.status = "running"
+    db.commit()
+    assert repo.claim_next_pending(db) is None
+
+
 def test_create_task_dedupes_repeated_endpoint_ids(db, make_endpoint):
     ep = make_endpoint(project_id=1)
 
@@ -120,7 +148,35 @@ def test_apply_item_creates_all_cases_by_default(db, make_endpoint):
     assert result.created == 2
     assert {c.name for c in case_repo.list_cases(db, ep.id)} == {"c1", "c2"}
     assert item.applied_count == 2
+    assert len(service.load_cases(item.applied_cases)) == 2
     assert item.result_cases is None
+
+
+def test_item_out_backfills_applied_cases_when_snapshot_missing(db, make_endpoint):
+    cases = [CaseCreate(name="c1", category="positive", request_spec=RequestSpec())]
+    ep, item = _succeeded_item(db, make_endpoint, cases)
+    service.apply_item(db, item, None)
+    item.applied_cases = None
+    db.commit()
+    db.refresh(item)
+
+    out = service._item_out(db, item)
+
+    assert out.applied_count == 1
+    assert len(out.applied_cases) == 1
+    assert out.applied_cases[0].name == "c1"
+
+
+def test_load_cases_tolerates_partial_invalid_rows():
+    import json
+
+    raw = service.dump_cases(
+        [CaseCreate(name="ok", category="positive", request_spec=RequestSpec())]
+    )
+    data = json.loads(raw)
+    data.append({"name": ""})
+    loaded = service.load_cases(json.dumps(data, ensure_ascii=False))
+    assert len(loaded) == 1 and loaded[0].name == "ok"
 
 
 def test_apply_item_creates_only_selected_indexes(db, make_endpoint):
@@ -229,6 +285,29 @@ def test_list_active_excludes_terminal_task(db, make_endpoint):
     service.cancel_task(db, task)
 
     assert service.list_active(db, 1) == []
+
+
+def test_list_active_mine_across_accessible_projects(db, make_endpoint):
+    from app.models.project import Project
+    from app.models.user import User
+
+    user = User(username="aigen-mine", hashed_password="x", role="admin")
+    db.add(user)
+    p1 = Project(name="p-a", owner_id=user.id)
+    p2 = Project(name="p-b", owner_id=user.id)
+    db.add_all([p1, p2])
+    db.commit()
+
+    ep1 = make_endpoint(project_id=p1.id, path="/one")
+    ep2 = make_endpoint(project_id=p2.id, path="/two")
+    t1 = service.create_task(db, p1.id, user.id, _create([ep1.id]))
+    t2 = service.create_task(db, p2.id, user.id, _create([ep2.id]))
+
+    mine = service.list_active_mine(db, user)
+    assert {b.id for b in mine} == {t1.id, t2.id}
+
+    service.cancel_task(db, t1)
+    assert [b.id for b in service.list_active_mine(db, user)] == [t2.id]
 
 
 def test_list_tasks_page_paginates(db, make_endpoint):

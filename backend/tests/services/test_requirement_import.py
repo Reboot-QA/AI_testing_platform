@@ -7,6 +7,8 @@ from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
 from app.services.requirement_io_service import (
+    build_requirements_import_template_excel,
+    build_requirements_import_template_xmind,
     clear_project_requirements,
     import_requirements_from_rows,
     parse_requirement_import_file,
@@ -86,7 +88,7 @@ def test_import_requirements_append_imports_every_row(db):
     )
     db.commit()
 
-    created, skipped, cleared = import_requirements_from_rows(
+    created, skipped, cleared, protected = import_requirements_from_rows(
         db,
         project,
         [
@@ -109,6 +111,7 @@ def test_import_requirements_append_imports_every_row(db):
     assert created == 3
     assert skipped == 0
     assert cleared == 0
+    assert protected == 0
 
     existing = db.query(Requirement).filter(Requirement.title == "已有需求").all()
     assert len(existing) == 2
@@ -121,7 +124,51 @@ def test_import_requirements_append_imports_every_row(db):
         .all()
     )
     assert len(new_rows) == 2
-    assert [row.sort_order for row in new_rows] == [3, 4]
+    assert [row.sort_order for row in new_rows] == [2, 3]
+
+
+def test_import_requirements_append_ignores_excel_sort_order(db):
+    user = _seed_user(db)
+    project = _seed_project(db, user)
+    db.add(
+        Requirement(
+            project_id=project.id,
+            title="已有需求",
+            sort_order=1,
+            req_type="functional",
+            priority="P1",
+            status="draft",
+            source="manual",
+            created_by_id=user.id,
+        )
+    )
+    db.commit()
+
+    created, skipped, cleared, protected = import_requirements_from_rows(
+        db,
+        project,
+        [
+            {
+                "序号": "1",
+                "标题": "示例需求",
+                "类型": "功能",
+                "优先级": "P1",
+                "状态": "草稿",
+                "来源": "手动",
+                "描述": "模板行",
+            },
+        ],
+        user,
+        mode="append",
+    )
+
+    assert created == 1
+    imported = (
+        db.query(Requirement)
+        .filter(Requirement.project_id == project.id, Requirement.title == "示例需求")
+        .one()
+    )
+    assert imported.sort_order == 2
 
 
 def test_import_requirements_replace_clears_and_imports(db):
@@ -140,7 +187,7 @@ def test_import_requirements_replace_clears_and_imports(db):
     )
     db.commit()
 
-    created, skipped, cleared = import_requirements_from_rows(
+    created, skipped, cleared, protected = import_requirements_from_rows(
         db,
         project,
         [{"标题": "新需求A", "类型": "功能", "优先级": "P1", "状态": "已评审", "来源": "文档解析", "描述": ""}],
@@ -151,50 +198,170 @@ def test_import_requirements_replace_clears_and_imports(db):
     assert created == 1
     assert skipped == 0
     assert cleared == 1
+    assert protected == 0
     titles = [req.title for req in db.query(Requirement).filter(Requirement.project_id == project.id).all()]
     assert titles == ["新需求A"]
 
 
-def test_clear_project_requirements_unlinks_testcases(db):
+def test_clear_project_requirements_only_deletes_without_testcases(db):
     user = _seed_user(db)
     project = _seed_project(db, user)
-    req = Requirement(
+    deletable = Requirement(
         project_id=project.id,
-        title="待清空",
+        title="可删除",
         req_type="functional",
         priority="P1",
         status="draft",
         source="manual",
         created_by_id=user.id,
     )
-    db.add(req)
+    protected_req = Requirement(
+        project_id=project.id,
+        title="保留",
+        req_type="functional",
+        priority="P1",
+        status="draft",
+        source="manual",
+        created_by_id=user.id,
+    )
+    db.add_all([deletable, protected_req])
     db.commit()
-    db.refresh(req)
+    db.refresh(protected_req)
     case = TestCase(
         project_id=project.id,
         title="关联用例",
         case_type="functional",
         priority="P1",
-        requirement_id=req.id,
+        requirement_id=protected_req.id,
         created_by_id=user.id,
     )
     db.add(case)
     db.commit()
     db.refresh(case)
 
-    cleared = clear_project_requirements(db, project.id)
+    deleted, protected = clear_project_requirements(db, project.id)
     db.commit()
 
-    assert cleared == 1
+    assert deleted == 1
+    assert protected == 1
     db.refresh(case)
-    assert case.requirement_id is None
+    assert case.requirement_id == protected_req.id
+    remaining = db.query(Requirement).filter(Requirement.project_id == project.id).all()
+    assert len(remaining) == 1
+    assert remaining[0].title == "保留"
+
+
+def test_import_requirements_replace_preserves_requirements_with_testcases(db):
+    user = _seed_user(db)
+    project = _seed_project(db, user)
+    protected_req = Requirement(
+        project_id=project.id,
+        title="有用例的需求",
+        sort_order=1,
+        req_type="functional",
+        priority="P1",
+        status="draft",
+        source="manual",
+        created_by_id=user.id,
+    )
+    deletable_req = Requirement(
+        project_id=project.id,
+        title="旧需求",
+        req_type="functional",
+        priority="P1",
+        status="draft",
+        source="manual",
+        created_by_id=user.id,
+    )
+    db.add_all([protected_req, deletable_req])
+    db.commit()
+    db.refresh(protected_req)
+    db.add(
+        TestCase(
+            project_id=project.id,
+            title="关联用例",
+            case_type="functional",
+            priority="P1",
+            requirement_id=protected_req.id,
+            created_by_id=user.id,
+        )
+    )
+    db.commit()
+
+    created, skipped, cleared, protected = import_requirements_from_rows(
+        db,
+        project,
+        [{"标题": "新需求A", "类型": "功能", "优先级": "P1", "状态": "已评审", "来源": "文档解析", "描述": ""}],
+        user,
+        mode="replace",
+    )
+
+    assert created == 1
+    assert skipped == 0
+    assert cleared == 1
+    assert protected == 1
+    titles = sorted(req.title for req in db.query(Requirement).filter(Requirement.project_id == project.id).all())
+    assert titles == ["新需求A", "有用例的需求"]
+    imported = db.query(Requirement).filter(Requirement.title == "新需求A").one()
+    assert imported.sort_order == 2
+
+
+def test_import_requirements_replace_avoids_duplicate_sort_order_with_protected(db):
+    user = _seed_user(db)
+    project = _seed_project(db, user)
+    protected_req = Requirement(
+        project_id=project.id,
+        title="AI 使用规范制定",
+        sort_order=1,
+        req_type="functional",
+        priority="P1",
+        status="approved",
+        source="ai_document",
+        created_by_id=user.id,
+    )
+    db.add(protected_req)
+    db.commit()
+    db.refresh(protected_req)
+    db.add(
+        TestCase(
+            project_id=project.id,
+            title="关联用例",
+            case_type="functional",
+            priority="P1",
+            requirement_id=protected_req.id,
+            created_by_id=user.id,
+        )
+    )
+    db.commit()
+
+    created, skipped, cleared, protected = import_requirements_from_rows(
+        db,
+        project,
+        [
+            {"序号": "1", "标题": "示例需求", "类型": "功能", "优先级": "P1", "状态": "草稿", "来源": "手动", "描述": ""},
+            {"序号": "2", "标题": "需求B", "类型": "功能", "优先级": "P1", "状态": "草稿", "来源": "手动", "描述": ""},
+        ],
+        user,
+        mode="replace",
+    )
+
+    assert created == 2
+    assert protected == 1
+    orders = {
+        req.title: req.sort_order
+        for req in db.query(Requirement).filter(Requirement.project_id == project.id).all()
+    }
+    assert orders["AI 使用规范制定"] == 1
+    assert orders["示例需求"] == 2
+    assert orders["需求B"] == 3
+    assert len(set(orders.values())) == 3
 
 
 def test_import_requirements_replace_preserves_excel_sort_order(db):
     user = _seed_user(db)
     project = _seed_project(db, user)
 
-    created, skipped, cleared = import_requirements_from_rows(
+    created, skipped, cleared, protected = import_requirements_from_rows(
         db,
         project,
         [
@@ -220,7 +387,7 @@ def test_import_requirements_imports_duplicate_titles_without_merge(db):
     user = _seed_user(db)
     project = _seed_project(db, user)
 
-    created, skipped, cleared = import_requirements_from_rows(
+    created, skipped, cleared, protected = import_requirements_from_rows(
         db,
         project,
         [
@@ -247,7 +414,7 @@ def test_import_requirements_applies_excel_status(db):
     user = _seed_user(db)
     project = _seed_project(db, user)
 
-    created, skipped, cleared = import_requirements_from_rows(
+    created, skipped, cleared, protected = import_requirements_from_rows(
         db,
         project,
         [{"标题": "评审需求", "类型": "功能", "优先级": "P1", "状态": "已评审", "来源": "文档解析", "描述": ""}],
@@ -257,5 +424,19 @@ def test_import_requirements_applies_excel_status(db):
     assert created == 1
     assert skipped == 0
     assert cleared == 0
+    assert protected == 0
     req = db.query(Requirement).filter(Requirement.project_id == project.id).one()
     assert req.status == "approved"
+
+
+def test_import_template_excel_and_xmind_parse():
+    xbuf, _ = build_requirements_import_template_excel()
+    rows = parse_requirement_import_file("template.xlsx", xbuf.getvalue())
+    assert len(rows) >= 1
+    assert rows[0]["标题"] == "示例需求"
+
+    zbuf, _ = build_requirements_import_template_xmind()
+    xrows = parse_requirement_import_file("template.xmind", zbuf.getvalue())
+    assert len(xrows) == 2
+    assert xrows[0]["标题"] == "示例需求一"
+    assert xrows[0]["优先级"] == "P1"

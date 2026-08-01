@@ -1,7 +1,7 @@
-"""Apifox 失败通知 · 项目级配置模型（一对一 project）。
+"""Apifox 通知 · 项目级配置模型（一对一 project）。
 
-每个项目单独配置邮件/Telegram 渠道 + 固定收件人 + 三类触发开关；该项目的
-定时任务/套件·场景执行/AI 生成失败时按配置推送。
+每个项目单独配置邮件/Telegram 渠道 + 固定收件人 + 三类事件的成功/失败触发开关；
+该项目的定时任务/套件·场景执行/AI 生成 完成时按配置推送（失败/成功各自可配）。
 """
 
 from datetime import datetime
@@ -34,10 +34,15 @@ class ApifoxNotifyConfig(Base):
     telegram_bot_token: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     telegram_chat_ids: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON chat_id 数组
 
-    # 三类触发开关
+    # 三类触发开关 · 失败（历史列，语义=失败通知）
     notify_schedule: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     notify_run: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
     notify_aigen: Mapped[bool] = mapped_column(Boolean, default=True, server_default="1")
+
+    # 三类触发开关 · 成功（新增，默认关，成功通知属打扰，opt-in）
+    notify_schedule_success: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    notify_run_success: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    notify_aigen_success: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
 
     # 自动重试（仅定时任务）：失败后重跑 retry_count 次、每次间隔 retry_interval_sec 秒，全部失败才通知
     retry_count: Mapped[int] = mapped_column(Integer, default=0, server_default="0")

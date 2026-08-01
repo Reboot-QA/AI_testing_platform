@@ -5,6 +5,7 @@ week_day/interval_minutes/cron_expr/last_run_at）。执行体独立：拉取 UR
 import_sync_service.apply_sync，落 last_run_status/detail。由 scheduler 线程驱动。
 """
 
+import json
 import logging
 
 from sqlalchemy.orm import Session
@@ -16,10 +17,18 @@ from app.utils.time_util import now_local
 
 logger = logging.getLogger(__name__)
 
-# 校验/下次运行计算/描述直接复用（schedule_service 内部已 cast(Any)，duck-typed 兼容本模型）
-validate_fields = schedule_service.validate_fields
-describe = schedule_service.describe
-_compute_next = schedule_service._compute_next
+# 校验/下次运行计算/描述直接复用 schedule_service（内部已 cast(Any)，duck-typed 兼容本模型）。
+# 用薄包装而非模块级别名：把"取函数"从加载期推迟到调用期，避开访问未初始化模块的循环依赖脆弱点。
+def validate_fields(*args, **kwargs):
+    return schedule_service.validate_fields(*args, **kwargs)
+
+
+def describe(*args, **kwargs):
+    return schedule_service.describe(*args, **kwargs)
+
+
+def _compute_next(*args, **kwargs):
+    return schedule_service._compute_next(*args, **kwargs)
 
 
 def refresh_schedule(db: Session, task: ApifoxImportSchedule, *, force_from_now: bool = False) -> None:
@@ -42,12 +51,24 @@ def _load_doc(task: ApifoxImportSchedule) -> dict:
 
 
 def _run_import_once(db: Session, task: ApifoxImportSchedule) -> tuple[str, str]:
-    """跑一次定时导入，返回 (status, detail)。异常在外层兜底。"""
+    """跑一次定时导入，返回 (status, detail)；逐条清单写入 task.last_run_manifest。异常在外层兜底。"""
     doc = _load_doc(task)
     report = import_sync_service.apply_sync(db, task.project_id, doc, task.delete_unreferenced)
     detail = (
         f"新增 {report.added}、更新 {report.updated}、删除 {report.deleted}、"
-        f"保留(被引用) {report.kept_referenced}"
+        f"保留(被引用) {report.kept_referenced}、未变 {report.skipped}"
+    )
+    task.last_run_manifest = json.dumps(
+        {
+            "added": report.added,
+            "updated": report.updated,
+            "deleted": report.deleted,
+            "kept_referenced": report.kept_referenced,
+            "skipped": report.skipped,
+            "truncated": report.truncated,
+            "items": [it.model_dump() for it in report.items],
+        },
+        ensure_ascii=False,
     )
     return "success", detail
 
@@ -62,6 +83,7 @@ def execute_schedule(db: Session, task: ApifoxImportSchedule) -> None:
             logger.exception("apifox 定时导入 %s 执行异常", task.id)
             db.rollback()
             status, detail = "failed", f"{type(exc).__name__}: {exc}"[:500]
+            task.last_run_manifest = None  # 失败清掉旧清单，避免失败态下展示上次成功的明细
         task.last_run_at = now_local()
         task.last_run_status = status
         task.last_run_detail = detail[:500]
@@ -75,20 +97,27 @@ def execute_schedule(db: Session, task: ApifoxImportSchedule) -> None:
                 task.next_run_at = None
         db.commit()
 
-    if task.last_run_status == "failed":
-        _notify_import_failure(db, task)
+    _notify_import(db, task)
 
 
-def _notify_import_failure(db: Session, task: ApifoxImportSchedule) -> None:
+def _notify_import(db: Session, task: ApifoxImportSchedule) -> None:
+    """定时导入完成通知（成功/失败按开关分别推送；复用定时任务开关）。"""
     from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+    from app.services.apifox.notify_templates import NotifyPayload
 
     try:
-        detail = f"定时导入「{task.name}」执行失败：{task.last_run_detail or ''}"
-        notify_service.notify_failure(
-            db, task.project_id, "import_schedule", f"定时导入失败：{task.name}", detail
+        payload = NotifyPayload(
+            event_type="import_schedule",
+            result="success" if task.last_run_status != "failed" else "failure",
+            project_name=notify_service.project_name(db, task.project_id),
+            scene="定时导入",
+            target_name=task.name,
+            extra=(task.last_run_detail or "")[:200],
+            happened_at=task.last_run_at,
         )
+        notify_service.notify_event(db, task.project_id, payload)
     except Exception:  # noqa: BLE001 - 通知不影响主流程
-        logger.exception("定时导入失败通知异常 task=%s", task.id)
+        logger.exception("定时导入通知异常 task=%s", task.id)
 
 
 def run_due_import_schedules(db: Session) -> None:

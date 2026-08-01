@@ -6,7 +6,7 @@ from app.auth import create_access_token, get_current_admin, get_current_user, g
 from app.database import get_db
 from app.models.department import Department
 from app.models.user import User
-from app.schemas import Token, UserCreate, UserOut, UserPasswordChange, UserProfileUpdate
+from app.schemas import ActionResultOut, Token, UserCreate, UserOut, UserPasswordChange, UserProfileUpdate
 from app.services.login_lock_service import is_login_locked, record_login_failure, record_login_success
 from app.services.permission_service import ensure_default_permissions, get_user_menu_keys
 
@@ -110,13 +110,13 @@ def update_me(
     return _build_user_out(current_user, db)
 
 
-@router.post("/logout")
+@router.post("/logout", response_model=ActionResultOut)
 def logout(current_user: User = Depends(get_current_user)):
     """退出登录。JWT 无状态，服务端此处作为登出钩子/审计点；前端据此清理本地会话。"""
     return {"message": "已退出登录"}
 
 
-@router.put("/password")
+@router.put("/password", response_model=ActionResultOut)
 def change_password(
     data: UserPasswordChange,
     db: Session = Depends(get_db),

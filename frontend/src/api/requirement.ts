@@ -19,8 +19,8 @@ export const requirementApi = {
     post<Schemas['RequirementOut']>('/requirements', data),
   update: (id: Id, data: Schemas['RequirementUpdate']) =>
     put<Schemas['RequirementOut']>(`/requirements/${id}`, data),
-  delete: (id: Id) => del<any>(`/requirements/${id}`), // 无 response_model（技术债）
-  clearTestcases: (id: Id) => del<any>(`/requirements/${id}/testcases`), // 无 response_model（技术债）
+  delete: (id: Id) => del<void>(`/requirements/${id}`),
+  clearTestcases: (id: Id) => del<Schemas['ActionResultOut']>(`/requirements/${id}/testcases`),
   batchUpdateStatus: (data: Schemas['RequirementBatchStatusUpdate']) =>
     post<Schemas['RequirementBatchStatusResponse']>('/requirements/batch/status', data),
   batchDelete: (data: Schemas['RequirementBatchDelete']) =>
@@ -35,11 +35,11 @@ export const requirementApi = {
       timeout: 120000,
     })
   },
-  extractFromDocumentStream: (
+  extractFromDocumentStream: <TEvent extends SSEEvent>(
     projectId: Id,
     file: File,
     providerId: Id | undefined,
-    onEvent: (event: SSEEvent) => void,
+    onEvent: (event: TEvent) => void,
     options: { signal?: AbortSignal } = {},
   ) => {
     const form = new FormData()
@@ -47,7 +47,7 @@ export const requirementApi = {
     form.append('file', file)
     if (providerId) form.append('provider_id', String(providerId))
     // multipart：不设 Content-Type，交由浏览器带 boundary
-    return streamSSE('/api/v1/requirements/ai/extract/stream', {
+    return streamSSE<TEvent>('/api/v1/requirements/ai/extract/stream', {
       body: form,
       onEvent,
       signal: options.signal,
@@ -75,4 +75,8 @@ export const requirementApi = {
       timeout: 120000,
     })
   },
+  downloadImportTemplateExcel: () =>
+    get<Blob>('/requirements/import/template/excel', { responseType: 'blob' }),
+  downloadImportTemplateXmind: () =>
+    get<Blob>('/requirements/import/template/xmind', { responseType: 'blob' }),
 }

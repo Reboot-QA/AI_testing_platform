@@ -50,6 +50,7 @@ class ApifoxAiGenTaskItem(Base):
     generated_count: Mapped[int] = mapped_column(Integer, default=0)
     applied_count: Mapped[int] = mapped_column(Integer, default=0)
     result_cases: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: CaseCreate[]
+    applied_cases: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: 已入库归档预览
     discarded_cases: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON: 已废弃预览
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

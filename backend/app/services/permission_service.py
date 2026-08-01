@@ -12,8 +12,6 @@ SYSTEM_MENU_KEYS = {
     "system_users",
     "system_departments",
     "system_permissions",
-    "system_logs",
-    "system_error_logs",
 }
 
 

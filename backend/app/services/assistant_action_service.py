@@ -13,22 +13,22 @@ def _wait_step(label: str = "等待页面就绪", ms: int = DEFAULT_WAIT_MS) -> 
     return {"type": "wait", "ms": ms, "label": label}
 
 # 新版信息架构（v2 壳）：首页 /hub（项目列表 + 跨项目动态）；业务功能都在项目工作区
-# /hub/workspace/{pid}#domain=<域>&section=<区>（自动化域再加 &biz=）。旧全局路由已 redirect 到 /hub。
+# 工作区深链使用 /hub/workspace/{pid}/<子路径>；旧 hash 仅由前端守卫兼容。
 # 各功能 → (domain, section, biz)；biz 仅自动化域需要。
-_NAV_MAP: Dict[str, tuple] = {
-    "req-points": ("requirements", "req-points", None),
-    "req-docs": ("requirements", "req-docs", None),
-    "func-cases": ("functional", "func-cases", None),
-    "ai-generate": ("functional", "ai", None),
-    "manual-run": ("functional", "func-runs", None),
-    "apis": ("automation", "apis", "apis"),
-    "cases": ("automation", "cases", "autotest"),
-    "scenarios": ("automation", "scenarios", "autotest"),
-    "suites": ("automation", "suites", "autotest"),
-    "schedules": ("automation", "schedules", "autotest"),
-    "reports": ("automation", "reports", "reports"),
-    "trash": ("automation", "trash", "autotest"),
-    "automation": ("automation", "overview", "autotest"),
+_NAV_MAP: Dict[str, str] = {
+    "req-points": "requirements/points",
+    "req-docs": "requirements/documents",
+    "func-cases": "functional/cases",
+    "ai-generate": "functional/ai-generate",
+    "manual-run": "functional/runs",
+    "apis": "automation/apis",
+    "cases": "automation/cases",
+    "scenarios": "automation/scenarios",
+    "suites": "automation/suites",
+    "schedules": "automation/schedules",
+    "reports": "automation/reports",
+    "trash": "automation/trash",
+    "automation": "automation",
 }
 
 
@@ -41,13 +41,8 @@ def _pid_from_path(page_path: Optional[str]) -> Optional[str]:
 
 
 def _ws_path(pid: str, key: str) -> str:
-    """按功能 key 拼项目工作区深链（照搬 useWorkspaceHash 的 hash 序列化：domain[/biz]/section）。"""
-    domain, section, biz = _NAV_MAP[key]
-    parts = [f"domain={domain}"]
-    if biz:
-        parts.append(f"biz={biz}")
-    parts.append(f"section={section}")
-    return f"/hub/workspace/{pid}#" + "&".join(parts)
+    """按功能 key 拼项目工作区具名子路径。"""
+    return f"/hub/workspace/{pid}/{_NAV_MAP[key]}"
 
 
 def _nav_key(text: str) -> Optional[str]:
@@ -81,7 +76,7 @@ def _nav_key(text: str) -> Optional[str]:
 # 前端 data-assistant 锚点 / invoke handler（随 v2 壳逐页重挂后的当前清单）
 ACTION_CATALOG = """
 可用浏览器自动化步骤（按顺序放入 actions 数组）：
-1. navigate - 跳转页面: {"type":"navigate","path":"/hub#view=projects"} 或项目工作区深链 {"type":"navigate","path":"/hub/workspace/12#domain=functional&section=func-cases"}
+1. navigate - 跳转页面: {"type":"navigate","path":"/hub#view=projects"} 或项目工作区深链 {"type":"navigate","path":"/hub/workspace/12/functional/cases"}
 2. wait - 等待毫秒: {"type":"wait","ms":1000,"label":"等待页面就绪"}
 3. click - 点击元素: {"type":"click","target":"projects.create_btn"}
 4. fill - 填写输入: {"type":"fill","target":"projects.form.name","value":"项目名称"}
@@ -112,10 +107,10 @@ ACTION_SYSTEM_PROMPT = f"""你是 AI 质量平台的「操作规划器」。用�
 - 用户要求「演示」「帮我操作」「自动创建」「直接创建」等时，必须生成可执行的 actions，needs_confirmation 为 true。
 - 仅咨询「怎么做」「如何操作」且未要求代操作时，actions 为空数组。
 - 平台首页是 /hub；「项目管理」固定使用 /hub#view=projects。
-- 各业务功能都在**项目工作区**内，深链格式 /hub/workspace/{{项目id}}#domain=<域>&section=<区>（自动化域再加 &biz=<biz>）：
-  · 需求点 domain=requirements&section=req-points；需求文档分析 section=req-docs
-  · 功能用例库 domain=functional&section=func-cases；AI 生成用例 section=ai；手工执行 section=func-runs
-  · 接口自动化 domain=automation：接口目录 biz=apis&section=apis；接口用例 section=cases；场景 section=scenarios；套件 section=suites；定时 section=schedules；测试报告 biz=reports&section=reports；回收站 section=trash
+- 各业务功能都在**项目工作区**内，深链格式 /hub/workspace/{{项目id}}/<子路径>：
+  · 需求点 requirements/points；需求文档分析 requirements/documents
+  · 功能用例库 functional/cases；AI 生成用例 functional/ai-generate；手工执行 functional/runs
+  · 接口自动化：automation/apis、automation/cases、automation/scenarios、automation/suites、automation/schedules、automation/reports、automation/trash
 - 项目工作区功能需要「项目id」：若当前上下文没有项目，停止动作并提示用户先选择项目。
 - 旧路径 /projects /apifox /api-automation /testcases /requirements /ai-generate /dashboard 已废弃，一律改用上面的 /hub 深链。
 - 项目名称从用户话术中提取；未指定时用「AI演示项目」。
@@ -171,7 +166,7 @@ def _project_create_actions(name: str, desc: str) -> List[Dict[str, Any]]:
         {
             "type": "invoke",
             "handler": "projects.submitDemo",
-            "payload": {"next_hash": "#domain=settings&open=basic"},
+            "payload": {"next_route": "WorkspaceSettingsBasic"},
             "label": "创建项目并进入基础设置",
         },
     ]

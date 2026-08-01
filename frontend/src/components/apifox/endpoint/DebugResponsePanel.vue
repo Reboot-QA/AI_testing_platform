@@ -11,6 +11,14 @@
     <template v-if="resp">
       <div class="debug-resp__head">
         <span class="debug-resp__lbl">响应</span>
+        <el-tag
+          v-if="overallPassed !== null"
+          size="small"
+          effect="dark"
+          :type="overallPassed ? 'success' : 'danger'"
+          class="debug-resp__verdict"
+          >{{ overallPassed ? '✓ 测试通过' : '✗ 测试失败' }}</el-tag
+        >
         <el-tag size="small" :type="statusType">{{ resp.status_code ?? '—' }}</el-tag>
         <el-tag v-if="statusHint" size="small" type="danger" effect="plain">{{
           statusHint
@@ -18,6 +26,20 @@
         <span class="debug-resp__meta">{{ Math.round(resp.duration_ms) }} ms</span>
         <span v-if="resp.error" class="debug-resp__err">{{ resp.error }}</span>
       </div>
+      <!-- 失败时把失败项直接列在头部下，无需切到断言/契约 tab 才看得到 -->
+      <el-alert
+        v-if="overallPassed === false && failureSummary.length"
+        type="error"
+        :closable="false"
+        show-icon
+        class="debug-resp__warn"
+      >
+        <template #title>
+          <div v-for="(f, i) in failureSummary" :key="'f' + i" class="debug-resp__fail-line">
+            {{ f }}
+          </div>
+        </template>
+      </el-alert>
       <el-alert
         v-for="(w, i) in resp.warnings || []"
         :key="'w' + i"
@@ -52,7 +74,7 @@
             />
           </div>
         </el-tab-pane>
-        <el-tab-pane v-if="assertionItems.length" label="断言" name="assertions">
+        <el-tab-pane v-if="assertionItems.length" :label="assertTabLabel" name="assertions">
           <div class="debug-resp__box"><ResultList :items="assertionItems" /></div>
         </el-tab-pane>
         <el-tab-pane v-if="resp.extract_results?.length" label="提取" name="extracts">
@@ -86,7 +108,7 @@
             <span v-else class="empty-console">没有内容</span>
           </div>
         </el-tab-pane>
-        <el-tab-pane v-if="resp.contract_result" label="契约" name="contract">
+        <el-tab-pane v-if="resp.contract_result" :label="contractTabLabel" name="contract">
           <div class="debug-resp__line">
             <el-tag size="small" :type="resp.contract_result.passed ? 'success' : 'danger'">
               {{ resp.contract_result.passed ? '符合' : '不符' }}
@@ -124,6 +146,43 @@ const props = defineProps<{ resp: Schemas['DebugResponse'] | null }>()
 const assertionItems = computed(() =>
   toAssertionItems(props.resp?.assertion_results, props.resp?.script_logs),
 )
+
+// 整体测试结论：接口默认 200 成功具有迷惑性，成败实际由后置断言/契约决定。
+// 这里汇总「用户切 tab 能看到的全部检查」（断言含 pm.test + 契约 + 请求错误），提到头部一眼可见。
+type ContractResult = {
+  passed: boolean
+  strict?: boolean
+  message?: string
+  errors?: string[]
+  schema_name?: string
+}
+const contract = computed(() => props.resp?.contract_result as ContractResult | null | undefined)
+const failedAssertions = computed(() => assertionItems.value.filter((a) => !a.passed))
+// 契约不符（用于 tab 展示，如实反映是否匹配 schema）
+const contractMismatch = computed(() => contract.value?.passed === false)
+// 契约「判失败」：仅当勾选「不符判失败」(strict) 且不符才计入整体失败；不勾则只展示不判失败
+const contractFailed = computed(() => contractMismatch.value && contract.value?.strict === true)
+const hasChecks = computed(() => assertionItems.value.length > 0 || !!contract.value)
+// null = 无任何断言/契约，不下成败结论（只看 HTTP 状态）；否则 true/false
+const overallPassed = computed<boolean | null>(() => {
+  const r = props.resp
+  if (!r) return null
+  if (r.error) return false
+  if (!hasChecks.value) return null
+  return failedAssertions.value.length === 0 && !contractFailed.value
+})
+const failureSummary = computed(() => {
+  const out = failedAssertions.value.map((a) => a.message)
+  if (contractFailed.value) {
+    const c = contract.value
+    out.push(`[契约] ${c?.schema_name ?? ''}不符${c?.message ? '：' + c.message : ''}`)
+  }
+  return out
+})
+const assertTabLabel = computed(() =>
+  failedAssertions.value.length ? `断言 ✗${failedAssertions.value.length}` : '断言 ✓',
+)
+const contractTabLabel = computed(() => (contractMismatch.value ? '契约 ✗' : '契约 ✓'))
 
 const { enabled: consolePrintDbEnabled } = useDebugConsolePrint()
 const activeTab = ref('body')
@@ -200,6 +259,15 @@ defineExpose({ consolePrintEnabled: consolePrintDbEnabled })
 .debug-resp__lbl {
   font-weight: 600;
   color: var(--ax-brand);
+}
+
+.debug-resp__verdict {
+  font-weight: 600;
+}
+
+.debug-resp__fail-line {
+  line-height: 1.6;
+  word-break: break-all;
 }
 
 .debug-resp__meta {

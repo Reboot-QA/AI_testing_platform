@@ -82,35 +82,38 @@
           title="尚未定义列：请先在上方「列定义」输入列名并回车（或点「添加列」），数据行才会出现对应的列。"
           class="rows-empty-tip"
         />
-        <el-table :data="form.rows" size="small" border class="rows-table">
-          <el-table-column type="index" label="#" width="46" />
-          <el-table-column v-for="c in form.columns" :key="c" :label="c" min-width="120">
-            <template #default="{ row }">
-              <el-input v-model="row.values[c]" :maxlength="VALUE_MAX_LEN" size="small" />
-            </template>
-          </el-table-column>
-          <el-table-column label="启用" width="60" align="center">
-            <template #default="{ row }">
-              <el-switch v-model="row.enabled" size="small" />
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" width="60" align="center">
-            <template #default="{ $index }">
-              <el-button
-                link
-                type="danger"
-                size="small"
-                class="row-del"
-                @click="form.rows.splice($index, 1)"
-              >
-                删
-              </el-button>
-            </template>
-          </el-table-column>
-        </el-table>
-        <el-button link type="primary" size="small" class="add-row-btn" @click="addRow">
-          + 添加数据行
-        </el-button>
+        <!-- 未定义列时不渲染数据行表格：空列的行没有意义，只留上方提示 -->
+        <template v-if="form.columns.length > 0">
+          <el-table :data="form.rows" size="small" border class="rows-table">
+            <el-table-column type="index" label="#" width="46" />
+            <el-table-column v-for="c in form.columns" :key="c" :label="c" min-width="120">
+              <template #default="{ row }">
+                <el-input v-model="row.values[c]" :maxlength="VALUE_MAX_LEN" size="small" />
+              </template>
+            </el-table-column>
+            <el-table-column label="启用" width="60" align="center">
+              <template #default="{ row }">
+                <el-switch v-model="row.enabled" size="small" />
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="60" align="center">
+              <template #default="{ $index }">
+                <el-button
+                  link
+                  type="danger"
+                  size="small"
+                  class="row-del"
+                  @click="form.rows.splice($index, 1)"
+                >
+                  删
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+          <el-button link type="primary" size="small" class="add-row-btn" @click="addRow">
+            + 添加数据行
+          </el-button>
+        </template>
       </template>
       <el-empty v-else description="选择或新建一个数据集（可被用例数据驱动引用）" />
     </div>

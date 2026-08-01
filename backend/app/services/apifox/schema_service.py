@@ -113,6 +113,7 @@ def create_schema(db: Session, project_id: int, data: SchemaCreate) -> SchemaOut
         name=data.name,
         json_schema=data.json_schema,
         description=data.description,
+        sort_order=repo.next_sort_order(db, project_id),
     )
     repo.add(db, schema)
     db.commit()

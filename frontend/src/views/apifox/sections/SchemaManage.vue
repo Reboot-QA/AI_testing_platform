@@ -15,30 +15,34 @@
         placeholder="搜索模型名称"
         class="schema-search"
       />
-      <div
-        v-for="s in filteredSchemas"
-        :key="s.id"
-        class="schema-item"
-        :class="{ active: form.id === s.id }"
-        @click="selectSchema(s.id)"
-      >
-        <el-icon><Document /></el-icon>
-        <span class="schema-name">{{ s.name }}</span>
-        <el-tooltip
-          v-if="s.ref_count"
-          content="被引用数（接口契约 + 模型 $ref）"
-          placement="right"
-          :show-after="400"
+      <div class="schema-list-body">
+        <div
+          v-for="s in filteredSchemas"
+          :key="s.id"
+          class="schema-item"
+          :class="{ active: form.id === s.id }"
+          @click="selectSchema(s.id)"
         >
-          <span class="schema-ref">{{ s.ref_count }}</span>
-        </el-tooltip>
-        <el-icon class="schema-del" title="删除模型" @click.stop="delSchema(s)"><Delete /></el-icon>
+          <el-icon><Document /></el-icon>
+          <span class="schema-name">{{ s.name }}</span>
+          <el-tooltip
+            v-if="s.ref_count"
+            content="被引用数（接口契约 + 模型 $ref）"
+            placement="right"
+            :show-after="400"
+          >
+            <span class="schema-ref">{{ s.ref_count }}</span>
+          </el-tooltip>
+          <el-icon class="schema-del" title="删除模型" @click.stop="delSchema(s)"
+            ><Delete
+          /></el-icon>
+        </div>
+        <el-empty
+          v-if="filteredSchemas.length === 0"
+          :description="schemas.length ? '无匹配的数据模型' : '暂无数据模型'"
+          :image-size="60"
+        />
       </div>
-      <el-empty
-        v-if="filteredSchemas.length === 0"
-        :description="schemas.length ? '无匹配的数据模型' : '暂无数据模型'"
-        :image-size="60"
-      />
     </div>
 
     <div class="editor-panel">
@@ -182,7 +186,7 @@ defineExpose({ create: () => addSchema() })
 
 async function addSchema() {
   const { value } = await ElMessageBox.prompt('模型名称', '新建数据模型', {
-    ...nameInputOptions(),
+    ...nameInputOptions(MODEL_NAME_MAX_LEN),
   })
   const created = await apifoxApi.createSchema(pid.value, {
     name: value,
@@ -270,6 +274,19 @@ onMounted(async () => {
 }
 
 /* list-panel / panel-head / panel-title / schema-search 见 apifox-workspace.css */
+.list-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.schema-list-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .schema-item {
   display: flex;
   align-items: center;

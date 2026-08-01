@@ -8,13 +8,18 @@ from sqlalchemy.orm import Session
 from app.models.apifox.schedule import ApifoxSchedule
 
 
-def list_schedules(db: Session, project_id: int) -> List[ApifoxSchedule]:
-    return (
-        db.query(ApifoxSchedule)
-        .filter(ApifoxSchedule.project_id == project_id)
-        .order_by(ApifoxSchedule.id.desc())
-        .all()
-    )
+def list_schedules(
+    db: Session,
+    project_id: int,
+    keyword: Optional[str] = None,
+    schedule_id: Optional[int] = None,
+) -> List[ApifoxSchedule]:
+    query = db.query(ApifoxSchedule).filter(ApifoxSchedule.project_id == project_id)
+    if schedule_id is not None:
+        query = query.filter(ApifoxSchedule.id == schedule_id)
+    if keyword and keyword.strip():
+        query = query.filter(ApifoxSchedule.name.like(f"%{keyword.strip()}%"))
+    return query.order_by(ApifoxSchedule.id.desc()).all()
 
 
 def get_schedule(db: Session, schedule_id: int) -> Optional[ApifoxSchedule]:

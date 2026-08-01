@@ -5,7 +5,7 @@
 
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -22,6 +22,7 @@ from app.routers.apifox.schemas import (
     FolderCreate,
     FolderOut,
     FolderUpdate,
+    TreeReorderOut,
     TreeReorderRequest,
 )
 from app.services.apifox import endpoint_service as service
@@ -91,7 +92,7 @@ def update_folder(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/folders/{fid}")
+@router.delete("/folders/{fid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_folder(
     fid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
@@ -100,7 +101,7 @@ def delete_folder(
         service.delete_folder(db, folder, deleted_by=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "文件夹已删除"}
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------- endpoints ----------
@@ -150,7 +151,7 @@ def update_endpoint(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/endpoints/{eid}")
+@router.delete("/endpoints/{eid}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_endpoint(
     eid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
@@ -159,11 +160,11 @@ def delete_endpoint(
         service.delete_endpoint(db, endpoint, deleted_by=user.id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "接口已移入回收站"}
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 # ---------- 树拖拽重排 ----------
-@router.post("/projects/{pid}/tree/reorder")
+@router.post("/projects/{pid}/tree/reorder", response_model=TreeReorderOut)
 def reorder_tree(
     pid: int,
     data: TreeReorderRequest,
@@ -172,7 +173,9 @@ def reorder_tree(
 ):
     get_accessible_project(db, pid, user)
     try:
-        service.reorder_tree(db, pid, data)
+        order_version, updated_count = service.reorder_tree(db, pid, data)
+    except service.OrderVersionConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "已保存排序"}
+    return {"project_id": pid, "order_version": order_version, "updated_count": updated_count}

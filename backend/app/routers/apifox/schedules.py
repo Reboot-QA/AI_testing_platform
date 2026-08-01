@@ -3,9 +3,9 @@
 router 仅参数校验与编排；增删改后一律 refresh_schedule(force_from_now=True) 写 next_run_at。
 """
 
-from typing import Any, List
+from typing import Any, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth import get_current_user
@@ -93,9 +93,15 @@ def _out(db: Session, task: ApifoxSchedule) -> ScheduleOut:
 
 
 @router.get("/projects/{pid}/schedules", response_model=List[ScheduleOut])
-def list_schedules(pid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+def list_schedules(
+    pid: int,
+    keyword: Optional[str] = Query(None, max_length=200, description="模糊匹配任务名称"),
+    schedule_id: Optional[int] = Query(None, ge=1, description="按定时任务 ID 精确查询"),
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
     get_accessible_project(db, pid, user)
-    return [_out(db, t) for t in schedule_repo.list_schedules(db, pid)]
+    return [_out(db, t) for t in schedule_repo.list_schedules(db, pid, keyword, schedule_id)]
 
 
 @router.post("/projects/{pid}/schedules", response_model=ScheduleOut)
@@ -173,17 +179,18 @@ def update_schedule(
     return _out(db, task)
 
 
-@router.delete("/schedules/{sid}")
+@router.delete("/schedules/{sid}", status_code=204)
 def delete_schedule(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _owned_schedule(db, sid, user)
     schedule_repo.delete(db, task)
     db.commit()
-    return {"detail": "已删除"}
+    return None
 
 
-@router.post("/schedules/{sid}/run-now", response_model=ScheduleOut)
+@router.post("/schedules/{sid}/run-now", response_model=ScheduleOut, status_code=202)
 def run_schedule_now(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    # 触发即返回：执行体（套件/多用例 + 重试 sleep）放后台守护线程跑，避免占请求线程导致超时。
+    # last_run_* 由后台跑完后更新，前端提示「已触发」并稍后在报告查看。
     task = _owned_schedule(db, sid, user)
-    schedule_service.execute_schedule(db, task)
-    db.refresh(task)
+    schedule_service.run_now_background(task.id)
     return _out(db, task)

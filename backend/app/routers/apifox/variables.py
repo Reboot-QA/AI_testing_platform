@@ -97,11 +97,11 @@ def update_environment(
     return service.update_environment(db, env, data)
 
 
-@router.delete("/environments/{eid}")
+@router.delete("/environments/{eid}", status_code=204)
 def delete_environment(eid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     env = _env_checked(db, eid, user)
     service.delete_environment(db, env)
-    return {"message": "环境已删除"}
+    return None
 
 
 # ---------- environment servers（命名前置 URL） ----------
@@ -133,11 +133,11 @@ def update_server(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/environment-servers/{sid}")
+@router.delete("/environment-servers/{sid}", status_code=204)
 def delete_server(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     server = _server_checked(db, sid, user)
     service.delete_server(db, server)
-    return {"message": "前置 URL 已删除"}
+    return None
 
 
 # ---------- 环境变量 ----------
@@ -169,11 +169,11 @@ def update_env_var(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/env-variables/{vid}")
+@router.delete("/env-variables/{vid}", status_code=204)
 def delete_env_var(vid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     var = _env_var_checked(db, vid, user)
     service.delete_env_var(db, var)
-    return {"message": "变量已删除"}
+    return None
 
 
 @router.put("/env-variables/{vid}/local", response_model=VariableOut)
@@ -213,11 +213,11 @@ def update_global_var(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/global-variables/{gid}")
+@router.delete("/global-variables/{gid}", status_code=204)
 def delete_global_var(gid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     var = _global_var_checked(db, gid, user)
     service.delete_global_var(db, var)
-    return {"message": "变量已删除"}
+    return None
 
 
 @router.put("/global-variables/{gid}/local", response_model=VariableOut)

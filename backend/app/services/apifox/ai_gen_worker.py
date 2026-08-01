@@ -118,19 +118,36 @@ def _finalize(db: Session, task: ApifoxAiGenTask) -> None:
         task.status = "succeeded" if ok and not bad else "failed" if bad and not ok else "partial"
     task.finished_at = datetime.utcnow()
     db.commit()
-    if task.status in ("failed", "partial"):
-        _notify_failure(db, task)
+    if task.status != "canceled":  # 成功/失败/部分 各按开关推送；取消不通知
+        _notify_task(db, task)
 
 
-def _notify_failure(db: Session, task: ApifoxAiGenTask) -> None:
+def _notify_task(db: Session, task: ApifoxAiGenTask) -> None:
+    """AI 生成任务完成通知（成功/失败按开关分别推送；partial 归为失败）。"""
     from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+    from app.services.apifox.notify_templates import NotifyPayload
 
     try:
-        bad = sum(1 for i in repo.list_items(db, task.id) if i.status == "failed")
-        detail = f"任务 #{task.id}：{task.done_items}/{task.total_items} 个接口，{bad} 个失败。"
-        notify_service.notify_failure(db, task.project_id, "aigen", "AI 生成任务失败", detail)
+        items = repo.list_items(db, task.id)
+        ok = sum(1 for i in items if i.status == "succeeded")
+        bad = sum(1 for i in items if i.status == "failed")
+        total = task.total_items or len(items)
+        stats = f"{ok}/{total} 个接口生成成功"
+        if bad:
+            stats += f"，{bad} 个失败"
+        payload = NotifyPayload(
+            event_type="aigen",
+            result="success" if task.status == "succeeded" else "failure",
+            project_name=notify_service.project_name(db, task.project_id),
+            scene="AI 生成任务",
+            stats_text=stats,
+            ref_id=task.id,
+            ref_label="任务",
+            happened_at=task.finished_at,
+        )
+        notify_service.notify_event(db, task.project_id, payload)
     except Exception:  # noqa: BLE001 - 通知不影响主流程
-        logger.exception("AI 生成失败通知异常 task=%s", task.id)
+        logger.exception("AI 生成通知异常 task=%s", task.id)
 
 
 def _process_task(db: Session, task: ApifoxAiGenTask) -> None:

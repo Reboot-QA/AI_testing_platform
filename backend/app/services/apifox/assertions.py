@@ -20,10 +20,18 @@ def _extract_json_path(data: Any, path: str) -> Any:
         normalized = normalized[2:]
     elif normalized.startswith("$"):
         normalized = normalized[1:].lstrip(".")
-    current = data
-    for part in normalized.replace("[", ".").replace("]", "").split("."):
-        if not part:
-            continue
+    parts = [p for p in normalized.replace("[", ".").replace("]", "").split(".") if p]
+    return _walk_json_path(data, parts)
+
+
+def _walk_json_path(current: Any, parts: list) -> Any:
+    for i, part in enumerate(parts):
+        if part == "*":
+            # 数组通配符：对列表每个元素取剩余路径，收集成列表（末段 * 即返回各元素本身）
+            if not isinstance(current, list):
+                return None
+            rest = parts[i + 1 :]
+            return [_walk_json_path(item, rest) for item in current]
         if isinstance(current, dict):
             current = current.get(part)
         elif isinstance(current, list) and part.isdigit():

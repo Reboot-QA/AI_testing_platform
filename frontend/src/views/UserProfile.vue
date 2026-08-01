@@ -245,8 +245,8 @@ async function changePassword() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #2b6cff, #722ed1);
-  color: #fff;
+  background: linear-gradient(135deg, var(--ax-raw-hex-2b6cff), var(--ax-raw-hex-722ed1));
+  color: var(--ax-raw-hex-fff);
   font-size: 22px;
   font-weight: 600;
   flex-shrink: 0;

@@ -4,7 +4,7 @@
       :stats="stats"
       :actions="ACTIONS"
       :steps="STEPS"
-      @nav="(s, f) => emit('nav', s, f)"
+      @nav="onNav"
     />
     <OverviewRecentAiSection
       title="最近 AI 生成"
@@ -17,7 +17,7 @@
       empty-text="暂无 AI 生成用例，可前往「AI 生成用例」"
       @refresh="loadRecent"
       @page-change="onRecentPage"
-      @row-click="(row) => emit('nav', 'func-cases', 'kw:' + row.title)"
+      @row-click="(row) => onNav('func-cases', 'kw:' + row.title)"
     />
   </div>
 </template>
@@ -30,11 +30,12 @@ import DomainOverview from './DomainOverview.vue'
 import OverviewRecentAiSection, { type OverviewAiRow } from './OverviewRecentAiSection.vue'
 import type { OverviewAction, OverviewStat, OverviewStep } from '@/types/shell'
 import { formatBeijingTime } from '@/utils/datetime'
+import { useWorkspaceOverviewNav } from '@/composables/useWorkspaceOverviewNav'
 
 const props = defineProps<{ projectId: number }>()
-const emit = defineEmits<{ nav: [section: string, filter?: string] }>()
+const { navigate: onNav } = useWorkspaceOverviewNav(() => props.projectId, 'functional')
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const overview = ref<Awaited<ReturnType<typeof projectApi.functionalOverview>> | null>(null)
 const recentLoading = ref(false)
 const recentPage = ref(1)
@@ -46,12 +47,14 @@ const STEPS: OverviewStep[] = [
   { label: '完成用例评审', section: 'func-cases' },
   { label: '创建测试单', section: 'func-runs' },
   { label: '执行并跟踪结果', section: 'func-runs' },
+  { label: '查看测试报告', section: 'func-reports' },
 ]
 
 const ACTIONS: OverviewAction[] = [
   { label: 'AI 生成用例', section: 'ai', icon: 'MagicStick', primary: true },
   { label: '功能用例库', section: 'func-cases', icon: 'Files' },
   { label: '手工执行', section: 'func-runs', icon: 'VideoPlay' },
+  { label: '功能测试报告', section: 'func-reports', icon: 'Document' },
 ]
 
 const REVIEW_MAP: Record<string, string> = {
@@ -136,13 +139,13 @@ async function loadRecent() {
   if (!props.projectId) return
   recentLoading.value = true
   try {
-    const data = (await testcaseApi.list({
+    const data = await testcaseApi.listPage({
       project_id: props.projectId,
       source: 'ai_generated',
       order: 'created_at_desc',
       page: recentPage.value,
       page_size: PAGE_SIZE,
-    })) as { items: Schemas['TestCaseOut'][]; total: number }
+    })
     recentItems.value = data.items || []
     recentTotal.value = data.total || 0
   } catch {

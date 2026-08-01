@@ -210,7 +210,7 @@ async function generate() {
 }
 
 .mock-tip {
-  color: var(--ax-warning, #e6a23c);
+  color: var(--ax-warning, var(--ax-raw-hex-e6a23c));
 }
 
 .auto-hint {

@@ -1,9 +1,9 @@
 // v2 新壳的信息架构类型：域 / 自动化二级业务 / 设置子页 / 首页视图。
 // 深链语义严格对齐原型 hash（#project&domain&section&biz&open / #view）。
 
-export type WorkspaceDomain = 'requirements' | 'functional' | 'automation' | 'settings'
+export type WorkspaceDomain = 'requirements' | 'functional' | 'automation' | 'ai_tasks' | 'settings'
 
-export type AutomationBiz = 'apis' | 'autotest' | 'reports' | 'ai'
+export type AutomationBiz = 'apis' | 'autotest' | 'reports'
 
 export type SettingsSection =
   | 'basic'
@@ -19,7 +19,7 @@ export type SettingsSection =
 
 export type HomeView = 'home' | 'projects' | 'activity' | 'system'
 
-// projectId 走路由 path 参数（/hub/workspace/:projectId）；域/子页状态走 hash。
+// projectId、域和子页均走工作区具名路由；列表筛选和报告来源使用 query。
 export interface WorkspaceHashState {
   domain: WorkspaceDomain
   section: string

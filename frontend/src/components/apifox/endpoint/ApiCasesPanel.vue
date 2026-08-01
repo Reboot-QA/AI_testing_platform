@@ -1,6 +1,6 @@
 <template>
   <div class="flex h-full min-h-0 flex-col overflow-hidden">
-    <el-tabs v-model="tab" class="mb-1 shrink-0">
+    <el-tabs v-model="tab" class="endpoint-case-tabs shrink-0">
       <el-tab-pane label="测试用例" name="cases" />
       <el-tab-pane v-if="!readonly" name="ai-gen">
         <template #label>
@@ -17,12 +17,14 @@
     <div class="min-h-0 flex-1 overflow-hidden">
       <EndpointCasesTab
         v-show="tab === 'cases'"
+        ref="casesTabRef"
         class="h-full"
         :endpoint-id="endpointId"
         :project-id="projectId"
         :readonly="readonly"
         @changed="onCasesChanged"
         @open-ai-gen="(start) => openAiGen(start)"
+        @batch-run-done="onBatchRunDone"
       />
       <AiGenEndpointPanel
         v-if="!readonly"
@@ -32,10 +34,11 @@
         :endpoint-id="endpointId"
         :project-id="projectId"
         @view-cases="tab = 'cases'"
-        @applied="emit('cases-changed')"
+        @applied="onAiApplied"
       />
       <EndpointReportsTab
         v-if="tab === 'reports'"
+        ref="reportsTabRef"
         class="h-full"
         :endpoint-id="endpointId"
         :project-id="projectId"
@@ -65,6 +68,8 @@ const props = withDefaults(
 const emit = defineEmits<{ 'cases-changed': [] }>()
 
 const tab = ref('cases')
+const casesTabRef = ref<InstanceType<typeof EndpointCasesTab> | null>(null)
+const reportsTabRef = ref<InstanceType<typeof EndpointReportsTab> | null>(null)
 const aiPanelRef = ref<InstanceType<typeof AiGenEndpointPanel> | null>(null)
 const aiGenStore = useApifoxAiGenerateStore()
 
@@ -86,8 +91,22 @@ function onCasesChanged() {
   emit('cases-changed')
 }
 
+/** AI 入库成功：立刻重拉测试用例列表 + 通知左树用例数 */
+async function onAiApplied() {
+  await casesTabRef.value?.loadCases?.()
+  emit('cases-changed')
+}
+
+async function onBatchRunDone() {
+  tab.value = 'reports'
+  await nextTick()
+  await reportsTabRef.value?.load?.()
+}
+
 watch(tab, (name) => {
   if (name === 'ai-gen') void aiPanelRef.value?.refreshCaseCount?.()
+  // 切回测试用例时再拉一次，覆盖「点查看已有用例」等未走 applied 的路径
+  if (name === 'cases') void casesTabRef.value?.loadCases?.()
 })
 
 watch(
@@ -99,6 +118,17 @@ watch(
 </script>
 
 <style scoped>
+.endpoint-case-tabs :deep(.el-tabs__header) {
+  margin-bottom: var(--ax-space-2);
+}
+
+.endpoint-case-tabs :deep(.el-tabs__item) {
+  height: 32px;
+  padding: 0 var(--ax-space-3);
+  font-size: var(--ax-font-xs);
+  line-height: 32px;
+}
+
 .ai-tab-label {
   display: inline-flex;
   align-items: center;

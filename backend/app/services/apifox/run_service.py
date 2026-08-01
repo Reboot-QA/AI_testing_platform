@@ -154,6 +154,10 @@ class _RunContext:
         self.passed = 0
         self.failed = 0
         self.iteration = 0  # 数据驱动/循环当前轮次（0 基），落到每个步骤供报告分组
+        # 内层循环(loop)轮次标记：loop_round 为当前所处循环轮的全局序号（0=不在循环内），
+        # loop_seq 为单调自增发号器，保证嵌套/多循环每一轮 id 唯一，供报告统计「循环数」
+        self.loop_round = 0
+        self.loop_seq = 0
         # 步骤树按 scenario_id 记忆化为快照：数据驱动/循环多轮不再每轮重查步骤表（评审 #4）
         self.step_tree_cache: Dict[int, Dict[Optional[int], List[_StepNode]]] = {}
         # 登录态跨步骤透传（仅场景开启）：共享 cookie jar + 传递中的 token
@@ -184,6 +188,7 @@ def _record_step(ctx: _RunContext, step_type: str, status: str, detail: Dict[str
         step_type=step_type,
         depth=depth,
         iteration=ctx.iteration,
+        loop_round=ctx.loop_round,
         case_id=case.id if case else None,
         case_name=case_name or (case.name if case else ""),
         method=detail.get("method") or "",
@@ -463,6 +468,8 @@ def _run_loop_block(
     while 逐轮重求条件；三模式都受 MAX_LOOP_ITERATIONS 硬上限兜底。循环变量写 ctx.runtime。"""
     config = engine._loads(step.config, {}) or {}
     body = by_parent.get(step.id, [])
+    # 每轮循环体开始前发一个全局唯一轮次号，落到该轮各步骤；退出循环恢复外层轮次（嵌套安全）
+    outer_round = ctx.loop_round
     if config.get("mode") == "while":
         condition = config.get("condition") or {}
         try:
@@ -470,18 +477,23 @@ def _run_loop_block(
         except (TypeError, ValueError):
             max_iter = 0
         n = 0
-        while n < max_iter:
-            cond_vars = engine.merge_vars(global_vars, env_vars, ctx.runtime)
-            passed, _msg = engine.evaluate_condition(condition, cond_vars)
-            if not passed:
-                break
-            n += 1
-            try:
-                yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
-            except _ContinueLoop:
-                continue
-            except _BreakLoop:
-                break
+        try:
+            while n < max_iter:
+                cond_vars = engine.merge_vars(global_vars, env_vars, ctx.runtime)
+                passed, _msg = engine.evaluate_condition(condition, cond_vars)
+                if not passed:
+                    break
+                n += 1
+                ctx.loop_seq += 1
+                ctx.loop_round = ctx.loop_seq
+                try:
+                    yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
+                except _ContinueLoop:
+                    continue
+                except _BreakLoop:
+                    break
+        finally:
+            ctx.loop_round = outer_round
         return
     # 循环变量(index/item)按 loop 层级作用域：进入前快照、退出后恢复，
     # 避免嵌套同名循环变量互相污染（内层跑完不该把 index 残留给外层后续步骤）
@@ -493,6 +505,8 @@ def _run_loop_block(
     try:
         for injection in engine.loop_iterations(config, entry_vars):
             ctx.runtime.update(injection)
+            ctx.loop_seq += 1
+            ctx.loop_round = ctx.loop_seq
             try:
                 yield from _run_steps(ctx, by_parent, body, total, env_vars, global_vars, depth + 1)
             except _ContinueLoop:
@@ -500,6 +514,7 @@ def _run_loop_block(
             except _BreakLoop:
                 break
     finally:
+        ctx.loop_round = outer_round
         for k in scoped:
             if k in saved:
                 ctx.runtime[k] = saved[k]
@@ -551,40 +566,57 @@ def _start_run(db: Session, project_id: int, target_type: str, target_id: int,
         triggered_by=triggered_by,
         started_at=datetime.utcnow(),
     )
-    run_repo.add(db, run)
+    run_repo.add(db, run)  # flush 后 run.id 可用；chain_head_id 由 after_insert 事件填自身 id
     db.commit()
     db.refresh(run)
     return run
 
 
-def _notify_run_failure(db: Session, run: ApifoxRun) -> None:
-    """执行失败通知。子运行（有父）不单独通知；定时触发由 schedule_service 通知，避免重复。"""
+_RUN_TYPE_LABELS = {"suite": "套件", "scenario": "场景", "case": "用例", "endpoint": "接口"}
+
+
+def _notify_run(db: Session, run: ApifoxRun) -> None:
+    """执行完成通知（成功/失败按开关分别推送）。子运行（有父）不单独通知；
+    定时触发由 schedule_service 通知，避免重复。"""
     if run.parent_run_id is not None or (run.triggered_by or "").startswith("schedule:"):
         return
     from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+    from app.services.apifox.notify_templates import NotifyPayload
 
     try:
-        total = (run.passed_count or 0) + (run.failed_count or 0)
-        detail = (
-            f"{run.target_type}「{run.target_name}」执行失败："
-            f"{run.failed_count}/{total} 失败。运行记录 #{run.id}。"
+        type_label = _RUN_TYPE_LABELS.get(run.target_type, run.target_type)
+        payload = NotifyPayload(
+            event_type="run",
+            result="success" if run.status == "passed" else "failure",
+            project_name=notify_service.project_name(db, run.project_id),
+            scene=f"{type_label}执行",
+            target_name=run.target_name or "",
+            total=(run.passed_count or 0) + (run.failed_count or 0),
+            passed=run.passed_count or 0,
+            failed=run.failed_count or 0,
+            duration_ms=run.duration_ms,
+            ref_id=run.id,
+            triggered_by=run.triggered_by,
+            happened_at=run.finished_at,
         )
-        notify_service.notify_failure(db, run.project_id, "run", f"执行失败：{run.target_name}", detail)
+        notify_service.notify_event(db, run.project_id, payload)
     except Exception:  # noqa: BLE001 - 通知不影响主流程
-        logger.exception("执行失败通知异常 run=%s", run.id)
+        logger.exception("执行通知异常 run=%s", run.id)
 
 
 def _finalize(ctx: _RunContext, started: float) -> Dict[str, Any]:
     run = ctx.run
     run.passed_count = ctx.passed
     run.failed_count = ctx.failed
+    # 回填实际执行步数：total_count 建 run 时是运行前估算，list/while 循环运行前不知轮数只估 1 轮，
+    # 会与实际不符，导致报告「已完成/总数」偏小、通过率>100%（Confluence 7/24-#9）。以实际 index 为准。
+    run.total_count = ctx.index
     run.status = "passed" if ctx.failed == 0 else "failed"
     run.duration_ms = (time.perf_counter() - started) * 1000
     run.pass_rate = round(ctx.passed / ctx.index * 100, 2) if ctx.index else 0.0
     run.finished_at = datetime.utcnow()
     ctx.db.commit()
-    if run.status == "failed":
-        _notify_run_failure(ctx.db, run)
+    _notify_run(ctx.db, run)
     return {
         "type": "done",
         "run_id": run.id,
@@ -728,8 +760,7 @@ def _finalize_suite(db: Session, run: ApifoxRun, started: float,
     run.pass_rate = round(passed_items / done * 100, 2) if done else 0.0
     run.finished_at = datetime.utcnow()
     db.commit()
-    if run.status == "failed":
-        _notify_run_failure(db, run)
+    _notify_run(db, run)
     return {
         "type": "suite_done",
         "run_id": run.id,
@@ -808,6 +839,112 @@ def iter_suite_run(
         finalized = True
     finally:
         # 兜底：任何中途异常逃逸（如 finalize 本身失败）都不让父运行永久卡 running
+        if not finalized:
+            try:
+                db.rollback()
+            except Exception:  # noqa: BLE001
+                pass
+            _fail_orphan_run(db, run.id)
+
+
+def _endpoint_display_name(endpoint) -> str:
+    method = (getattr(endpoint, "method", None) or "").strip()
+    path = (getattr(endpoint, "path", None) or "").strip()
+    if method and path:
+        return f"{method} {path}"
+    name = (getattr(endpoint, "name", None) or "").strip()
+    return name or "接口"
+
+
+def iter_endpoint_batch_run(
+    db: Session,
+    endpoint,
+    cases: List[ApifoxEndpointCase],
+    environment: Optional[ApifoxEnvironment],
+    triggered_by: str,
+    user_id: Optional[int],
+) -> Generator[Dict[str, Any], None, None]:
+    """接口「全部运行」：父运行一条报告，各用例为子运行（对齐 Apifox 批次报告 + 套件语义）。"""
+    display_name = _endpoint_display_name(endpoint)
+    total = len(cases)
+    if total == 0:
+        yield {"type": "error", "message": "没有可运行的用例"}
+        return
+
+    run = _start_run(
+        db,
+        endpoint.project_id,
+        "endpoint",
+        endpoint.id,
+        display_name,
+        environment,
+        triggered_by,
+        total,
+    )
+    yield {
+        "type": "batch_start",
+        "run_id": run.id,
+        "total": total,
+        "message": f"开始执行接口「{display_name}」全部用例（{total} 条）",
+    }
+
+    started = time.perf_counter()
+    passed_items = 0
+    failed_items = 0
+    finalized = False
+    try:
+        for index, case in enumerate(cases, start=1):
+            item_status = "failed"
+            child_run_id: Optional[int] = None
+            try:
+                child_gen = iter_case_run(db, case, environment, triggered_by, user_id, run.id)
+                yield {
+                    "type": "item_start",
+                    "index": index,
+                    "total": total,
+                    "target_type": "case",
+                    "target_id": case.id,
+                    "target_name": case.name,
+                }
+                for ev in child_gen:
+                    etype = ev.get("type")
+                    if etype == "start":
+                        child_run_id = ev.get("run_id")
+                    elif etype == "step":
+                        yield {**ev, "item_index": index}
+                    elif etype == "done":
+                        item_status = ev.get("status") or "failed"
+                        yield {
+                            "type": "item_done",
+                            "index": index,
+                            "total": total,
+                            "target_name": case.name,
+                            "status": item_status,
+                            "child_run_id": ev.get("run_id"),
+                            "passed_count": ev.get("passed_count"),
+                            "failed_count": ev.get("failed_count"),
+                            "duration_ms": ev.get("duration_ms"),
+                        }
+            except Exception as exc:  # noqa: BLE001
+                db.rollback()
+                _fail_orphan_run(db, child_run_id)
+                item_status = "failed"
+                yield {
+                    "type": "item_done",
+                    "index": index,
+                    "total": total,
+                    "target_name": case.name,
+                    "status": "failed",
+                    "child_run_id": child_run_id,
+                    "error_message": f"用例执行失败: {exc}",
+                }
+            if item_status == "passed":
+                passed_items += 1
+            else:
+                failed_items += 1
+        yield _finalize_suite(db, run, started, passed_items, failed_items)
+        finalized = True
+    finally:
         if not finalized:
             try:
                 db.rollback()

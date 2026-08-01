@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Callable, Optional
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -59,3 +59,24 @@ def get_current_admin(
     if user_has_system_access(db, current_user):
         return current_user
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="需要管理员权限")
+
+
+def ensure_menu_permission(db: Session, current_user: User, menu_key: str) -> None:
+    """校验菜单能力，资源归属仍由业务路由的项目访问校验负责。"""
+    from app.services.permission_service import get_user_menu_keys
+
+    if menu_key not in get_user_menu_keys(db, current_user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="无权访问该模块")
+
+
+def require_menu_permission(menu_key: str) -> Callable:
+    """生成可复用的菜单能力鉴权依赖。"""
+
+    def dependency(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db),
+    ) -> User:
+        ensure_menu_permission(db, current_user, menu_key)
+        return current_user
+
+    return dependency

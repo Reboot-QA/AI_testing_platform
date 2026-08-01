@@ -11,6 +11,7 @@ import './styles/element-theme.css'
 import './styles/tailwind.css'
 import './styles/layout.css'
 import './styles/apifox-workspace.css'
+import './styles/drag.css'
 
 import App from './App.vue'
 import router from './router'

@@ -6,7 +6,16 @@ type ProjectCaseBrief = Schemas['ProjectCaseBrief']
 export interface ImportTreeNode {
   key: string
   id: number
-  type: 'folder' | 'endpoint' | 'root' | 'case' | 'scenario' | 'scenario-folder' | 'scenario-root' | 'suite' | 'suite-root'
+  type:
+    | 'folder'
+    | 'endpoint'
+    | 'root'
+    | 'case'
+    | 'scenario'
+    | 'scenario-folder'
+    | 'scenario-root'
+    | 'suite'
+    | 'suite-root'
   label: string
   method?: string
   path?: string

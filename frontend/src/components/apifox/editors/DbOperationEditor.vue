@@ -86,22 +86,22 @@ import { useWorkspaceStore } from '@/stores/workspace'
 
 const props = withDefaults(
   defineProps<{
-    op: Schemas['ProcessorRow']
     databases?: Schemas['DatabaseOut'][]
     sqlScripts?: Schemas['SqlScriptBrief'][]
   }>(),
   { databases: () => [], sqlScripts: () => [] },
 )
+const op = defineModel<Schemas['ProcessorRow']>('op', { required: true })
 
 // SQL 支持 {{变量}} 插值——用常量承载，避免模板里嵌套 mustache 触发解析错误
 const sqlHint = '支持 {{变量}} 插值；按当前环境执行。'
 
 // op.db_extracts 后端默认 []，旧数据可能缺失：只读兜底，不在 computed 里改 prop
-const extracts = computed<Schemas['DbExtractRow'][]>(() => props.op.db_extracts ?? [])
+const extracts = computed<Schemas['DbExtractRow'][]>(() => op.value.db_extracts ?? [])
 
 function addExtract() {
-  if (!props.op.db_extracts) props.op.db_extracts = []
-  props.op.db_extracts.push({ var_name: '', column: '', scope: 'temporary' })
+  if (!op.value.db_extracts) op.value.db_extracts = []
+  op.value.db_extracts.push({ var_name: '', column: '', scope: 'temporary' })
 }
 
 const { open: openDatabaseManage } = useDatabaseManageDrawer()

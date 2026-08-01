@@ -138,7 +138,7 @@ def update_department(
     return _department_out(department, db)
 
 
-@router.delete("/{department_id}")
+@router.delete("/{department_id}", status_code=204)
 def delete_department(
     department_id: int,
     db: Session = Depends(get_db),
@@ -156,4 +156,4 @@ def delete_department(
         )
     db.delete(department)
     db.commit()
-    return {"message": "删除成功"}
+    return None

@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, cast
 from sqlalchemy.orm import Session
 
 from app.models.apifox.scenario import ApifoxScenario, ApifoxScenarioStep
+from app.models.project import Project
 from app.repositories.apifox import case_repo, dataset_repo, endpoint_repo
 from app.repositories.apifox import scenario_repo as repo
 from app.routers.apifox.scenario_schemas import (
@@ -25,6 +26,10 @@ from app.routers.apifox.scenario_schemas import (
 )
 from app.services.apifox import upload_service, versioning
 from app.services.apifox.run_engine import CONDITION_OPERATORS, MAX_LOOP_ITERATIONS
+
+
+class OrderVersionConflictError(Exception):
+    """排序快照已过期，需要客户端刷新后重试。"""
 
 VALID_STEP_TYPES = {"case", "wait", "scenario", "group", "if", "else", "loop", "break", "continue", "db", "http"}
 # 可嵌套子步骤的容器型步骤
@@ -295,12 +300,20 @@ def update_scenario(db: Session, scenario: ApifoxScenario, data: ScenarioUpdate)
     return _out(db, scenario)
 
 
-def reorder_scenarios(db: Session, project_id: int, items: List[ScenarioReorderItem]) -> None:
+def reorder_scenarios(
+    db: Session, project_id: int, items: List[ScenarioReorderItem], expected_order_version: int
+) -> tuple[int, int]:
     """批量落库场景的分组与排序（拖拽持久化）。
 
     只更新传入的 id（支持"只发受影响的组"）；folder_id/sort_order 一起写，一次 commit。
     排序非内容编辑，不 bump version，避免与"编辑场景"抢乐观锁。
     """
+    project = db.query(Project).filter(Project.id == project_id).with_for_update().first()
+    if project is None:
+        raise ValueError("项目不存在")
+    if project.scenario_order_version != expected_order_version:
+        raise OrderVersionConflictError("场景排序已被其他操作更新，请刷新后重试")
+
     scenarios = {s.id: s for s in repo.list_scenarios_by_ids(db, [it.id for it in items])}
     validated_folders: set[int] = set()
     for it in items:
@@ -312,7 +325,9 @@ def reorder_scenarios(db: Session, project_id: int, items: List[ScenarioReorderI
             validated_folders.add(it.folder_id)
         scenario.folder_id = it.folder_id
         scenario.sort_order = it.sort_order
+    project.scenario_order_version += 1
     db.commit()
+    return project.scenario_order_version, len(items)
 
 
 def delete_scenario(db: Session, scenario: ApifoxScenario, deleted_by: Optional[int] = None) -> None:

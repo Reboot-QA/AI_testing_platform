@@ -5,23 +5,27 @@ from sqlalchemy.orm import Session
 from app.models.test_execution import ManualTestRun, ManualTestRunCase
 from app.models.testcase import TestCase
 from app.models.user import User
-from app.services.testcase_query_helper import sort_testcases_for_display, testcase_has_sort_order_column, testcase_sort_order_value
+from app.services.testcase_query_helper import (
+    sort_testcases_for_display,
+    testcase_has_sort_order_column,
+    testcase_sort_order_value,
+)
 from app.utils.time_util import now_local
 
 EXECUTION_RESULTS = {"pending", "pass", "fail", "blocked", "skip"}
 
 
 def sort_run_cases_by_library_order(cases: List[ManualTestRunCase]) -> List[ManualTestRunCase]:
-    """与功能用例库一致：testcase.sort_order 降序，再 id 降序。"""
+    """与功能用例库一致：testcase.sort_order 升序（1 在上），再 id 升序。"""
 
     def _key(item: ManualTestRunCase) -> tuple:
         case = item.testcase
         if case is None:
-            return (0, item.sort_order, item.id)
+            return (1, item.sort_order, item.id)
         if testcase_has_sort_order_column():
             seq = testcase_sort_order_value(case) or case.id
-            return (-seq, -case.id, item.id)
-        return (-case.id, item.id)
+            return (seq, case.id, item.id)
+        return (case.id, item.id)
 
     return sorted(cases, key=_key)
 

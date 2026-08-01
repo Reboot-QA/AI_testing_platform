@@ -22,7 +22,7 @@
       :model-value="group.items"
       handle=".drag-handle"
       :animation="150"
-      ghost-class="suite-item-ghost"
+      ghost-class="ax-drag-ghost"
       @update:model-value="(v: SuiteEditorItem[]) => $emit('sort', v)"
     >
       <div v-for="(it, i) in group.items" :key="it._uid" class="suite-item">
@@ -188,11 +188,5 @@ const enabledCount = computed(() => props.group.items.filter((it) => it.enabled 
   padding: 0 var(--ax-space-1);
   font-size: var(--ax-font-xs);
   height: auto;
-}
-
-:global(.suite-item-ghost) {
-  opacity: 0.45;
-  background: var(--ax-bg-hover);
-  border-radius: 4px;
 }
 </style>

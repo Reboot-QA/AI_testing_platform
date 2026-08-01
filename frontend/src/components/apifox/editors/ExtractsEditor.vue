@@ -44,7 +44,7 @@ import { EXTRACT_SOURCE_OPTIONS, VARIABLE_SCOPE_OPTIONS } from '@/utils/apiCaseC
 
 type ExtractRow = Schemas['ExtractRow']
 
-defineProps<{ rows: ExtractRow[] }>()
+const rows = defineModel<ExtractRow[]>('rows', { required: true })
 
 function emptyRow(): ExtractRow {
   return {

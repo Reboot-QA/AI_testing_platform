@@ -35,7 +35,7 @@
         :default-expanded-keys="['root', SCENARIO_ROOT_KEY, SUITE_ROOT_KEY]"
         :expand-on-click-node="false"
         :filter-node-method="filterNode"
-        @check="(data) => onTreeCheck(data as ImportTreeNode)"
+        @check="(node: ImportTreeNode) => onTreeCheck(node)"
       >
         <template #default="{ data }">
           <span class="tree-node">
@@ -132,7 +132,6 @@ const {
   searchPlaceholder,
   emptyText,
   filterNode,
-  syncCheckedCount,
   onTreeCheck,
   clearChecked,
   open,
@@ -149,7 +148,11 @@ const isSchedulePick = computed(
 
 /** 用例模式下各级显示用例数（接口节点也显示），接口模式下只有目录/根显示接口数 */
 function showNodeCount(data: { type: string }): boolean {
-  if (data.type === 'scenario-root' || data.type === 'scenario-folder' || data.type === 'suite-root') {
+  if (
+    data.type === 'scenario-root' ||
+    data.type === 'scenario-folder' ||
+    data.type === 'suite-root'
+  ) {
     return true
   }
   const withCases =

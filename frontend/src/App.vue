@@ -1,6 +1,5 @@
 <template>
   <el-config-provider>
-    <AiTaskLeaveBanner />
     <router-view />
     <AssistantPanel v-if="showAssistant" :key="assistantPanelKey" />
   </el-config-provider>
@@ -10,11 +9,14 @@
 import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import AssistantPanel from '@/components/AssistantPanel.vue'
-import AiTaskLeaveBanner from '@/components/shell/AiTaskLeaveBanner.vue'
 import { useUserStore } from '@/stores/user'
+import { useSessionSync } from '@/composables/useSessionSync'
 
 const route = useRoute()
 const userStore = useUserStore()
+
+// 多标签页共用 localStorage 的 token：别处换账号/登出后本页要跟着对齐，否则会拿新 token 打旧项目
+useSessionSync()
 
 const showAssistant = computed(
   () => userStore.isLoggedIn && route.path !== '/login' && route.path !== '/force-change-password',

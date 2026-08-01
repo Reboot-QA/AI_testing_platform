@@ -6,7 +6,17 @@ export const testExecutionApi = {
     get<Schemas['ManualTestRunSummaryOut'][]>('/test-executions', {
       params: { project_id: projectId },
     }),
-  listRunsPage: (projectId: Id, params?: { page?: number; page_size?: number }) =>
+  listRunsPage: (
+    projectId: Id,
+    params?: {
+      page?: number
+      page_size?: number
+      status?: string
+      keyword?: string
+      date_from?: string
+      date_to?: string
+    },
+  ) =>
     get<Schemas['ManualTestRunPageOut']>('/test-executions/page', {
       params: { project_id: projectId, ...params },
     }),
@@ -15,13 +25,16 @@ export const testExecutionApi = {
     post<Schemas['ManualTestRunDetailOut']>('/test-executions', data),
   updateRun: (id: Id, data: Schemas['ManualTestRunUpdate']) =>
     put<Schemas['ManualTestRunSummaryOut']>(`/test-executions/${id}`, data),
-  deleteRun: (id: Id) => del<any>(`/test-executions/${id}`), // 无 response_model（技术债）
+  deleteRun: (id: Id) => del<void>(`/test-executions/${id}`),
+  batchDeleteRuns: (data: Schemas['ManualTestRunBatchDelete']) =>
+    post<Schemas['BatchDeleteResponse']>('/test-executions/batch/delete', data),
   submitCaseResult: (runId: Id, caseRowId: Id, data: Schemas['ManualTestRunCaseResultUpdate']) =>
     put<Schemas['ManualTestRunCaseOut']>(`/test-executions/${runId}/cases/${caseRowId}`, data),
-  // 无 response_model（可选用例列表返回自由结构）：any 占位（技术债）
   listAvailableCases: (projectId: Id, params: Record<string, unknown> = {}) =>
-    get<any>('/test-executions/available-cases/list', {
+    get<Schemas['ManualTestRunAvailableCaseOut'][]>('/test-executions/available-cases/list', {
       params: { project_id: projectId, ...params },
       paramsSerializer: { indexes: null },
     }),
+  exportRun: (runId: Id, format = 'excel') =>
+    get<Blob>(`/test-executions/${runId}/export`, { params: { format }, responseType: 'blob' }),
 }

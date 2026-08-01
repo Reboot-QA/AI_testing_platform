@@ -36,7 +36,14 @@
       </section>
 
       <section class="aad-example">
-        <h4 class="aad-example-title">调用示例</h4>
+        <div class="aad-example-head">
+          <h4 class="aad-example-title">调用示例</h4>
+          <el-radio-group v-model="shell" size="small">
+            <el-radio-button value="bash">Bash (Mac/Linux)</el-radio-button>
+            <el-radio-button value="powershell">PowerShell (Windows)</el-radio-button>
+          </el-radio-group>
+          <el-button size="small" class="aad-copy" @click="copy(example)">复制命令</el-button>
+        </div>
         <pre class="aad-code">{{ example }}</pre>
       </section>
     </div>
@@ -103,9 +110,31 @@ async function copy(text: string) {
   else ElMessage.warning('复制失败，请手动选择')
 }
 
+// Windows 用户默认给 PowerShell 版，避免复制 Bash 命令过去跑不了
+const shell = ref<'bash' | 'powershell'>(
+  typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
+    ? 'powershell'
+    : 'bash',
+)
+
 const example = computed(() => {
   const token = tokens.value[0]?.token || '<YOUR_TOKEN>'
   const base = `${window.location.origin}/api/v1/apifox/api`
+  if (shell.value === 'powershell') {
+    // PowerShell 用原生 Invoke-RestMethod：body 传给 cmdlet 参数、不经 curl.exe 原生参数解析，
+    // 避开 Windows PowerShell 5.1 把 JSON 内层双引号吃掉的 bug（curl.exe -d 在 PS 里会坏）
+    if (props.mode === 'import') {
+      return (
+        `Invoke-RestMethod -Uri "${base}/import" -Method Post ` +
+        `-Headers @{ "X-API-Token" = "${token}" } -ContentType "application/json" ` +
+        `-Body '{"url": "https://example.com/openapi.json"}'`
+      )
+    }
+    return (
+      `Invoke-RestMethod -Uri "${base}/export/openapi?spec_version=3.0&file_format=json" ` +
+      `-Headers @{ "X-API-Token" = "${token}" } -OutFile "openapi.json"`
+    )
+  }
   if (props.mode === 'import') {
     return (
       `curl -X POST '${base}/import' \\\n` +
@@ -191,11 +220,23 @@ const example = computed(() => {
   flex: none;
 }
 
+.aad-example-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ax-space-2);
+  margin-bottom: var(--ax-space-2);
+}
+
 .aad-example-title {
-  margin: 0 0 var(--ax-space-2);
+  margin: 0;
   font-size: var(--ax-text-body-size);
   font-weight: 600;
   color: var(--ax-text);
+}
+
+.aad-copy {
+  margin-left: auto;
 }
 
 .aad-code {

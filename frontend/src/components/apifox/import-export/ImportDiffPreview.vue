@@ -97,13 +97,13 @@ const isEmpty = computed(
   font-weight: 600;
 }
 .sec-title.added {
-  color: var(--ax-success, #67c23a);
+  color: var(--ax-success, var(--ax-raw-hex-67c23a));
 }
 .sec-title.changed {
-  color: var(--ax-warning, #e6a23c);
+  color: var(--ax-warning, var(--ax-raw-hex-e6a23c));
 }
 .sec-title.removed {
-  color: var(--ax-danger, #f56c6c);
+  color: var(--ax-danger, var(--ax-raw-hex-f56c6c));
 }
 
 .row {
@@ -130,7 +130,7 @@ const isEmpty = computed(
   color: var(--ax-text-tertiary);
 }
 .ep-name {
-  color: var(--ax-text-secondary, #909399);
+  color: var(--ax-text-secondary, var(--ax-raw-hex-909399));
   font-size: var(--ax-text-caption-size);
 }
 
@@ -140,9 +140,9 @@ const isEmpty = computed(
   padding-left: 60px;
 }
 .affected {
-  color: var(--ax-text-secondary, #909399);
+  color: var(--ax-text-secondary, var(--ax-raw-hex-909399));
 }
 .ref-warn {
-  color: var(--ax-danger, #f56c6c);
+  color: var(--ax-danger, var(--ax-raw-hex-f56c6c));
 }
 </style>

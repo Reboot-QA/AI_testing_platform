@@ -91,11 +91,11 @@ def update_sql_script(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/sql-scripts/{sid}")
+@router.delete("/sql-scripts/{sid}", status_code=204)
 def delete_sql_script(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     script = _script_checked(db, sid, user)
     try:
         service.delete_script(db, script)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "SQL 脚本已删除"}
+    return None

@@ -1,6 +1,6 @@
 <template>
-  <div class="pt-1">
-    <div class="mb-2.5 flex flex-wrap items-center gap-2">
+  <div class="pt-2">
+    <div class="mb-2 flex flex-wrap items-center gap-2 px-2">
       <span class="text-sm text-muted-foreground">分类</span>
       <el-select v-model="form.category" size="small" class="w-[110px]" @change="saveCase">
         <el-option v-for="c in CASE_CATEGORIES" :key="c.value" :label="c.label" :value="c.value" />

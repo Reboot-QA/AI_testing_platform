@@ -2,9 +2,11 @@
   <div class="project-shell">
     <GlobalRail
       mode="project"
-      :active-domain="state.domain"
+      :active-domain="domain"
+      :visible-domains="visibleDomains"
+      :ai-tasks-dot="aiTasksDot"
       :user-name="userName"
-      @nav-domain="switchDomain"
+      @nav-domain="navigateDomain"
       @nav-home="goHome"
       @nav-projects="goProjects"
       @nav-profile="onNavProfile"
@@ -12,18 +14,24 @@
     />
 
     <div class="ws-col">
-      <header v-if="store.currentProject" class="ws-project-bar">
-        <span class="ws-project-name" :title="store.currentProject.name">
+      <header
+        v-if="store.currentProject"
+        class="flex h-16 shrink-0 items-center gap-3 border-b border-border bg-background px-5 shadow-sm"
+      >
+        <span
+          class="min-w-0 flex-1 truncate text-lg font-semibold leading-none text-foreground"
+          :title="store.currentProject.name"
+        >
           {{ store.currentProject.name }}
         </span>
-        <div class="ws-env">
+        <div class="flex shrink-0 items-center gap-1">
           <el-select
             :model-value="store.currentEnvironmentId ?? undefined"
             filterable
             clearable
             size="small"
             placeholder="选择环境"
-            class="ws-env-select"
+            class="w-44"
             @change="onEnvChange"
           >
             <template #prefix>
@@ -38,7 +46,7 @@
           </el-select>
           <el-button
             size="small"
-            class="env-manage-btn"
+            class="shrink-0"
             title="环境管理"
             @click="envDrawerVisible = true"
           >
@@ -46,28 +54,19 @@
           </el-button>
         </div>
       </header>
-      <div class="ws-inner">
+      <!-- 项目校验通过后才挂子面板：否则每个面板各自发一次项目内请求，会连弹多条「项目不存在」 -->
+      <div v-if="projectReady" class="ws-inner">
         <WorkspaceTree
-          v-if="state.domain !== 'settings'"
+          v-if="domain !== 'settings'"
           :key="`tree-${projectId}`"
-          :domain="state.domain"
-          :biz="state.biz"
-          :section="state.section"
+          :domain="domain"
           :project-id="String(projectId)"
-          @nav-auto="({ biz, section }) => switchBiz(biz, section)"
-          @nav-section="setSection"
         />
         <div class="ws-body">
-          <WorkspaceMain
-            :key="`main-${projectId}`"
-            :domain="state.domain"
-            :biz="state.biz"
-            :section="state.section"
-            :open="state.open"
-            :project-id="projectId"
-            @nav-settings="setSettings"
-            @nav-section="setSection"
-          />
+          <!-- 保留工作区样式作用域；路由只负责页面切换，不应丢失 panel-head 等公共规范。 -->
+          <div class="ws-main">
+            <RouterView v-if="!currentMeta?.managerOnly || isManager" :key="route.fullPath" />
+          </div>
         </div>
       </div>
     </div>
@@ -93,30 +92,84 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { hubAiTasksApi } from '@/api/hubAiTasks'
+import { apifoxApi } from '@/api/apifox'
 import { useRouteParamId } from '@/composables/useRouteParamId'
+import { useAiGenerateStore } from '@/stores/aiGenerate'
+import { useRequirementExtractStore } from '@/stores/requirementExtract'
 import { useUserStore } from '@/stores/user'
+import { useApifoxAiGenerateStore } from '@/stores/apifoxAiGenerate'
 import { useWorkspaceStore } from '@/stores/workspace'
-import { useWorkspaceHash } from '@/composables/useWorkspaceHash'
+import { firstWorkspaceRoute, workspaceDomains, workspaceMeta } from '@/router/workspace'
 import { provideResolvableVars } from '@/composables/useResolvableVars'
 import GlobalRail from '@/components/shell/GlobalRail.vue'
 import WorkspaceTree from '@/components/shell/WorkspaceTree.vue'
-import WorkspaceMain from '@/components/shell/WorkspaceMain.vue'
 import EnvManage from '@/views/apifox/sections/EnvManage.vue'
 
 const router = useRouter()
+const route = useRoute()
 const userStore = useUserStore()
+const functionalAiStore = useAiGenerateStore()
+const requirementExtractStore = useRequirementExtractStore()
+const aiGenStore = useApifoxAiGenerateStore()
 const store = useWorkspaceStore()
 const userName = computed(() => userStore.user?.username ?? '')
+const remoteHubAiTaskCounts = ref({ requirement: 0, functional: 0 })
+const remoteApifoxAiGenCount = ref(0)
+// 轮询定时器：仅在“已知有活跃任务”时才转起来，任务收敛为 0 就自行停表，
+// 避免不管有没有任务、只要人在工作区就无限轮询（对齐 AiGenJobsPanel / apifoxAiGenerate 的既有约定）。
+let hubAiTaskPollTimer: ReturnType<typeof setInterval> | null = null
+let hubAiTaskPollProjectId = 0
+
+function localRequirementActiveForProject(projectId: number): boolean {
+  return requirementExtractStore.extracting && requirementExtractStore.activeProjectId === projectId
+}
+
+function localFunctionalActiveForProject(projectId: number): boolean {
+  return functionalAiStore.generating && functionalAiStore.activeProjectId === projectId
+}
+
+const aiTasksDot = computed(() => {
+  const pid = projectReady.value ? Number(projectId.value) : 0
+  if (!pid) return null
+
+  const apifoxActive = Math.max(
+    aiGenStore.activeCountForUserInProject(userName.value, pid),
+    remoteApifoxAiGenCount.value,
+  )
+  let count = apifoxActive
+  count += localRequirementActiveForProject(pid)
+    ? Math.max(1, remoteHubAiTaskCounts.value.requirement)
+    : remoteHubAiTaskCounts.value.requirement
+  count += localFunctionalActiveForProject(pid)
+    ? Math.max(1, remoteHubAiTaskCounts.value.functional)
+    : remoteHubAiTaskCounts.value.functional
+  return count || null
+})
 
 const projectId = useRouteParamId()
-const { state, switchDomain, switchBiz, setSection, setSettings } = useWorkspaceHash()
+const currentMeta = computed(() => workspaceMeta(route))
+const domain = computed(() => currentMeta.value?.domain ?? 'automation')
+const visibleDomains = computed(() => workspaceDomains(userStore.hasPermission))
+const isManager = computed(
+  () => userStore.isAdmin || store.currentProject?.owner_id === userStore.user?.id,
+)
+function navigateDomain(nextDomain: typeof domain.value) {
+  const name = firstWorkspaceRoute(userStore.hasPermission, nextDomain)
+  if (name && projectId.value) void router.push({ name, params: { projectId: projectId.value } })
+}
+
+// 当前 projectId 是否已校验为「存在且当前账号可访问」（切换账号后 URL/内存里可能残留别人的项目）
+const projectReady = ref(false)
+// 校验通过前传 0，让下面的变量集合先不取数（load 对 falsy pid 直接置空）
+const readyProjectId = computed(() => (projectReady.value ? projectId.value : 0))
 
 // {{变量}} 可解析集合（供 VarInput 按联动性上色 + hover 提示）：随项目/当前环境变化重取
 provideResolvableVars(
-  projectId,
+  readyProjectId,
   computed(() => store.currentEnvironmentId ?? null),
 )
 
@@ -160,22 +213,133 @@ function onNavProfile() {
   router.push('/account')
 }
 
+// 侧边栏 AI 任务红点：仅统计当前项目（与 AI 任务概述页一致）
+async function refreshRemoteHubAiTaskCount(id: number) {
+  if (!id || !userName.value) {
+    remoteHubAiTaskCounts.value = { requirement: 0, functional: 0 }
+    remoteApifoxAiGenCount.value = 0
+    stopHubAiTaskPolling()
+    return
+  }
+  try {
+    const [reqRunning, reqPending, funcRunning, funcPending, apifoxActive] = await Promise.all([
+      hubAiTasksApi.listTasks(id, { task_type: 'requirement', status: 'running', page_size: 50 }),
+      hubAiTasksApi.listTasks(id, { task_type: 'requirement', status: 'pending', page_size: 50 }),
+      hubAiTasksApi.listTasks(id, { task_type: 'functional', status: 'running', page_size: 50 }),
+      hubAiTasksApi.listTasks(id, { task_type: 'functional', status: 'pending', page_size: 50 }),
+      apifoxApi.listActiveAiGenTasks(id),
+    ])
+    const isMine = (task: { creator_name?: string | null }) => task.creator_name === userName.value
+    const requirement =
+      reqRunning.items.filter(isMine).length + reqPending.items.filter(isMine).length
+    const functional =
+      funcRunning.items.filter(isMine).length + funcPending.items.filter(isMine).length
+    remoteHubAiTaskCounts.value = { requirement, functional }
+    remoteApifoxAiGenCount.value = apifoxActive.filter(isMine).length
+    const stillActive =
+      requirement > 0 ||
+      functional > 0 ||
+      remoteApifoxAiGenCount.value > 0 ||
+      aiGenStore.hasActiveInProject(id) ||
+      localFunctionalActiveForProject(id) ||
+      localRequirementActiveForProject(id)
+    if (stillActive) {
+      ensureHubAiTaskPolling(id)
+    } else {
+      stopHubAiTaskPolling()
+    }
+  } catch {
+    remoteHubAiTaskCounts.value = { requirement: 0, functional: 0 }
+    remoteApifoxAiGenCount.value = 0
+    stopHubAiTaskPolling()
+  }
+}
+
+function stopHubAiTaskPolling() {
+  if (hubAiTaskPollTimer) {
+    clearInterval(hubAiTaskPollTimer)
+    hubAiTaskPollTimer = null
+  }
+  hubAiTaskPollProjectId = 0
+}
+
+function ensureHubAiTaskPolling(id: number) {
+  if (hubAiTaskPollTimer && hubAiTaskPollProjectId === id) return
+  stopHubAiTaskPolling()
+  hubAiTaskPollProjectId = id
+  hubAiTaskPollTimer = setInterval(() => void refreshRemoteHubAiTaskCount(id), 4000)
+}
+
 watch(
   projectId,
   async (id) => {
+    projectReady.value = false
+    stopHubAiTaskPolling()
+    remoteHubAiTaskCounts.value = { requirement: 0, functional: 0 }
+    remoteApifoxAiGenCount.value = 0
     if (!id) {
       router.push('/hub')
       return
     }
+    // 先单独校验项目（串行，不与环境并发）：不可访问时只弹下面一条提示，不叠多条 404
     try {
-      await Promise.all([store.loadProject(id), store.loadEnvironments(id)])
+      await store.loadProject(id, true)
     } catch {
+      store.clearCurrent()
       ElMessage.error('项目不存在或无访问权限')
       router.push('/hub')
+      return
+    }
+    // 环境同样先于子面板就绪（部分面板在挂载时就读当前环境），取不到不阻断工作区
+    try {
+      await store.loadEnvironments(id)
+    } catch {
+      // 全局拦截器已提示
+    }
+    // 期间又切了项目：本次结果作废，交给后一次 watch 回调
+    if (projectId.value !== id) return
+    projectReady.value = true
+    // 只查一次；查到活跃任务时函数内部会自己续上轮询，查不到就此打住，不常驻定时器
+    void refreshRemoteHubAiTaskCount(Number(id))
+  },
+  { immediate: true },
+)
+
+watch(userName, () => {
+  if (projectReady.value && projectId.value) {
+    void refreshRemoteHubAiTaskCount(Number(projectId.value))
+  }
+})
+
+watch(
+  [projectReady, isManager, () => currentMeta.value?.managerOnly],
+  ([ready, manager, managerOnly]) => {
+    if (ready && managerOnly && !manager && projectId.value) {
+      void router.replace({
+        name: 'WorkspaceSettingsBasic',
+        params: { projectId: projectId.value },
+      })
     }
   },
   { immediate: true },
 )
+
+// 本地发起流式任务（生成用例/解析需求）时立即探一次远端，尽快让计数与本地状态对齐并续上轮询
+watch(
+  () =>
+    localFunctionalActiveForProject(Number(projectId.value)) ||
+    localRequirementActiveForProject(Number(projectId.value)) ||
+    aiGenStore.hasActiveInProject(Number(projectId.value)),
+  (active) => {
+    if (active && projectReady.value && projectId.value) {
+      void refreshRemoteHubAiTaskCount(Number(projectId.value))
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  stopHubAiTaskPolling()
+})
 </script>
 
 <style scoped>
@@ -206,44 +370,8 @@ watch(
   min-height: 0;
 }
 
-.ws-project-bar {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--ax-space-2);
-  padding: var(--ax-space-1-5) var(--ax-space-3);
-  background: var(--ax-bg);
-  border-bottom: 1px solid var(--ax-border);
-}
-
-.ws-project-name {
-  flex: 1;
-  min-width: 0;
-  font-size: var(--ax-font-sm);
-  font-weight: 600;
-  color: var(--ax-text);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.ws-env {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: var(--ax-space-1);
-}
-
-.ws-env-select {
-  width: 170px;
-}
-
 .ws-env-icon {
   color: var(--ax-text-tertiary);
-}
-
-.env-manage-btn {
-  flex: none;
 }
 
 .env-option {

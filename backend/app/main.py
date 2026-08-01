@@ -3,25 +3,28 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.auth import require_menu_permission
 from app.bootstrap import run_bootstrap
 from app.config import settings
+from app.log_format import MultilineTimestampFormatter
 from app.request_logging import register_request_logging
 from app.routers import (
     assistant,
     auth,
     departments,
-    logs,
     projects,
     requirements,
     test_execution,
     testcases,
     users,
 )
+from app.routers import hub_ai_tasks as hub_ai_tasks_router
 from app.routers import settings as settings_router
 from app.routers.apifox import ai_gen_tasks_router as apifox_ai_gen_tasks_router
+from app.routers.apifox import api_tokens_public_router as apifox_api_tokens_public_router
 from app.routers.apifox import api_tokens_router as apifox_api_tokens_router
 from app.routers.apifox import cases_router as apifox_cases_router
 from app.routers.apifox import data_models_router as apifox_data_models_router
@@ -59,7 +62,7 @@ def setup_logging() -> None:
     if root_logger.handlers:
         return
     root_logger.setLevel(logging.INFO)
-    formatter = logging.Formatter("[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s")
+    formatter = MultilineTimestampFormatter()
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(formatter)
@@ -125,36 +128,45 @@ app.add_middleware(
 
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(projects.router, prefix="/api/v1")
+app.include_router(hub_ai_tasks_router.router, prefix="/api/v1")
 app.include_router(requirements.router, prefix="/api/v1")
 app.include_router(testcases.router, prefix="/api/v1")
 app.include_router(settings_router.router, prefix="/api/v1")
 app.include_router(users.router, prefix="/api/v1")
 app.include_router(departments.router, prefix="/api/v1")
-app.include_router(test_execution.router, prefix="/api/v1")
-app.include_router(logs.router, prefix="/api/v1")
+app.include_router(
+    test_execution.router,
+    prefix="/api/v1",
+    dependencies=[Depends(require_menu_permission("test_execution"))],
+)
 app.include_router(assistant.router, prefix="/api/v1")
-app.include_router(apifox_router, prefix="/api/v1")
-app.include_router(apifox_variables_router, prefix="/api/v1")
-app.include_router(apifox_cases_router, prefix="/api/v1")
-app.include_router(apifox_ai_gen_tasks_router, prefix="/api/v1")
-app.include_router(apifox_notify_router, prefix="/api/v1")
-app.include_router(apifox_data_models_router, prefix="/api/v1")
-app.include_router(apifox_scripts_router, prefix="/api/v1")
-app.include_router(apifox_sql_scripts_router, prefix="/api/v1")
-app.include_router(apifox_global_params_router, prefix="/api/v1")
-app.include_router(apifox_scenarios_router, prefix="/api/v1")
-app.include_router(apifox_runs_router, prefix="/api/v1")
-app.include_router(apifox_imports_router, prefix="/api/v1")
-app.include_router(apifox_import_schedules_router, prefix="/api/v1")
-app.include_router(apifox_api_tokens_router, prefix="/api/v1")
-app.include_router(apifox_schedules_router, prefix="/api/v1")
-app.include_router(apifox_debug_router, prefix="/api/v1")
-app.include_router(apifox_workbench_router, prefix="/api/v1")
-app.include_router(apifox_suites_router, prefix="/api/v1")
-app.include_router(apifox_trash_router, prefix="/api/v1")
-app.include_router(apifox_uploads_router, prefix="/api/v1")
-app.include_router(apifox_datasets_router, prefix="/api/v1")
-app.include_router(apifox_databases_router, prefix="/api/v1")
+apifox_permission = [Depends(require_menu_permission("apifox_workbench"))]
+project_settings_permission = [Depends(require_menu_permission("projects"))]
+
+app.include_router(apifox_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_variables_router, prefix="/api/v1", dependencies=project_settings_permission)
+app.include_router(apifox_cases_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_ai_gen_tasks_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_notify_router, prefix="/api/v1", dependencies=project_settings_permission)
+app.include_router(apifox_data_models_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_scripts_router, prefix="/api/v1", dependencies=project_settings_permission)
+app.include_router(apifox_sql_scripts_router, prefix="/api/v1", dependencies=project_settings_permission)
+app.include_router(apifox_global_params_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_scenarios_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_runs_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_imports_router, prefix="/api/v1", dependencies=project_settings_permission)
+app.include_router(apifox_import_schedules_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_api_tokens_router, prefix="/api/v1", dependencies=project_settings_permission)
+# 通过 API 导入/导出：X-API-Token 自鉴权，不挂 JWT/菜单权限依赖，供外部系统免登录调用
+app.include_router(apifox_api_tokens_public_router, prefix="/api/v1")
+app.include_router(apifox_schedules_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_debug_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_workbench_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_suites_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_trash_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_uploads_router, prefix="/api/v1", dependencies=apifox_permission)
+app.include_router(apifox_datasets_router, prefix="/api/v1", dependencies=project_settings_permission)
+app.include_router(apifox_databases_router, prefix="/api/v1", dependencies=project_settings_permission)
 
 register_request_logging(app)
 

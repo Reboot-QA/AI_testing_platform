@@ -2,6 +2,7 @@
 
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.apifox.data_model import ApifoxSchema
@@ -20,6 +21,14 @@ def list_schemas(db: Session, project_id: int) -> List[ApifoxSchema]:
         .order_by(ApifoxSchema.sort_order, ApifoxSchema.id)
         .all()
     )
+
+
+def next_sort_order(db: Session, project_id: int) -> int:
+    """项目内末尾的 sort_order + 1；空项目返回 0。新建时排到最后用。"""
+    current_max = (
+        db.query(func.max(ApifoxSchema.sort_order)).filter(ApifoxSchema.project_id == project_id).scalar()
+    )
+    return current_max + 1 if current_max is not None else 0
 
 
 def get_schema(db: Session, schema_id: int) -> Optional[ApifoxSchema]:

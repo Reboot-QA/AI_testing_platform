@@ -5,6 +5,7 @@
 
 from typing import List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.apifox.endpoint import (
@@ -41,6 +42,16 @@ def get_folder(db: Session, folder_id: int) -> Optional[ApifoxFolder]:
     )
 
 
+def next_folder_sort_order(db: Session, project_id: int, parent_id: Optional[int]) -> int:
+    """同层（同 parent_id）末尾的 sort_order + 1；空层返回 0。新建时排到最后用。"""
+    q = db.query(func.max(ApifoxFolder.sort_order)).filter(
+        ApifoxFolder.project_id == project_id, ApifoxFolder.kind == "endpoint"
+    )
+    q = q.filter(ApifoxFolder.parent_id.is_(None) if parent_id is None else ApifoxFolder.parent_id == parent_id)
+    current_max = q.scalar()
+    return current_max + 1 if current_max is not None else 0
+
+
 def create_folder(db: Session, folder: ApifoxFolder) -> ApifoxFolder:
     db.add(folder)
     db.flush()
@@ -59,6 +70,16 @@ def list_endpoints(db: Session, project_id: int) -> List[ApifoxEndpoint]:
         .order_by(ApifoxEndpoint.sort_order, ApifoxEndpoint.id)
         .all()
     )
+
+
+def next_endpoint_sort_order(db: Session, project_id: int, folder_id: Optional[int]) -> int:
+    """同文件夹内末尾的 sort_order + 1；空文件夹返回 0。新建时排到最后用。"""
+    q = db.query(func.max(ApifoxEndpoint.sort_order)).filter(
+        ApifoxEndpoint.project_id == project_id, ApifoxEndpoint.deleted_at.is_(None)
+    )
+    q = q.filter(ApifoxEndpoint.folder_id.is_(None) if folder_id is None else ApifoxEndpoint.folder_id == folder_id)
+    current_max = q.scalar()
+    return current_max + 1 if current_max is not None else 0
 
 
 def list_deleted_endpoints(db: Session, project_id: int) -> List[ApifoxEndpoint]:

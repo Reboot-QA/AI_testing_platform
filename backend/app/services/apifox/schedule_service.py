@@ -7,6 +7,7 @@
 """
 
 import logging
+import threading
 import time
 from datetime import datetime
 from typing import Any, Optional, cast
@@ -14,6 +15,7 @@ from typing import Any, Optional, cast
 from croniter import croniter
 from sqlalchemy.orm import Session
 
+from app.database import SessionLocal
 from app.models.apifox.schedule import ApifoxSchedule
 from app.repositories.apifox import (
     case_repo,
@@ -147,8 +149,11 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
     仅定时任务重试；调度单线程串行，故间隔封顶 60s，避免长间隔拖住其它到期任务。
     单次异常吞掉记 failed，避免拖垮轮询线程。
     """
+    from app.repositories.apifox import run_repo  # 局部导入避开模块级循环依赖（同 notify_service）
+
     retry_count, interval = _retry_config(db, task.project_id)
     status, run_id = "failed", None
+    head_run_id: Optional[int] = None
     try:
         for attempt in range(retry_count + 1):
             if attempt > 0:
@@ -159,6 +164,12 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
             except Exception:  # noqa: BLE001 - 单次执行异常不得中断轮询线程
                 logger.exception("apifox 定时任务 %s 执行异常（第 %s 次）", task.id, attempt + 1)
                 status, run_id = "failed", None
+            # 重试链打标：首个 run 为链头，后续各次指向链头并记第几次尝试，供报告折叠
+            if run_id is not None:
+                if head_run_id is None:
+                    head_run_id = run_id
+                else:
+                    run_repo.mark_retry(db, run_id, head_run_id, attempt + 1)
             if status != "failed":
                 break
         task.last_run_at = now_local()
@@ -174,22 +185,51 @@ def execute_schedule(db: Session, task: ApifoxSchedule) -> None:
                 task.next_run_at = None
         db.commit()
 
-    if task.last_run_status == "failed":
-        _notify_schedule_failure(db, task)
+    _notify_schedule(db, task)
 
 
-def _notify_schedule_failure(db: Session, task: ApifoxSchedule) -> None:
-    from app.services.apifox import notify_service  # 延迟导入避免顶层循环
+def run_now_background(sid: int) -> None:
+    """立即执行定时任务：后台守护线程 + 独立 session，请求端不阻塞（套件/多用例 + 重试 sleep
+    同步跑完会超时；沿用调度线程的并发范式：自管 session、异常 try/except 兜住不外抛）。"""
+
+    def _worker() -> None:
+        db = SessionLocal()
+        try:
+            task = db.query(ApifoxSchedule).filter(ApifoxSchedule.id == sid).first()
+            if task is not None:
+                execute_schedule(db, task)
+        except Exception:  # noqa: BLE001 - 后台执行异常仅记日志，不影响进程
+            logger.exception("apifox 定时任务 %s 立即执行（后台）异常", sid)
+        finally:
+            db.close()
+
+    threading.Thread(target=_worker, daemon=True, name=f"apifox-run-now-{sid}").start()
+
+
+def _notify_schedule(db: Session, task: ApifoxSchedule) -> None:
+    """定时任务完成通知（成功/失败按开关分别推送）。"""
+    from app.repositories.apifox import run_repo  # 局部导入避开模块级循环依赖
+    from app.services.apifox import notify_service
+    from app.services.apifox.notify_templates import NotifyPayload
 
     try:
-        detail = f"定时任务「{task.name}」执行失败（{task.target_type}）。"
-        if task.last_run_id:
-            detail += f" 运行记录 #{task.last_run_id}。"
-        notify_service.notify_failure(
-            db, task.project_id, "schedule", f"定时任务失败：{task.name}", detail
+        run = run_repo.get_run(db, task.last_run_id) if task.last_run_id else None
+        payload = NotifyPayload(
+            event_type="schedule",
+            result="success" if task.last_run_status != "failed" else "failure",
+            project_name=notify_service.project_name(db, task.project_id),
+            scene="定时任务",
+            target_name=task.name,
+            total=((run.passed_count or 0) + (run.failed_count or 0)) if run else 0,
+            passed=(run.passed_count or 0) if run else 0,
+            failed=(run.failed_count or 0) if run else 0,
+            duration_ms=run.duration_ms if run else None,
+            ref_id=task.last_run_id,
+            happened_at=run.finished_at if run else None,
         )
+        notify_service.notify_event(db, task.project_id, payload)
     except Exception:  # noqa: BLE001 - 通知不影响主流程
-        logger.exception("定时任务失败通知异常 task=%s", task.id)
+        logger.exception("定时任务通知异常 task=%s", task.id)
 
 
 def run_due_apifox_tasks(db: Session) -> None:

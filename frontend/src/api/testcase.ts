@@ -2,24 +2,26 @@ import { del, get, post, put, streamSSE, type Id, type SSEEvent } from './reques
 import type { Schemas } from './types'
 
 export const testcaseApi = {
-  // 无 response_model（列表返回自由结构）：any 占位（技术债）
-  list: (params?: Record<string, unknown>) => get<any>('/testcases', { params }),
+  list: (params?: Record<string, unknown>) =>
+    get<Schemas['TestCaseOut'][]>('/testcases', { params }),
+  listPage: (params: Record<string, unknown> & { page: number; page_size: number }) =>
+    get<Schemas['TestCasePageOut']>('/testcases', { params }),
   create: (data: Schemas['TestCaseCreate']) => post<Schemas['TestCaseOut']>('/testcases', data),
   update: (id: Id, data: Schemas['TestCaseUpdate']) =>
     put<Schemas['TestCaseOut']>(`/testcases/${id}`, data),
-  delete: (id: Id) => del<any>(`/testcases/${id}`), // 无 response_model（技术债）
+  delete: (id: Id) => del<void>(`/testcases/${id}`),
   batchDelete: (data: Schemas['TestCaseBatchDelete']) =>
     post<Schemas['BatchDeleteResponse']>('/testcases/batch/delete', data),
   batchReview: (data: Schemas['TestCaseBatchReviewUpdate']) =>
     post<Schemas['TestCaseBatchReviewResponse']>('/testcases/batch/review', data),
   aiGenerate: (data: Schemas['AIGenerateRequest']) =>
     post<Schemas['AIGenerateResponse']>('/testcases/ai/generate', data, { timeout: 120000 }),
-  aiGenerateStream: (
+  aiGenerateStream: <TEvent extends SSEEvent>(
     data: Schemas['AIGenerateRequest'],
-    onEvent: (event: SSEEvent) => void,
+    onEvent: (event: TEvent) => void,
     options: { signal?: AbortSignal } = {},
   ) =>
-    streamSSE('/api/v1/testcases/ai/generate/stream', {
+    streamSSE<TEvent>('/api/v1/testcases/ai/generate/stream', {
       body: JSON.stringify(data),
       headers: { 'Content-Type': 'application/json' },
       signal: options.signal,
@@ -45,4 +47,8 @@ export const testcaseApi = {
       timeout: 120000,
     })
   },
+  downloadImportTemplateExcel: () =>
+    get<Blob>('/testcases/import/template/excel', { responseType: 'blob' }),
+  downloadImportTemplateXmind: () =>
+    get<Blob>('/testcases/import/template/xmind', { responseType: 'blob' }),
 }

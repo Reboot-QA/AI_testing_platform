@@ -2,48 +2,21 @@ import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { isUnauthorizedError } from '@/api/request'
 import { useUserStore } from '@/stores/user'
+import {
+  canAccessWorkspacePage,
+  firstWorkspaceRoute,
+  legacyWorkspaceRoute,
+  workspaceMeta,
+  workspaceRoutes,
+} from './workspace'
 
-const WORKSPACE_PERMISSIONS = [
-  'projects',
-  'requirement_docs',
-  'requirements',
-  'ai_generate',
-  'testcases',
-  'test_execution',
-  'apifox_workbench',
-]
-
-function workspaceSectionPermissions(hash: string): string[] {
-  const params = new URLSearchParams(hash.replace(/^#/, ''))
-  const domain = params.get('domain') || 'automation'
-  const section = params.get('section') || ''
-  if (domain === 'requirements') {
-    if (section === 'req-docs') return ['requirement_docs']
-    if (section === 'req-points') return ['requirements']
-    return ['requirement_docs', 'requirements']
-  }
-  if (domain === 'functional') {
-    if (section === 'ai') return ['ai_generate']
-    if (section === 'func-runs' || section === 'func-exec') return ['test_execution']
-    if (section === 'func-cases') return ['testcases']
-    return ['ai_generate', 'testcases', 'test_execution']
-  }
-  if (domain === 'settings') return ['projects']
-  return ['apifox_workbench']
-}
-
-function firstAccessibleWorkspaceHash(userStore: ReturnType<typeof useUserStore>): string | null {
-  if (userStore.hasPermission('requirements')) return '#domain=requirements&section=req-points'
-  if (userStore.hasPermission('requirement_docs')) return '#domain=requirements&section=req-docs'
-  if (userStore.hasPermission('testcases')) return '#domain=functional&section=func-cases'
-  if (userStore.hasPermission('ai_generate')) return '#domain=functional&section=ai'
-  if (userStore.hasPermission('test_execution')) return '#domain=functional&section=func-runs'
-  if (userStore.hasPermission('apifox_workbench')) {
-    return '#domain=automation&biz=autotest&section=overview'
-  }
-  if (userStore.hasPermission('projects')) return '#domain=settings&open=basic'
-  return null
-}
+import {
+  canAccessHub,
+  isSameRouteTarget,
+  resolveLandingPath,
+  HUB_ENTRY_PERMISSIONS,
+  WORKSPACE_ENTRY_PERMISSIONS,
+} from './landing'
 
 const routes: RouteRecordRaw[] = [
   {
@@ -69,13 +42,14 @@ const routes: RouteRecordRaw[] = [
     path: '/hub',
     name: 'HubHome',
     component: () => import('@/layouts/HubHomeShell.vue'),
-    meta: { permission: 'dashboard' },
+    meta: { anyPermissions: [...HUB_ENTRY_PERMISSIONS, ...WORKSPACE_ENTRY_PERMISSIONS] },
   },
   {
     path: '/hub/workspace/:projectId',
     name: 'HubWorkspace',
     component: () => import('@/layouts/ProjectShell.vue'),
-    meta: { anyPermissions: WORKSPACE_PERMISSIONS },
+    meta: { anyPermissions: [...WORKSPACE_ENTRY_PERMISSIONS] },
+    children: workspaceRoutes,
   },
 
   // 旧业务路径重定向到新壳（视图文件仍被新壳复用，故不删）
@@ -88,6 +62,8 @@ const routes: RouteRecordRaw[] = [
   { path: '/test-execution', redirect: '/hub' },
   { path: '/apifox', redirect: '/hub' },
   { path: '/apifox/project/:projectId', redirect: (to) => `/hub/workspace/${to.params.projectId}` },
+  { path: '/system/logs', redirect: '/system/settings' },
+  { path: '/system/error-logs', redirect: '/system/settings' },
 
   // 系统管理（SystemShell 壳，独立于业务工作区）
   {
@@ -118,18 +94,6 @@ const routes: RouteRecordRaw[] = [
         name: 'PermissionManagement',
         component: () => import('@/views/PermissionManagement.vue'),
         meta: { permission: 'system_permissions' },
-      },
-      {
-        path: 'logs',
-        name: 'LogMonitor',
-        component: () => import('@/views/LogMonitor.vue'),
-        meta: { permission: 'system_logs' },
-      },
-      {
-        path: 'error-logs',
-        name: 'ErrorLogs',
-        component: () => import('@/views/ErrorLogs.vue'),
-        meta: { permission: 'system_error_logs' },
       },
     ],
   },
@@ -169,29 +133,54 @@ router.beforeEach(async (to, _from, next) => {
       return next('/login')
     }
     if (!userStore.mustChangePassword) {
-      return next('/hub')
+      return next(resolveLandingPath(userStore.hasPermission))
     }
     return next()
   }
+  const legacy = legacyWorkspaceRoute(to.hash)
+  if (legacy) {
+    return next({ name: legacy.name, params: to.params, query: legacy.query, replace: true })
+  }
+  if (to.name === 'HubWorkspace') {
+    const fallback = firstWorkspaceRoute(userStore.hasPermission)
+    if (!fallback) return next(resolveLandingPath(userStore.hasPermission))
+    return next({ name: fallback, params: to.params, replace: true })
+  }
+  if (to.name === 'WorkspaceSettings') {
+    return next({ name: 'WorkspaceSettingsBasic', params: to.params, replace: true })
+  }
+  const workspacePage = workspaceMeta(to)
+  if (workspacePage && !canAccessWorkspacePage(workspacePage, userStore.hasPermission)) {
+    const fallback = firstWorkspaceRoute(userStore.hasPermission)
+    return next(
+      fallback
+        ? { name: fallback, params: to.params, replace: true }
+        : resolveLandingPath(userStore.hasPermission),
+    )
+  }
+
+  const redirectIfForbidden = () => {
+    if (!canAccessHub(userStore.hasPermission)) {
+      ElMessage.warning('账号暂无任何菜单权限，请联系管理员')
+      userStore.logout()
+      return next('/login')
+    }
+    const landing = resolveLandingPath(userStore.hasPermission)
+    if (isSameRouteTarget(to.fullPath, landing)) {
+      ElMessage.warning('暂无访问该页面的权限')
+      return next(false)
+    }
+    return next(landing)
+  }
+
   if (to.meta.permission && !userStore.hasPermission(to.meta.permission as string)) {
-    return next('/hub')
+    return redirectIfForbidden()
   }
   if (
     to.meta.anyPermissions?.length &&
     !to.meta.anyPermissions.some((permission) => userStore.hasPermission(permission))
   ) {
-    return next('/hub')
-  }
-  if (to.name === 'HubWorkspace') {
-    const allowed = workspaceSectionPermissions(to.hash).some((permission) =>
-      userStore.hasPermission(permission),
-    )
-    if (!allowed) {
-      const fallbackHash = firstAccessibleWorkspaceHash(userStore)
-      if (!fallbackHash) return next('/hub')
-      ElMessage.warning('您无权访问该模块，已切换到可访问区域')
-      return next({ path: to.path, hash: fallbackHash, replace: true })
-    }
+    return redirectIfForbidden()
   }
   next()
 })

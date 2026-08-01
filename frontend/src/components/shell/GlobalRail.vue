@@ -10,12 +10,18 @@
     </button>
 
     <template v-if="mode === 'home'">
-      <RailButton label="首页" :active="activeView === 'home'" @click="emit('navView', 'home')">
+      <RailButton
+        v-if="canHome"
+        label="首页"
+        :active="activeView === 'home'"
+        @click="emit('navView', 'home')"
+      >
         <template #icon
           ><el-icon><HomeFilled /></el-icon
         ></template>
       </RailButton>
       <RailButton
+        v-if="canProjects"
         label="项目"
         :active="activeView === 'projects'"
         @click="emit('navView', 'projects')"
@@ -55,6 +61,7 @@
       </RailButton>
       <div class="gr-divider" />
       <RailButton
+        v-if="canVisit('requirements')"
         label="需求"
         :active="activeDomain === 'requirements'"
         @click="emit('navDomain', 'requirements')"
@@ -64,6 +71,7 @@
         ></template>
       </RailButton>
       <RailButton
+        v-if="canVisit('functional')"
         label="功能"
         :active="activeDomain === 'functional'"
         @click="emit('navDomain', 'functional')"
@@ -73,6 +81,7 @@
         ></template>
       </RailButton>
       <RailButton
+        v-if="canVisit('automation')"
         label="自动化"
         :active="activeDomain === 'automation'"
         @click="emit('navDomain', 'automation')"
@@ -81,8 +90,20 @@
           ><el-icon><VideoPlay /></el-icon
         ></template>
       </RailButton>
+      <RailButton
+        v-if="canVisit('ai_tasks')"
+        label="AI任务"
+        :active="activeDomain === 'ai_tasks'"
+        :dot="aiTasksDot"
+        @click="emit('navDomain', 'ai_tasks')"
+      >
+        <template #icon
+          ><el-icon><MagicStick /></el-icon
+        ></template>
+      </RailButton>
       <div class="gr-spacer" />
       <RailButton
+        v-if="canVisit('settings')"
         label="设置"
         :active="activeDomain === 'settings'"
         @click="emit('navDomain', 'settings')"
@@ -120,14 +141,22 @@ const props = withDefaults(
     activeView?: HomeView
     activeDomain?: WorkspaceDomain
     activityDot?: number | null
+    aiTasksDot?: number | null
+    visibleDomains?: WorkspaceDomain[]
     canSystem?: boolean
+    canHome?: boolean
+    canProjects?: boolean
     userName?: string
   }>(),
   {
     activeView: 'home',
     activeDomain: 'automation',
     activityDot: null,
-    canSystem: true,
+    aiTasksDot: null,
+    canSystem: false,
+    canHome: true,
+    canProjects: true,
+    visibleDomains: () => ['requirements', 'functional', 'automation', 'ai_tasks', 'settings'],
     userName: '',
   },
 )
@@ -152,6 +181,10 @@ function onUserCommand(command: string) {
 }
 
 const avatarText = computed(() => (props.userName || 'A').charAt(0).toUpperCase())
+
+function canVisit(domain: WorkspaceDomain): boolean {
+  return props.visibleDomains.includes(domain)
+}
 </script>
 
 <style scoped>
@@ -218,8 +251,8 @@ const avatarText = computed(() => (props.userName || 'A').charAt(0).toUpperCase(
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #2b6cff, #722ed1);
-  color: #fff;
+  background: linear-gradient(135deg, var(--ax-raw-hex-2b6cff), var(--ax-raw-hex-722ed1));
+  color: var(--ax-raw-hex-fff);
   font-size: var(--ax-font-xs);
   font-weight: 600;
 }

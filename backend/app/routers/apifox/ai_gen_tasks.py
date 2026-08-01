@@ -70,6 +70,14 @@ def list_active_ai_gen_tasks(
     return service.list_active(db, pid)
 
 
+@router.get("/ai-gen-tasks/mine/active", response_model=List[AiGenTaskBrief])
+def list_my_active_ai_gen_tasks(
+    db: Session = Depends(get_db), user: User = Depends(get_current_user)
+):
+    """当前用户跨所有可访问项目的进行中 AI 生成任务（侧边栏角标）。"""
+    return service.list_active_mine(db, user)
+
+
 @router.get("/projects/{pid}/ai-gen-tasks", response_model=AiGenTaskPageOut)
 def list_ai_gen_tasks(
     pid: int,
@@ -79,11 +87,14 @@ def list_ai_gen_tasks(
     status: Optional[str] = Query(None, description="按任务状态过滤"),
     date_from: Optional[date] = Query(None, description="创建时间下界（含当天）"),
     date_to: Optional[date] = Query(None, description="创建时间上界（含当天）"),
+    task_id: Optional[int] = Query(None, ge=1, description="按任务 ID 精确查询"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
     get_accessible_project(db, pid, user)
-    return service.list_tasks_page(db, pid, page, page_size, keyword, status, date_from, date_to)
+    return service.list_tasks_page(
+        db, pid, page, page_size, keyword, status, date_from, date_to, task_id
+    )
 
 
 @router.get("/ai-gen-tasks/{tid}", response_model=AiGenTaskOut)

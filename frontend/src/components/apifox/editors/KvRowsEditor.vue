@@ -111,7 +111,6 @@ import {
 // suggest='header' 时键/值走 header 常用清单自动补全；其余场景为普通输入。
 const props = withDefaults(
   defineProps<{
-    rows: KvRow[]
     suggest?: string
     showType?: boolean
   }>(),
@@ -120,6 +119,7 @@ const props = withDefaults(
     showType: false,
   },
 )
+const rows = defineModel<KvRow[]>('rows', { required: true })
 
 // HTTP 参数类型标注（含 file），语义不同于 useJsonSchema 的 SCHEMA_TYPES，故意不复用
 const PARAM_TYPES = ['string', 'integer', 'number', 'boolean', 'array', 'object', 'file']
@@ -133,7 +133,7 @@ const autoHeaders = ref<Schemas['DefaultHeaderOut'][]>([])
 const showAuto = ref(false)
 const visibleAutoHeaders = computed(() => {
   const userKeys = new Set(
-    props.rows.map((r) => (r.key || '').trim().toLowerCase()).filter(Boolean),
+    rows.value.map((r) => (r.key || '').trim().toLowerCase()).filter(Boolean),
   )
   return autoHeaders.value.filter((h) => !userKeys.has(h.name.toLowerCase()))
 })
@@ -144,11 +144,11 @@ let descByKey: Record<string, string> = {}
 let typeByKey: Record<string, string> = {}
 
 const isEmptyRow = (r: KvRow) => !(r.key || '').trim() && !(r.value || '').trim()
-const isTail = (i: number) => i === props.rows.length - 1 && isEmptyRow(props.rows[i])
+const isTail = (i: number) => i === rows.value.length - 1 && isEmptyRow(rows.value[i])
 
 // 自动新行：始终保留恰好一个末尾空行（幂等，稳定后不再变更，不会递归死循环）
 function syncTail() {
-  const list = props.rows
+  const list = rows.value
   while (
     list.length > 1 &&
     isEmptyRow(list[list.length - 1]) &&
@@ -162,16 +162,16 @@ function syncTail() {
 }
 
 function del(i: number) {
-  props.rows.splice(i, 1)
+  rows.value.splice(i, 1)
   syncTail()
 }
 
 function toggleBulk() {
   if (!bulkMode.value) {
-    bulkText.value = rowsToText(props.rows)
+    bulkText.value = rowsToText(rows.value)
     descByKey = {}
     typeByKey = {}
-    props.rows.forEach((r) => {
+    rows.value.forEach((r) => {
       if (r.key && r.desc) descByKey[r.key] = r.desc
       if (r.key && r.type) typeByKey[r.key] = r.type
     })
@@ -188,7 +188,7 @@ function syncFromText() {
     if (descByKey[r.key]) r.desc = descByKey[r.key]
     if (typeByKey[r.key]) r.type = typeByKey[r.key]
   })
-  props.rows.splice(0, props.rows.length, ...parsed)
+  rows.value.splice(0, rows.value.length, ...parsed)
 }
 
 const fetchKeys = (query: string, cb: (results: Array<Record<string, string>>) => void) =>
@@ -204,10 +204,10 @@ function onKeySelect(row: KvRow, item: { value: string }) {
 
 // 常用 Header 勾选区：勾选加入启用行（带默认值）、取消移除；已在列表则显示为勾选
 const isPresent = (name: string) =>
-  props.rows.some((r) => (r.key || '').trim().toLowerCase() === name.toLowerCase())
+  rows.value.some((r) => (r.key || '').trim().toLowerCase() === name.toLowerCase())
 
 function toggleCommon(h: (typeof COMMON_HEADER_PRESETS)[number], checked: boolean) {
-  const list = props.rows
+  const list = rows.value
   if (checked) {
     if (!isPresent(h.name)) {
       const at = list.length && isEmptyRow(list[list.length - 1]) ? list.length - 1 : list.length
@@ -229,7 +229,7 @@ onMounted(() => {
 })
 // 表格模式下任意键值改动后维持末尾空行（深比较，内容变触发）
 watch(
-  () => props.rows,
+  () => rows.value,
   () => {
     if (!bulkMode.value) syncTail()
   },
@@ -237,7 +237,7 @@ watch(
 )
 // 父级换了整份 rows（切用例/接口）：退出批量模式并重建末尾空行，避免残留旧文本覆盖新数据
 watch(
-  () => props.rows,
+  () => rows.value,
   () => {
     bulkMode.value = false
     syncTail()

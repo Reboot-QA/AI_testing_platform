@@ -36,7 +36,7 @@ export function useScenarioFolders(pidRef: Ref<number | string | null | undefine
 
   async function deleteFolder(folder: ScenarioFolder): Promise<void> {
     await ElMessageBox.confirm(
-      `删除文件夹「${folder.name}」？其下场景会移到未分组（不会删除场景）。`,
+      `删除文件夹「${folder.name}」？文件夹中的场景会被一起删除（可在回收站还原）。`,
       '删除文件夹',
       { type: 'warning' },
     )

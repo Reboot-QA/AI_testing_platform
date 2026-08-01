@@ -3,8 +3,8 @@
 from datetime import date, datetime, time, timedelta
 from typing import Dict, List, Optional
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.models.apifox.case import ApifoxEndpointCase
 from app.models.apifox.run import ApifoxRun, ApifoxRunStep
@@ -54,6 +54,29 @@ def list_runs(db: Session, project_id: int, limit: int = 100) -> List[ApifoxRun]
     )
 
 
+def _chain_key():
+    """重试链标识：物化列 chain_head_id（= 创建时的自身 id / 重试后的链头 id）。
+
+    用真实列而非 COALESCE(retry_of_run_id, id)，让 ORDER BY 走复合索引、消除 filesort。
+    """
+    return ApifoxRun.chain_head_id
+
+
+def _is_latest_attempt():
+    """本行是所在重试链的最后一次尝试（= 整体结果，报告列表的代表行）。
+
+    分页单位必须是「一条重试链」而非「一次尝试」：否则前端把同链多次尝试折成一行后，
+    每页实际行数远少于 page_size，总条数与页数也被重试次数放大。
+    同链 = chain_head_id 相同；本行非最新 ⟺ 同链存在 id 更大的行。
+    """
+    later = aliased(ApifoxRun)
+    return ~(
+        select(later.id)
+        .where(later.chain_head_id == ApifoxRun.chain_head_id, later.id > ApifoxRun.id)
+        .exists()
+    )
+
+
 def _top_level_runs_query(
     db: Session,
     project_id: int,
@@ -62,9 +85,13 @@ def _top_level_runs_query(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    run_id: Optional[int] = None,
 ):
+    # 筛选条件一律作用在代表行（最后一次尝试）上，与报告列表展示的那一行语义一致
     query = db.query(ApifoxRun).filter(
-        ApifoxRun.project_id == project_id, ApifoxRun.parent_run_id.is_(None)
+        ApifoxRun.project_id == project_id,
+        ApifoxRun.parent_run_id.is_(None),
+        _is_latest_attempt(),
     )
     if target_types:
         query = query.filter(ApifoxRun.target_type.in_(target_types))
@@ -72,6 +99,12 @@ def _top_level_runs_query(
         query = query.filter(ApifoxRun.status == status)
     if keyword and keyword.strip():
         query = query.filter(ApifoxRun.target_name.like(f"%{keyword.strip()}%"))
+    if run_id is not None:
+        list_run_id = resolve_list_run_id(db, run_id)
+        if list_run_id is not None:
+            query = query.filter(ApifoxRun.id == list_run_id)
+        else:
+            query = query.filter(ApifoxRun.id == run_id)
     if date_from:
         query = query.filter(ApifoxRun.started_at >= datetime.combine(date_from, time.min))
     if date_to:
@@ -90,9 +123,12 @@ def count_runs(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    run_id: Optional[int] = None,
 ) -> int:
     return (
-        _top_level_runs_query(db, project_id, target_types, keyword, status, date_from, date_to)
+        _top_level_runs_query(
+            db, project_id, target_types, keyword, status, date_from, date_to, run_id
+        )
         .with_entities(func.count(ApifoxRun.id))
         .scalar()
         or 0
@@ -109,15 +145,44 @@ def list_runs_page(
     status: Optional[str] = None,
     date_from: Optional[date] = None,
     date_to: Optional[date] = None,
+    run_id: Optional[int] = None,
 ) -> List[ApifoxRun]:
     offset = (page - 1) * page_size
     return (
-        _top_level_runs_query(db, project_id, target_types, keyword, status, date_from, date_to)
-        .order_by(ApifoxRun.id.desc())
+        _top_level_runs_query(
+            db, project_id, target_types, keyword, status, date_from, date_to, run_id
+        )
+        # 按链头 id 倒序 = 按触发时间倒序（重试发生在链头之后，不应把整链顶到最前）
+        .order_by(_chain_key().desc())
         .offset(offset)
         .limit(page_size)
         .all()
     )
+
+
+def list_retry_chains(db: Session, chain_head_ids: List[int]) -> Dict[int, List[ApifoxRun]]:
+    """按链头 id 取各重试链中「代表行以外」的历次尝试（attempt 升序），供报告行展开子行。
+
+    链成员 = 链头本身 + retry_of_run_id 指向它的各次重试；最后一次尝试是 list_runs_page 已返回的
+    代表行，这里剔除，避免展开后重复一行。无重试的链不出现在返回值中。
+    """
+    if not chain_head_ids:
+        return {}
+    rows = (
+        db.query(ApifoxRun)
+        .filter(
+            or_(
+                ApifoxRun.id.in_(chain_head_ids),
+                ApifoxRun.retry_of_run_id.in_(chain_head_ids),
+            )
+        )
+        .order_by(ApifoxRun.attempt.asc(), ApifoxRun.id.asc())
+        .all()
+    )
+    chains: Dict[int, List[ApifoxRun]] = {}
+    for row in rows:
+        chains.setdefault(row.retry_of_run_id or row.id, []).append(row)
+    return {key: members[:-1] for key, members in chains.items() if len(members) > 1}
 
 
 def failure_reasons(db: Session, run_ids: List[int]) -> Dict[int, str]:
@@ -162,8 +227,67 @@ def failure_reasons(db: Session, run_ids: List[int]) -> Dict[int, str]:
     return reasons
 
 
+def list_endpoint_batch_runs(db: Session, endpoint_id: int, limit: int = 50) -> List[ApifoxRun]:
+    """接口「全部运行」聚合报告：每条 parent run 对应一次批次。"""
+    return (
+        db.query(ApifoxRun)
+        .filter(
+            ApifoxRun.target_type == "endpoint",
+            ApifoxRun.target_id == endpoint_id,
+            ApifoxRun.parent_run_id.is_(None),
+        )
+        .order_by(ApifoxRun.id.desc())
+        .limit(limit)
+        .all()
+    )
+
+
+def resolve_list_run_id(db: Session, run_id: int) -> Optional[int]:
+    """将任意 run id 解析为报告列表代表行（顶层 + 重试链末次尝试）。"""
+    run = get_run(db, run_id)
+    if not run:
+        return None
+    target = run
+    while target.parent_run_id is not None:
+        parent = get_run(db, target.parent_run_id)
+        if not parent:
+            break
+        target = parent
+    head_id = target.retry_of_run_id or target.id
+    latest = (
+        db.query(ApifoxRun)
+        .filter(
+            ApifoxRun.project_id == target.project_id,
+            or_(ApifoxRun.id == head_id, ApifoxRun.retry_of_run_id == head_id),
+        )
+        .order_by(ApifoxRun.id.desc())
+        .first()
+    )
+    return latest.id if latest else target.id
+
+
 def get_run(db: Session, run_id: int) -> Optional[ApifoxRun]:
     return db.query(ApifoxRun).filter(ApifoxRun.id == run_id).first()
+
+
+def mark_retry(db: Session, run_id: int, head_run_id: int, attempt: int) -> None:
+    """把某次重试运行标记为重试链的一环：指向链头 run + 记第几次尝试。"""
+    run = db.query(ApifoxRun).filter(ApifoxRun.id == run_id).first()
+    if run:
+        run.retry_of_run_id = head_run_id
+        run.chain_head_id = head_run_id  # 归入链头所在链，供报告分页按链排序/折叠
+        run.attempt = attempt
+        db.commit()
+
+
+def list_retry_attempts(db: Session, head_run_id: int) -> List[ApifoxRun]:
+    """取某重试链的所有后续尝试（不含链头自身），按 attempt 升序。"""
+    return (
+        db.query(ApifoxRun)
+        .filter(ApifoxRun.retry_of_run_id == head_run_id)
+        .order_by(ApifoxRun.attempt)
+        .all()
+    )
 
 
 def list_child_runs(db: Session, parent_run_id: int) -> List[ApifoxRun]:

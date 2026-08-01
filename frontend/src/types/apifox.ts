@@ -253,6 +253,29 @@ export type ImportDiffView = Schemas['ImportDiffOut'] & {
   removed: NonNullable<Schemas['ImportDiffOut']['removed']>
 }
 
+/** 导入「预览 & 勾选」树节点：叶子 key 即后端 ImportPreviewEndpoint.key（"METHOD path"） */
+export interface ImportPreviewNode {
+  key: string
+  label: string
+  type: 'root' | 'group' | 'folder' | 'endpoint'
+  method?: string
+  path?: string
+  /** 项目里已有同 (method, path) 的接口 */
+  exists?: boolean
+  /** 已存在且请求契约与文档不一致 */
+  changed?: boolean
+  /** 分组/目录下的接口数 */
+  count?: number
+  children?: ImportPreviewNode[]
+}
+
+/** 目标目录下拉的树节点（el-tree-select 数据） */
+export interface FolderOptionNode {
+  value: number
+  label: string
+  children?: FolderOptionNode[]
+}
+
 /** 树右键菜单项（原定义在 common/TreeContextMenu.vue） */
 export type TreeContextMenuIcon =
   'http' | 'folder' | 'rename' | 'copy' | 'delete' | 'import' | 'case' | 'curl' | 'more'

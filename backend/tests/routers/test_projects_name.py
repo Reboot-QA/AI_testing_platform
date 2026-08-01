@@ -1,7 +1,6 @@
 import pytest
 from fastapi import HTTPException
 
-from app.models.project import Project
 from app.models.user import User
 from app.routers.projects import create_project, update_project
 from app.schemas import ProjectCreate, ProjectUpdate

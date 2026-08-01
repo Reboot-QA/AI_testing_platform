@@ -133,5 +133,10 @@ export const useSuiteTabsStore = defineStore('suiteTabs', {
       t.name = t.form.name
       t.snapshot = snap(t.form)
     },
+
+    /** 切换账号/退出登录时清空：tab 按项目缓存，不清会把上个用户的套件带到新会话 */
+    resetAll(): void {
+      this.byProject = {}
+    },
   },
 })

@@ -12,7 +12,11 @@
     <template v-if="testcase">
       <el-form v-if="editing" ref="formRef" :model="form" :rules="rules" label-width="90px">
         <el-form-item label="标题" prop="title">
-          <el-input v-model="form.title" :maxlength="TITLE_MAX_LEN" />
+          <el-input
+            v-model="form.title"
+            :maxlength="REQ_CASE_TITLE_MAX_LEN"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="用例类型">
           <el-select v-model="form.case_type" style="width: 100%">
@@ -123,7 +127,7 @@
 </template>
 
 <script setup lang="ts">
-import { LONG_TEXT_MAX_LEN, TITLE_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
+import { LONG_TEXT_MAX_LEN, REQ_CASE_TITLE_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
 import { computed, reactive, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from '@/types/element-plus'
@@ -188,7 +192,14 @@ const form = reactive<EditableTestCase>({
   tags: '',
 })
 const rules: FormRules<EditableTestCase> = {
-  title: [{ required: true, message: '请输入标题', trigger: 'blur' }],
+  title: [
+    { required: true, message: '请输入标题', trigger: 'blur' },
+    {
+      max: REQ_CASE_TITLE_MAX_LEN,
+      message: `标题不能超过 ${REQ_CASE_TITLE_MAX_LEN} 字`,
+      trigger: 'blur',
+    },
+  ],
 }
 
 function fillForm(testcase: TestCase) {

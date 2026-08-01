@@ -5,6 +5,8 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.models.apifox.ai_gen_task import ApifoxAiGenTask
+from app.models.hub_ai_task import HubAiTask
 from app.models.requirement import Requirement
 from app.models.test_execution import ManualTestRun
 from app.models.testcase import TestCase
@@ -115,4 +117,44 @@ def get_requirements_overview(db: Session, project_id: int) -> dict:
         "unlinked_count": unlinked_count,
         "ai_document_count": ai_document_count,
         "ai_unreviewed_count": ai_unreviewed_count,
+    }
+
+
+def get_ai_tasks_overview(db: Session, project_id: int) -> dict:
+    """AI 任务概述：三类任务均为可追踪的执行记录（hub_ai_tasks + apifox AI 生成任务）。"""
+    api_task_count = int(
+        db.query(func.count(ApifoxAiGenTask.id))
+        .filter(ApifoxAiGenTask.project_id == project_id)
+        .scalar()
+        or 0
+    )
+    active_api_task_count = int(
+        db.query(func.count(ApifoxAiGenTask.id))
+        .filter(
+            ApifoxAiGenTask.project_id == project_id,
+            ApifoxAiGenTask.status.in_(("pending", "running")),
+        )
+        .scalar()
+        or 0
+    )
+    requirement_task_count = int(
+        db.query(func.count(HubAiTask.id))
+        .filter(HubAiTask.project_id == project_id, HubAiTask.task_type == "requirement")
+        .scalar()
+        or 0
+    )
+    case_task_count = int(
+        db.query(func.count(HubAiTask.id))
+        .filter(HubAiTask.project_id == project_id, HubAiTask.task_type == "functional")
+        .scalar()
+        or 0
+    )
+    total_task_count = api_task_count + requirement_task_count + case_task_count
+
+    return {
+        "total_task_count": total_task_count,
+        "requirement_task_count": requirement_task_count,
+        "case_task_count": case_task_count,
+        "api_task_count": api_task_count,
+        "active_api_task_count": active_api_task_count,
     }

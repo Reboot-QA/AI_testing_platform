@@ -27,7 +27,7 @@
           :reason="r.error_message"
           :status-text="statusText(r)"
           :status-class="statusClass(r)"
-          @click="enter(r.project_id)"
+          @click="enter(r)"
         />
       </div>
       <el-empty v-else-if="!loading" description="暂无匹配的运行记录" :image-size="72" />
@@ -52,6 +52,7 @@ import { onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { WorkbenchReportItem } from '@/api/apifox'
 import { apifoxApi } from '@/api'
+import { workspaceRouteLocation } from '@/composables/useWorkspaceOverviewNav'
 import { formatRelativeTime } from '@/utils/datetime'
 import ActivityRow from '@/components/hub/ActivityRow.vue'
 
@@ -104,11 +105,11 @@ watch([scope, kind], () => {
   load()
 })
 
-function enter(projectId: number) {
-  router.push({
-    path: `/hub/workspace/${projectId}`,
-    hash: '#domain=automation&biz=reports&section=reports',
+function enter(r: WorkbenchReportItem) {
+  const loc = workspaceRouteLocation(r.project_id, 'automation', 'reports', undefined, {
+    run: String(r.run_id),
   })
+  if (loc) void router.push(loc)
 }
 
 onMounted(load)

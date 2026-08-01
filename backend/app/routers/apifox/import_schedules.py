@@ -4,6 +4,7 @@ router 仅参数校验与编排；增删改后一律 refresh_schedule(force_from
 密码 / Token 仅在提供时写入（update 不传即保留原值），响应不回传其明文。
 """
 
+import json
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,7 @@ from app.models.apifox.import_schedule import ApifoxImportSchedule
 from app.models.user import User
 from app.repositories.apifox import import_schedule_repo
 from app.routers.apifox.import_schedule_schemas import (
+    ImportRunManifest,
     ImportScheduleCreate,
     ImportScheduleOut,
     ImportScheduleUpdate,
@@ -45,6 +47,15 @@ def _clear_irrelevant(task: ApifoxImportSchedule) -> None:
         task.cron_expr = None
 
 
+def _parse_manifest(raw: str | None) -> ImportRunManifest | None:
+    if not raw:
+        return None
+    try:
+        return ImportRunManifest.model_validate(json.loads(raw))
+    except (ValueError, TypeError):
+        return None
+
+
 def _out(db: Session, task: ApifoxImportSchedule) -> ImportScheduleOut:
     return ImportScheduleOut(
         id=task.id,
@@ -64,6 +75,7 @@ def _out(db: Session, task: ApifoxImportSchedule) -> ImportScheduleOut:
         last_run_at=task.last_run_at,
         last_run_status=task.last_run_status,
         last_run_detail=task.last_run_detail,
+        last_run_manifest=_parse_manifest(task.last_run_manifest),
         next_run_at=task.next_run_at,
     )
 
@@ -150,12 +162,12 @@ def update_import_schedule(
     return _out(db, task)
 
 
-@router.delete("/import-schedules/{sid}")
+@router.delete("/import-schedules/{sid}", status_code=204)
 def delete_import_schedule(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     task = _owned(db, sid, user)
     import_schedule_repo.delete(db, task)
     db.commit()
-    return {"detail": "已删除"}
+    return None
 
 
 @router.post("/import-schedules/{sid}/run-now", response_model=ImportScheduleOut)

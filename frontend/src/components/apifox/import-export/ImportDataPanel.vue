@@ -1,5 +1,5 @@
 <template>
-  <div class="io-page">
+  <div class="io-page" :class="{ 'io-page--wide': !!preview && !diff }">
     <header class="io-head">
       <div>
         <h2 class="io-title">导入数据</h2>
@@ -35,15 +35,16 @@
 
     <section class="io-section io-panel">
       <!-- 输入态 -->
-      <template v-if="!diff">
+      <template v-if="!preview && !diff">
         <div class="io-panel-head">
           <h3 class="io-section-title">{{ current.label }}</h3>
           <p v-if="current.hint" class="io-hint">
             {{ current.hint }}
             <button type="button" class="io-link" @click="comingSoon">查看详细说明</button>
           </p>
-          <p v-if="isUpdate" class="io-hint io-hint--update">
-            该项目已有接口，将作为「更新同步」：先预览变更（新增/变更/移除）再应用，不会盲目新建。
+          <p v-if="hasEndpoints" class="io-hint io-hint--update">
+            该项目已有接口：下一步会列出文档里的接口并标出「已存在 /
+            有变更」，由你勾选要导入的部分并选择导入位置。
           </p>
         </div>
 
@@ -65,29 +66,40 @@
         />
 
         <div v-if="showContinue" class="io-footer">
-          <el-button
-            type="primary"
-            :loading="busy"
-            :disabled="!canContinue"
-            @click="handleContinue"
-          >
-            {{ continueLabel }}
+          <el-button type="primary" :loading="busy" :disabled="!canContinue" @click="onContinue">
+            继续
           </el-button>
         </div>
       </template>
 
-      <!-- 更新预览态（同源识别） -->
-      <template v-else>
+      <!-- 预览 & 配置态：勾选接口 + 选导入位置 -->
+      <template v-else-if="preview && !diff">
         <div class="io-panel-head">
-          <h3 class="io-section-title">更新预览</h3>
-          <p class="io-hint">与上次导入同源，已识别为「更新同步」；确认变更后应用。</p>
+          <h3 class="io-section-title">导入预览 &amp; 配置</h3>
+          <p class="io-hint">默认全选；取消勾选即不导入，已存在的接口按右侧策略处理。</p>
+        </div>
+        <ImportPreviewPanel
+          :preview="preview"
+          :busy="busy"
+          :has-endpoints="hasEndpoints"
+          @back="resetPreview"
+          @to-sync="loadDiff"
+          @confirm="handleImport"
+        />
+      </template>
+
+      <!-- 更新同步态（可选入口） -->
+      <template v-else-if="diff">
+        <div class="io-panel-head">
+          <h3 class="io-section-title">更新同步</h3>
+          <p class="io-hint">按文档整体同步：建新增、更新变更契约，并可清理文档中已移除的接口。</p>
         </div>
         <ImportDiffPreview :diff="diff" />
         <el-checkbox v-model="deleteUnreferenced" class="io-del-opt">
           同时删除「新 Swagger 已移除且无用例引用」的接口（连同其用例）
         </el-checkbox>
         <div class="io-footer">
-          <el-button @click="resetDiff">返回</el-button>
+          <el-button @click="backToPreview">返回</el-button>
           <el-button type="primary" :loading="busy" @click="handleApply">应用更新</el-button>
         </div>
       </template>
@@ -99,8 +111,9 @@
 import { computed, ref } from 'vue'
 import type { ImportSourceFormat } from '@/types/apifox'
 import { IMPORT_FORMATS, findImportFormat } from '@/utils/importFormats'
-import { useImportWorkspace } from '@/composables/useImportWorkspace'
+import { useImportWorkspace, type ImportChoice } from '@/composables/useImportWorkspace'
 import ImportDialogContent from '@/components/apifox/import-export/ImportDialogContent.vue'
+import ImportPreviewPanel from '@/components/apifox/import-export/ImportPreviewPanel.vue'
 import ImportDiffPreview from '@/components/apifox/import-export/ImportDiffPreview.vue'
 import ImportScheduleDialog from '@/components/apifox/import-export/ImportScheduleDialog.vue'
 import ApiAccessDialog from '@/components/apifox/endpoint/ApiAccessDialog.vue'
@@ -121,19 +134,22 @@ const {
   mode,
   showContinue,
   canContinue,
-  isUpdate,
-  continueLabel,
+  hasEndpoints,
+  preview,
   diff,
   deleteUnreferenced,
   comingSoon,
   onFile,
   onContinue,
+  confirmImport,
+  loadDiff,
   applySync,
-  resetDiff,
+  backToPreview,
+  resetPreview,
 } = useImportWorkspace(format)
 
-async function handleContinue() {
-  const ok = await onContinue()
+async function handleImport(choice: ImportChoice) {
+  const ok = await confirmImport(choice)
   if (ok) contentRef.value?.reset()
 }
 
@@ -149,6 +165,10 @@ async function handleApply() {
   display: flex;
   flex-direction: column;
   gap: var(--ax-space-5);
+}
+/* 预览态是「树 + 配置」两栏，需要比输入态更宽 */
+.io-page--wide {
+  max-width: 1120px;
 }
 .io-head {
   display: flex;

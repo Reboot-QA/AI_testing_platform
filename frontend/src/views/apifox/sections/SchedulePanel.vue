@@ -4,12 +4,46 @@
       <span class="tip"
         >定时任务按计划自动执行用例/场景，结果落入测试报告（触发来源标记为「定时」）。</span
       >
-      <el-button type="primary" @click="openDialog()">
+      <el-button type="primary" size="small" @click="openDialog()">
         <el-icon><Plus /></el-icon> 新建定时任务
       </el-button>
     </div>
 
-    <el-table :data="schedules" class="schedule-table" height="100%" size="small" border>
+    <div class="filters">
+      <el-input
+        v-model="filterScheduleId"
+        class="schedule-id"
+        size="small"
+        clearable
+        placeholder="任务 ID"
+        @keyup.enter="search"
+      />
+      <el-input
+        v-model="filterKeyword"
+        class="search"
+        size="small"
+        clearable
+        :maxlength="SEARCH_MAX_LEN"
+        placeholder="搜索任务名称"
+        @keyup.enter="search"
+      >
+        <template #prefix
+          ><el-icon><Search /></el-icon
+        ></template>
+      </el-input>
+      <el-button type="primary" size="small" @click="search">搜索</el-button>
+      <el-button size="small" @click="resetFilters">重置</el-button>
+    </div>
+
+    <el-table
+      v-loading="loading"
+      :data="schedules"
+      class="schedule-table"
+      height="100%"
+      size="small"
+      border
+    >
+      <el-table-column label="ID" prop="id" width="72" />
       <el-table-column label="名称" prop="name" min-width="140" />
       <el-table-column label="目标" min-width="180">
         <template #default="{ row }">
@@ -109,13 +143,16 @@
               <el-button link type="danger" size="small" @click="clearTarget">清除</el-button>
             </div>
             <span v-else class="schedule-target-placeholder">{{ targetPickPlaceholder }}</span>
-            <el-button type="primary" plain @click="openTargetPicker">{{ targetPickButtonLabel }}</el-button>
+            <el-button type="primary" plain @click="openTargetPicker">{{
+              targetPickButtonLabel
+            }}</el-button>
           </div>
         </el-form-item>
         <el-form-item label="环境">
           <el-select
             v-model="form.environment_id"
             clearable
+            :value-on-clear="null"
             placeholder="不指定环境（用绝对地址）"
             style="width: 100%"
           >
@@ -175,11 +212,12 @@
 </template>
 
 <script setup lang="ts">
-import { TITLE_MAX_LEN, VALUE_MAX_LEN } from '@/constants/limits'
+import { TITLE_MAX_LEN, VALUE_MAX_LEN, SEARCH_MAX_LEN } from '@/constants/limits'
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import {
@@ -198,6 +236,9 @@ const router = useRouter()
 const weekdays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
 
 const schedules = ref<Schemas['ScheduleOut'][]>([])
+const loading = ref(false)
+const filterKeyword = ref('')
+const filterScheduleId = ref('')
 const cases = ref<Schemas['ProjectCaseBrief'][]>([])
 const scenarios = ref<Schemas['ScenarioBrief'][]>([])
 const suites = ref<Schemas['SuiteBrief'][]>([])
@@ -353,21 +394,55 @@ function targetTagType(t: string) {
   return t === 'scenario' ? 'warning' : t === 'suite' ? 'primary' : 'success'
 }
 
-async function loadAll() {
-  const [sch, cs, scn, sui, envs, eps] = await Promise.all([
-    apifoxApi.listSchedules(pid.value),
+function parseScheduleIdFilter(raw: string): number | null {
+  const text = raw.trim()
+  if (!/^\d+$/.test(text)) return null
+  const id = Number(text)
+  return Number.isInteger(id) && id > 0 ? id : null
+}
+
+async function loadSchedules() {
+  loading.value = true
+  try {
+    const params: { keyword?: string; schedule_id?: number } = {}
+    const kw = filterKeyword.value.trim()
+    if (kw) params.keyword = kw
+    const scheduleId = parseScheduleIdFilter(filterScheduleId.value)
+    if (scheduleId) params.schedule_id = scheduleId
+    schedules.value = await apifoxApi.listSchedules(pid.value, params)
+  } finally {
+    loading.value = false
+  }
+}
+
+function search() {
+  filterScheduleId.value = filterScheduleId.value.replace(/\D/g, '')
+  void loadSchedules()
+}
+
+function resetFilters() {
+  filterKeyword.value = ''
+  filterScheduleId.value = ''
+  void loadSchedules()
+}
+
+async function loadMeta() {
+  const [cs, scn, sui, envs, eps] = await Promise.all([
     apifoxApi.listProjectCases(pid.value),
     apifoxApi.listScenarios(pid.value),
     apifoxApi.listSuites(pid.value),
     apifoxApi.listEnvironments(pid.value),
     apifoxApi.listEndpoints(pid.value),
   ])
-  schedules.value = sch
   cases.value = cs
   scenarios.value = scn
   suites.value = sui
   environments.value = envs
   endpoints.value = eps
+}
+
+async function loadAll() {
+  await Promise.all([loadMeta(), loadSchedules()])
 }
 
 defineExpose({ create: () => openDialog() })
@@ -458,13 +533,12 @@ async function toggle(row: Schemas['ScheduleOut']) {
 async function runNow(row: Schemas['ScheduleOut']) {
   runningId.value = row.id
   try {
-    const res = await apifoxApi.runScheduleNow(row.id)
-    ElMessage.success(
-      `执行完成：${res.last_run_status === 'passed' ? '通过' : '失败'}，可在测试报告查看`,
-    )
+    // 后端触发即返回（执行体放后台跑，避免套件/多用例长任务占请求线程超时）；结果稍后在测试报告查看
+    await apifoxApi.runScheduleNow(row.id)
+    ElMessage.success('已触发执行，请稍后在测试报告查看结果')
     await loadAll()
   } catch (e: unknown) {
-    ElMessage.error((e as Error).message || '执行失败')
+    ElMessage.error((e as Error).message || '触发失败')
   } finally {
     runningId.value = null
   }
@@ -475,12 +549,10 @@ function viewReport(row: Schemas['ScheduleOut']) {
     ElMessage.info('该任务尚未产生测试报告')
     return
   }
-  const query = { ...route.query }
-  delete query.run
-  void router.replace({
-    path: route.path,
-    query,
-    hash: `#domain=automation&biz=reports&section=reports&run=${row.last_run_id}`,
+  void router.push({
+    name: 'WorkspaceAutomationReports',
+    params: route.params,
+    query: { run: String(row.last_run_id), from: 'schedules' },
   })
 }
 
@@ -501,6 +573,22 @@ onMounted(loadAll)
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+}
+
+.filters {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  margin-bottom: var(--ax-space-2-5);
+  flex: none;
+}
+
+.filters .schedule-id {
+  width: 120px;
+}
+
+.filters .search {
+  width: 220px;
 }
 
 .toolbar {

@@ -54,13 +54,22 @@
               </div>
             </el-form-item>
             <el-form-item label="关联需求">
+              <div v-if="approvedCount" class="req-filter-bar">
+                <span class="req-filter-label">筛选</span>
+                <el-radio-group v-model="reqCaseFilter" size="small">
+                  <el-radio-button value="all">全部</el-radio-button>
+                  <el-radio-button value="with_cases">已有用例</el-radio-button>
+                  <el-radio-button value="without_cases">未有用例</el-radio-button>
+                </el-radio-group>
+              </div>
               <el-select
                 v-model="form.requirement_ids"
                 multiple
+                filterable
                 collapse-tags
                 collapse-tags-tooltip
                 clearable
-                placeholder="可多选已评审需求，或下方手动输入"
+                placeholder="搜索或选择已评审需求（可多选）"
                 style="width: 100%"
               >
                 <template v-if="selectableCount" #header>
@@ -75,7 +84,7 @@
                   </div>
                 </template>
                 <el-option
-                  v-for="r in approvedRequirements"
+                  v-for="r in filteredApprovedRequirements"
                   :key="r.id"
                   :label="r.title"
                   :value="r.id"
@@ -97,7 +106,11 @@
                 <el-button link type="primary" @click="selectAllRequirements">全选</el-button>
                 <el-button link @click="clearSelectedRequirements">清空</el-button>
                 <span class="req-select-count"
-                  >已选 {{ selectedSelectableCount }}/{{ selectableCount }}</span
+                  >已选 {{ selectedSelectableCount }}/{{ selectableCount
+                  }}<template v-if="form.requirement_ids.length">
+                    · 预计生成约
+                    {{ resolveGenerateCount(form.requirement_ids) }} 条用例</template
+                  ></span
                 >
               </div>
               <div v-if="form.project_id && !requirements.length" class="form-tip">
@@ -105,6 +118,12 @@
               </div>
               <div v-else-if="form.project_id && !approvedCount" class="form-tip">
                 当前项目暂无已评审需求，请先在需求点中评审后再关联
+              </div>
+              <div
+                v-else-if="form.project_id && approvedCount && !filteredApprovedRequirements.length"
+                class="form-tip"
+              >
+                当前筛选下暂无需求，请切换筛选条件
               </div>
             </el-form-item>
             <el-form-item label="需求描述" prop="requirement_text">
@@ -129,11 +148,12 @@
               <el-button
                 type="primary"
                 data-assistant="ai_generate.generate_btn"
-                :loading="generating"
+                :loading="scopedTaskActive"
+                :disabled="restoringRunning && storeMatchesProject"
                 @click="handleGenerate"
               >
                 <el-icon><MagicStick /></el-icon>
-                {{ generating ? '正在生成，请稍候...' : '开始生成' }}
+                {{ scopedTaskActive ? '正在生成，请稍候...' : '开始生成' }}
               </el-button>
             </el-form-item>
           </el-form>
@@ -157,65 +177,76 @@
         <div class="panel-h">
           <span class="panel-title">生成结果</span>
           <div class="result-tags">
-            <el-tag v-if="lastMode" :type="lastMode === 'llm' ? 'success' : 'warning'" size="small">
-              {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
+            <el-tag
+              v-if="scopedLastMode"
+              :type="scopedLastMode === 'llm' ? 'success' : 'warning'"
+              size="small"
+            >
+              {{ scopedLastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
             </el-tag>
-            <el-tag v-if="lastProviderName" type="info" size="small">{{ lastProviderName }}</el-tag>
-            <el-tag v-if="results.length" type="primary" size="small"
-              >{{ results.length }} 条</el-tag
+            <el-tag v-if="scopedLastProviderName" type="info" size="small">{{
+              scopedLastProviderName
+            }}</el-tag>
+            <el-tag v-if="scopedResults.length" type="primary" size="small"
+              >{{ scopedResults.length }} 条</el-tag
             >
           </div>
         </div>
 
         <div class="panel-body result-body">
           <el-empty
-            v-if="!results.length && !generating && !errorMessage"
+            v-if="!scopedHasResultsPanel && !scopedErrorMessage"
             description="配置需求后点击「开始生成」"
             :image-size="72"
           />
 
           <el-alert
-            v-if="errorMessage && !generating"
+            v-if="scopedErrorMessage && !scopedTaskActive"
             class="error-alert"
-            :title="errorMessage"
+            :title="scopedErrorMessage"
             type="error"
             show-icon
             :closable="false"
           />
 
-          <div v-if="failedRequirements.length && !generating" class="failed-panel">
+          <div v-if="scopedFailedRequirements.length && !scopedTaskActive" class="failed-panel">
             <div class="failed-head">
-              <span class="failed-title">{{ failedRequirements.length }} 个需求生成失败</span>
+              <span class="failed-title">{{ scopedFailedRequirements.length }} 个需求生成失败</span>
               <el-button
-                v-if="retryableFailedCount"
+                v-if="scopedRetryableFailedCount"
                 type="primary"
-                :loading="generating"
+                :loading="scopedTaskActive"
                 @click="retryFailed"
               >
-                重新生成失败项 ({{ retryableFailedCount }})
+                重新生成失败项 ({{ scopedRetryableFailedCount }})
               </el-button>
             </div>
             <ul class="failed-list">
-              <li v-for="item in failedRequirements" :key="item.requirement_id ?? item.title">
+              <li v-for="item in scopedFailedRequirements" :key="item.requirement_id ?? item.title">
                 <span class="failed-req">{{ item.title }}</span>
                 <span class="failed-reason">{{ item.reason }}</span>
               </li>
             </ul>
           </div>
 
-          <div v-if="generating" class="stream-progress">
-            <el-progress :percentage="progressPercent" :stroke-width="8" striped striped-flow />
-            <p class="progress-text">{{ progressMessage }}</p>
-            <p v-if="results.length" class="saved-tip">
-              已实时写入用例库 {{ results.length }} 条
+          <div v-if="scopedTaskActive" class="stream-progress">
+            <el-progress
+              :percentage="scopedProgressPercent"
+              :stroke-width="8"
+              striped
+              striped-flow
+            />
+            <p class="progress-text">{{ scopedProgressMessage }}</p>
+            <p v-if="scopedResults.length" class="saved-tip">
+              已实时写入用例库 {{ scopedResults.length }} 条
               <el-button type="primary" link @click="goToTestCaseLibrary">前往用例库查看</el-button>
             </p>
           </div>
 
-          <div v-if="results.length" class="result-list">
-            <el-collapse v-model="activeNames">
+          <div v-if="scopedResults.length" class="result-list">
+            <el-collapse v-model="scopedActiveNames">
               <el-collapse-item
-                v-for="item in results"
+                v-for="item in scopedResults"
                 :key="item.id"
                 :title="`[${item.priority}] ${item.title}`"
                 :name="item.id"
@@ -239,14 +270,11 @@
             </el-collapse>
           </div>
 
-          <div v-if="results.length" class="result-footer">
-            <el-text v-if="!generating" type="success"
-              >共生成 {{ results.length }} 条用例，已实时保存至用例库</el-text
+          <div v-if="scopedResults.length && !scopedTaskActive" class="result-footer">
+            <el-text type="success"
+              >共生成 {{ scopedResults.length }} 条用例，已实时保存至用例库</el-text
             >
-            <el-text v-else type="info">生成中，用例将实时写入用例库...</el-text>
-            <el-button v-if="!generating" type="primary" link @click="goToTestCaseLibrary"
-              >前往用例库评审 →</el-button
-            >
+            <el-button type="primary" link @click="goToTestCaseLibrary">前往用例库评审 →</el-button>
           </div>
         </div>
       </div>
@@ -286,6 +314,9 @@ const router = useRouter()
 const {
   results,
   generating,
+  restoringRunning,
+  taskActive,
+  hasResultsPanel,
   progressMessage,
   progressCurrent,
   progressTotal,
@@ -296,19 +327,8 @@ const {
   failedRequirements,
 } = storeToRefs(aiStore)
 
-const retryableFailedCount = computed(
-  () => failedRequirements.value.filter((f) => f.requirement_id != null).length,
-)
-
-const projects = ref<Project[]>([])
-const requirements = ref<Requirement[]>([])
-const llmProviders = ref<Schemas['LLMProviderOptionOut'][]>([])
-const providersLoading = ref(false)
-const mockMode = ref(false)
-const formRef = ref<FormInstance>()
-
 // scopedProjectId 传入时锁定该项目（新壳工作区）：隐藏项目下拉；不传保持独立页原行为
-const props = defineProps<{ scopedProjectId?: number }>()
+const props = defineProps<{ scopedProjectId?: number; embedded?: boolean }>()
 const scoped = computed(() => props.scopedProjectId != null)
 
 const form = reactive<GenerateForm>({
@@ -319,9 +339,62 @@ const form = reactive<GenerateForm>({
   case_type: 'functional',
 })
 
+const currentProjectId = computed(() => props.scopedProjectId ?? form.project_id)
+
+/** 全局 Pinia 与当前页项目一致时才展示/操作生成结果（跨项目切换隔离） */
+const storeMatchesProject = computed(
+  () => currentProjectId.value != null && aiStore.activeProjectId === currentProjectId.value,
+)
+const scopedResults = computed(() => (storeMatchesProject.value ? results.value : []))
+const scopedTaskActive = computed(() => storeMatchesProject.value && taskActive.value)
+const scopedHasResultsPanel = computed(() => storeMatchesProject.value && hasResultsPanel.value)
+const scopedProgressMessage = computed(() =>
+  storeMatchesProject.value ? progressMessage.value : '',
+)
+const scopedProgressCurrent = computed(() =>
+  storeMatchesProject.value ? progressCurrent.value : 0,
+)
+const scopedProgressTotal = computed(() => (storeMatchesProject.value ? progressTotal.value : 0))
+const scopedProgressPercent = computed(() => {
+  if (!scopedProgressTotal.value) return scopedTaskActive.value ? 5 : 0
+  return Math.min(100, Math.round((scopedProgressCurrent.value / scopedProgressTotal.value) * 100))
+})
+const scopedLastMode = computed(() => (storeMatchesProject.value ? lastMode.value : ''))
+const scopedLastProviderName = computed(() =>
+  storeMatchesProject.value ? lastProviderName.value : '',
+)
+const scopedErrorMessage = computed(() => (storeMatchesProject.value ? errorMessage.value : ''))
+const scopedFailedRequirements = computed(() =>
+  storeMatchesProject.value ? failedRequirements.value : [],
+)
+const scopedRetryableFailedCount = computed(
+  () => scopedFailedRequirements.value.filter((f) => f.requirement_id != null).length,
+)
+
+const scopedActiveNames = computed({
+  get(): Array<number | string> {
+    if (!storeMatchesProject.value) return []
+    const ids = new Set(scopedResults.value.map((r) => r.id))
+    return activeNames.value.filter((id) => ids.has(id as number))
+  },
+  set(val: Array<number | string>) {
+    if (storeMatchesProject.value) {
+      activeNames.value = val
+    }
+  },
+})
+
+const projects = ref<Project[]>([])
+const requirements = ref<Requirement[]>([])
+const llmProviders = ref<Schemas['LLMProviderOptionOut'][]>([])
+const providersLoading = ref(false)
+const mockMode = ref(false)
+const formRef = ref<FormInstance>()
+
 const DEFAULT_GENERATE_COUNT = 5
 const CASES_PER_REQUIREMENT = 3
-const MAX_GENERATE_COUNT = 100
+/** 与后端 AIGenerateRequest.count 上限一致 */
+const MAX_GENERATE_COUNT = 2000
 
 function resolveGenerateCount(requirementIds: number[]) {
   if (!requirementIds.length) return DEFAULT_GENERATE_COUNT
@@ -333,11 +406,6 @@ const rules: FormRules<GenerateForm> = {
   provider_id: [{ required: true, message: '请选择大模型', trigger: 'change' }],
 }
 
-const progressPercent = computed(() => {
-  if (!progressTotal.value) return generating.value ? 5 : 0
-  return Math.min(100, Math.round((progressCurrent.value / progressTotal.value) * 100))
-})
-
 const statusMap: Record<string, string> = { draft: '草稿', approved: '已评审', closed: '已关闭' }
 const statusType: Record<string, 'info' | 'success' | 'warning'> = {
   draft: 'info',
@@ -347,9 +415,24 @@ const statusType: Record<string, 'info' | 'success' | 'warning'> = {
 const approvedRequirements = computed(() =>
   requirements.value.filter((r) => r.status === 'approved'),
 )
+
+type ReqCaseFilter = 'all' | 'with_cases' | 'without_cases'
+const reqCaseFilter = ref<ReqCaseFilter>('all')
+
+const filteredApprovedRequirements = computed(() => {
+  const list = approvedRequirements.value
+  if (reqCaseFilter.value === 'with_cases') {
+    return list.filter((r) => (r.testcase_count ?? 0) > 0)
+  }
+  if (reqCaseFilter.value === 'without_cases') {
+    return list.filter((r) => (r.testcase_count ?? 0) === 0)
+  }
+  return list
+})
+
 const approvedCount = computed(() => approvedRequirements.value.length)
-const selectableCount = computed(() => approvedCount.value)
-const selectableIds = computed(() => approvedRequirements.value.map((r) => r.id))
+const selectableCount = computed(() => filteredApprovedRequirements.value.length)
+const selectableIds = computed(() => filteredApprovedRequirements.value.map((r) => r.id))
 const selectedSelectableCount = computed(
   () => selectableIds.value.filter((id) => form.requirement_ids.includes(id)).length,
 )
@@ -391,11 +474,25 @@ watch(
 // 新壳切换项目 → 同步锁定并重载需求
 watch(
   () => props.scopedProjectId,
-  (v) => {
+  (v, old) => {
     if (v == null) return
     form.project_id = v
     form.requirement_ids = []
     loadRequirements()
+    if (old != null && old !== v) {
+      aiStore.cancelGeneration('已切换项目，生成已取消')
+    }
+    aiStore.onEnterAiGeneratePage(v)
+  },
+  { immediate: true },
+)
+
+watch(
+  () => form.project_id,
+  (id, prev) => {
+    if (scoped.value || id == null || prev == null || prev === id) return
+    aiStore.cancelGeneration()
+    aiStore.onEnterAiGeneratePage(id)
   },
 )
 
@@ -431,6 +528,7 @@ async function loadRequirements() {
   requirements.value = await requirementApi.list(form.project_id)
   form.requirement_ids = []
   form.requirement_text = ''
+  reqCaseFilter.value = 'all'
 }
 
 async function loadProviders() {
@@ -516,8 +614,8 @@ function goToTestCaseLibrary() {
     return
   }
   void router.push({
-    path: `/hub/workspace/${projectId}`,
-    hash: '#domain=functional&section=func-cases',
+    name: 'WorkspaceFunctionalCases',
+    params: { projectId },
   })
 }
 
@@ -577,7 +675,9 @@ onMounted(async () => {
   })
 
   await Promise.all([loadProjects(), loadProviders()])
-  aiStore.onEnterAiGeneratePage() // 新壳按 v-if 挂载，进入/离开保护改由组件生命周期驱动（原 router 钩子已随旧路由移除）
+  if (props.scopedProjectId == null && form.project_id != null) {
+    aiStore.onEnterAiGeneratePage(form.project_id)
+  }
 })
 
 onUnmounted(() => {
@@ -730,6 +830,19 @@ onUnmounted(() => {
 .req-select-header {
   padding: var(--ax-space-1) var(--ax-space-3) var(--ax-space-2);
   border-bottom: 1px solid var(--ax-border);
+}
+
+.req-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-gap-sm);
+  margin-bottom: var(--ax-space-2);
+}
+
+.req-filter-label {
+  flex-shrink: 0;
+  color: var(--ax-text-secondary);
+  font-size: var(--ax-text-caption-size);
 }
 
 .req-select-actions {

@@ -8,9 +8,10 @@ from urllib.parse import quote
 
 from openpyxl import Workbook, load_workbook
 from openpyxl.styles import Alignment, Font
-from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
+from sqlalchemy.orm import Session, joinedload
 
+from app.constants.limits import normalize_req_case_title
 from app.models.project import Project
 from app.models.requirement import Requirement
 from app.models.testcase import TestCase
@@ -243,6 +244,85 @@ def export_requirements_excel(project: Project, requirements: List[Requirement])
     return buffer, filename
 
 
+def build_requirements_import_template_excel() -> Tuple[BytesIO, str]:
+    """空项目可用的导入 Excel 模板（含表头与一行示例）。"""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "需求点"
+    ws.append(EXCEL_HEADERS)
+    for col in range(1, len(EXCEL_HEADERS) + 1):
+        cell = ws.cell(1, col)
+        cell.font = Font(bold=True)
+        cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.append([1, "示例需求", "功能", "P1", "草稿", "手动", "请填写需求描述，导入前可删除本行"])
+    for row in ws.iter_rows(min_row=2, max_row=ws.max_row):
+        for cell in row:
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+    ws.column_dimensions["A"].width = 8
+    ws.column_dimensions["B"].width = 36
+    ws.column_dimensions["C"].width = 10
+    ws.column_dimensions["D"].width = 8
+    ws.column_dimensions["E"].width = 10
+    ws.column_dimensions["F"].width = 12
+    ws.column_dimensions["G"].width = 48
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    return buffer, "requirements_import_template.xlsx"
+
+
+def build_requirements_import_template_xmind() -> Tuple[BytesIO, str]:
+    """XMind 导入模板：末级节点为需求点，上级节点可表示类型/优先级。"""
+    leaf_a = _build_xmind_topic("示例需求一", notes="请填写需求描述，导入前可删除示例节点")
+    leaf_b = _build_xmind_topic("示例需求二", notes="XMind 仅导入末级主题")
+    priority_node = _build_xmind_topic("P1", children=[leaf_a, leaf_b])
+    type_node = _build_xmind_topic("功能", children=[priority_node])
+    root = _build_xmind_topic(
+        "需求导入模板",
+        children=[type_node],
+        structure_class="org.xmind.ui.logic.right",
+    )
+    sheet_id = _topic_id()
+    sheet = {
+        "id": sheet_id,
+        "class": "sheet",
+        "title": "需求点",
+        "rootTopic": root,
+        "theme": {
+            "map": {
+                "id": _topic_id(),
+                "properties": {
+                    "svg:fill": "#ffffff",
+                    "multi-line-colors": "",
+                    "color-list": "",
+                },
+            }
+        },
+    }
+    metadata = {
+        "dataStructureVersion": "2",
+        "layoutEngineVersion": "3",
+        "creator": {"name": "AI质量平台", "version": "1.0.0"},
+        "activeSheetId": sheet_id,
+        "modifier": "",
+    }
+    manifest = {
+        "file-entries": {
+            "content.json": {},
+            "metadata.json": {},
+            "Thumbnails/thumbnail.png": {},
+        }
+    }
+    buffer = BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("content.json", json.dumps([sheet], ensure_ascii=False))
+        archive.writestr("metadata.json", json.dumps(metadata, ensure_ascii=False))
+        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False))
+        archive.writestr("Thumbnails/thumbnail.png", _XMIND_THUMBNAIL_PNG)
+    buffer.seek(0)
+    return buffer, "requirements_import_template.xmind"
+
+
 def export_requirements_xmind(project: Project, requirements: List[Requirement]) -> Tuple[BytesIO, str]:
     grouped = _group_requirements(requirements)
     type_nodes: List[Dict] = []
@@ -436,6 +516,21 @@ def next_requirement_sort_order(db: Session, project_id: int) -> int:
     return int(current or 0) + 1
 
 
+def _project_sort_orders_in_use(db: Session, project_id: int) -> set[int]:
+    if not requirement_has_sort_order_column():
+        return set()
+    rows = db.query(Requirement.sort_order).filter(Requirement.project_id == project_id).all()
+    return {int(value) for value in (row[0] for row in rows) if value and int(value) > 0}
+
+
+def _allocate_sort_order(preferred: int, used: set[int], floor: int) -> int:
+    candidate = max(preferred, floor)
+    while candidate in used:
+        candidate += 1
+    used.add(candidate)
+    return candidate
+
+
 def dedupe_import_rows(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     merged: Dict[str, Dict[str, str]] = {}
     order: List[str] = []
@@ -449,19 +544,29 @@ def dedupe_import_rows(rows: List[Dict[str, str]]) -> List[Dict[str, str]]:
     return [merged[title] for title in order]
 
 
-def clear_project_requirements(db: Session, project_id: int) -> int:
-    requirement_ids = [
-        row[0] for row in db.query(Requirement.id).filter(Requirement.project_id == project_id).all()
-    ]
-    if not requirement_ids:
-        return 0
-    db.query(TestCase).filter(TestCase.requirement_id.in_(requirement_ids)).update(
-        {TestCase.requirement_id: None},
-        synchronize_session=False,
-    )
-    db.query(Requirement).filter(Requirement.id.in_(requirement_ids)).delete(synchronize_session=False)
-    db.flush()
-    return len(requirement_ids)
+def clear_project_requirements(db: Session, project_id: int) -> Tuple[int, int]:
+    """覆盖导入前清理：仅删除无关联用例的需求点，保留已关联用例的需求。
+
+    Returns:
+        (deleted_count, protected_count)
+    """
+    requirements = db.query(Requirement).filter(Requirement.project_id == project_id).all()
+    if not requirements:
+        return 0, 0
+
+    deleted = 0
+    protected = 0
+    for req in requirements:
+        case_count = db.query(TestCase).filter(TestCase.requirement_id == req.id).count()
+        if case_count > 0:
+            protected += 1
+            continue
+        db.delete(req)
+        deleted += 1
+
+    if deleted:
+        db.flush()
+    return deleted, protected
 
 
 def summarize_import_rows(rows: List[Dict[str, str]]) -> Tuple[int, int, int, List[str]]:
@@ -475,24 +580,29 @@ def import_requirements_from_rows(
     rows: List[Dict[str, str]],
     current_user: User,
     mode: RequirementImportMode = "append",
-) -> Tuple[int, int, int]:
+) -> Tuple[int, int, int, int]:
     created = 0
     skipped = 0
     cleared = 0
+    protected = 0
 
     if mode == "replace":
-        cleared = clear_project_requirements(db, project.id)
+        cleared, protected = clear_project_requirements(db, project.id)
 
+    used_sort_orders = _project_sort_orders_in_use(db, project.id)
     next_sort_order = next_requirement_sort_order(db, project.id)
 
     for index, row in enumerate(rows, start=1):
-        title = row.get("标题", "").strip()
+        title = normalize_req_case_title(row.get("标题", ""))
         if not title:
             skipped += 1
             continue
         try:
-            fallback_sort_order = next_sort_order if mode == "append" else index
-            sort_order = parse_import_sort_order(row, fallback_sort_order)
+            if mode == "append":
+                preferred = next_sort_order
+            else:
+                preferred = parse_import_sort_order(row, index)
+            sort_order = _allocate_sort_order(preferred, used_sort_orders, next_sort_order)
             payload = {
                 "description": row.get("描述") or None,
                 "req_type": normalize_type(row.get("类型")),
@@ -518,7 +628,7 @@ def import_requirements_from_rows(
 
     if created or cleared:
         db.commit()
-    return created, skipped, cleared
+    return created, skipped, cleared, protected
 
 
 def list_project_requirements(db: Session, project_id: int) -> List[Requirement]:

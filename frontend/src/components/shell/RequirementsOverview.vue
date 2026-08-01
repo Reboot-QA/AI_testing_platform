@@ -4,7 +4,7 @@
       :stats="stats"
       :actions="ACTIONS"
       :steps="STEPS"
-      @nav="(s, f) => emit('nav', s, f)"
+      @nav="onNav"
     />
     <OverviewRecentAiSection
       title="最近 AI 分析"
@@ -16,7 +16,7 @@
       empty-text="暂无 AI 导入需求，可前往「AI 分析需求」"
       @refresh="loadRecent"
       @page-change="onRecentPage"
-      @row-click="(row) => emit('nav', 'req-points', 'kw:' + row.title)"
+      @row-click="(row) => onNav('req-points', 'kw:' + row.title)"
     />
   </div>
 </template>
@@ -29,11 +29,12 @@ import DomainOverview from './DomainOverview.vue'
 import OverviewRecentAiSection, { type OverviewAiRow } from './OverviewRecentAiSection.vue'
 import type { OverviewAction, OverviewStat, OverviewStep } from '@/types/shell'
 import { formatBeijingTime } from '@/utils/datetime'
+import { useWorkspaceOverviewNav } from '@/composables/useWorkspaceOverviewNav'
 
 const props = defineProps<{ projectId: number }>()
-const emit = defineEmits<{ nav: [section: string, filter?: string] }>()
+const { navigate: onNav } = useWorkspaceOverviewNav(() => props.projectId, 'requirements')
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 10
 const overview = ref<Awaited<ReturnType<typeof projectApi.requirementsOverview>> | null>(null)
 const recentLoading = ref(false)
 const recentPage = ref(1)

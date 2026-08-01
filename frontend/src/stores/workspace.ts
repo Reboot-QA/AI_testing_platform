@@ -30,8 +30,17 @@ export const useWorkspaceStore = defineStore('workspace', {
     },
   },
   actions: {
-    async loadProject(id: number | string): Promise<Project> {
-      this.currentProject = await projectApi.get(id)
+    // 首页快捷入口的默认项目：已有当前项目直接复用；否则取工作台概览首个
+    // （后端 user_project_pref_service.order_cards 已按「置顶优先 → 自定义排序」返回）。
+    // 一个项目都没有时返回 null，由调用方引导创建项目。
+    async resolveDefaultProjectId(): Promise<number | null> {
+      if (this.currentProject) return this.currentProject.id
+      const overview = await apifoxApi.workbenchOverview()
+      return overview.projects[0]?.id ?? null
+    },
+    // skipErrorToast：调用方自行提示（工作区校验项目可访问性时用，避免与自定义提示叠两条）
+    async loadProject(id: number | string, skipErrorToast = false): Promise<Project> {
+      this.currentProject = await projectApi.get(id, { skipErrorToast })
       return this.currentProject
     },
     async loadEnvironments(projectId: number | string): Promise<Environment[]> {

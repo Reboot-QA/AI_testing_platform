@@ -150,6 +150,12 @@ export const useApiTabsStore = defineStore('apiTabs', {
         p.activeId = id
       }
     },
+    /** 取消当前接口激活态，保留已打开 tab，供点击接口树空白区使用。 */
+    deactivate(pid: number | string): void {
+      const p = this._p(pid)
+      if (p.activeId != null) p.lastActiveId = p.activeId
+      p.activeId = null
+    },
     async openEndpoint(pid: number | string, id: number): Promise<void> {
       const p = this._p(pid)
       if (p.tabs.some((t) => t.id === id)) {
@@ -255,6 +261,11 @@ export const useApiTabsStore = defineStore('apiTabs', {
     setDebugResp(pid: number | string, id: number, resp: Schemas['DebugResponse'] | null): void {
       const t = this.findTab(pid, id)
       if (t) t.debugResp = resp
+    },
+
+    /** 切换账号/退出登录时清空：tab 按项目缓存，不清会把上个用户的接口带到新会话 */
+    resetAll(): void {
+      this.byProject = {}
     },
   },
 })

@@ -6,6 +6,19 @@ from typing import Optional
 from pydantic import BaseModel, Field
 
 from app.constants.limits import TITLE_MAX_LEN
+from app.routers.apifox.schemas import ImportRunItem
+
+
+class ImportRunManifest(BaseModel):
+    """上次运行逐条清单：counts + items（新增/更新/删除/保留/未变），供明细表展示。"""
+
+    added: int = 0
+    updated: int = 0
+    deleted: int = 0
+    kept_referenced: int = 0
+    skipped: int = 0
+    truncated: bool = False
+    items: list[ImportRunItem] = Field(default_factory=list)
 
 
 class ImportScheduleCreate(BaseModel):
@@ -56,4 +69,5 @@ class ImportScheduleOut(BaseModel):
     last_run_at: Optional[datetime] = None
     last_run_status: Optional[str] = None
     last_run_detail: Optional[str] = None
+    last_run_manifest: Optional[ImportRunManifest] = None
     next_run_at: Optional[datetime] = None

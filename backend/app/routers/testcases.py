@@ -2,12 +2,12 @@ import json
 import logging
 from typing import Any, Dict, List, Optional, Union
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_menu_permission
 from app.config import settings
 from app.database import SessionLocal, get_db
 from app.models.project import Project
@@ -27,12 +27,14 @@ from app.schemas import (
     TestCasePageOut,
     TestCaseUpdate,
 )
+from app.services import hub_ai_task_service
 from app.services.ai_service import (
     build_generation_tasks,
     generate_testcases,
     split_generation_batches,
     stream_generate_batches,
 )
+from app.services.hub_ai_task_wait import hub_task_was_canceled, wait_hub_task_running
 from app.services.project_access_service import get_accessible_project, get_accessible_project_ids
 from app.services.requirement_io_service import summarize_import_rows
 from app.services.requirement_query_helper import fetch_requirements_for_ai
@@ -40,6 +42,8 @@ from app.services.settings_service import get_effective_llm_config
 from app.services.test_execution_service import delete_testcases_with_execution_cleanup
 from app.services.testcase_io_service import (
     build_content_disposition,
+    build_testcases_import_template_excel,
+    build_testcases_import_template_xmind,
     export_testcases_excel,
     export_testcases_xmind,
     import_testcases_from_rows,
@@ -57,6 +61,22 @@ from app.services.testcase_query_helper import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/testcases", tags=["用例"])
+
+_HUB_CASE_TYPE_LABELS = {
+    "functional": "功能测试",
+    "api": "接口测试",
+    "performance": "性能测试",
+    "security": "安全测试",
+}
+
+AI_CASES_PER_REQUIREMENT = 3
+AI_GENERATE_COUNT_MAX = 2000
+
+
+def _resolve_ai_generate_count(data: AIGenerateRequest, requirement_count: int) -> int:
+    if requirement_count > 0:
+        return min(requirement_count * AI_CASES_PER_REQUIREMENT, AI_GENERATE_COUNT_MAX)
+    return min(data.count, AI_GENERATE_COUNT_MAX)
 
 ALLOWED_REVIEW_STATUSES = {"draft", "pending", "approved", "rejected"}
 ALLOWED_TESTCASE_IMPORT_MODES = {"append", "replace"}
@@ -222,6 +242,39 @@ def _sse_event(payload: dict) -> str:
     return f"data: {json.dumps(payload, ensure_ascii=False, default=str)}\n\n"
 
 
+def _hub_db_call(fn):
+    db = SessionLocal()
+    try:
+        return fn(db)
+    finally:
+        db.close()
+
+
+def _abort_functional_hub_stream_task(
+    db: Session,
+    hub_task_id: int,
+    *,
+    saved_count: int = 0,
+    error: str = "生成已中断",
+) -> None:
+    task = hub_ai_task_service.get_task(db, hub_task_id)
+    if not task or task.status in hub_ai_task_service.HUB_TASK_TERMINAL:
+        return
+    if task.status == "pending":
+        hub_ai_task_service.cancel_pending_hub_task(db, hub_task_id, error=error)
+        return
+    status = "partial" if saved_count > 0 else "failed"
+    hub_ai_task_service.finish_task(
+        db,
+        hub_task_id,
+        status=status,
+        generated_total=saved_count,
+        applied_total=saved_count,
+        done_items=saved_count,
+        error=error,
+    )
+
+
 def _build_generation_tasks(ctx: Dict[str, Any], total_count: int) -> List[Dict[str, Any]]:
     req_items = [
         {"id": req.id, "title": req.title, "description": req.description or ""}
@@ -241,7 +294,7 @@ def _apply_testcase_list_order(query, order: Optional[str]):
     return apply_testcase_list_order(query)
 
 
-@router.get("", response_model=Union[List[TestCaseOut], TestCasePageOut])
+@router.get("", response_model=Union[List[TestCaseOut], TestCasePageOut], dependencies=[Depends(require_menu_permission("testcases"))])
 def list_testcases(
     project_id: Optional[int] = Query(None),
     requirement_id: Optional[int] = Query(None),
@@ -315,7 +368,7 @@ def list_testcases(
     return [_testcase_out(item, db) for item in query.all()]
 
 
-@router.post("", response_model=TestCaseOut)
+@router.post("", response_model=TestCaseOut, dependencies=[Depends(require_menu_permission("testcases"))])
 def create_testcase(
     data: TestCaseCreate,
     db: Session = Depends(get_db),
@@ -333,7 +386,7 @@ def create_testcase(
     return _testcase_out(case, db)
 
 
-@router.post("/ai/generate", response_model=AIGenerateResponse)
+@router.post("/ai/generate", response_model=AIGenerateResponse, dependencies=[Depends(require_menu_permission("ai_generate"))])
 async def ai_generate(
     data: AIGenerateRequest,
     db: Session = Depends(get_db),
@@ -341,7 +394,8 @@ async def ai_generate(
 ):
     ctx = _prepare_ai_generate(db, data, current_user)
     llm_config = ctx["llm_config"]
-    tasks = _build_generation_tasks(ctx, data.count)
+    generate_count = _resolve_ai_generate_count(data, len(ctx["selected_requirements"]))
+    tasks = _build_generation_tasks(ctx, generate_count)
 
     saved: List[TestCase] = []
     mode = "mock" if llm_config["mock_mode"] else "llm"
@@ -382,9 +436,10 @@ async def ai_generate(
     )
 
 
-@router.post("/ai/generate/stream")
+@router.post("/ai/generate/stream", dependencies=[Depends(require_menu_permission("ai_generate"))])
 async def ai_generate_stream(
     data: AIGenerateRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
 ):
     db = SessionLocal()
@@ -412,10 +467,74 @@ async def ai_generate_stream(
         failed_by_key: Dict[str, Dict[str, Any]] = {}
         mode = "mock" if ctx["llm_config"]["mock_mode"] else "llm"
         llm_config = ctx["llm_config"]
-        tasks = _build_generation_tasks(ctx, data.count)
+        generate_count = _resolve_ai_generate_count(data, len(ctx["selected_requirements"]))
+        tasks = _build_generation_tasks(ctx, generate_count)
+        hub_task_id: Optional[int] = None
+        task_finished = False
+        worker_active = False
+        sel = ctx["selected_requirements"]
+        target_label = f"{len(sel)} 个需求" if sel else "手动输入需求"
+        category_label = _HUB_CASE_TYPE_LABELS.get(data.case_type, data.case_type)
+        llm_slot_key = hub_ai_task_service.llm_slot_key_from_config(llm_config)
 
         try:
+            try:
+                hub_task = hub_ai_task_service.create_running_task(
+                    stream_db,
+                    project_id=data.project_id,
+                    task_type="functional",
+                    created_by=current_user.id,
+                    target=target_label,
+                    category_label=category_label,
+                    total_items=generate_count,
+                    provider_id=llm_config.get("provider_id"),
+                    meta={
+                        "provider_id": llm_config.get("provider_id"),
+                        "model": llm_config.get("model"),
+                        "provider_name": llm_config.get("provider_name"),
+                        "llm_slot_key": llm_slot_key,
+                    },
+                )
+            except hub_ai_task_service.HubTaskCapacityError as exc:
+                yield _sse_event({"type": "error", "message": exc.message})
+                return
+
+            hub_task_id = hub_task.id
+            if hub_task.status == "pending":
+                yield _sse_event(
+                    {
+                        "type": "status",
+                        "message": "排队中，等待使用同一模型的其他 AI 用例生成任务完成…",
+                        "queued": True,
+                        "current": 0,
+                        "total": generate_count,
+                        "hub_task_id": hub_task_id,
+                    }
+                )
+                slot_status = await wait_hub_task_running(
+                    _hub_db_call,
+                    hub_task_id,
+                    is_disconnected=request.is_disconnected,
+                )
+                if slot_status != "running":
+                    err = (
+                        "排队任务已取消"
+                        if slot_status == "canceled"
+                        else "排队任务未能启动，请稍后重试"
+                    )
+                    _abort_functional_hub_stream_task(stream_db, hub_task_id, error=err)
+                    task_finished = True
+                    yield _sse_event({"type": "error", "message": err})
+                    return
+
             if not tasks:
+                hub_ai_task_service.finish_task(
+                    stream_db,
+                    hub_task_id,
+                    status="failed",
+                    error="没有可生成的需求任务，请检查关联需求",
+                )
+                task_finished = True
                 yield _sse_event({"type": "error", "message": "没有可生成的需求任务，请检查关联需求"})
                 return
 
@@ -431,9 +550,13 @@ async def ai_generate_stream(
                         f"{batch_call_count} 批请求（并发 {settings.ai_generate_concurrency}）..."
                     ),
                     "current": 0,
-                    "total": data.count,
+                    "total": generate_count,
+                    "hub_task_id": hub_task_id,
                 }
             )
+
+            hub_ai_task_service.set_hub_parse_worker_active(stream_db, hub_task_id, True)
+            worker_active = True
 
             async for cases_data, batch_mode, batch_index, batch_total, requirement_id, label, task_error in stream_generate_batches(
                 tasks,
@@ -445,6 +568,15 @@ async def ai_generate_stream(
                 batch_size=settings.ai_generate_batch_size,
                 concurrency=settings.ai_generate_concurrency,
             ):
+                if hub_task_id and await hub_task_was_canceled(_hub_db_call, hub_task_id):
+                    _abort_functional_hub_stream_task(
+                        stream_db,
+                        hub_task_id,
+                        saved_count=saved_count,
+                        error="任务已取消",
+                    )
+                    task_finished = True
+                    return
                 mode = batch_mode
                 if task_error:
                     fail_key = str(requirement_id) if requirement_id is not None else f"manual:{label}"
@@ -461,7 +593,7 @@ async def ai_generate_stream(
                             "type": "status",
                             "message": f"「{label}」生成失败，已跳过（{batch_index}/{batch_total}）",
                             "current": saved_count,
-                            "total": data.count,
+                            "total": generate_count,
                         }
                     )
                     continue
@@ -471,7 +603,7 @@ async def ai_generate_stream(
                         "type": "status",
                         "message": f"正在为「{label}」生成用例（{batch_index}/{batch_total} 批）...",
                         "current": saved_count,
-                        "total": data.count,
+                        "total": generate_count,
                     }
                 )
 
@@ -489,16 +621,35 @@ async def ai_generate_stream(
                     stream_db.flush()
                     stream_db.refresh(case)
                     saved_count += 1
+                    hub_ai_task_service.record_functional_case_progress(
+                        stream_db,
+                        hub_task_id,
+                        sort_order=saved_count,
+                        testcase_id=case.id,
+                        done_items=saved_count,
+                        generated_total=saved_count,
+                        total_items=generate_count,
+                    )
                     yield _sse_event(
                         {
                             "type": "case",
                             "data": _testcase_out(case, stream_db).model_dump(mode="json"),
                             "current": saved_count,
-                            "total": data.count,
+                            "total": generate_count,
                             "saved": True,
                         }
                     )
                 stream_db.commit()
+
+            if hub_task_id and await hub_task_was_canceled(_hub_db_call, hub_task_id):
+                _abort_functional_hub_stream_task(
+                    stream_db,
+                    hub_task_id,
+                    saved_count=saved_count,
+                    error="任务已取消",
+                )
+                task_finished = True
+                return
 
             failed_tasks = list(failed_by_key.values())
             if saved_count == 0:
@@ -514,6 +665,23 @@ async def ai_generate_stream(
             message = f"成功生成 {saved_count} 条用例，已实时写入用例库"
             if failed_tasks:
                 message += f"，{len(failed_tasks)} 个需求生成失败已跳过"
+
+            final_status = "partial" if failed_tasks else "succeeded"
+            hub_ai_task_service.finish_task(
+                stream_db,
+                hub_task_id,
+                status=final_status,
+                generated_total=saved_count,
+                applied_total=saved_count,
+                done_items=saved_count,
+                total_items=generate_count,
+                meta={
+                    "mode": mode,
+                    "failed_count": len(failed_tasks),
+                    "message": message,
+                },
+            )
+            task_finished = True
 
             yield _sse_event(
                 {
@@ -534,6 +702,19 @@ async def ai_generate_stream(
                 message = f"已写入用例库 {saved_count} 条，后续生成中断：{exc}"
                 if failed_tasks:
                     message += f"；{len(failed_tasks)} 个需求生成失败已跳过"
+                if hub_task_id:
+                    hub_ai_task_service.finish_task(
+                        stream_db,
+                        hub_task_id,
+                        status="partial",
+                        generated_total=saved_count,
+                        applied_total=saved_count,
+                        done_items=saved_count,
+                        total_items=generate_count,
+                        error=str(exc),
+                        meta={"message": message, "partial": True},
+                    )
+                task_finished = True
                 yield _sse_event(
                     {
                         "type": "done",
@@ -548,8 +729,27 @@ async def ai_generate_stream(
                     }
                 )
             else:
+                if hub_task_id:
+                    hub_ai_task_service.finish_task(
+                        stream_db,
+                        hub_task_id,
+                        status="failed",
+                        generated_total=0,
+                        applied_total=0,
+                        error=str(exc),
+                    )
+                task_finished = True
                 yield _sse_event({"type": "error", "message": f"AI 生成失败: {exc}"})
         finally:
+            if worker_active and hub_task_id:
+                hub_ai_task_service.set_hub_parse_worker_active(stream_db, hub_task_id, False)
+            if hub_task_id and not task_finished:
+                _abort_functional_hub_stream_task(
+                    stream_db,
+                    hub_task_id,
+                    saved_count=saved_count,
+                    error="连接中断或生成异常退出",
+                )
             stream_db.close()
 
     return StreamingResponse(
@@ -563,7 +763,7 @@ async def ai_generate_stream(
     )
 
 
-@router.get("/export/excel")
+@router.get("/export/excel", dependencies=[Depends(require_menu_permission("testcases"))])
 def export_excel(
     project_id: int = Query(...),
     db: Session = Depends(get_db),
@@ -579,7 +779,7 @@ def export_excel(
     )
 
 
-@router.get("/export/xmind")
+@router.get("/export/xmind", dependencies=[Depends(require_menu_permission("testcases"))])
 def export_xmind(
     project_id: int = Query(...),
     db: Session = Depends(get_db),
@@ -595,7 +795,7 @@ def export_xmind(
     )
 
 
-@router.post("/import/file", response_model=TestCaseFileImportResponse)
+@router.post("/import/file", response_model=TestCaseFileImportResponse, dependencies=[Depends(require_menu_permission("testcases"))])
 async def import_testcases_file(
     project_id: int = Form(...),
     file: UploadFile = File(...),
@@ -659,7 +859,33 @@ async def import_testcases_file(
     return _build_import_response(message)
 
 
-@router.post("/batch/review", response_model=TestCaseBatchReviewResponse)
+@router.get("/import/template/excel", dependencies=[Depends(require_menu_permission("testcases"))])
+def download_testcases_import_template_excel(
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    buffer, filename = build_testcases_import_template_excel()
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": build_content_disposition(filename, "testcases_import_template.xlsx")},
+    )
+
+
+@router.get("/import/template/xmind", dependencies=[Depends(require_menu_permission("testcases"))])
+def download_testcases_import_template_xmind(
+    current_user: User = Depends(get_current_user),
+):
+    _ = current_user
+    buffer, filename = build_testcases_import_template_xmind()
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.xmind.workbook",
+        headers={"Content-Disposition": build_content_disposition(filename, "testcases_import_template.xmind")},
+    )
+
+
+@router.post("/batch/review", response_model=TestCaseBatchReviewResponse, dependencies=[Depends(require_menu_permission("testcases"))])
 def batch_review_testcases(
     data: TestCaseBatchReviewUpdate,
     db: Session = Depends(get_db),
@@ -708,7 +934,7 @@ def batch_review_testcases(
     )
 
 
-@router.post("/batch/delete", response_model=BatchDeleteResponse)
+@router.post("/batch/delete", response_model=BatchDeleteResponse, dependencies=[Depends(require_menu_permission("testcases"))])
 def batch_delete_testcases(
     data: TestCaseBatchDelete,
     db: Session = Depends(get_db),
@@ -726,7 +952,7 @@ def batch_delete_testcases(
     return BatchDeleteResponse(deleted_count=deleted_count, message=f"成功删除 {deleted_count} 条用例")
 
 
-@router.get("/{case_id}", response_model=TestCaseOut)
+@router.get("/{case_id}", response_model=TestCaseOut, dependencies=[Depends(require_menu_permission("testcases"))])
 def get_testcase(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     case = db.query(TestCase).options(joinedload(TestCase.creator)).filter(TestCase.id == case_id).first()
     if not case:
@@ -735,7 +961,7 @@ def get_testcase(case_id: int, db: Session = Depends(get_db), current_user: User
     return _testcase_out(case, db)
 
 
-@router.put("/{case_id}", response_model=TestCaseOut)
+@router.put("/{case_id}", response_model=TestCaseOut, dependencies=[Depends(require_menu_permission("testcases"))])
 def update_testcase(
     case_id: int,
     data: TestCaseUpdate,
@@ -769,7 +995,7 @@ def update_testcase(
     return _testcase_out(case, db)
 
 
-@router.delete("/{case_id}")
+@router.delete("/{case_id}", status_code=204, dependencies=[Depends(require_menu_permission("testcases"))])
 def delete_testcase(case_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     case = db.query(TestCase).filter(TestCase.id == case_id).first()
     if not case:
@@ -777,4 +1003,4 @@ def delete_testcase(case_id: int, db: Session = Depends(get_db), current_user: U
     _check_project(db, case.project_id, current_user)
     delete_testcases_with_execution_cleanup(db, [case])
     db.commit()
-    return {"message": "删除成功"}
+    return None

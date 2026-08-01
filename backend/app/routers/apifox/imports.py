@@ -12,7 +12,7 @@ from app.auth import get_current_user
 from app.database import get_db
 from app.models.project import Project
 from app.models.user import User
-from app.routers.apifox.schemas import ImportDiffOut, ImportSyncReport
+from app.routers.apifox.schemas import ImportDiffOut, ImportPreviewOut, ImportSyncReport
 from app.services.apifox import (
     export_docs,
     export_postman,
@@ -54,9 +54,23 @@ class ImportSyncRequest(ImportRequest):
     delete_unreferenced: bool = False
 
 
+class ImportOpenapiRequest(ImportRequest):
+    """执行导入时附带用户在「预览 & 配置」里的选择。"""
+
+    # 导入位置：None = 根目录；文档 tag 作为其下的子目录
+    target_folder_id: Optional[int] = None
+    # 勾选的接口 key（形如 "GET /users"）；None = 不筛选，全部导入
+    selected_keys: Optional[list[str]] = None
+    # 已存在同 (method, path) 接口时：skip 跳过 / overwrite 覆盖请求契约
+    on_conflict: str = "skip"
+    # 是否一并导入 components/schemas 为数据模型
+    with_schemas: bool = True
+
+
 class ImportReport(BaseModel):
     total: int
     created: int
+    updated: int = 0
     skipped: int
     folders_created: int
     schemas_created: int = 0
@@ -184,16 +198,39 @@ def _load_doc(data: ImportRequest) -> Dict[str, Any]:
     return import_converters.to_openapi3(raw)
 
 
-@router.post("/projects/{pid}/import/openapi", response_model=ImportReport)
-def import_openapi(
+@router.post("/projects/{pid}/import/openapi/preview", response_model=ImportPreviewOut)
+def import_openapi_preview(
     pid: int,
     data: ImportRequest,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    """导入前的只读预览：按 tag 分组列出待导入接口，标注已存在/契约有变更，供用户勾选。"""
     get_accessible_project(db, pid, user)
     try:
-        report = import_service.import_openapi(db, pid, _load_doc(data))
+        return ImportPreviewOut(**import_service.preview_openapi(db, pid, _load_doc(data)))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except _DOC_STRUCTURE_ERRORS as exc:
+        raise _doc_error(pid, "导入预览", exc)
+
+
+@router.post("/projects/{pid}/import/openapi", response_model=ImportReport)
+def import_openapi(
+    pid: int,
+    data: ImportOpenapiRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    get_accessible_project(db, pid, user)
+    options = import_service.ImportOptions(
+        target_folder_id=data.target_folder_id,
+        selected_keys=set(data.selected_keys) if data.selected_keys is not None else None,
+        on_conflict=data.on_conflict,
+        with_schemas=data.with_schemas,
+    )
+    try:
+        report = import_service.import_openapi(db, pid, _load_doc(data), options)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except IntegrityError:

@@ -4,6 +4,8 @@ from typing import Any, List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
+from app.constants.limits import REQ_CASE_TITLE_MAX_LEN, validate_build_name, validate_req_case_title
+
 USERNAME_PATTERN = re.compile(r"^[A-Za-z0-9_]+$")
 
 
@@ -107,6 +109,9 @@ class MenuDefinitionOut(BaseModel):
     label: str
     path: str
     group: str
+    parent: Optional[str] = None
+    parent_label: Optional[str] = None
+    hint: Optional[str] = None
 
 
 class UserPermissionsOut(BaseModel):
@@ -181,6 +186,8 @@ class ProjectPrefOrderIn(BaseModel):
 class ProjectOut(ProjectBase):
     id: int
     owner_seq: int = 0
+    api_tree_order_version: int = 1
+    scenario_order_version: int = 1
     owner_id: int
     owner_name: str = ""
     department_id: Optional[int] = None
@@ -258,13 +265,25 @@ class RequirementBase(BaseModel):
 class RequirementCreate(RequirementBase):
     project_id: int
 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        return validate_req_case_title(value)
+
 
 class RequirementUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=REQ_CASE_TITLE_MAX_LEN)
     description: Optional[str] = None
     req_type: Optional[str] = None
     priority: Optional[str] = None
     status: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_req_case_title(value)
 
 
 class RequirementOut(RequirementBase):
@@ -314,10 +333,15 @@ class RequirementBatchDeleteResponse(BaseModel):
 
 
 class ExtractedRequirement(BaseModel):
-    title: str
+    title: str = Field(min_length=1, max_length=REQ_CASE_TITLE_MAX_LEN)
     description: Optional[str] = None
     req_type: str = "functional"
     priority: str = "P1"
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        return validate_req_case_title(value)
 
 
 class RequirementExtractResponse(BaseModel):
@@ -333,6 +357,7 @@ class RequirementExtractResponse(BaseModel):
 class RequirementBatchImport(BaseModel):
     project_id: int
     requirements: List[ExtractedRequirement] = Field(min_length=1)
+    hub_task_id: Optional[int] = None
 
 
 class RequirementBatchImportResponse(BaseModel):
@@ -378,9 +403,14 @@ class TestCaseBase(BaseModel):
 class TestCaseCreate(TestCaseBase):
     project_id: int
 
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        return validate_req_case_title(value)
+
 
 class TestCaseUpdate(BaseModel):
-    title: Optional[str] = None
+    title: Optional[str] = Field(default=None, min_length=1, max_length=REQ_CASE_TITLE_MAX_LEN)
     case_type: Optional[str] = None
     priority: Optional[str] = None
     preconditions: Optional[str] = None
@@ -389,6 +419,13 @@ class TestCaseUpdate(BaseModel):
     tags: Optional[str] = None
     requirement_id: Optional[int] = None
     review_status: Optional[str] = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: Optional[str]) -> Optional[str]:
+        if value is None:
+            return None
+        return validate_req_case_title(value)
 
 
 class TestCaseOut(TestCaseBase):
@@ -420,7 +457,7 @@ class AIGenerateRequest(BaseModel):
     requirement_ids: Optional[List[int]] = None
     requirement_text: Optional[str] = None
     case_type: str = "functional"
-    count: int = Field(default=5, ge=1, le=100)
+    count: int = Field(default=5, ge=1, le=2000)
     provider_id: Optional[int] = None
 
 
@@ -454,6 +491,12 @@ class BatchDeleteResponse(BaseModel):
     message: str
 
 
+class ActionResultOut(BaseModel):
+    """无实体返回的写操作统一响应。"""
+
+    message: str
+
+
 class DashboardStats(BaseModel):
     project_count: int
     requirement_count: int
@@ -478,6 +521,14 @@ class RequirementsOverviewOut(BaseModel):
     unlinked_count: int
     ai_document_count: int
     ai_unreviewed_count: int
+
+
+class AiTasksOverviewOut(BaseModel):
+    total_task_count: int
+    requirement_task_count: int
+    case_task_count: int
+    api_task_count: int
+    active_api_task_count: int = 0
 
 
 class LLMSettingsOut(BaseModel):
@@ -574,11 +625,21 @@ class ManualTestRunCreate(BaseModel):
     requirement_id: Optional[int] = None
     requirement_ids: Optional[List[int]] = None
 
+    @field_validator("build_name")
+    @classmethod
+    def validate_build_name_field(cls, value: Optional[str]) -> Optional[str]:
+        return validate_build_name(value)
+
 
 class ManualTestRunUpdate(BaseModel):
     name: Optional[str] = None
     build_name: Optional[str] = None
     description: Optional[str] = None
+
+    @field_validator("build_name")
+    @classmethod
+    def validate_build_name_field(cls, value: Optional[str]) -> Optional[str]:
+        return validate_build_name(value)
 
 
 class ManualTestRunCaseResultUpdate(BaseModel):
@@ -609,6 +670,17 @@ class ManualTestRunCaseOut(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class ManualTestRunAvailableCaseOut(BaseModel):
+    """创建测试单时可选择的已评审用例。"""
+
+    id: int
+    title: str
+    priority: str
+    case_type: str
+    requirement_id: Optional[int]
+    sort_order: int
 
 
 class ManualTestRunSummaryOut(BaseModel):
@@ -644,3 +716,8 @@ class ManualTestRunPageOut(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class ManualTestRunBatchDelete(BaseModel):
+    project_id: int
+    run_ids: List[int] = Field(min_length=1)

@@ -18,7 +18,6 @@
 
 <script setup lang="ts">
 import { computed, watch } from 'vue'
-import type { Schemas } from '@/api/types'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { useRunReportDrawer } from '@/composables/useRunReportDrawer'
 import RunReportDetail from '@/components/apifox/run/RunReportDetail.vue'

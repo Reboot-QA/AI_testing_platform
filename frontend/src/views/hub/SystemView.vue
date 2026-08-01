@@ -49,12 +49,12 @@ const ALL = [
     perm: 'system_departments',
   },
   {
-    title: '日志',
-    desc: '操作日志 · 错误日志',
-    icon: 'Document',
-    color: '#ff7d00',
-    path: '/system/logs',
-    perm: 'system_logs',
+    title: '权限管理',
+    desc: '菜单授权 · 部门权限',
+    icon: 'Key',
+    color: '#722ed1',
+    path: '/system/permissions',
+    perm: 'system_permissions',
   },
 ]
 

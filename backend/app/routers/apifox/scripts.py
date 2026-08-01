@@ -78,14 +78,14 @@ def save_debug_preset(
     return preset_service.upsert_preset(db, pid, data, user.id)
 
 
-@router.delete("/projects/{pid}/script-debug-presets/{preset_id}")
+@router.delete("/projects/{pid}/script-debug-presets/{preset_id}", status_code=204)
 def delete_debug_preset(
     pid: int, preset_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)
 ):
     get_accessible_project(db, pid, user)
     if not preset_service.delete_preset(db, pid, preset_id):
         raise HTTPException(status_code=404, detail="预设不存在")
-    return {"message": "预设已删除"}
+    return None
 
 
 @router.get("/scripts/{sid}", response_model=ScriptOut)
@@ -107,11 +107,11 @@ def update_script(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/scripts/{sid}")
+@router.delete("/scripts/{sid}", status_code=204)
 def delete_script(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     script = _script_checked(db, sid, user)
     try:
         service.delete_script(db, script)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    return {"message": "脚本已删除"}
+    return None

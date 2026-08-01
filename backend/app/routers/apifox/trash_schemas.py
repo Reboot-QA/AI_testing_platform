@@ -39,6 +39,13 @@ class TrashBatchOut(BaseModel):
     errors: list[str] = []
 
 
+class TrashRestoreOut(BaseModel):
+    entity_type: TrashKind
+    entity_id: int
+    restored_at: datetime
+    version: Optional[int] = None
+
+
 class TrashPageOut(BaseModel):
     items: list[TrashItem]
     total: int

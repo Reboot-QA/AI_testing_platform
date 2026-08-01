@@ -8,7 +8,7 @@ import json
 from datetime import date
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, Body
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
@@ -24,10 +24,12 @@ from app.repositories.apifox import (
     suite_repo,
     variable_repo,
 )
+from app.routers.apifox.case_schemas import CaseRunAllRequest
 from app.routers.apifox.run_schemas import (
     RunBatchDeleteIn,
     RunBatchDeleteOut,
     RunBrief,
+    RunBriefWithRetries,
     RunOut,
     RunPageOut,
     RunStepOut,
@@ -182,6 +184,53 @@ def run_suite_stream(
     return _sse_response(event_generator())
 
 
+@router.post("/endpoints/{eid}/cases/run-all/stream")
+def run_endpoint_cases_all_stream(
+    eid: int,
+    environment_id: Optional[int] = None,
+    body: CaseRunAllRequest = Body(default_factory=CaseRunAllRequest),
+    current_user: User = Depends(get_current_user),
+):
+    """接口「全部运行」：生成一条聚合报告，各用例为子运行。"""
+    db = SessionLocal()
+    try:
+        endpoint = endpoint_repo.get_endpoint(db, eid)
+        if not endpoint:
+            raise HTTPException(status_code=404, detail="接口不存在")
+        get_accessible_project(db, endpoint.project_id, current_user)
+        triggered_by = current_user.username
+        user_id = current_user.id
+    finally:
+        db.close()
+
+    def event_generator():
+        stream_db = SessionLocal()
+        try:
+            stream_endpoint = endpoint_repo.get_endpoint(stream_db, eid)
+            if not stream_endpoint:
+                yield _sse_event({"type": "error", "message": "接口不存在"})
+                return
+            all_cases = case_repo.list_cases(stream_db, eid)
+            if body.case_ids:
+                wanted = set(body.case_ids)
+                cases = [c for c in all_cases if c.id in wanted]
+            else:
+                cases = all_cases
+            environment = _resolve_environment(stream_db, environment_id, stream_endpoint.project_id)
+            for event in run_service.iter_endpoint_batch_run(
+                stream_db, stream_endpoint, cases, environment, triggered_by, user_id
+            ):
+                yield _sse_event(event)
+        except ValueError as exc:
+            yield _sse_event({"type": "error", "message": str(exc)})
+        except Exception as exc:  # noqa: BLE001
+            yield _sse_event({"type": "error", "message": f"执行失败: {exc}"})
+        finally:
+            stream_db.close()
+
+    return _sse_response(event_generator())
+
+
 # ---------- 运行记录查询 ----------
 def _loads(text: Optional[str], fallback):
     if not text:
@@ -207,6 +256,8 @@ def _brief(run: ApifoxRun, error_message: Optional[str] = None) -> RunBrief:
         pass_rate=run.pass_rate,
         duration_ms=run.duration_ms,
         triggered_by=run.triggered_by,
+        retry_of_run_id=run.retry_of_run_id,
+        attempt=run.attempt,
         started_at=run.started_at,
         finished_at=run.finished_at,
         error_message=error_message,
@@ -219,6 +270,7 @@ def _step_out(step: ApifoxRunStep) -> RunStepOut:
         step_type=step.step_type,
         depth=step.depth,
         iteration=step.iteration,
+        loop_round=step.loop_round,
         case_id=step.case_id,
         case_name=step.case_name,
         method=step.method,
@@ -261,6 +313,7 @@ def list_runs_page(
         None, description="逗号分隔的目标类型，如 scenario,suite"
     ),
     keyword: Optional[str] = Query(None, max_length=200, description="模糊匹配运行目标名"),
+    run_id: Optional[int] = Query(None, ge=1, description="按运行记录 ID 精确查询"),
     status: Optional[str] = Query(None, description="按运行状态过滤：running/passed/failed"),
     date_from: Optional[date] = Query(None, description="运行时间下界（含当天）"),
     date_to: Optional[date] = Query(None, description="运行时间上界（含当天）"),
@@ -269,15 +322,26 @@ def list_runs_page(
 ):
     get_accessible_project(db, pid, user)
     types = _parse_target_types(target_types)
-    total = run_repo.count_runs(db, pid, types, keyword, status, date_from, date_to)
-    runs = run_repo.list_runs_page(db, pid, page, page_size, types, keyword, status, date_from, date_to)
-    reasons = run_repo.failure_reasons(db, [run.id for run in runs if run.status == "failed"])
-    return RunPageOut(
-        items=[_brief(run, reasons.get(run.id)) for run in runs],
-        total=total,
-        page=page,
-        page_size=page_size,
+    total = run_repo.count_runs(db, pid, types, keyword, status, date_from, date_to, run_id)
+    runs = run_repo.list_runs_page(
+        db, pid, page, page_size, types, keyword, status, date_from, date_to, run_id
     )
+    # 每行是一条重试链：runs 为各链最后一次尝试（代表行），chains 为其此前的历次尝试（展开子行）
+    chains = run_repo.list_retry_chains(db, [run.retry_of_run_id or run.id for run in runs])
+    failed_ids = [run.id for run in runs if run.status == "failed"]
+    failed_ids += [a.id for attempts in chains.values() for a in attempts if a.status == "failed"]
+    reasons = run_repo.failure_reasons(db, failed_ids)
+    items = [
+        RunBriefWithRetries(
+            **_brief(run, reasons.get(run.id)).model_dump(),
+            retries=[
+                _brief(a, reasons.get(a.id))
+                for a in chains.get(run.retry_of_run_id or run.id, [])
+            ],
+        )
+        for run in runs
+    ]
+    return RunPageOut(items=items, total=total, page=page, page_size=page_size)
 
 
 @router.get("/endpoints/{eid}/runs", response_model=List[RunBrief])
@@ -286,7 +350,7 @@ def list_endpoint_runs(eid: int, db: Session = Depends(get_db), user: User = Dep
     if not endpoint:
         raise HTTPException(status_code=404, detail="接口不存在")
     get_accessible_project(db, endpoint.project_id, user)
-    return [_brief(r) for r in run_repo.latest_batch_case_runs_by_endpoint(db, eid)]
+    return [_brief(r) for r in run_repo.list_endpoint_batch_runs(db, eid)]
 
 
 def _full_run_out(db: Session, run: ApifoxRun) -> RunOut:
@@ -307,7 +371,7 @@ def get_run(rid: int, db: Session = Depends(get_db), user: User = Depends(get_cu
     return _full_run_out(db, run)
 
 
-@router.delete("/runs/{rid}")
+@router.delete("/runs/{rid}", status_code=204)
 def delete_run(rid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     run = run_repo.get_run(db, rid)
     if not run:
@@ -317,7 +381,7 @@ def delete_run(rid: int, db: Session = Depends(get_db), user: User = Depends(get
         raise HTTPException(status_code=400, detail="请删除顶层运行记录")
     run_repo.delete_runs(db, [rid])
     db.commit()
-    return {"message": "已删除"}
+    return None
 
 
 @router.post("/projects/{pid}/runs/batch-delete", response_model=RunBatchDeleteOut)

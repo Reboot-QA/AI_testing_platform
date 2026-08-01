@@ -1,9 +1,12 @@
 """Apifox · OpenAPI 3.x 导入（URL 拉取/粘贴 JSON → 批量生成 endpoint，按 tag 建文件夹）。
 
-同 (method, path) 已存在则跳过；批量入库单次 commit。仅支持 OpenAPI 3.x（Swagger 2.0 后续）。
+导入前先 preview_openapi 出「预览 & 配置」数据，用户勾选接口、选目标目录、定已存在接口的处理方式
+（跳过 / 覆盖契约），再由 import_openapi 按 ImportOptions 执行；批量入库单次 commit。
+仅支持 OpenAPI 3.x（Swagger 2.0 等由 import_converters 先归一化）。
 """
 
 import json
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
@@ -11,8 +14,8 @@ from sqlalchemy.orm import Session
 
 from app.models.apifox.data_model import ApifoxSchema
 from app.models.apifox.endpoint import ApifoxEndpoint, ApifoxFolder
+from app.repositories.apifox import case_repo, schema_repo
 from app.repositories.apifox import endpoint_repo as repo
-from app.repositories.apifox import schema_repo
 from app.routers.apifox.schemas import AuthSpec, BodySpec, KvRow, RequestSpec
 
 HTTP_METHODS = ("get", "post", "put", "delete", "patch")
@@ -281,15 +284,146 @@ def parse_openapi(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
     return endpoints
 
 
+# ---------- 请求契约比对（导入覆盖 / 更新同步 / 预览共用） ----------
+def load_spec(text: Optional[str]) -> RequestSpec:
+    if not text:
+        return RequestSpec()
+    try:
+        return RequestSpec.model_validate_json(text)
+    except ValueError:
+        return RequestSpec()
+
+
+def _row_keys(rows) -> frozenset:
+    return frozenset(r.key for r in rows if r.key)
+
+
+def _typed_keys(rows) -> frozenset:
+    return frozenset((r.key, r.type) for r in rows if r.key)
+
+
+def _body_signature(body: BodySpec) -> Tuple[Any, ...]:
+    """请求体契约签名：忽略格式差异，识别结构变化（form 键 / json 结构 / 原文）。"""
+    if body.type in ("form-data", "urlencoded"):
+        return ("form", _row_keys(body.form))
+    if body.type == "graphql":
+        return ("graphql", (body.graphql_query or "").strip())
+    if body.type == "json":
+        raw = (body.raw or "").strip()
+        try:
+            return ("json", json.dumps(json.loads(raw), sort_keys=True, ensure_ascii=False))
+        except (ValueError, TypeError):
+            return ("json", raw)
+    if body.type in ("xml", "raw"):
+        return (body.type, (body.raw or "").strip())
+    return (body.type,)  # none | binary
+
+
+def change_labels(new: RequestSpec, old: RequestSpec) -> List[str]:
+    """接口契约变更点（只看 import 能表达的结构，忽略示例值/enabled/desc 的本地编辑）。"""
+    labels: List[str] = []
+    if _typed_keys(new.query) != _typed_keys(old.query):
+        labels.append("Query 参数")
+    if _typed_keys(new.path_params) != _typed_keys(old.path_params):  # Params 带类型标注，需比 type
+        labels.append("Path 参数")
+    if _row_keys(new.headers) != _row_keys(old.headers):  # header 无类型语义，只比 key
+        labels.append("请求头")
+    if _body_signature(new.body) != _body_signature(old.body):
+        labels.append("请求体")
+    return labels
+
+
+def apply_contract(ep: ApifoxEndpoint, new_spec: RequestSpec, old_spec: RequestSpec) -> None:
+    """只覆盖请求契约字段，保留本地 cookies/auth/settings。"""
+    old_spec.query = new_spec.query
+    old_spec.path_params = new_spec.path_params
+    old_spec.headers = new_spec.headers
+    old_spec.body = new_spec.body
+    ep.request_spec = old_spec.model_dump_json()
+
+
+# ---------- 预览 & 选择性导入 ----------
+CONFLICT_MODES = ("skip", "overwrite")
+
+
+def endpoint_key(method: str, path: str) -> str:
+    """预览项与勾选项的稳定标识（前端按此回传选中的接口）。"""
+    return f"{method.upper()} {path}"
+
+
+@dataclass
+class ImportOptions:
+    """用户在「导入预览 & 配置」里做的选择。默认= 全部导入到根目录、已存在的跳过。"""
+
+    # 导入位置：None = 根目录；文档 tag 作为其下的子目录
+    target_folder_id: Optional[int] = None
+    # 勾选的接口 key（endpoint_key 格式）；None = 不筛选（全部）
+    selected_keys: Optional[Set[str]] = None
+    # 已存在同 (method, path) 接口时：skip 跳过 / overwrite 覆盖请求契约
+    on_conflict: str = "skip"
+    # 是否一并导入 components/schemas 为数据模型
+    with_schemas: bool = True
+
+
+def _schema_defs(doc: Dict[str, Any]) -> Dict[str, Any]:
+    defs = (doc.get("components") or {}).get("schemas") or {}
+    return defs if isinstance(defs, dict) else {}
+
+
+def preview_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[str, Any]:
+    """只读预览：按 tag 分组列出待导入接口，并标注库中是否已存在 / 契约是否有变更。不写库。"""
+    validate_openapi(doc)
+    parsed = parse_openapi(doc)
+    existing_by_key = {(e.method.upper(), e.path): e for e in repo.list_endpoints(db, project_id)}
+
+    groups: Dict[str, List[Dict[str, Any]]] = {}
+    order: List[str] = []
+    exists_count = changed_count = 0
+    for item in parsed:
+        folder = item["folder"] or ""
+        if folder not in groups:
+            groups[folder] = []
+            order.append(folder)
+        ep = existing_by_key.get((item["method"], item["path"]))
+        changed = bool(ep is not None and change_labels(item["request_spec"], load_spec(ep.request_spec)))
+        exists_count += 1 if ep is not None else 0
+        changed_count += 1 if changed else 0
+        groups[folder].append({
+            "key": endpoint_key(item["method"], item["path"]),
+            "name": item["name"],
+            "method": item["method"],
+            "path": item["path"],
+            "folder": folder,
+            "exists": ep is not None,
+            "changed": changed,
+        })
+
+    info = doc.get("info") if isinstance(doc.get("info"), dict) else {}
+    return {
+        "title": str((info or {}).get("title") or "导入数据"),
+        "folders": [{"name": name, "endpoints": groups[name]} for name in order],
+        "total": len(parsed),
+        "exists_count": exists_count,
+        "changed_count": changed_count,
+        "schemas_total": len(_schema_defs(doc)),
+        "schemas_new": count_new_schemas(db, project_id, doc),
+    }
+
+
 def _resolve_folder_id(
-    db: Session, project_id: int, folder_name: Optional[str], folder_by_name: Dict[str, ApifoxFolder]
+    db: Session,
+    project_id: int,
+    folder_name: Optional[str],
+    folder_by_name: Dict[str, ApifoxFolder],
+    parent_id: Optional[int] = None,
 ) -> Tuple[Optional[int], bool]:
-    """按 tag 名 get-or-create 顶层文件夹；返回 (folder_id, 是否新建)。"""
+    """按 tag 名在 parent_id 下 get-or-create 文件夹；返回 (folder_id, 是否新建)。
+    无 tag 的接口直接落在 parent_id（目标目录，None 即根目录）。"""
     if not folder_name:
-        return None, False
+        return parent_id, False
     folder = folder_by_name.get(folder_name)
     if folder is None:
-        folder = ApifoxFolder(project_id=project_id, name=folder_name)
+        folder = ApifoxFolder(project_id=project_id, name=folder_name, parent_id=parent_id)
         repo.create_folder(db, folder)
         folder_by_name[folder_name] = folder
         return folder.id, True
@@ -297,10 +431,16 @@ def _resolve_folder_id(
 
 
 def create_endpoint_from_item(
-    db: Session, project_id: int, item: Dict[str, Any], folder_by_name: Dict[str, ApifoxFolder]
+    db: Session,
+    project_id: int,
+    item: Dict[str, Any],
+    folder_by_name: Dict[str, ApifoxFolder],
+    parent_id: Optional[int] = None,
 ) -> bool:
     """按解析项建接口（folder get-or-create）；返回是否新建了文件夹。导入与更新同步共用。"""
-    folder_id, folder_created = _resolve_folder_id(db, project_id, item["folder"], folder_by_name)
+    folder_id, folder_created = _resolve_folder_id(
+        db, project_id, item["folder"], folder_by_name, parent_id
+    )
     repo.create_endpoint(db, ApifoxEndpoint(
         project_id=project_id,
         folder_id=folder_id,
@@ -313,34 +453,71 @@ def create_endpoint_from_item(
     return folder_created
 
 
-def import_openapi(db: Session, project_id: int, doc: Dict[str, Any]) -> Dict[str, int]:
-    """导入编排：跳重(method,path) + 按 tag get-or-create 文件夹 + 批量入库单次 commit。"""
+def _folder_index(
+    db: Session, project_id: int, options: ImportOptions
+) -> Dict[str, ApifoxFolder]:
+    """目标目录下的同名文件夹索引（tag → folder），顺带校验目标目录属于本项目。"""
+    folders = repo.list_folders(db, project_id)
+    if options.target_folder_id is not None and all(
+        f.id != options.target_folder_id for f in folders
+    ):
+        raise ValueError("目标目录不存在或不属于当前项目")
+    return {f.name: f for f in folders if f.parent_id == options.target_folder_id}
+
+
+def import_openapi(
+    db: Session,
+    project_id: int,
+    doc: Dict[str, Any],
+    options: Optional[ImportOptions] = None,
+) -> Dict[str, int]:
+    """导入编排：按勾选项过滤 + 已存在项按策略跳过/覆盖 + tag 目录建在目标目录下，单次 commit。"""
+    options = options or ImportOptions()
+    if options.on_conflict not in CONFLICT_MODES:
+        raise ValueError("已存在接口的处理方式仅支持 skip / overwrite")
     validate_openapi(doc)
     parsed = parse_openapi(doc)
+    if options.selected_keys is not None:
+        parsed = [
+            it for it in parsed if endpoint_key(it["method"], it["path"]) in options.selected_keys
+        ]
 
-    existing: Set[Tuple[str, str]] = {
-        (e.method.upper(), e.path) for e in repo.list_endpoints(db, project_id)
+    existing: Dict[Tuple[str, str], ApifoxEndpoint] = {
+        (e.method.upper(), e.path): e for e in repo.list_endpoints(db, project_id)
     }
-    folder_by_name: Dict[str, ApifoxFolder] = {
-        f.name: f for f in repo.list_folders(db, project_id) if f.parent_id is None
-    }
+    folder_by_name = _folder_index(db, project_id, options)
 
-    created = skipped = folders_created = 0
+    created = updated = skipped = folders_created = 0
+    seen: Set[Tuple[str, str]] = set()
     for item in parsed:
-        if (item["method"], item["path"]) in existing:
+        key = (item["method"], item["path"])
+        ep = existing.get(key)
+        if ep is not None or key in seen:
+            # 已存在：按用户选择跳过或覆盖请求契约（契约无变化时不算更新）
+            if ep is not None and options.on_conflict == "overwrite":
+                old_spec = load_spec(ep.request_spec)
+                if change_labels(item["request_spec"], old_spec):
+                    apply_contract(ep, item["request_spec"], old_spec)
+                    if case_repo.list_cases(db, ep.id):
+                        ep.cases_stale = True  # 有用例则标记待复核，供树上提示
+                    updated += 1
+                    continue
             skipped += 1
             continue
-        if create_endpoint_from_item(db, project_id, item, folder_by_name):
+        if create_endpoint_from_item(
+            db, project_id, item, folder_by_name, options.target_folder_id
+        ):
             folders_created += 1
-        existing.add((item["method"], item["path"]))
+        seen.add(key)
         created += 1
 
-    schemas_created = import_schemas(db, project_id, doc)
+    schemas_created = import_schemas(db, project_id, doc) if options.with_schemas else 0
 
     db.commit()
     return {
         "total": len(parsed),
         "created": created,
+        "updated": updated,
         "skipped": skipped,
         "folders_created": folders_created,
         "schemas_created": schemas_created,

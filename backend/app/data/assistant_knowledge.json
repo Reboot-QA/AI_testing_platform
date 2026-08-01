@@ -1,0 +1,98 @@
+{
+  "version": 1,
+  "guides": [
+    {
+      "text": "如何创建项目",
+      "permissions": [
+        "projects"
+      ],
+      "answer": "**如何创建项目**\n\n1. 打开 **Hub 首页**（路径 \\`/hub\\`），左侧导航点 **项目**（或首页「我的项目」区域）。\n2. 点击 **新建项目**（工具栏蓝色按钮，或列表末尾的「+ 新建项目」卡片）。\n3. 在弹窗填写 **项目名**、**描述**（选填），点 **确定**。\n4. 在项目卡片上点击进入 **项目工作区**，即可使用左侧 **需求 / 功能 / 自动化** 三大域。"
+    },
+    {
+      "text": "如何创建需求",
+      "permissions": [
+        "requirements"
+      ],
+      "answer": "**如何创建需求（需求点）**\n\n1. 进入目标 **项目工作区**（从 Hub 项目列表点进项目）。\n2. 最左侧全局栏点 **需求**。\n3. 在「需求资产」分组下打开 **需求点**（不是「需求概览」）。\n4. 点工具栏 **+ 添加需求**。\n5. 在「添加需求」弹窗填写 **标题**、**类型**、**优先级**、**描述**，点 **确定**。\n6. 保存后在列表可 **详情 / 编辑 / 删除**；将状态改为 **已评审** 后，才可用于 **AI 生成功能用例** 关联。\n\n**从文档批量导入（可选）：** 同一「需求」域 → **AI 分析需求** → 上传文档 → **AI 解析需求点** → 勾选后 **导入到需求点**。"
+    },
+    {
+      "text": "如何生成用例",
+      "permissions": [
+        "ai_generate",
+        "testcases",
+        "apifox_workbench"
+      ],
+      "answer": "**如何生成用例**\n\n**一、AI 生成功能用例（推荐）**\n1. 项目工作区 → 左侧 **功能** → **AI 生成功能用例**。\n2. 选择 **大模型**（需在 **系统 → 全局设置** 配置 Provider / Key，或开启 Mock）。\n3. 在 **关联需求** 中勾选 **已评审** 的需求点，或在下方补充描述。\n4. 点 **开始生成**；右侧「生成结果」展示进度，用例会 **实时写入功能用例库**。\n\n**二、手工维护功能用例**\n1. **功能** → **功能用例库** → **手动添加**，维护步骤与关联需求点。\n\n**三、接口自动化用例**\n1. 左侧 **自动化** → **接口用例**，在左侧树选中接口。\n2. 在右侧用例区 **添加用例**，或使用 **AI 生成**（接口用例）并查看生成日志。"
+    },
+    {
+      "text": "如何执行用例",
+      "permissions": [
+        "testcases",
+        "apifox_workbench"
+      ],
+      "answer": "**如何执行用例**\n\n**功能用手工执行**\n1. 项目工作区 → **功能** → **手工执行**。\n2. 点 **新建测试单**，选择 **需求点**（至少一个）、执行人、版本等信息并创建。\n3. 进入测试单，对关联的 **功能用例** 逐条标记 **通过 / 失败 / 阻塞**，可填实际结果。\n4. 完成后在列表查看进度与统计。\n\n**接口 / 场景自动化执行**\n1. **自动化** → **接口用例** 或 **测试场景** / **测试套件**。\n2. 在页面顶部 **选择运行环境**，点绿色 **运行**。\n3. 运行中会打开 **测试报告** 抽屉查看步骤进度；结束后在 **测试报告** 列表查看历史与导出。"
+    },
+    {
+      "text": "如何使用接口自动化",
+      "permissions": [
+        "apifox_workbench"
+      ],
+      "answer": "**如何使用接口自动化**\n\n入口：进入 **项目工作区** 后，左侧全局栏点 **自动化**。\n\n- **自动化概览**：汇总与最近运行\n- **接口目录**：维护 HTTP 接口，可 **发送** 调试\n- **数据模型**：Schema 管理\n- **接口用例**：单接口用例、断言与脚本\n- **测试场景**：串联业务流程步骤\n- **测试套件**：批量回归\n- **定时任务**：周期触发\n- **测试报告**：运行明细与导出\n- **AI 任务中心**：接口侧 AI 任务\n- **回收站**：已删资源恢复\n\n**建议顺序：** 接口目录 → 接口用例 → 测试场景 → 测试套件 → 测试报告。运行前在页面顶部选择 **运行环境**。"
+    }
+  ],
+  "ui_actions": [
+    {
+      "key": "ai_generate.generate_btn",
+      "file": "views/AIGenerate.vue"
+    },
+    {
+      "key": "ai_generate.project_select",
+      "file": "views/AIGenerate.vue"
+    },
+    {
+      "key": "ai_generate.requirement_text",
+      "file": "views/AIGenerate.vue"
+    },
+    {
+      "key": "projects.create_btn",
+      "file": "views/hub/ProjectsView.vue"
+    },
+    {
+      "key": "projects.form.description",
+      "file": "views/hub/ProjectsView.vue"
+    },
+    {
+      "key": "projects.form.name",
+      "file": "views/hub/ProjectsView.vue"
+    },
+    {
+      "key": "projects.form.submit",
+      "file": "views/hub/ProjectsView.vue"
+    },
+    {
+      "key": "requirements.create_btn",
+      "file": "views/Requirements.vue"
+    },
+    {
+      "key": "requirements.form.description",
+      "file": "views/Requirements.vue"
+    },
+    {
+      "key": "requirements.form.submit",
+      "file": "views/Requirements.vue"
+    },
+    {
+      "key": "requirements.form.title",
+      "file": "views/Requirements.vue"
+    }
+  ],
+  "sections": {
+    "workspace": "## 信息架构（与 Hub / 项目工作区 UI 一致，勿使用已废弃旧菜单名）\n- **Hub 首页** `/hub`：左侧 **首页 / 项目 / 动态**；有权限时可见 **系统**。\n- **项目工作区** `/hub/workspace/{项目ID}`：左侧全局栏 **需求 / 功能 / 自动化 / AI任务 / 设置**。\n- URL 使用具名子路径，例如 `/hub/workspace/:projectId/requirements/points`。\n\n### Hub 首页导航\n- **首页**：/hub#view=home\n- **项目**：/hub#view=projects\n- **动态**：/hub#view=activity\n- **系统**：/hub/system\n\n### 需求域\n- **需求概览**\n- **需求资产** → **AI 分析需求**、**需求点**\n\n### 功能域\n- **功能测试概览**\n- **功能用例资产** → **AI 生成功能用例**、**功能用例库**、**手工执行**\n- **测试报告** → **功能测试报告**\n\n### 自动化域\n- **自动化概览**\n- **接口管理** → **接口目录**、**数据模型**\n- **自动化测试** → **接口用例**、**测试场景**、**测试套件**、**定时任务**\n- **报告** → **测试报告**\n- **回收站**\n\n### AI 任务域\n- **AI 任务概述**\n- **任务执行** → **AI 需求任务**、**AI 用例任务**、**AI 接口任务**",
+    "features": "## 功能要点\n- 需求点状态：草稿 / 已评审 / 已关闭；仅 **已评审** 可关联 AI 生成功能用例。\n- 需求点 **+ 添加需求** 为手工创建；**AI 分析需求** 可上传文档解析后导入需求点。\n- 需求导入：**追加** 忽略 Excel 序号、自动续编；**覆盖** 仅删除无关联用例的需求，已关联用例的需求点保留。\n- 功能用例：AI 生成写入功能用例库；手工执行通过 **新建测试单** 关联需求点执行。\n- 接口自动化：运行前在顶部选择 **运行环境**；接口用例 / 测试场景 / 测试套件均可 **运行**，结果在 **测试报告** 查看。\n- Hub 右侧栏为 **动态**（失败聚焦、最近报告、定时、手工、AI 任务等聚合）。",
+    "system_menus": "## 系统管理菜单（Hub → 系统）\n- **全局设置**（`/system/settings`）\n- **用户管理**（`/system/users`）\n- **部门权限**（`/system/departments`）\n- **权限管理**（`/system/permissions`）",
+    "guides": "## 常见问答（与前端快捷问题一致）\n### Q: 如何创建项目\n**如何创建项目**\n\n1. 打开 **Hub 首页**（路径 \\`/hub\\`），左侧导航点 **项目**（或首页「我的项目」区域）。\n2. 点击 **新建项目**（工具栏蓝色按钮，或列表末尾的「+ 新建项目」卡片）。\n3. 在弹窗填写 **项目名**、**描述**（选填），点 **确定**。\n4. 在项目卡片上点击进入 **项目工作区**，即可使用左侧 **需求 / 功能 / 自动化** 三大域。\n\n### Q: 如何创建需求\n**如何创建需求（需求点）**\n\n1. 进入目标 **项目工作区**（从 Hub 项目列表点进项目）。\n2. 最左侧全局栏点 **需求**。\n3. 在「需求资产」分组下打开 **需求点**（不是「需求概览」）。\n4. 点工具栏 **+ 添加需求**。\n5. 在「添加需求」弹窗填写 **标题**、**类型**、**优先级**、**描述**，点 **确定**。\n6. 保存后在列表可 **详情 / 编辑 / 删除**；将状态改为 **已评审** 后，才可用于 **AI 生成功能用例** 关联。\n\n**从文档批量导入（可选）：** 同一「需求」域 → **AI 分析需求** → 上传文档 → **AI 解析需求点** → 勾选后 **导入到需求点**。\n\n### Q: 如何生成用例\n**如何生成用例**\n\n**一、AI 生成功能用例（推荐）**\n1. 项目工作区 → 左侧 **功能** → **AI 生成功能用例**。\n2. 选择 **大模型**（需在 **系统 → 全局设置** 配置 Provider / Key，或开启 Mock）。\n3. 在 **关联需求** 中勾选 **已评审** 的需求点，或在下方补充描述。\n4. 点 **开始生成**；右侧「生成结果」展示进度，用例会 **实时写入功能用例库**。\n\n**二、手工维护功能用例**\n1. **功能** → **功能用例库** → **手动添加**，维护步骤与关联需求点。\n\n**三、接口自动化用例**\n1. 左侧 **自动化** → **接口用例**，在左侧树选中接口。\n2. 在右侧用例区 **添加用例**，或使用 **AI 生成**（接口用例）并查看生成日志。\n\n### Q: 如何执行用例\n**如何执行用例**\n\n**功能用手工执行**\n1. 项目工作区 → **功能** → **手工执行**。\n2. 点 **新建测试单**，选择 **需求点**（至少一个）、执行人、版本等信息并创建。\n3. 进入测试单，对关联的 **功能用例** 逐条标记 **通过 / 失败 / 阻塞**，可填实际结果。\n4. 完成后在列表查看进度与统计。\n\n**接口 / 场景自动化执行**\n1. **自动化** → **接口用例** 或 **测试场景** / **测试套件**。\n2. 在页面顶部 **选择运行环境**，点绿色 **运行**。\n3. 运行中会打开 **测试报告** 抽屉查看步骤进度；结束后在 **测试报告** 列表查看历史与导出。\n\n### Q: 如何使用接口自动化\n**如何使用接口自动化**\n\n入口：进入 **项目工作区** 后，左侧全局栏点 **自动化**。\n\n- **自动化概览**：汇总与最近运行\n- **接口目录**：维护 HTTP 接口，可 **发送** 调试\n- **数据模型**：Schema 管理\n- **接口用例**：单接口用例、断言与脚本\n- **测试场景**：串联业务流程步骤\n- **测试套件**：批量回归\n- **定时任务**：周期触发\n- **测试报告**：运行明细与导出\n- **AI 任务中心**：接口侧 AI 任务\n- **回收站**：已删资源恢复\n\n**建议顺序：** 接口目录 → 接口用例 → 测试场景 → 测试套件 → 测试报告。运行前在页面顶部选择 **运行环境**。",
+    "api_summary": "## 后端 API 能力摘要（供理解平台能力边界，勿向用户背诵路径）\n### AI助手\n- POST /api/v1/assistant/chat/stream — Assistant Chat Stream\n### 接口自动化v2\n- GET /api/v1/apifox/default-headers — List Default Headers\n- GET /api/v1/apifox/projects/{pid}/folders — List Folders\n- POST /api/v1/apifox/projects/{pid}/folders — Create Folder\n- PUT /api/v1/apifox/folders/{fid} — Update Folder\n- DELETE /api/v1/apifox/folders/{fid} — Delete Folder\n- GET /api/v1/apifox/projects/{pid}/endpoints — List Endpoints\n- POST /api/v1/apifox/projects/{pid}/endpoints — Create Endpoint\n- GET /api/v1/apifox/endpoints/{eid} — Get Endpoint\n- …共 11 个接口\n### 接口自动化v2·AI生成任务\n- POST /api/v1/apifox/projects/{pid}/ai-gen-tasks — Create Ai Gen Task\n- GET /api/v1/apifox/projects/{pid}/ai-gen-tasks — List Ai Gen Tasks\n- GET /api/v1/apifox/projects/{pid}/ai-gen-tasks/active — List Active Ai Gen Tasks\n- GET /api/v1/apifox/ai-gen-tasks/{tid} — Get Ai Gen Task\n- POST /api/v1/apifox/ai-gen-tasks/{tid}/cancel — Cancel Ai Gen Task\n- POST /api/v1/apifox/ai-gen-tasks/{tid}/items/{iid}/apply — Apply Ai Gen Task Item\n- POST /api/v1/apifox/ai-gen-tasks/{tid}/apply — Apply Ai Gen Task Batch\n- POST /api/v1/apifox/ai-gen-tasks/{tid}/items/{iid}/discard — Discard Ai Gen Task Item\n- …共 9 个接口\n### 接口自动化v2·回收站\n- GET /api/v1/apifox/projects/{pid}/trash — List Trash\n- POST /api/v1/apifox/projects/{pid}/trash/batch-restore — Batch Restore Trash\n- POST /api/v1/apifox/projects/{pid}/trash/batch-purge — Batch Purge Trash\n- POST /api/v1/apifox/trash/{kind}/{item_id}/restore — Restore Item\n- DELETE /api/v1/apifox/trash/{kind}/{item_id} — Purge Item\n### 接口自动化v2·定时任务\n- GET /api/v1/apifox/projects/{pid}/schedules — List Schedules\n- POST /api/v1/apifox/projects/{pid}/schedules — Create Schedule\n- PUT /api/v1/apifox/schedules/{sid} — Update Schedule\n- DELETE /api/v1/apifox/schedules/{sid} — Delete Schedule\n- POST /api/v1/apifox/schedules/{sid}/run-now — Run Schedule Now\n### 接口自动化v2·工作台\n- GET /api/v1/apifox/projects/{project_id}/stats — Project Stats\n- GET /api/v1/apifox/workbench/overview — Workbench Overview\n- GET /api/v1/apifox/workbench/running — Workbench Running\n- GET /api/v1/apifox/workbench/reports — Workbench Reports\n- GET /api/v1/apifox/workbench/failures — Workbench Failures\n- GET /api/v1/apifox/workbench/schedules — Workbench Schedules\n- GET /api/v1/apifox/workbench/manual — Workbench Manual\n- GET /api/v1/apifox/workbench/ai-tasks — Workbench Ai Tasks\n### 接口自动化v2·执行\n- POST /api/v1/apifox/cases/{cid}/run/stream — Run Case Stream\n- POST /api/v1/apifox/scenarios/{sid}/run/stream — Run Scenario Stream\n- POST /api/v1/apifox/suites/{sid}/run/stream — Run Suite Stream\n- GET /api/v1/apifox/projects/{pid}/runs — List Runs\n- GET /api/v1/apifox/projects/{pid}/runs/page — List Runs Page\n- GET /api/v1/apifox/endpoints/{eid}/runs — List Endpoint Runs\n- GET /api/v1/apifox/runs/{rid} — Get Run\n- DELETE /api/v1/apifox/runs/{rid} — Delete Run\n- …共 10 个接口\n### 接口自动化v2·数据模型\n- GET /api/v1/apifox/projects/{pid}/schemas — List Schemas\n- POST /api/v1/apifox/projects/{pid}/schemas — Create Schema\n- GET /api/v1/apifox/schemas/{sid} — Get Schema\n- PUT /api/v1/apifox/schemas/{sid} — Update Schema\n- DELETE /api/v1/apifox/schemas/{sid} — Delete Schema\n### 接口自动化v2·测试套件\n- GET /api/v1/apifox/projects/{pid}/suites — List Suites\n- POST /api/v1/apifox/projects/{pid}/suites — Create Suite\n- GET /api/v1/apifox/suites/{sid} — Get Suite\n- PUT /api/v1/apifox/suites/{sid} — Update Suite\n- DELETE /api/v1/apifox/suites/{sid} — Delete Suite\n- POST /api/v1/apifox/suites/{sid}/copy — Copy Suite\n### 用例\n- GET /api/v1/testcases — List Testcases\n- POST /api/v1/testcases — Create Testcase\n- POST /api/v1/testcases/ai/generate — Ai Generate\n- POST /api/v1/testcases/ai/generate/stream — Ai Generate Stream\n- GET /api/v1/testcases/export/excel — Export Excel\n- GET /api/v1/testcases/export/xmind — Export Xmind\n- POST /api/v1/testcases/import/file — Import Testcases File\n- GET /api/v1/testcases/import/template/excel — Download Testcases Import Template Excel\n- …共 14 个接口\n### 用户管理\n- GET /api/v1/users/menus — List Menus\n- GET /api/v1/users — List Users\n- POST /api/v1/users — Create User\n- PUT /api/v1/users/{user_id} — Update User\n- DELETE /api/v1/users/{user_id} — Delete User\n- PUT /api/v1/users/{user_id}/password — Reset Password\n- POST /api/v1/users/{user_id}/login-lock — Lock User Login\n- POST /api/v1/users/{user_id}/login-unlock — Unlock User Login\n- …共 10 个接口\n### 认证\n- POST /api/v1/auth/register — Register\n- POST /api/v1/auth/login — Login\n- GET /api/v1/auth/me — Me\n- PUT /api/v1/auth/me — Update Me\n- POST /api/v1/auth/logout — Logout\n- PUT /api/v1/auth/password — Change Password\n### 部门\n- GET /api/v1/departments — List Departments\n- POST /api/v1/departments — Create Department\n- GET /api/v1/departments/menus — List Menus\n- GET /api/v1/departments/{department_id}/permissions — Get Department Permissions\n- PUT /api/v1/departments/{department_id}/permissions — Update Department Permissions\n- PUT /api/v1/departments/{department_id} — Update Department\n- DELETE /api/v1/departments/{department_id} — Delete Department\n### 需求\n- GET /api/v1/requirements — List Requirements\n- POST /api/v1/requirements — Create Requirement\n- POST /api/v1/requirements/batch/status — Batch Update Requirement Status\n- POST /api/v1/requirements/batch/delete — Batch Delete Requirements\n- POST /api/v1/requirements/ai/extract — Extract Requirements From File\n- POST /api/v1/requirements/ai/extract/stream — Extract Requirements Stream\n- POST /api/v1/requirements/batch/import — Batch Import Requirements\n- GET /api/v1/requirements/export/excel — Export Requirements Excel\n- …共 16 个接口\n### 项目\n- GET /api/v1/projects — List Projects\n- POST /api/v1/projects — Create Project\n- PUT /api/v1/projects/preferences/order — Save Project Preferences\n- GET /api/v1/projects/stats/dashboard — Dashboard Stats\n- GET /api/v1/projects/{project_id}/overview/functional — Functional Overview\n- GET /api/v1/projects/{project_id}/overview/requirements — Requirements Overview\n- GET /api/v1/projects/{project_id}/overview/ai-tasks — Ai Tasks Overview\n- GET /api/v1/projects/{project_id} — Get Project\n- …共 14 个接口",
+    "ui_actions": "## 页面 UI 锚点（data-assistant，供理解关键按钮位置）\n- `ai_generate.generate_btn`（views/AIGenerate.vue）\n- `ai_generate.project_select`（views/AIGenerate.vue）\n- `ai_generate.requirement_text`（views/AIGenerate.vue）\n- `projects.create_btn`（views/hub/ProjectsView.vue）\n- `projects.form.description`（views/hub/ProjectsView.vue）\n- `projects.form.name`（views/hub/ProjectsView.vue）\n- `projects.form.submit`（views/hub/ProjectsView.vue）\n- `requirements.create_btn`（views/Requirements.vue）\n- `requirements.form.description`（views/Requirements.vue）\n- `requirements.form.submit`（views/Requirements.vue）\n- `requirements.form.title`（views/Requirements.vue）",
+    "answer_rules": "- 使用简体中文；按钮/菜单名必须与下文导航树一致（如「+ 添加需求」「测试场景」）。\n- 不要引用旧路径 `/projects`、`/requirements` 作为当前入口（会 redirect 到 Hub）。\n- 用户问平台以外的问题时可正常解答；问平台功能时优先给出可执行步骤。\n- 不确定的平台功能不要编造，可建议用户查看对应菜单或联系管理员。\n- **禁止**代替用户在浏览器中点击、跳转或填写表单，即使用户说「帮我操作」也只输出文字步骤。"
+  }
+}

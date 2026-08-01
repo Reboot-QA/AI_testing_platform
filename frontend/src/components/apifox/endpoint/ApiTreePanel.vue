@@ -34,69 +34,54 @@
       placeholder="搜索接口名 / 路径 / 文件夹"
       class="tree-search"
     />
-    <el-tree
-      ref="treeRef"
-      :data="treeData"
-      node-key="key"
-      :expand-on-click-node="false"
-      :allow-drop="allowDrop"
-      :filter-node-method="filterNode"
-      highlight-current
-      draggable
-      @node-click="onNodeClick"
-      @node-drop="onDrop"
-      @node-contextmenu="onContextMenu"
-      @node-expand="onNodeExpand"
-      @node-collapse="onNodeCollapse"
-    >
-      <template #default="{ data }">
-        <span class="node">
-          <MethodTag v-if="data.type === 'endpoint'" :method="data.method" class="tree-method" />
-          <el-icon v-else><Folder /></el-icon>
-          <span class="node-title">
-            <span class="node-label">{{ data.label }}</span>
-            <span v-if="data.type === 'folder'" class="node-count"
-              >({{ data.endpointCount ?? 0 }})</span
-            >
-            <span
-              v-if="data.type === 'endpoint' && caseCounts"
-              class="case-count"
-              :class="{ 'case-count--right': readonly }"
-              title="该接口的用例数"
-              >{{ caseCounts[Number(data.id)] ?? 0 }}</span
-            >
-            <span
-              v-if="data.casesStale"
-              class="stale-dot"
-              title="接口契约已更新，已有用例可能过时，建议重新生成或复核"
-              >●</span
-            >
-          </span>
-          <el-icon
-            v-if="!readonly"
-            class="node-more"
-            title="更多操作"
-            @click.stop="onMoreClick($event, data)"
-          >
-            <MoreFilled />
-          </el-icon>
-        </span>
-      </template>
-    </el-tree>
-
-    <div v-if="showSchemas" class="schema-section">
-      <div class="schema-head">
-        <el-icon><Box /></el-icon> 数据模型
-      </div>
-      <div
-        v-for="s in filteredSchemas"
-        :key="s.id"
-        class="schema-item"
-        @click="emit('select-schema', s.id)"
+    <div v-if="dragDisabledText" class="drag-paused">{{ dragDisabledText }}</div>
+    <div v-else class="drag-tip" role="status">
+      <el-icon><Rank /></el-icon>
+      拖拽接口或目录可调整排序；搜索时会暂时停用拖拽
+    </div>
+    <div class="tree-panel-body" @click="onTreePanelBodyClick">
+      <el-tree
+        ref="treeRef"
+        :data="treeData"
+        node-key="key"
+        :expand-on-click-node="true"
+        :allow-drop="allowDrop"
+        :filter-node-method="filterNode"
+        highlight-current
+        :draggable="canDrag"
+        :render-after-expand="true"
+        @node-click="onNodeClick"
+        @node-drop="onDrop"
+        @node-drag-over="onNodeDragOver"
+        @node-drag-end="clearDropForbid"
+        @node-contextmenu="onContextMenu"
+        @node-expand="onNodeExpand"
+        @node-collapse="onNodeCollapse"
       >
-        <span class="schema-name">{{ s.name }}</span>
+        <template #default="{ data }">
+          <ApiTreeNodeContent
+            :node="data"
+            :case-counts="caseCounts"
+            :readonly="readonly"
+            @more="onMoreClick"
+          />
+        </template>
+      </el-tree>
+
+      <div v-if="showSchemas" class="schema-section">
+        <div class="schema-head">
+          <el-icon><Box /></el-icon> 数据模型
+        </div>
+        <div
+          v-for="s in filteredSchemas"
+          :key="s.id"
+          class="schema-item"
+          @click="emit('select-schema', s.id)"
+        >
+          <span class="schema-name">{{ s.name }}</span>
+        </div>
+        <div v-if="!filteredSchemas.length" class="schema-empty">暂无数据模型</div>
       </div>
-      <div v-if="!filteredSchemas.length" class="schema-empty">暂无数据模型</div>
     </div>
 
     <TreeContextMenu
@@ -114,7 +99,7 @@
 import { nameInputOptions } from '@/utils/promptLimits'
 import { SEARCH_MAX_LEN } from '@/constants/limits'
 import { copyText } from '@/utils/clipboard'
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { Id } from '@/api/request'
 import type { Schemas } from '@/api/types'
@@ -122,8 +107,9 @@ import type { TreeContextMenuItem } from '@/types/apifox'
 import { apifoxApi } from '@/api'
 import { emptySpec, normalizeSpec } from '@/utils/apifoxSpec'
 import { useApiTree, type ApiTreeNode } from '@/composables/useApiTree'
-import MethodTag from '@/components/apifox/common/MethodTag.vue'
+import { useWorkspaceStore } from '@/stores/workspace'
 import TreeContextMenu from '@/components/apifox/common/TreeContextMenu.vue'
+import ApiTreeNodeContent from '@/components/apifox/endpoint/ApiTreeNodeContent.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -145,7 +131,7 @@ const props = withDefaults(
     caseCounts: undefined,
     readonly: false,
     draftCreate: false,
-    autoExpandLevels: 1,
+    autoExpandLevels: 0,
     currentEndpointId: null,
   },
 )
@@ -157,9 +143,11 @@ const emit = defineEmits<{
   'generate-ai': [endpointIds: number[]]
   'case-added': []
   'new-draft': [folderId: number | null]
+  'clear-selection': []
 }>()
 
 const pid = computed(() => props.projectId)
+const ws = useWorkspaceStore()
 const {
   treeData,
   treeRef,
@@ -179,6 +167,50 @@ watch(
   (id) => void highlightEndpoint(id),
 )
 
+let filterTimer: ReturnType<typeof setTimeout> | null = null
+watch(filterText, (value) => {
+  if (filterTimer) clearTimeout(filterTimer)
+  filterTimer = setTimeout(() => {
+    treeRef.value?.filter(value)
+    filterTimer = null
+  }, 150)
+})
+onBeforeUnmount(() => {
+  if (filterTimer) clearTimeout(filterTimer)
+})
+
+/**
+ * 只读页（接口用例页）与搜索过滤中都不给拖：
+ * 过滤只是隐藏了不匹配的行，拖动会插到「看不见的行」之间，落库结果无法预期。
+ */
+const canDrag = computed(() => !props.readonly && !filterText.value.trim())
+const dragDisabledText = computed(() => {
+  if (props.readonly) return '只读模式，已禁用拖拽排序'
+  if (!canDrag.value) return '搜索中，已暂停拖拽排序'
+  return ''
+})
+
+// el-tree 在 dragover 里同步算好落点：dropType 为 none（例如把文件夹拖向自己的子孙）时，
+// 它既不加 is-drop-inner，也把插入线挪到 -9999px，整个过程静默——这里据此补一个禁止态。
+let forbidEl: HTMLElement | null = null
+
+function clearDropForbid() {
+  forbidEl?.classList.remove('ax-drop-forbid')
+  forbidEl = null
+}
+
+function onNodeDragOver(_dragNode: unknown, _dropNode: unknown, ev: DragEvent) {
+  clearDropForbid()
+  const el = (ev.target as HTMLElement | null)?.closest('.el-tree-node') as HTMLElement | null
+  if (!el || el.classList.contains('is-drop-inner')) return
+  const indicator = el
+    .closest('.el-tree')
+    ?.querySelector('.el-tree__drop-indicator') as HTMLElement | null
+  if (indicator && indicator.style.top !== '-9999px') return
+  el.classList.add('ax-drop-forbid')
+  forbidEl = el
+}
+
 const schemas = ref<Schemas['SchemaBrief'][]>([])
 const filteredSchemas = computed(() => {
   const kw = filterText.value.trim().toLowerCase()
@@ -197,6 +229,16 @@ async function reloadAll() {
 }
 
 const selectedFolderId = ref<number | null>(null)
+
+/** 点击树或数据模型以外的面板空白区时，清除目录/接口的当前选中态。 */
+function onTreePanelBodyClick(event: MouseEvent) {
+  const target = event.target as HTMLElement
+  if (target.closest('.el-tree-node, .schema-section')) return
+  selectedFolderId.value = null
+  treeRef.value?.setCurrentKey(null)
+  emit('clear-selection')
+}
+
 const ctx = reactive<{
   visible: boolean
   x: number
@@ -389,10 +431,23 @@ async function addCase(node: ApiTreeNode) {
   emit('case-added')
 }
 
+// 导出 cURL 用完整 URL：当前环境前置URL + path（对齐后端 build_request 的 base+path）。
+// path 已是绝对地址则直接用；无环境/未配前置URL 时退回仅 path。
+function resolveEndpointUrl(path: string, serverName?: string | null): string {
+  const p = path || ''
+  if (/^https?:\/\//i.test(p)) return p
+  const env = ws.currentEnvironment
+  const named = serverName ? env?.servers?.find((s) => s.name === serverName) : undefined
+  const base = (named?.base_url ?? env?.base_url ?? '').replace(/\/+$/, '')
+  if (!base) return p
+  return base + (p ? '/' + p.replace(/^\/+/, '') : '')
+}
+
 async function copyEndpointCurl(node: ApiTreeNode) {
   const ep = await apifoxApi.getEndpoint(node.id)
   const spec = normalizeSpec(ep.request_spec)
-  const lines = [`curl -X ${ep.method} '${ep.path}'`]
+  const url = resolveEndpointUrl(ep.path, ep.server_name)
+  const lines = [`curl -X ${ep.method} '${url}'`]
   for (const h of spec.headers ?? []) {
     if (h.enabled !== false && h.key) lines.push(`  -H '${h.key}: ${h.value ?? ''}'`)
   }
@@ -458,8 +513,13 @@ async function deleteNode(data: ApiTreeNode) {
       ? `确认删除文件夹「${data.label}」？其下所有子文件夹与接口将一并移入回收站。`
       : `确认删除「${data.label}」？`
   await ElMessageBox.confirm(confirmMsg, '提示', { type: 'warning' })
-  if (data.type === 'folder') await apifoxApi.deleteFolder(data.id)
-  else {
+  if (data.type === 'folder') {
+    await apifoxApi.deleteFolder(data.id)
+    // 删除成功后不能保留已删除目录作为「新建」的目标目录，
+    // 否则紧接着创建会把失效 id 继续传为 parent_id。
+    selectedFolderId.value = null
+    treeRef.value?.setCurrentKey(null)
+  } else {
     await apifoxApi.deleteEndpoint(data.id)
     emit('deleted', data.id)
   }
@@ -473,6 +533,19 @@ onMounted(reloadAll)
 </script>
 
 <style scoped>
+.tree-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.tree-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
 .tree-panel :deep(.el-tree-node__content) {
   width: 100%;
   min-width: 0;
@@ -486,84 +559,25 @@ onMounted(reloadAll)
   color: var(--ax-text-secondary);
 }
 
-.node {
-  display: flex;
-  align-items: center;
-  gap: var(--ax-space-1-5);
-  flex: 1;
-  min-width: 0;
-  width: 100%;
+.tree-panel :deep(.el-tree-node__content:focus-visible) {
+  outline: 2px solid var(--ax-focus-ring);
+  outline-offset: -2px;
 }
 
-.tree-method {
-  flex-shrink: 0;
-  min-width: 34px;
+/* 搜索过滤中拖拽被停用，给个明确说明，免得以为拖拽坏了 */
+.drag-paused {
+  padding: var(--ax-space-1) var(--ax-space-2) 0;
+  font-size: var(--ax-font-xs);
+  color: var(--ax-text-placeholder);
 }
 
-.node-title {
-  flex: 1;
-  min-width: 0;
+.drag-tip {
   display: flex;
   align-items: center;
   gap: var(--ax-space-1);
-  overflow: hidden;
-}
-
-.node-label {
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.node-count {
-  flex-shrink: 0;
+  padding: var(--ax-space-1) var(--ax-space-2) 0;
   font-size: var(--ax-font-xs);
-  font-weight: 400;
-  color: var(--ax-text-tertiary);
-}
-
-.case-count {
-  flex-shrink: 0;
-  min-width: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: var(--ax-bg-subtle);
-  color: var(--ax-text-tertiary);
-  font-size: var(--ax-font-xs);
-  line-height: 16px;
-  text-align: center;
-}
-
-/* 只读模式：无「...」占位，用例数徽标推到接口行右端 */
-.case-count--right {
-  margin-left: auto;
-}
-
-.stale-dot {
-  flex-shrink: 0;
-  margin-left: 4px;
-  font-size: 10px;
-  line-height: 1;
-  color: var(--ax-warning);
-}
-
-.node-more {
-  flex-shrink: 0;
-  margin-left: auto;
-  padding: 2px;
-  border-radius: 4px;
-  font-size: 14px;
-  color: var(--ax-text-tertiary);
-  cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s;
-}
-
-.node-more:hover {
-  color: var(--ax-text-secondary);
-  background: var(--ax-bg-hover);
+  color: var(--ax-text-placeholder);
 }
 
 .schema-section {
@@ -618,8 +632,8 @@ onMounted(reloadAll)
   min-width: 30px;
   padding: 0 4px;
   border-radius: 3px;
-  background: #fff7ed;
-  color: #ea580c;
+  background: var(--ax-raw-hex-fff7ed);
+  color: var(--ax-raw-hex-ea580c);
   font-size: 10px;
   font-weight: 700;
   line-height: 16px;

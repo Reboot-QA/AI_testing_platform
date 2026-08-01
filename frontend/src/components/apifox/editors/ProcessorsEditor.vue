@@ -1,7 +1,13 @@
 <template>
   <div class="proc-editor">
-    <VueDraggable v-model="props.rows" handle=".proc-drag" :animation="150" class="proc-list">
-      <div v-for="(op, i) in props.rows" :key="i" class="proc-item">
+    <VueDraggable
+      v-model="rows"
+      handle=".proc-drag"
+      :animation="150"
+      ghost-class="ax-drag-ghost"
+      class="proc-list"
+    >
+      <div v-for="(op, i) in rows" :key="i" class="proc-item">
         <div
           class="proc-head"
           :class="{ 'proc-head--off': op.enabled === false, 'proc-head--open': isExpanded(op) }"
@@ -178,7 +184,7 @@
       </div>
     </VueDraggable>
 
-    <el-empty v-if="props.rows.length === 0" :image-size="40" description="暂无操作，下方添加" />
+    <el-empty v-if="rows.length === 0" :image-size="40" description="暂无操作，下方添加" />
 
     <el-dropdown trigger="click" class="proc-add" @command="addKind">
       <button type="button" class="proc-add-btn">
@@ -218,7 +224,6 @@ type Processor = Schemas['ProcessorRow']
 
 const props = withDefaults(
   defineProps<{
-    rows: Processor[]
     phase: 'pre' | 'post'
     scripts?: Schemas['ScriptBrief'][]
     databases?: Schemas['DatabaseOut'][]
@@ -234,6 +239,7 @@ const props = withDefaults(
     allowContract: true,
   },
 )
+const rows = defineModel<Processor[]>('rows', { required: true })
 
 const addLabel = computed(() => (props.phase === 'pre' ? '添加前置操作' : '添加后置操作'))
 
@@ -407,13 +413,13 @@ function toggleEnabled(op: Processor) {
 
 function addKind(kind: string) {
   const op = emptyOp(kind)
-  props.rows.push(op)
+  rows.value.push(op)
   expandedOps.value = new Set(expandedOps.value).add(op)
 }
 
 function remove(i: number) {
-  const op = props.rows[i]
-  props.rows.splice(i, 1)
+  const op = rows.value[i]
+  rows.value.splice(i, 1)
   if (op) {
     const next = new Set(expandedOps.value)
     next.delete(op)
@@ -422,10 +428,10 @@ function remove(i: number) {
 }
 
 function copyAt(i: number) {
-  const src = props.rows[i]
+  const src = rows.value[i]
   if (!src) return
   const clone = JSON.parse(JSON.stringify(src)) as Processor
-  props.rows.splice(i + 1, 0, clone)
+  rows.value.splice(i + 1, 0, clone)
   expandedOps.value = new Set(expandedOps.value).add(clone)
 }
 

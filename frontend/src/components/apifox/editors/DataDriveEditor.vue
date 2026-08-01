@@ -70,7 +70,7 @@
 
 <script setup lang="ts">
 import { TITLE_MAX_LEN } from '@/constants/limits'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import type { Schemas } from '@/api/types'
 import type { KvRow } from '@/types/apifox'
 import VarInput from '@/components/apifox/common/VarInput.vue'
@@ -81,7 +81,6 @@ type DataDriveModel = Schemas['DataDrive']
 
 const props = withDefaults(
   defineProps<{
-    model: DataDriveModel
     varRows?: KvRow[]
     datasets?: DatasetBrief[]
   }>(),
@@ -90,25 +89,27 @@ const props = withDefaults(
     datasets: () => [],
   },
 )
+const model = defineModel<DataDriveModel>('model', { required: true })
 
 const varNames = computed(() => variableNamesFromRows(props.varRows))
 
 const rows = computed({
-  get: () => {
-    if (!Array.isArray(props.model.rows)) props.model.rows = []
-    return props.model.rows
-  },
+  get: () => model.value.rows ?? [],
   set: (value) => {
-    props.model.rows = value
+    model.value.rows = value
   },
 })
 
 // undefined/其它 视为 inline；写回 model.source
 const source = computed({
-  get: () => (props.model.source === 'dataset' ? 'dataset' : 'inline'),
+  get: () => (model.value.source === 'dataset' ? 'dataset' : 'inline'),
   set: (v) => {
-    props.model.source = v
+    model.value.source = v
   },
+})
+
+onMounted(() => {
+  if (!Array.isArray(model.value.rows)) model.value.rows = []
 })
 
 function addRow() {

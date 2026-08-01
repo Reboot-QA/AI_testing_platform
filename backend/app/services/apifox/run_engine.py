@@ -411,10 +411,14 @@ def _extract_db_columns(db_extracts, first_row: Dict[str, Any], variables: Dict[
     """按提取配置从结果首行取列写入 variables；返回 (extract_results, scoped)。对齐 run_service._extract_db_row。"""
     extract_results: List[Dict[str, Any]] = []
     scoped: List[Dict[str, str]] = []
+
+    def _get(ex, key):  # 兼容 dict（运行路径 _Op）与 Pydantic DbExtractRow（调试路径）
+        return ex.get(key) if isinstance(ex, dict) else getattr(ex, key, None)
+
     for ex in db_extracts or []:
-        var_name = str((ex.get("var_name") if isinstance(ex, dict) else "") or "").strip()
-        column = str((ex.get("column") if isinstance(ex, dict) else "") or "").strip()
-        scope = (ex.get("scope") if isinstance(ex, dict) else None) or "temporary"
+        var_name = str(_get(ex, "var_name") or "").strip()
+        column = str(_get(ex, "column") or "").strip()
+        scope = _get(ex, "scope") or "temporary"
         if not var_name or not column:
             continue
         if column in first_row:
@@ -539,6 +543,7 @@ def _run_post_ops(db, ops, response, detail, variables, request_snapshot, durati
                 resolved = schema_ref.resolve_schema_text(db, project_id, schema.json_schema)
                 contract = contract_service.validate_response(resolved, response)
                 contract["schema_name"] = schema.name
+                contract["strict"] = bool(op.contract_strict)  # 供调试/报告判断契约不符是否计失败
                 detail["contract_result"] = contract
                 if op.contract_strict and not contract["passed"]:
                     passed = False

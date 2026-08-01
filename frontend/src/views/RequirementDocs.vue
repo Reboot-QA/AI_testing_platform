@@ -24,20 +24,12 @@
                 :loading="providersLoading"
                 :disabled="!llmProviders.length"
               >
-                <template #label>
-                  <LlmProviderLabel
-                    v-if="selectedProvider"
-                    :text="formatLlmProviderLabel(selectedProvider)"
-                  />
-                </template>
                 <el-option
                   v-for="item in llmProviders"
                   :key="item.id"
-                  :label="formatLlmProviderLabel(item)"
+                  :label="formatProviderLabel(item)"
                   :value="item.id"
-                >
-                  <LlmProviderLabel :text="formatLlmProviderLabel(item)" />
-                </el-option>
+                />
               </el-select>
               <div v-if="!providersLoading && !llmProviders.length" class="form-tip">
                 暂无可用模型，请前往
@@ -55,8 +47,8 @@
                 :auto-upload="false"
                 :limit="1"
                 :show-file-list="false"
-                :disabled="extracting"
-                accept=".txt,.md,.docx"
+                :disabled="scopedTaskActive"
+                accept=".txt,.md,.docx,text/plain,text/markdown"
                 :on-change="handleFileChange"
                 :on-remove="handleFileRemove"
                 :on-exceed="handleExceed"
@@ -79,12 +71,12 @@
               <el-button
                 type="primary"
                 class="extract-btn"
-                :loading="extracting"
-                :disabled="!projectId || !selectedFile"
+                :loading="scopedTaskActive"
+                :disabled="!projectId || !selectedFile || (restoringRunning && storeMatchesProject)"
                 @click="handleExtract"
               >
                 <el-icon><MagicStick /></el-icon>
-                {{ extracting ? '正在解析，请稍候...' : 'AI 解析需求点' }}
+                {{ scopedTaskActive ? '正在解析，请稍候...' : 'AI 解析需求点' }}
               </el-button>
             </el-form-item>
           </el-form>
@@ -108,113 +100,116 @@
         <div class="panel-h">
           <span class="panel-title">解析结果</span>
           <div class="result-tags">
-            <el-tag v-if="lastMode" :type="lastMode === 'llm' ? 'success' : 'warning'" size="small">
-              {{ lastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
+            <el-tag
+              v-if="scopedLastMode && scopedExtracted.length"
+              :type="scopedLastMode === 'llm' ? 'success' : 'warning'"
+              size="small"
+            >
+              {{ scopedLastMode === 'llm' ? 'LLM 模式' : 'Mock 模式' }}
             </el-tag>
-            <el-tag v-if="extracted.length" type="primary" size="small">
-              {{ extracted.length }} 条
-            </el-tag>
-            <el-tag v-if="selectedRows.length" type="info" size="small">
-              已选 {{ selectedRows.length }}
+            <el-tag v-if="scopedExtracted.length" type="primary" size="small">
+              {{ scopedExtracted.length }} 条
             </el-tag>
           </div>
         </div>
 
         <div class="panel-body result-body">
           <el-empty
-            v-if="!extracting && !extracted.length"
-            description="上传文档后点击「AI 解析需求点」"
+            v-if="!scopedHasResultsPanel"
+            description="上传文档后点击「AI 解析需求点」；进行中的任务可在 AI 需求任务查看进度"
             :image-size="72"
           />
 
-          <div v-if="extracting" class="stream-progress">
-            <el-progress :percentage="progressPercent" :stroke-width="8" striped striped-flow />
-            <p class="progress-text">{{ progressMessage }}</p>
-            <p v-if="extracted.length" class="saved-tip">
-              已提取 {{ extracted.length }} 条需求点，解析完成后可编辑并导入
-            </p>
-          </div>
+          <template v-if="scopedHasResultsPanel">
+            <div v-if="scopedTaskActive" class="stream-progress">
+              <el-progress
+                :percentage="scopedProgressPercent"
+                :stroke-width="8"
+                striped
+                striped-flow
+              />
+              <p class="progress-text">{{ scopedProgressMessage }}</p>
+              <p v-if="scopedExtracted.length" class="saved-tip">
+                已实时写入需求点 {{ scopedExtracted.length }} 条
+                <el-button type="primary" link @click="goToRequirementPoints"
+                  >前往需求点查看</el-button
+                >
+              </p>
+            </div>
 
-          <div v-if="extracted.length" class="table-wrap">
-            <el-table
-              ref="tableRef"
-              :data="extracted"
-              row-key="_key"
-              stripe
-              border
-              height="100%"
-              @selection-change="handleSelectionChange"
+            <div
+              v-if="scopedExtracted.length && !scopedTaskActive && scopedActiveTarget"
+              class="restore-hint-bar"
             >
-              <el-table-column type="selection" width="45" fixed="left" />
-              <el-table-column label="标题" min-width="160" fixed="left">
-                <template #default="{ row }">
-                  <el-input v-model="row.title" :maxlength="TITLE_MAX_LEN" />
-                </template>
-              </el-table-column>
-              <el-table-column label="类型" width="120">
-                <template #default="{ row }">
-                  <el-select v-model="row.req_type" style="width: 100%">
-                    <el-option label="功能测试" value="functional" />
-                    <el-option label="接口测试" value="api" />
-                    <el-option label="性能测试" value="performance" />
-                    <el-option label="安全测试" value="security" />
-                  </el-select>
-                </template>
-              </el-table-column>
-              <el-table-column label="优先级" width="90" align="center">
-                <template #default="{ row }">
-                  <el-select v-model="row.priority" style="width: 100%">
-                    <el-option
-                      v-for="p in ['P0', 'P1', 'P2', 'P3']"
-                      :key="p"
-                      :label="p"
-                      :value="p"
-                    />
-                  </el-select>
-                </template>
-              </el-table-column>
-              <el-table-column label="描述" min-width="240">
-                <template #default="{ row }">
-                  <el-input
-                    v-model="row.description"
-                    :maxlength="LONG_TEXT_MAX_LEN"
-                    type="textarea"
-                    :rows="2"
-                    resize="none"
-                  />
-                </template>
-              </el-table-column>
-              <el-table-column label="操作" width="72" fixed="right" align="center">
-                <template #default="{ row }">
-                  <el-popconfirm title="确认删除该需求点？" @confirm="handleRemoveRow(row)">
-                    <template #reference>
-                      <el-button link type="danger" size="small">删除</el-button>
-                    </template>
-                  </el-popconfirm>
-                </template>
-              </el-table-column>
-            </el-table>
-          </div>
-
-          <div v-if="extracted.length && !extracting" class="result-footer">
-            <el-text v-if="extractMessage" type="info" size="small">{{ extractMessage }}</el-text>
-            <el-text v-else type="success" size="small">
-              共解析 {{ extracted.length }} 条需求点，勾选后导入到需求点
-            </el-text>
-            <div class="result-actions">
-              <el-button @click="toggleSelectAll">
-                {{ allSelected ? '取消全选' : '全选' }}
-              </el-button>
-              <el-button
-                type="primary"
-                :loading="importing"
-                :disabled="!selectedRows.length"
-                @click="handleImport"
+              <el-text size="small" type="info">文档：{{ scopedActiveTarget }}</el-text>
+              <el-button type="primary" link @click="goToRequirementPoints"
+                >前往需求点查看</el-button
               >
-                导入到需求点{{ selectedRows.length ? ` (${selectedRows.length})` : '' }}
+            </div>
+
+            <div v-if="scopedExtracted.length" class="table-wrap">
+              <el-table :data="pagedExtracted" row-key="_key" stripe border height="100%">
+                <el-table-column label="标题" min-width="160" fixed="left">
+                  <template #default="{ row }">
+                    <el-input
+                      v-model="row.title"
+                      :maxlength="REQ_CASE_TITLE_MAX_LEN"
+                      show-word-limit
+                    />
+                  </template>
+                </el-table-column>
+                <el-table-column label="类型" width="120">
+                  <template #default="{ row }">
+                    <el-select v-model="row.req_type" style="width: 100%">
+                      <el-option label="功能测试" value="functional" />
+                      <el-option label="接口测试" value="api" />
+                      <el-option label="性能测试" value="performance" />
+                      <el-option label="安全测试" value="security" />
+                    </el-select>
+                  </template>
+                </el-table-column>
+                <el-table-column label="优先级" width="90" align="center">
+                  <template #default="{ row }">
+                    <el-select v-model="row.priority" style="width: 100%">
+                      <el-option
+                        v-for="p in ['P0', 'P1', 'P2', 'P3']"
+                        :key="p"
+                        :label="p"
+                        :value="p"
+                      />
+                    </el-select>
+                  </template>
+                </el-table-column>
+                <el-table-column label="描述" min-width="240">
+                  <template #default="{ row }">
+                    <el-input v-model="row.description" type="textarea" :rows="2" resize="none" />
+                  </template>
+                </el-table-column>
+              </el-table>
+            </div>
+
+            <div v-if="scopedExtracted.length" class="result-pagination">
+              <el-pagination
+                v-model:current-page="resultPage"
+                v-model:page-size="resultPageSize"
+                :total="scopedExtracted.length"
+                :page-sizes="[...PAGE_SIZE_OPTIONS]"
+                layout="total, sizes, prev, pager, next, jumper"
+                small
+                background
+                @size-change="handleResultPageSizeChange"
+              />
+            </div>
+
+            <div v-if="scopedExtracted.length && !scopedTaskActive" class="result-footer">
+              <el-text v-if="scopedExtractMessage" type="success" size="small">{{
+                scopedExtractMessage
+              }}</el-text>
+              <el-button type="primary" link @click="goToRequirementPoints">
+                前往需求点查看
               </el-button>
             </div>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -222,29 +217,39 @@
 </template>
 
 <script setup lang="ts">
-import { LONG_TEXT_MAX_LEN, TITLE_MAX_LEN } from '@/constants/limits'
-import { computed, ref, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { computed, ref, onMounted, onUnmounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, genFileId } from 'element-plus'
-import type { TableInstance, UploadFile, UploadInstance, UploadRawFile } from 'element-plus'
-import { projectApi, requirementApi, settingsApi } from '@/api'
+import { ElMessage, genFileId } from 'element-plus'
+import type { UploadFile, UploadInstance, UploadRawFile } from 'element-plus'
+import { projectApi, settingsApi } from '@/api'
 import { unwrapProjectList } from '@/api/project'
 import type { Schemas } from '@/api/types'
 import type { Project } from '@/types/common'
-import { useRequirementExtractStore, type ExtractedRow } from '@/stores/requirementExtract'
-import LlmProviderLabel from '@/components/LlmProviderLabel.vue'
-import { formatLlmProviderLabel } from '@/utils/llmProviderLabel'
+import { useRequirementExtractStore } from '@/stores/requirementExtract'
+import { DEFAULT_PAGE_SIZE, PAGE_SIZE_OPTIONS } from '@/constants/pagination'
+import { REQ_CASE_TITLE_MAX_LEN } from '@/constants/limits'
 
 const router = useRouter()
 const extractStore = useRequirementExtractStore()
+const ALLOWED_EXTENSIONS = ['.txt', '.md', '.docx']
 const MAX_FILE_SIZE = 50 * 1024 * 1024
-const FILE_SIZE_TIP = '文件大小不超过50M'
-const { extracting, extracted, lastMode, extractMessage, progressMessage, progressPercent } =
-  storeToRefs(extractStore)
+const FILE_SIZE_TIP = '文件大小不超过 50M'
+const FILE_TYPE_TIP = '仅支持 .txt / .md / .docx 格式'
+const {
+  restoringRunning,
+  taskActive,
+  hasResultsPanel,
+  extracted,
+  lastMode,
+  extractMessage,
+  progressMessage,
+  progressPercent,
+  activeTarget,
+} = storeToRefs(extractStore)
 
 // scopedProjectId 传入时锁定该项目（新壳工作区）：隐藏项目下拉；不传时保持独立页原行为
-const props = defineProps<{ scopedProjectId?: number }>()
+const props = defineProps<{ scopedProjectId?: number; embedded?: boolean }>()
 const scoped = computed(() => props.scopedProjectId != null)
 
 const projects = ref<Project[]>([])
@@ -254,30 +259,75 @@ const providerId = ref<number | null>(null)
 const providersLoading = ref(false)
 const mockMode = ref(false)
 const selectedFile = ref<File | null>(null)
-const importing = ref(false)
-const selectedRows = ref<ExtractedRow[]>([])
-const tableRef = ref<TableInstance>()
 const uploadRef = ref<UploadInstance>()
+const resultPage = ref(1)
+const resultPageSize = ref(DEFAULT_PAGE_SIZE)
 
-const allSelected = computed(
-  () => extracted.value.length > 0 && selectedRows.value.length === extracted.value.length,
+/** 全局 Pinia 与当前页项目一致时才展示/操作解析结果（跨项目切换隔离） */
+const storeMatchesProject = computed(
+  () => projectId.value != null && extractStore.activeProjectId === projectId.value,
+)
+const scopedExtracted = computed(() => (storeMatchesProject.value ? extracted.value : []))
+const scopedTaskActive = computed(() => storeMatchesProject.value && taskActive.value)
+const scopedHasResultsPanel = computed(() => storeMatchesProject.value && hasResultsPanel.value)
+const scopedProgressMessage = computed(() =>
+  storeMatchesProject.value ? progressMessage.value : '',
+)
+const scopedProgressPercent = computed(() =>
+  storeMatchesProject.value ? progressPercent.value : 0,
+)
+const scopedLastMode = computed(() => (storeMatchesProject.value ? lastMode.value : ''))
+const scopedActiveTarget = computed(() => (storeMatchesProject.value ? activeTarget.value : ''))
+const scopedExtractMessage = computed(() => (storeMatchesProject.value ? extractMessage.value : ''))
+
+const pagedExtracted = computed(() => {
+  const start = (resultPage.value - 1) * resultPageSize.value
+  return scopedExtracted.value.slice(start, start + resultPageSize.value)
+})
+
+watch(scopedTaskActive, (active, wasActive) => {
+  if (wasActive && !active) {
+    selectedFile.value = null
+    uploadRef.value?.clearFiles()
+    resultPage.value = 1
+  }
+})
+
+watch(
+  () => scopedExtracted.value.length,
+  (len) => {
+    const maxPage = Math.max(1, Math.ceil(len / resultPageSize.value) || 1)
+    if (resultPage.value > maxPage) {
+      resultPage.value = maxPage
+    }
+  },
 )
 
-const selectedProvider = computed(
-  () => llmProviders.value.find((item) => item.id === providerId.value) ?? null,
-)
+function handleResultPageSizeChange() {
+  resultPage.value = 1
+}
 
 // 新壳切换项目 → 锁定新项目并清空上一项目的解析结果
 watch(
   () => props.scopedProjectId,
-  (v) => {
+  (v, old) => {
     if (v == null) return
     projectId.value = v
-    extractStore.cancelExtract()
-    extractStore.resetSession()
-    selectedRows.value = []
+    if (old != null && old !== v) {
+      extractStore.cancelExtract()
+    }
+    extractStore.onEnterRequirementDocsPage(v)
   },
+  { immediate: true },
 )
+
+function formatProviderLabel(item: Schemas['LLMProviderOptionOut']) {
+  const tags = []
+  if (item.is_default) tags.push('默认')
+  if (!item.api_key_configured) tags.push('未配置Key')
+  const suffix = tags.length ? ` (${tags.join(' / ')})` : ''
+  return `${item.name}${suffix}`
+}
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
@@ -308,15 +358,15 @@ async function loadProviders() {
   }
 }
 
-function resetUploadPanel() {
-  selectedFile.value = null
-  selectedRows.value = []
-  uploadRef.value?.clearFiles()
-}
-
 function resetExtractionResult() {
   extractStore.resetSession()
-  selectedRows.value = []
+  resultPage.value = 1
+}
+
+function getFileExtension(name: string): string {
+  const dotIndex = name.lastIndexOf('.')
+  if (dotIndex === -1) return ''
+  return name.slice(dotIndex).toLowerCase()
 }
 
 function acceptFile(raw: File | undefined): boolean {
@@ -324,7 +374,14 @@ function acceptFile(raw: File | undefined): boolean {
     selectedFile.value = null
     return false
   }
-  if (raw.size > MAX_FILE_SIZE) {
+  const ext = getFileExtension(raw.name)
+  if (!ALLOWED_EXTENSIONS.includes(ext)) {
+    ElMessage.warning(FILE_TYPE_TIP)
+    uploadRef.value?.clearFiles()
+    selectedFile.value = null
+    return false
+  }
+  if (raw.size >= MAX_FILE_SIZE) {
     ElMessage.warning(FILE_SIZE_TIP)
     uploadRef.value?.clearFiles()
     selectedFile.value = null
@@ -336,16 +393,17 @@ function acceptFile(raw: File | undefined): boolean {
 }
 
 function handleFileChange(uploadFile: UploadFile) {
-  if (extracting.value) return
+  if (scopedTaskActive.value) return
   if (!acceptFile(uploadFile.raw)) {
     uploadRef.value?.clearFiles()
   }
 }
 
 function handleExceed(files: File[]) {
-  if (extracting.value || !files.length) return
+  if (scopedTaskActive.value || !files.length) return
   uploadRef.value?.clearFiles()
   const raw = files[0] as UploadRawFile
+  if (!acceptFile(raw)) return
   raw.uid = genFileId()
   uploadRef.value?.handleStart(raw)
 }
@@ -355,27 +413,24 @@ function handleFileRemove() {
   resetExtractionResult()
 }
 
-function handleSelectionChange(rows: ExtractedRow[]) {
-  selectedRows.value = rows
-}
-
-function handleRemoveRow(row: ExtractedRow) {
-  extractStore.removeRow(row._key)
-  selectedRows.value = selectedRows.value.filter((item) => item._key !== row._key)
-}
-
-function toggleSelectAll() {
-  if (!tableRef.value) return
-  if (allSelected.value) {
-    tableRef.value.clearSelection()
-  } else {
-    extracted.value.forEach((row) => tableRef.value?.toggleRowSelection(row, true))
+function goToRequirementPoints() {
+  if (projectId.value == null) {
+    ElMessage.warning('请先选择项目')
+    return
   }
+  void router.push({
+    name: 'WorkspaceRequirementPoints',
+    params: { projectId: projectId.value },
+  })
 }
 
 async function handleExtract() {
   if (!projectId.value || !selectedFile.value) return
-  if (selectedFile.value.size > MAX_FILE_SIZE) {
+  if (!ALLOWED_EXTENSIONS.includes(getFileExtension(selectedFile.value.name))) {
+    ElMessage.warning(FILE_TYPE_TIP)
+    return
+  }
+  if (selectedFile.value.size >= MAX_FILE_SIZE) {
     ElMessage.warning(FILE_SIZE_TIP)
     return
   }
@@ -387,7 +442,6 @@ async function handleExtract() {
     }
   }
 
-  selectedRows.value = []
   await extractStore.startExtract(
     projectId.value,
     selectedFile.value,
@@ -395,70 +449,21 @@ async function handleExtract() {
   )
 }
 
-async function syncSelectAllExtracted() {
-  await nextTick()
-  const table = tableRef.value
-  if (!table || !extracted.value.length) return
-  extracted.value.forEach((row) => table.toggleRowSelection(row, true))
-}
-
-// 流式写入时自动勾选全部行（表格随数据增长重渲染会丢选中态，需反复全选）
-watch(
-  () => extracted.value.length,
-  async (len, prev) => {
-    if (len <= (prev ?? 0)) return
-    await syncSelectAllExtracted()
-  },
-)
-
-watch(extracting, async (isExtracting, wasExtracting) => {
-  if (wasExtracting && !isExtracting && extracted.value.length) {
-    await syncSelectAllExtracted()
-  }
+watch(projectId, (id, prev) => {
+  if (id == null || prev == null || prev === id) return
+  extractStore.cancelExtract()
+  extractStore.onEnterRequirementDocsPage(id)
 })
 
-async function handleImport() {
-  if (!selectedRows.value.length) return
-  await ElMessageBox.confirm(
-    `确认将选中的 ${selectedRows.value.length} 条需求导入到需求点？`,
-    '导入确认',
-    { type: 'info' },
-  )
-
-  importing.value = true
-  try {
-    const res = await requirementApi.batchImport({
-      project_id: projectId.value!,
-      requirements: selectedRows.value.map((item) => ({
-        title: item.title,
-        description: item.description,
-        req_type: item.req_type,
-        priority: item.priority,
-      })),
-    })
-    ElMessage.success(res.message || '导入成功')
-    await router.push({
-      path: `/hub/workspace/${projectId.value}`,
-      hash: '#domain=requirements&section=req-points',
-    })
-  } finally {
-    importing.value = false
-  }
-}
-
 onMounted(async () => {
-  extractStore.onEnterPage()
-  if (!extracting.value) {
-    resetUploadPanel()
-  }
   await Promise.all([loadProjects(), loadProviders()])
+  if (projectId.value != null && props.scopedProjectId == null) {
+    extractStore.onEnterRequirementDocsPage(projectId.value)
+  }
 })
 
 onUnmounted(() => {
-  extractStore.onLeavePage()
-  if (!extracting.value) {
-    resetUploadPanel()
-  }
+  extractStore.onLeaveRequirementDocsPage()
 })
 </script>
 
@@ -495,7 +500,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--ax-gap);
-  padding: var(--ax-space-2-5) var(--ax-space-3-5);
+  padding: 10px 14px;
   border-bottom: 1px solid var(--ax-border);
   flex: none;
 }
@@ -503,8 +508,8 @@ onUnmounted(() => {
 .panel-title {
   display: inline-flex;
   align-items: center;
-  gap: var(--ax-space-1-5);
-  font-size: var(--ax-text-body-size);
+  gap: 6px;
+  font-size: var(--ax-font);
   font-weight: 600;
   color: var(--ax-text);
 }
@@ -517,7 +522,7 @@ onUnmounted(() => {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--ax-space-3-5) var(--ax-space-4);
+  padding: 14px 16px;
 }
 
 .config-panel .panel-body {
@@ -527,16 +532,16 @@ onUnmounted(() => {
 }
 
 .docs-form :deep(.el-form-item) {
-  margin-bottom: var(--ax-space-3-5);
+  margin-bottom: 14px;
 }
 
 .docs-form :deep(.el-form-item__label) {
-  font-size: var(--ax-text-body-sm-size);
+  font-size: var(--ax-font-sm);
   color: var(--ax-text-secondary);
 }
 
 .docs-upload :deep(.el-upload-dragger) {
-  padding: var(--ax-space-5) var(--ax-space-3);
+  padding: 20px 12px;
   border-radius: var(--ax-radius);
   border-color: var(--ax-border);
   background: var(--ax-bg-subtle);
@@ -553,21 +558,21 @@ onUnmounted(() => {
 .upload-icon {
   font-size: 40px;
   color: var(--ax-text-placeholder);
-  margin-bottom: var(--ax-space-1-5);
+  margin-bottom: 6px;
 }
 
 .upload-tip {
   color: var(--ax-text-placeholder);
-  font-size: var(--ax-text-caption-size);
+  font-size: var(--ax-font-xs);
   text-align: center;
 }
 
 .file-chip {
   display: flex;
   align-items: center;
-  gap: var(--ax-space-1-5);
-  margin-top: var(--ax-space-2);
-  padding: var(--ax-space-2) var(--ax-space-2-5);
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 10px;
   border-radius: var(--ax-radius);
   background: var(--ax-bg-subtle);
   border: 1px solid var(--ax-border);
@@ -579,7 +584,7 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: var(--ax-text-body-sm-size);
+  font-size: var(--ax-font-sm);
   color: var(--ax-text);
 }
 
@@ -595,7 +600,7 @@ onUnmounted(() => {
 .result-tags {
   display: flex;
   align-items: center;
-  gap: var(--ax-space-1-5);
+  gap: 6px;
   flex-wrap: wrap;
 }
 
@@ -618,11 +623,24 @@ onUnmounted(() => {
 }
 
 .table-wrap :deep(.el-table) {
-  font-size: var(--ax-text-body-sm-size);
+  font-size: var(--ax-font-sm);
 }
 
 .table-wrap :deep(.el-textarea__inner) {
-  font-size: var(--ax-text-body-sm-size);
+  font-size: var(--ax-font-sm);
+}
+
+.restore-hint-bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ax-gap);
+  margin-bottom: var(--ax-gap-sm);
+  padding: 6px 10px;
+  border-radius: var(--ax-radius);
+  background: var(--ax-bg-subtle);
+  border: 1px solid var(--ax-border);
 }
 
 .stream-progress {
@@ -630,16 +648,21 @@ onUnmounted(() => {
   margin-bottom: var(--ax-gap-sm);
 }
 
+.restore-hint {
+  flex: none;
+  margin-bottom: var(--ax-gap-sm);
+}
+
 .progress-text {
-  margin: var(--ax-space-2) 0 0;
+  margin: 8px 0 0;
   color: var(--ax-text-secondary);
-  font-size: var(--ax-text-body-sm-size);
+  font-size: var(--ax-font-sm);
 }
 
 .saved-tip {
-  margin: var(--ax-space-1-5) 0 0;
+  margin: 6px 0 0;
   color: var(--ax-success);
-  font-size: var(--ax-text-body-sm-size);
+  font-size: var(--ax-font-sm);
 }
 
 .result-footer {
@@ -649,20 +672,28 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: var(--ax-gap);
-  padding-top: var(--ax-space-2-5);
+  padding-top: 10px;
   border-top: 1px solid var(--ax-border);
+}
+
+.result-pagination {
+  flex: none;
+  display: flex;
+  justify-content: flex-end;
+  margin-top: var(--ax-gap-sm);
+  padding-top: 8px;
 }
 
 .result-actions {
   display: flex;
-  gap: var(--ax-space-2);
+  gap: 8px;
   flex-shrink: 0;
 }
 
 .form-tip {
-  margin-top: var(--ax-space-1);
+  margin-top: 4px;
   color: var(--ax-text-tertiary);
-  font-size: var(--ax-text-caption-size);
+  font-size: var(--ax-font-xs);
 }
 
 @media (max-width: 960px) {

@@ -20,6 +20,21 @@ const TYPE_LABELS: Record<string, string> = {
   response_time: '响应时长',
 }
 
+// 运算符 → 中文标签：用于按「配置的运算符」表达断言意图（如「不等于 200」），
+// 而非后端消息里随实际关系翻转的符号（失败的 != 会被渲染成「==」，看着像等于判断）。
+const OPERATOR_LABELS: Record<string, string> = {
+  eq: '等于',
+  neq: '不等于',
+  contains: '包含',
+  not_contains: '不包含',
+  gt: '大于',
+  gte: '大于等于',
+  lt: '小于',
+  lte: '小于等于',
+  regex: '匹配正则',
+  exists: '存在',
+}
+
 function toText(value: unknown): string {
   return value === null || value === undefined ? '' : String(value)
 }
@@ -30,12 +45,21 @@ function declarativeItems(results: readonly Record<string, unknown>[]): Assertio
     const passed = !!a.passed
     const type = toText(a.type)
     const typeLabel = TYPE_LABELS[type] || type
-    const msg = typeof a.message === 'string' ? a.message : ''
+    const opLabel = OPERATOR_LABELS[toText(a.operator)]
     const parts: string[] = []
     if (typeLabel) parts.push(`[${typeLabel}]`)
-    if (msg) parts.push(msg)
-    if (!passed && (a.expected != null || a.actual != null)) {
-      parts.push(`期望: ${toText(a.expected)} ｜ 实际: ${toText(a.actual)}`)
+    if (opLabel) {
+      // 运算符并进「期望」（如「期望: 不等于 200」），避免裸值 200 被误读成「期望等于 200」；
+      // exists 无期望值。失败时补「实际」。
+      const expected = a.operator === 'exists' ? opLabel : `${opLabel} ${toText(a.expected)}`
+      parts.push(passed ? `期望: ${expected}` : `期望: ${expected} ｜ 实际: ${toText(a.actual)}`)
+    } else {
+      // 无运算符的断言（包含/响应时长）沿用后端 message，失败再补期望/实际
+      const msg = typeof a.message === 'string' ? a.message : ''
+      if (msg) parts.push(msg)
+      if (!passed && (a.expected != null || a.actual != null)) {
+        parts.push(`期望: ${toText(a.expected)} ｜ 实际: ${toText(a.actual)}`)
+      }
     }
     return { passed, label: passed ? '通过' : '失败', message: parts.join(' ') }
   })

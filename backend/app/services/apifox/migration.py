@@ -182,6 +182,32 @@ def migrate_apifox_run_step_depth(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_run_step_loop_round(db: Session) -> None:
+    """apifox_run_steps 加 loop_round（内层循环轮次全局序号，0=不在循环内，供报告统计循环数）。"""
+    inspector = inspect(engine)
+    if "apifox_run_steps" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_run_steps")}
+    if "loop_round" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_run_steps ADD COLUMN loop_round INTEGER NOT NULL DEFAULT 0"))
+    db.expire_all()
+
+
+def migrate_apifox_import_schedule_manifest(db: Session) -> None:
+    """apifox_import_schedules 加 last_run_manifest（上次运行逐条清单 JSON，供明细表展示）。"""
+    inspector = inspect(engine)
+    if "apifox_import_schedules" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_import_schedules")}
+    if "last_run_manifest" in cols:
+        return
+    with engine.begin() as conn:
+        conn.execute(text("ALTER TABLE apifox_import_schedules ADD COLUMN last_run_manifest TEXT"))
+    db.expire_all()
+
+
 def migrate_apifox_schedule_cron(db: Session) -> None:
     """apifox_schedules 加 cron_expr（schedule_type=cron 时的表达式）。"""
     inspector = inspect(engine)
@@ -345,6 +371,20 @@ def migrate_apifox_notify_retry(db: Session) -> None:
     db.expire_all()
 
 
+def migrate_apifox_run_retry_chain(db: Session) -> None:
+    """apifox_runs 加 retry_of_run_id/attempt（定时任务失败重试链，供报告把多次尝试折叠成一行）。"""
+    inspector = inspect(engine)
+    if "apifox_runs" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_runs")}
+    with engine.begin() as conn:
+        if "retry_of_run_id" not in cols:
+            _alter_add_column(conn, "ALTER TABLE apifox_runs ADD COLUMN retry_of_run_id INTEGER")
+        if "attempt" not in cols:
+            _alter_add_column(conn, "ALTER TABLE apifox_runs ADD COLUMN attempt INTEGER NOT NULL DEFAULT 1")
+    db.expire_all()
+
+
 def migrate_apifox_ai_gen_discarded_cases(db: Session) -> None:
     """AI 生成任务子项：记录已从预览废弃的用例（未入库）。"""
     inspector = inspect(engine)
@@ -354,5 +394,73 @@ def migrate_apifox_ai_gen_discarded_cases(db: Session) -> None:
     if "discarded_cases" in cols:
         return
     with engine.begin() as conn:
-        conn.execute(text("ALTER TABLE apifox_ai_gen_task_items ADD COLUMN discarded_cases TEXT"))
+        _alter_add_column(conn, "ALTER TABLE apifox_ai_gen_task_items ADD COLUMN discarded_cases TEXT")
+    db.expire_all()
+
+
+def migrate_apifox_ai_gen_applied_cases(db: Session) -> None:
+    """AI 生成任务子项：记录已从预览入库的用例快照（供任务中心「已入库」查看）。"""
+    inspector = inspect(engine)
+    if "apifox_ai_gen_task_items" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_ai_gen_task_items")}
+    if "applied_cases" in cols:
+        return
+    with engine.begin() as conn:
+        _alter_add_column(conn, "ALTER TABLE apifox_ai_gen_task_items ADD COLUMN applied_cases TEXT")
+    db.expire_all()
+
+
+def migrate_apifox_notify_success(db: Session) -> None:
+    """apifox_notify_configs 加三类事件的成功通知开关（默认关，成功通知 opt-in）。"""
+    inspector = inspect(engine)
+    if "apifox_notify_configs" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_notify_configs")}
+    with engine.begin() as conn:
+        for col in ("notify_schedule_success", "notify_run_success", "notify_aigen_success"):
+            if col not in cols:
+                _alter_add_column(
+                    conn, f"ALTER TABLE apifox_notify_configs ADD COLUMN {col} BOOLEAN NOT NULL DEFAULT 0"
+                )
+    db.expire_all()
+
+
+def migrate_apifox_run_chain_head_id(db: Session) -> None:
+    """apifox_runs 加 chain_head_id 列 + 回填 + 报告分页复合索引。
+
+    chain_head_id = COALESCE(retry_of_run_id, id)，物化成真实列以支持索引排序
+    （MySQL 不允许生成列引用 AUTO_INCREMENT 的 id）。复合索引让 runs/page 的
+    ORDER BY chain_head_id DESC 走索引、LIMIT 提前终止，消除全表 filesort。
+    """
+    inspector = inspect(engine)
+    if "apifox_runs" not in inspector.get_table_names():
+        return
+    cols = {c["name"] for c in inspector.get_columns("apifox_runs")}
+    if "chain_head_id" not in cols:
+        with engine.begin() as conn:
+            _alter_add_column(conn, "ALTER TABLE apifox_runs ADD COLUMN chain_head_id INTEGER")
+        db.expire_all()
+    # 回填历史行（幂等：仅填 NULL）
+    with engine.begin() as conn:
+        _set_mysql_lock_timeouts(conn)
+        conn.execute(
+            text(
+                "UPDATE apifox_runs SET chain_head_id = COALESCE(retry_of_run_id, id) "
+                "WHERE chain_head_id IS NULL"
+            )
+        )
+    # 建索引（幂等：不存在才建；索引名需与模型一致）
+    existing_idx = {ix["name"] for ix in inspect(engine).get_indexes("apifox_runs")}
+    with engine.begin() as conn:
+        _set_mysql_lock_timeouts(conn)
+        if "ix_apifox_runs_chain_head_id" not in existing_idx:
+            conn.execute(text("CREATE INDEX ix_apifox_runs_chain_head_id ON apifox_runs (chain_head_id)"))
+        if "ix_apifox_runs_chain_page" not in existing_idx:
+            conn.execute(
+                text(
+                    "CREATE INDEX ix_apifox_runs_chain_page "
+                    "ON apifox_runs (project_id, parent_run_id, chain_head_id)"
+                )
+            )
     db.expire_all()

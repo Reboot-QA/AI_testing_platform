@@ -7,9 +7,10 @@
   >
     <template #actions>
       <el-button v-if="parentDetail" link type="primary" @click="emit('backToParent')">
-        ← 返回套件报告
+        ← {{ backLabel }}
       </el-button>
       <el-dropdown
+        v-if="showExport"
         split-button
         size="small"
         type="primary"
@@ -29,55 +30,47 @@
       </el-dropdown>
     </template>
 
-    <el-table
-      v-if="isSuite"
-      :data="detail.children"
-      size="small"
-      border
-      @row-click="(row: Schemas['RunBrief']) => emit('openChild', row)"
-    >
-      <el-table-column label="套件项" min-width="200">
-        <template #default="{ row }">
-          <el-tag size="small" :type="targetTag(row.target_type)">{{
-            targetTypeLabel(row.target_type)
-          }}</el-tag>
-          {{ row.target_name }}
-        </template>
-      </el-table-column>
-      <el-table-column label="状态" width="90">
-        <template #default="{ row }">
-          <el-tag size="small" :type="statusTag(row.status)">{{ statusLabel(row.status) }}</el-tag>
-        </template>
-      </el-table-column>
-      <el-table-column label="通过率" width="110">
-        <template #default="{ row }">
-          {{ row.pass_rate != null ? row.pass_rate + '%' : '-' }}
-        </template>
-      </el-table-column>
-      <el-table-column label="耗时" width="90">
-        <template #default="{ row }">{{
-          row.duration_ms != null ? Math.round(row.duration_ms) + 'ms' : '-'
-        }}</template>
-      </el-table-column>
-    </el-table>
+    <RunChildRunsList
+      v-if="aggregateChildren && detail.children?.length"
+      :children="detail.children"
+      :search-placeholder="childSearchPlaceholder"
+      :expand-inline="detail.target_type === 'endpoint'"
+      @open-child="(row) => emit('openChild', row)"
+    />
+    <el-empty v-else-if="aggregateChildren" description="暂无用例" :image-size="64" />
 
     <RunStepGroups v-else :detail="detail" />
   </RunReportDetail>
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import type { Schemas } from '@/api/types'
+import RunChildRunsList from '@/components/apifox/run/RunChildRunsList.vue'
 import RunReportDetail from '@/components/apifox/run/RunReportDetail.vue'
+import { RUN_LIST_SEARCH_CASE } from '@/utils/runReportList'
 import RunStepGroups from '@/components/apifox/run/RunStepGroups.vue'
-import { statusLabel, statusTag } from '@/utils/runFormat'
 
-defineProps<{
-  detail: Schemas['RunOut'] | null
-  parentDetail: Schemas['RunOut'] | null
-  environmentName: string
-  exporting: boolean
-  isSuite: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    detail: Schemas['RunOut'] | null
+    parentDetail: Schemas['RunOut'] | null
+    environmentName: string
+    exporting: boolean
+    isSuite?: boolean
+    showChildren?: boolean
+    childSearchPlaceholder?: string
+    backLabel?: string
+    showExport?: boolean
+  }>(),
+  {
+    isSuite: false,
+    showChildren: undefined,
+    childSearchPlaceholder: RUN_LIST_SEARCH_CASE,
+    backLabel: '返回套件报告',
+    showExport: true,
+  },
+)
 
 const emit = defineEmits<{
   backToParent: []
@@ -85,6 +78,10 @@ const emit = defineEmits<{
   openChild: [row: Schemas['RunBrief']]
 }>()
 
-const targetTypeLabel = (t: string) => (t === 'scenario' ? '场景' : t === 'suite' ? '套件' : '用例')
-const targetTag = (t: string) => (t === 'scenario' ? 'info' : t === 'suite' ? 'primary' : 'success')
+const aggregateChildren = computed(() => {
+  if (props.showChildren != null) return props.showChildren
+  if (props.isSuite) return true
+  const t = props.detail?.target_type
+  return t === 'suite' || t === 'endpoint'
+})
 </script>

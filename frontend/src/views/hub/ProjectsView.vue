@@ -58,7 +58,7 @@
         </div>
       </div>
 
-      <ActivitySide ref="activityRef" @open="openReports" />
+      <ActivitySide ref="activityRef" @open="onActivityOpen" />
     </div>
 
     <el-dialog v-model="dialogVisible" :title="editing ? '编辑项目' : '新建项目'" width="480px">
@@ -109,6 +109,8 @@ import type { FormInstance, FormItemRule, FormRules } from 'element-plus'
 import type { Schemas } from '@/api/types'
 import { apifoxApi, projectApi } from '@/api'
 import type { WorkspaceDomain } from '@/types/shell'
+import { firstWorkspaceRoute, legacyWorkspaceRoute } from '@/router/workspace'
+import { useUserStore } from '@/stores/user'
 import {
   registerAssistantHandler,
   unregisterAssistantHandler,
@@ -116,10 +118,18 @@ import {
 import StatTiles from '@/components/hub/StatTiles.vue'
 import ProjectCard from '@/components/hub/ProjectCard.vue'
 import ActivitySide from '@/components/hub/ActivitySide.vue'
+import {
+  workspaceRouteLocation,
+  type WorkspaceNavPayload,
+} from '@/composables/useWorkspaceOverviewNav'
 
 type WorkbenchProject = Schemas['WorkbenchProject']
 
+// autoCreate：由首页快捷入口在「一个项目都没有」时带过来，挂载后直接弹新建项目
+const props = defineProps<{ autoCreate?: boolean }>()
+
 const router = useRouter()
+const userStore = useUserStore()
 const loading = ref(false)
 const activityRef = ref<{ refresh: () => Promise<void> } | null>(null)
 const overview = reactive<Schemas['WorkbenchOverviewOut']>({
@@ -136,7 +146,10 @@ const filtered = computed(() => {
     // 我参与的：P0 阶段后端返回的均为可访问项目，暂等同全部；待后端补 is_member 标记再细分
     if (segment.value === 'pinned' && !p.pinned) return false
     if (!kw) return true
-    return `${p.name} ${p.description ?? ''} ${p.role}`.toLowerCase().includes(kw)
+    // 负责人搜索：owner_name（用户名+真实姓名）纳入过滤，避免只匹配 role 标签导致搜人名无结果
+    return `${p.name} ${p.description ?? ''} ${p.owner_name ?? ''} ${p.role}`
+      .toLowerCase()
+      .includes(kw)
   })
 })
 
@@ -191,15 +204,23 @@ async function loadData() {
 }
 
 function enter(id: number, domain: WorkspaceDomain = 'requirements') {
-  const section = domain === 'requirements' ? '&section=req-overview' : ''
-  router.push({ path: `/hub/workspace/${id}`, hash: `#domain=${domain}${section}` })
+  const name = firstWorkspaceRoute(userStore.hasPermission, domain)
+  if (name) void router.push({ name, params: { projectId: id } })
 }
 
 function openReports(projectId: number) {
-  router.push({
-    path: `/hub/workspace/${projectId}`,
-    hash: `#domain=automation&biz=reports&section=reports`,
-  })
+  void router.push({ name: 'WorkspaceAutomationReports', params: { projectId } })
+}
+
+function onActivityOpen(projectId: number, nav?: WorkspaceNavPayload) {
+  if (nav) {
+    const loc = workspaceRouteLocation(projectId, nav.domain, nav.section, nav.filter, nav.query)
+    if (loc) {
+      void router.push(loc)
+      return
+    }
+  }
+  openReports(projectId)
 }
 
 async function persistOrder() {
@@ -241,7 +262,8 @@ function openEdit(project: WorkbenchProject) {
   dialogVisible.value = true
 }
 
-async function submitProject(): Promise<Schemas['ProjectOut']> {
+// 保存项目（新建 / 编辑），不负责跳转：保存完去哪由调用方决定
+async function saveProject(): Promise<Schemas['ProjectOut']> {
   await formRef.value?.validate()
   submitting.value = true
   try {
@@ -260,11 +282,18 @@ async function submitProject(): Promise<Schemas['ProjectOut']> {
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
-    await loadData()
     return saved
   } finally {
     submitting.value = false
   }
+}
+
+// 弹窗「确定」：编辑后留在列表刷新；新建成功一律进入新项目的需求概览
+async function submitProject(): Promise<void> {
+  const isCreate = !editing.value
+  const saved = await saveProject()
+  if (isCreate) enter(saved.id)
+  else await loadData()
 }
 
 async function handleRename(project: WorkbenchProject) {
@@ -311,14 +340,19 @@ onMounted(async () => {
     if (!dialogVisible.value || editing.value) {
       throw new Error('项目创建表单尚未准备好')
     }
-    const project = await submitProject()
-    const requestedHash = typeof payload?.next_hash === 'string' ? payload.next_hash : ''
-    const nextHash = requestedHash.startsWith('#domain=')
-      ? requestedHash
-      : '#domain=settings&open=basic'
-    await router.push({ path: `/hub/workspace/${project.id}`, hash: nextHash })
+    const project = await saveProject()
+    const requestedRoute = typeof payload?.next_route === 'string' ? payload.next_route : ''
+    const target = legacyWorkspaceRoute(
+      typeof payload?.next_hash === 'string' ? payload.next_hash : '',
+    )
+    await router.push({
+      name: requestedRoute || target?.name || 'WorkspaceSettingsBasic',
+      params: { projectId: project.id },
+      query: target?.query,
+    })
   })
   await loadData()
+  if (props.autoCreate && !overview.projects.length) openCreate()
 })
 
 onUnmounted(() => {

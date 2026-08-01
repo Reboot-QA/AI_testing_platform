@@ -57,8 +57,8 @@ def update_param(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/global-params/{gid}")
+@router.delete("/global-params/{gid}", status_code=204)
 def delete_param(gid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     param = _param_checked(db, gid, user)
     service.delete_param(db, param)
-    return {"message": "全局参数已删除"}
+    return None

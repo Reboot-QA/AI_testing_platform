@@ -19,6 +19,11 @@ def _apply_operator(actual: Any, expected: Optional[str], operator: str) -> Tupl
     op = operator or "eq"
     a_str = "" if actual is None else str(actual)
     e_str = "" if expected is None else str(expected)
+    if isinstance(actual, bool):
+        # JSON 布尔取值为 Python True/False，str() 得 "True"/"False"；断言 expected 按 JSON 习惯
+        # 填小写 "true"/"false"。统一小写并容忍 expected 大小写/空白，避免 bool 断言恒失败。
+        a_str = a_str.lower()
+        e_str = e_str.strip().lower()
     if op == "exists":
         return actual is not None, f"值{'存在' if actual is not None else '不存在'}"
     if op in _NUMERIC_OPS:
@@ -41,4 +46,7 @@ def _apply_operator(actual: Any, expected: Optional[str], operator: str) -> Tupl
         return e_str not in a_str, f"{'不包含' if e_str not in a_str else '包含'} \"{e_str}\""
     if op == "neq":
         return a_str != e_str, f"{a_str} {'!=' if a_str != e_str else '=='} {e_str}"
-    return a_str == e_str, f"{a_str} {'==' if a_str == e_str else '!='} {e_str}"  # eq（字符串宽松等价）
+    if op == "eq":
+        return a_str == e_str, f"{a_str} {'==' if a_str == e_str else '!='} {e_str}"  # 字符串宽松等价
+    # 无法识别的运算符绝不静默按 eq 判「通过」：否则 != 等被悄悄降级成 == 造成假通过（后置断言尤危险）
+    return False, f"未知操作符：{op}"

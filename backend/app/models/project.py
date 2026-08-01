@@ -18,6 +18,9 @@ class Project(Base):
     department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("departments.id"), nullable=True, index=True)
     status: Mapped[str] = mapped_column(String(20), default="active")
     api_global_variables: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 两类拖拽排序分别使用项目级版本，避免接口树与场景列表互相制造冲突。
+    api_tree_order_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    scenario_order_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
     # 上次 OpenAPI 导入的 URL（同源再次导入时智能识别为「更新同步」并预览；也用于回填）
     last_import_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

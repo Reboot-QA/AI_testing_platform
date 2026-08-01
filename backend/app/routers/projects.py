@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
-from app.auth import get_current_user
+from app.auth import get_current_user, require_menu_permission
 from app.database import get_db
 from app.models.department import Department
 from app.models.project import Project
@@ -12,6 +12,8 @@ from app.models.requirement import Requirement
 from app.models.testcase import TestCase
 from app.models.user import User
 from app.schemas import (
+    ActionResultOut,
+    AiTasksOverviewOut,
     DashboardStats,
     FunctionalOverviewOut,
     ProjectCreate,
@@ -26,7 +28,7 @@ from app.schemas import (
 )
 from app.services import project_member_service, user_project_pref_service
 from app.services.apifox.project_cleanup import purge_project_all
-from app.services.overview_service import get_functional_overview, get_requirements_overview
+from app.services.overview_service import get_ai_tasks_overview, get_functional_overview, get_requirements_overview
 from app.services.project_access_service import (
     accessible_projects_query,
     get_accessible_project,
@@ -68,6 +70,8 @@ def _project_out(project: Project, db: Session) -> ProjectOut:
     return ProjectOut(
         id=project.id,
         owner_seq=project.owner_seq or 0,
+        api_tree_order_version=project.api_tree_order_version,
+        scenario_order_version=project.scenario_order_version,
         name=project.name,
         description=project.description,
         owner_id=project.owner_id,
@@ -142,7 +146,7 @@ def create_project(
     return _project_out(project, db)
 
 
-@router.put("/preferences/order")
+@router.put("/preferences/order", response_model=ActionResultOut)
 def save_project_preferences(
     data: ProjectPrefOrderIn,
     db: Session = Depends(get_db),
@@ -197,13 +201,23 @@ def requirements_overview(
     return get_requirements_overview(db, project_id)
 
 
+@router.get("/{project_id}/overview/ai-tasks", response_model=AiTasksOverviewOut)
+def ai_tasks_overview(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    get_accessible_project(db, project_id, current_user)
+    return get_ai_tasks_overview(db, project_id)
+
+
 @router.get("/{project_id}", response_model=ProjectOut)
 def get_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = get_accessible_project(db, project_id, current_user)
     return _project_out(project, db)
 
 
-@router.put("/{project_id}", response_model=ProjectOut)
+@router.put("/{project_id}", response_model=ProjectOut, dependencies=[Depends(require_menu_permission("projects"))])
 def update_project(
     project_id: int,
     data: ProjectUpdate,
@@ -232,7 +246,7 @@ def update_project(
     return _project_out(project, db)
 
 
-@router.delete("/{project_id}")
+@router.delete("/{project_id}", status_code=204, dependencies=[Depends(require_menu_permission("projects"))])
 def delete_project(project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     project = get_accessible_project(db, project_id, current_user)
     # 硬删除不可逆且清空整个项目：仅项目负责人或系统管理员可执行
@@ -241,7 +255,7 @@ def delete_project(project_id: int, db: Session = Depends(get_db), current_user:
     purge_project_all(db, project.id)  # 级联清空该项目全部数据（老平台 + apifox），避免 FK 阻塞/孤儿
     db.delete(project)
     db.commit()
-    return {"message": "删除成功"}
+    return None
 
 
 # ---------- 项目成员（显式授权，跨部门加人） ----------
@@ -253,7 +267,7 @@ def _manager_project(db: Session, project_id: int, user: User) -> Project:
     return project
 
 
-@router.get("/{project_id}/members", response_model=List[ProjectMemberOut])
+@router.get("/{project_id}/members", response_model=List[ProjectMemberOut], dependencies=[Depends(require_menu_permission("projects"))])
 def list_project_members(
     project_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
@@ -261,7 +275,7 @@ def list_project_members(
     return project_member_service.list_members(db, project_id)
 
 
-@router.get("/{project_id}/member-candidates", response_model=List[ProjectMemberCandidateOut])
+@router.get("/{project_id}/member-candidates", response_model=List[ProjectMemberCandidateOut], dependencies=[Depends(require_menu_permission("projects"))])
 def list_member_candidates(
     project_id: int,
     keyword: Optional[str] = Query(None, max_length=200),
@@ -272,7 +286,7 @@ def list_member_candidates(
     return project_member_service.list_candidates(db, project_id, keyword)
 
 
-@router.post("/{project_id}/members", response_model=ProjectMemberOut)
+@router.post("/{project_id}/members", response_model=ProjectMemberOut, dependencies=[Depends(require_menu_permission("projects"))])
 def add_project_member(
     project_id: int,
     data: ProjectMemberAddIn,
@@ -283,11 +297,11 @@ def add_project_member(
     return project_member_service.add_member(db, project_id, data.user_id, current_user.id)
 
 
-@router.delete("/{project_id}/members/{user_id}")
+@router.delete("/{project_id}/members/{user_id}", status_code=204, dependencies=[Depends(require_menu_permission("projects"))])
 def remove_project_member(
     project_id: int, user_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
 ):
     _manager_project(db, project_id, current_user)
     if not project_member_service.remove_member(db, project_id, user_id):
         raise HTTPException(status_code=404, detail="该用户不是项目成员")
-    return {"message": "已移除成员"}
+    return None

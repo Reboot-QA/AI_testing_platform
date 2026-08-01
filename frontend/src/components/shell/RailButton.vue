@@ -2,16 +2,18 @@
   <button class="gr-btn" :class="{ active }" type="button">
     <span class="gr-ic"><slot name="icon" /></span>
     <span v-if="label" class="gr-label">{{ label }}</span>
-    <span v-if="dot" class="gr-dot">{{ dot }}</span>
+    <span v-if="displayDot" class="gr-dot">{{ displayDot }}</span>
   </button>
 </template>
 
 <script setup lang="ts">
-withDefaults(
+import { computed } from 'vue'
+
+const props = withDefaults(
   defineProps<{
     label?: string
     active?: boolean
-    dot?: number | null
+    dot?: number | string | null
   }>(),
   {
     label: '',
@@ -19,6 +21,14 @@ withDefaults(
     dot: null,
   },
 )
+
+const displayDot = computed(() => {
+  if (typeof props.dot === 'number') {
+    if (props.dot <= 0) return ''
+    return props.dot > 99 ? '99+' : String(props.dot)
+  }
+  return props.dot || ''
+})
 </script>
 
 <style scoped>
@@ -83,7 +93,7 @@ withDefaults(
   font-size: 10px;
   line-height: 14px;
   text-align: center;
-  border: 2px solid #eef4ff;
+  border: 2px solid var(--ax-raw-hex-eef4ff);
   box-sizing: content-box;
 }
 </style>

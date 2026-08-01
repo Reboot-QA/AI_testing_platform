@@ -182,6 +182,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{project_id}/overview/ai-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ai Tasks Overview */
+        get: operations["ai_tasks_overview_api_v1_projects__project_id__overview_ai_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{project_id}": {
         parameters: {
             query?: never;
@@ -248,6 +265,108 @@ export interface paths {
         post?: never;
         /** Remove Project Member */
         delete: operations["remove_project_member_api_v1_projects__project_id__members__user_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{pid}/hub-ai-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Hub Ai Tasks */
+        get: operations["list_hub_ai_tasks_api_v1_projects__pid__hub_ai_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Hub Ai Task */
+        get: operations["get_hub_ai_task_api_v1_projects__pid__hub_ai_tasks__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cancel Hub Ai Task */
+        post: operations["cancel_hub_ai_task_api_v1_projects__pid__hub_ai_tasks__task_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Hub Ai Task Requirements */
+        get: operations["list_hub_ai_task_requirements_api_v1_projects__pid__hub_ai_tasks__task_id__requirements_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/requirements/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Discard Hub Ai Task Requirements */
+        post: operations["discard_hub_ai_task_requirements_api_v1_projects__pid__hub_ai_tasks__task_id__requirements_discard_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{pid}/hub-ai-tasks/{task_id}/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Hub Ai Task Cases */
+        get: operations["list_hub_ai_task_cases_api_v1_projects__pid__hub_ai_tasks__task_id__cases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -407,6 +526,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/requirements/import/template/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Requirements Import Template Excel */
+        get: operations["download_requirements_import_template_excel_api_v1_requirements_import_template_excel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/import/template/xmind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Requirements Import Template Xmind */
+        get: operations["download_requirements_import_template_xmind_api_v1_requirements_import_template_xmind_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/requirements/{req_id}": {
         parameters: {
             query?: never;
@@ -540,6 +693,40 @@ export interface paths {
         put?: never;
         /** Import Testcases File */
         post: operations["import_testcases_file_api_v1_testcases_import_file_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/testcases/import/template/excel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Testcases Import Template Excel */
+        get: operations["download_testcases_import_template_excel_api_v1_testcases_import_template_excel_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/testcases/import/template/xmind": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Testcases Import Template Xmind */
+        get: operations["download_testcases_import_template_xmind_api_v1_testcases_import_template_xmind_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -948,6 +1135,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/test-executions/page": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs Page */
+        get: operations["list_runs_page_api_v1_test_executions_page_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/test-executions/available-cases/list": {
         parameters: {
             query?: never;
@@ -959,6 +1163,23 @@ export interface paths {
         get: operations["list_available_cases_api_v1_test_executions_available_cases_list_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/test-executions/batch/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Batch Delete Runs */
+        post: operations["batch_delete_runs_api_v1_test_executions_batch_delete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -994,125 +1215,6 @@ export interface paths {
         get?: never;
         /** Update Case Result */
         put: operations["update_case_result_api_v1_test_executions__run_id__cases__case_row_id__put"];
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/sources": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Log Sources */
-        get: operations["list_log_sources_api_v1_logs_sources_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/tail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tail Logs */
-        get: operations["tail_logs_api_v1_logs_tail_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream Logs */
-        get: operations["stream_logs_api_v1_logs_stream_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/download": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Download Log */
-        get: operations["download_log_api_v1_logs_download_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/errors/summary": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Error Log Summary */
-        get: operations["error_log_summary_api_v1_logs_errors_summary_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/errors/tail": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Tail Error Logs */
-        get: operations["tail_error_logs_api_v1_logs_errors_tail_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/logs/errors/stream": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Stream Error Logs */
-        get: operations["stream_error_logs_api_v1_logs_errors_stream_get"];
-        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -1568,6 +1670,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/ai-gen-tasks/mine/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List My Active Ai Gen Tasks
+         * @description 当前用户跨所有可访问项目的进行中 AI 生成任务（侧边栏角标）。
+         */
+        get: operations["list_my_active_ai_gen_tasks_api_v1_apifox_ai_gen_tasks_mine_active_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/ai-gen-tasks/{tid}": {
         parameters: {
             query?: never;
@@ -1633,6 +1755,26 @@ export interface paths {
          * @description 一次入库多个接口项：省去前端逐项串行调用，服务端聚合返回最新任务。
          */
         post: operations["apply_ai_gen_task_batch_api_v1_apifox_ai_gen_tasks__tid__apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/apifox/ai-gen-tasks/{tid}/items/{iid}/discard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discard Ai Gen Task Item
+         * @description 从生成预览中废弃用例（未入库）；与 apply 相同 indexes 语义。
+         */
+        post: operations["discard_ai_gen_task_item_api_v1_apifox_ai_gen_tasks__tid__items__iid__discard_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2238,6 +2380,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/projects/{pid}/import/openapi/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Openapi Preview
+         * @description 导入前的只读预览：按 tag 分组列出待导入接口，标注已存在/契约有变更，供用户勾选。
+         */
+        post: operations["import_openapi_preview_api_v1_apifox_projects__pid__import_openapi_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/projects/{pid}/import/openapi": {
         parameters: {
             query?: never;
@@ -2621,6 +2783,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/apifox/workbench/ai-tasks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Workbench Ai Tasks
+         * @description AI 任务（跨项目 Hub 需求/用例 + 接口 AI 生成，按更新时间倒序）。
+         */
+        get: operations["workbench_ai_tasks_api_v1_apifox_workbench_ai_tasks_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/apifox/projects/{pid}/suites": {
         parameters: {
             query?: never;
@@ -2961,6 +3143,14 @@ export interface components {
             /** Model */
             model?: string | null;
         };
+        /**
+         * ActionResultOut
+         * @description 无实体返回的写操作统一响应。
+         */
+        ActionResultOut: {
+            /** Message */
+            message: string;
+        };
         /** AiGenApplyRequest */
         AiGenApplyRequest: {
             /** Indexes */
@@ -2980,11 +3170,6 @@ export interface components {
              * @default 0
              */
             skipped: number;
-        };
-        /** AiGenDiscardResult */
-        AiGenDiscardResult: {
-            /** Discarded */
-            discarded: number;
         };
         /** AiGenBatchApplyItem */
         AiGenBatchApplyItem: {
@@ -3034,6 +3219,11 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** AiGenDiscardResult */
+        AiGenDiscardResult: {
+            /** Discarded */
+            discarded: number;
+        };
         /** AiGenTaskBrief */
         AiGenTaskBrief: {
             /** Id */
@@ -3059,6 +3249,11 @@ export interface components {
              * @default 0
              */
             applied_total: number;
+            /**
+             * Model Label
+             * @default
+             */
+            model_label: string;
             /** Creator Name */
             creator_name?: string | null;
             /** Total Items */
@@ -3106,6 +3301,11 @@ export interface components {
              */
             cases: components["schemas"]["CaseCreate"][];
             /**
+             * Applied Cases
+             * @default []
+             */
+            applied_cases: components["schemas"]["CaseCreate"][];
+            /**
              * Discarded Cases
              * @default []
              */
@@ -3125,6 +3325,11 @@ export interface components {
             provider_id?: number | null;
             /** Provider Name */
             provider_name?: string | null;
+            /**
+             * Model Label
+             * @default
+             */
+            model_label: string;
             /**
              * Categories
              * @default []
@@ -3175,6 +3380,22 @@ export interface components {
             mode: string;
             /** Cases */
             cases: components["schemas"]["CaseCreate"][];
+        };
+        /** AiTasksOverviewOut */
+        AiTasksOverviewOut: {
+            /** Total Task Count */
+            total_task_count: number;
+            /** Requirement Task Count */
+            requirement_task_count: number;
+            /** Case Task Count */
+            case_task_count: number;
+            /** Api Task Count */
+            api_task_count: number;
+            /**
+             * Active Api Task Count
+             * @default 0
+             */
+            active_api_task_count: number;
         };
         /** ApiTokenCreate */
         ApiTokenCreate: {
@@ -3400,13 +3621,6 @@ export interface components {
              */
             file: string;
         };
-        /** CaseBatchDeleteRequest */
-        CaseBatchDeleteRequest: {
-            /** Case Ids */
-            case_ids?: number[];
-            /** Detach Refs */
-            detach_refs?: boolean;
-        };
         /** CaseBatchDeleteBlockedItem */
         CaseBatchDeleteBlockedItem: {
             /** Name */
@@ -3415,6 +3629,16 @@ export interface components {
             scenarios?: string[];
             /** Suites */
             suites?: string[];
+        };
+        /** CaseBatchDeleteRequest */
+        CaseBatchDeleteRequest: {
+            /** Case Ids */
+            case_ids?: number[];
+            /**
+             * Detach Refs
+             * @default false
+             */
+            detach_refs: boolean;
         };
         /** CaseBatchDeleteResult */
         CaseBatchDeleteResult: {
@@ -3842,6 +4066,32 @@ export interface components {
              */
             scope: string;
         };
+        /** DebugConsoleDbLog */
+        DebugConsoleDbLog: {
+            /**
+             * Time
+             * @default
+             */
+            time: string;
+            /** Sql */
+            sql: string;
+            /** Rows */
+            rows?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Row Count
+             * @default 0
+             */
+            row_count: number;
+            /**
+             * Passed
+             * @default true
+             */
+            passed: boolean;
+            /** Error */
+            error?: string | null;
+        };
         /**
          * DebugInlineScript
          * @description 内联脚本（正文直接携带，调试直发时执行，不查脚本库）。
@@ -3948,31 +4198,7 @@ export interface components {
              * Console Print Db
              * @default false
              */
-            console_print_db?: boolean;
-        };
-        /** DebugConsoleDbLog */
-        DebugConsoleDbLog: {
-            /**
-             * Time
-             * @default
-             */
-            time?: string;
-            /** Sql */
-            sql: string;
-            /** Rows */
-            rows?: Record<string, never>[];
-            /**
-             * Row Count
-             * @default 0
-             */
-            row_count?: number;
-            /**
-             * Passed
-             * @default true
-             */
-            passed?: boolean;
-            /** Error */
-            error?: string | null;
+            console_print_db: boolean;
         };
         /** DebugResponse */
         DebugResponse: {
@@ -4419,6 +4645,186 @@ export interface components {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
         };
+        /** HubAiTaskBrief */
+        HubAiTaskBrief: {
+            /** Id */
+            id: number;
+            /** Project Id */
+            project_id: number;
+            /** Task Type */
+            task_type: string;
+            /** Status */
+            status: string;
+            /** Target */
+            target: string;
+            /** Category Label */
+            category_label: string;
+            /**
+             * Model Label
+             * @default
+             */
+            model_label: string;
+            /** Total Items */
+            total_items: number;
+            /** Done Items */
+            done_items: number;
+            /** Generated Total */
+            generated_total: number;
+            /** Applied Total */
+            applied_total: number;
+            /** Error */
+            error?: string | null;
+            /**
+             * Creator Name
+             * @default
+             */
+            creator_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+        };
+        /** HubAiTaskCaseBrief */
+        HubAiTaskCaseBrief: {
+            /** Id */
+            id: number;
+            /**
+             * Link Id
+             * @default 0
+             */
+            link_id: number;
+            /** Title */
+            title: string;
+            /** Case Type */
+            case_type: string;
+            /** Priority */
+            priority: string;
+            /** Preconditions */
+            preconditions?: string | null;
+            /** Steps */
+            steps?: string | null;
+            /** Expected Results */
+            expected_results?: string | null;
+            /** Tags */
+            tags?: string | null;
+            /**
+             * Requirement Title
+             * @default
+             */
+            requirement_title: string;
+            /**
+             * Review Status
+             * @default
+             */
+            review_status: string;
+        };
+        /** HubAiTaskCasesOut */
+        HubAiTaskCasesOut: {
+            /** Items */
+            items: components["schemas"]["HubAiTaskCaseBrief"][];
+            /** Total */
+            total: number;
+        };
+        /** HubAiTaskOut */
+        HubAiTaskOut: {
+            /** Id */
+            id: number;
+            /** Project Id */
+            project_id: number;
+            /** Task Type */
+            task_type: string;
+            /** Status */
+            status: string;
+            /** Target */
+            target: string;
+            /** Category Label */
+            category_label: string;
+            /**
+             * Model Label
+             * @default
+             */
+            model_label: string;
+            /** Total Items */
+            total_items: number;
+            /** Done Items */
+            done_items: number;
+            /** Generated Total */
+            generated_total: number;
+            /** Applied Total */
+            applied_total: number;
+            /** Error */
+            error?: string | null;
+            /**
+             * Creator Name
+             * @default
+             */
+            creator_name: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
+            /** Requirements */
+            requirements?: components["schemas"]["HubAiTaskRequirementItemOut"][] | null;
+        };
+        /** HubAiTaskPageOut */
+        HubAiTaskPageOut: {
+            /** Total */
+            total: number;
+            /** Items */
+            items: components["schemas"]["HubAiTaskBrief"][];
+        };
+        /** HubAiTaskRequirementDiscard */
+        HubAiTaskRequirementDiscard: {
+            /** Item Ids */
+            item_ids: number[];
+        };
+        /** HubAiTaskRequirementDiscardResponse */
+        HubAiTaskRequirementDiscardResponse: {
+            /** Discarded */
+            discarded: number;
+            /** Message */
+            message: string;
+        };
+        /** HubAiTaskRequirementItemOut */
+        HubAiTaskRequirementItemOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Req Type
+             * @default functional
+             */
+            req_type: string;
+            /**
+             * Priority
+             * @default P1
+             */
+            priority: string;
+            /** Requirement Id */
+            requirement_id?: number | null;
+            /** Imported At */
+            imported_at?: string | null;
+        };
+        /** HubAiTaskRequirementsOut */
+        HubAiTaskRequirementsOut: {
+            /** Items */
+            items: components["schemas"]["HubAiTaskRequirementItemOut"][];
+            /** Total */
+            total: number;
+        };
         /**
          * ImportCaseRef
          * @description 被移除接口下、被场景/套件引用的用例（修改提示锚点）。
@@ -4478,6 +4884,110 @@ export interface components {
             schemas_added: number;
         };
         /**
+         * ImportOpenapiRequest
+         * @description 执行导入时附带用户在「预览 & 配置」里的选择。
+         */
+        ImportOpenapiRequest: {
+            /** Url */
+            url?: string | null;
+            /** Content */
+            content?: string | null;
+            basic_auth?: components["schemas"]["BasicAuth"] | null;
+            /** Git Token */
+            git_token?: string | null;
+            /** Target Folder Id */
+            target_folder_id?: number | null;
+            /** Selected Keys */
+            selected_keys?: string[] | null;
+            /**
+             * On Conflict
+             * @default skip
+             */
+            on_conflict: string;
+            /**
+             * With Schemas
+             * @default true
+             */
+            with_schemas: boolean;
+        };
+        /**
+         * ImportPreviewEndpoint
+         * @description 导入预览项：key 为「METHOD path」，前端按 key 回传勾选结果。
+         */
+        ImportPreviewEndpoint: {
+            /** Key */
+            key: string;
+            /** Name */
+            name: string;
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
+            /**
+             * Exists
+             * @default false
+             */
+            exists: boolean;
+            /**
+             * Changed
+             * @default false
+             */
+            changed: boolean;
+        };
+        /**
+         * ImportPreviewFolder
+         * @description 按文档 tag 分组；name 为空表示未分组接口。
+         */
+        ImportPreviewFolder: {
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Endpoints */
+            endpoints?: components["schemas"]["ImportPreviewEndpoint"][];
+        };
+        /** ImportPreviewOut */
+        ImportPreviewOut: {
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Folders */
+            folders?: components["schemas"]["ImportPreviewFolder"][];
+            /**
+             * Total
+             * @default 0
+             */
+            total: number;
+            /**
+             * Exists Count
+             * @default 0
+             */
+            exists_count: number;
+            /**
+             * Changed Count
+             * @default 0
+             */
+            changed_count: number;
+            /**
+             * Schemas Total
+             * @default 0
+             */
+            schemas_total: number;
+            /**
+             * Schemas New
+             * @default 0
+             */
+            schemas_new: number;
+        };
+        /**
          * ImportRemovedEndpoint
          * @description 移除项：库里有、新 spec 无。referenced=True 表示有用例被引用，不自动删。
          */
@@ -4509,6 +5019,11 @@ export interface components {
             total: number;
             /** Created */
             created: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
             /** Skipped */
             skipped: number;
             /** Folders Created */
@@ -4528,6 +5043,66 @@ export interface components {
             basic_auth?: components["schemas"]["BasicAuth"] | null;
             /** Git Token */
             git_token?: string | null;
+        };
+        /**
+         * ImportRunItem
+         * @description 一次导入的逐条结果，供定时导入「上次结果」明细表展示。
+         */
+        ImportRunItem: {
+            /** Method */
+            method: string;
+            /** Path */
+            path: string;
+            /**
+             * Folder
+             * @default
+             */
+            folder: string;
+            /**
+             * Name
+             * @default
+             */
+            name: string;
+            /** Status */
+            status: string;
+        };
+        /**
+         * ImportRunManifest
+         * @description 上次运行逐条清单：counts + items（新增/更新/删除/保留/未变），供明细表展示。
+         */
+        ImportRunManifest: {
+            /**
+             * Added
+             * @default 0
+             */
+            added: number;
+            /**
+             * Updated
+             * @default 0
+             */
+            updated: number;
+            /**
+             * Deleted
+             * @default 0
+             */
+            deleted: number;
+            /**
+             * Kept Referenced
+             * @default 0
+             */
+            kept_referenced: number;
+            /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Items */
+            items?: components["schemas"]["ImportRunItem"][];
         };
         /** ImportScheduleCreate */
         ImportScheduleCreate: {
@@ -4613,6 +5188,7 @@ export interface components {
             last_run_status?: string | null;
             /** Last Run Detail */
             last_run_detail?: string | null;
+            last_run_manifest?: components["schemas"]["ImportRunManifest"] | null;
             /** Next Run At */
             next_run_at?: string | null;
         };
@@ -4671,12 +5247,24 @@ export interface components {
              */
             kept_referenced: number;
             /**
+             * Skipped
+             * @default 0
+             */
+            skipped: number;
+            /**
              * Schemas Created
              * @default 0
              */
             schemas_created: number;
             /** Warnings */
             warnings?: string[];
+            /** Items */
+            items?: components["schemas"]["ImportRunItem"][];
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
         };
         /** ImportSyncRequest */
         ImportSyncRequest: {
@@ -4848,6 +5436,31 @@ export interface components {
             /** Local Value */
             local_value?: string | null;
         };
+        /**
+         * ManualTestRunAvailableCaseOut
+         * @description 创建测试单时可选择的已评审用例。
+         */
+        ManualTestRunAvailableCaseOut: {
+            /** Id */
+            id: number;
+            /** Title */
+            title: string;
+            /** Priority */
+            priority: string;
+            /** Case Type */
+            case_type: string;
+            /** Requirement Id */
+            requirement_id: number | null;
+            /** Sort Order */
+            sort_order: number;
+        };
+        /** ManualTestRunBatchDelete */
+        ManualTestRunBatchDelete: {
+            /** Project Id */
+            project_id: number;
+            /** Run Ids */
+            run_ids: number[];
+        };
         /** ManualTestRunCaseOut */
         ManualTestRunCaseOut: {
             /** Id */
@@ -4975,6 +5588,17 @@ export interface components {
             /** Cases */
             cases?: components["schemas"]["ManualTestRunCaseOut"][];
         };
+        /** ManualTestRunPageOut */
+        ManualTestRunPageOut: {
+            /** Items */
+            items: components["schemas"]["ManualTestRunSummaryOut"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** ManualTestRunSummaryOut */
         ManualTestRunSummaryOut: {
             /** Id */
@@ -5020,17 +5644,6 @@ export interface components {
              */
             created_at: string;
         };
-        /** ManualTestRunPageOut */
-        ManualTestRunPageOut: {
-            /** Items */
-            items: components["schemas"]["ManualTestRunSummaryOut"][];
-            /** Total */
-            total: number;
-            /** Page */
-            page: number;
-            /** Page Size */
-            page_size: number;
-        };
         /** ManualTestRunUpdate */
         ManualTestRunUpdate: {
             /** Name */
@@ -5050,6 +5663,12 @@ export interface components {
             path: string;
             /** Group */
             group: string;
+            /** Parent */
+            parent?: string | null;
+            /** Parent Label */
+            parent_label?: string | null;
+            /** Hint */
+            hint?: string | null;
         };
         /** MockModeUpdate */
         MockModeUpdate: {
@@ -5105,6 +5724,12 @@ export interface components {
             notify_run: boolean;
             /** Notify Aigen */
             notify_aigen: boolean;
+            /** Notify Schedule Success */
+            notify_schedule_success: boolean;
+            /** Notify Run Success */
+            notify_run_success: boolean;
+            /** Notify Aigen Success */
+            notify_aigen_success: boolean;
             /** Retry Count */
             retry_count: number;
             /** Retry Interval Sec */
@@ -5162,6 +5787,21 @@ export interface components {
              * @default true
              */
             notify_aigen: boolean;
+            /**
+             * Notify Schedule Success
+             * @default false
+             */
+            notify_schedule_success: boolean;
+            /**
+             * Notify Run Success
+             * @default false
+             */
+            notify_run_success: boolean;
+            /**
+             * Notify Aigen Success
+             * @default false
+             */
+            notify_aigen_success: boolean;
             /**
              * Retry Count
              * @default 0
@@ -5322,6 +5962,16 @@ export interface components {
              * @default 0
              */
             owner_seq: number;
+            /**
+             * Api Tree Order Version
+             * @default 1
+             */
+            api_tree_order_version: number;
+            /**
+             * Scenario Order Version
+             * @default 1
+             */
+            scenario_order_version: number;
             /** Owner Id */
             owner_id: number;
             /**
@@ -5488,6 +6138,8 @@ export interface components {
             project_id: number;
             /** Requirements */
             requirements: components["schemas"]["ExtractedRequirement"][];
+            /** Hub Task Id */
+            hub_task_id?: number | null;
         };
         /** RequirementBatchImportResponse */
         RequirementBatchImportResponse: {
@@ -5731,6 +6383,13 @@ export interface components {
             duration_ms?: number | null;
             /** Triggered By */
             triggered_by: string;
+            /** Retry Of Run Id */
+            retry_of_run_id?: number | null;
+            /**
+             * Attempt
+             * @default 1
+             */
+            attempt: number;
             /**
              * Started At
              * Format: date-time
@@ -5740,6 +6399,59 @@ export interface components {
             finished_at?: string | null;
             /** Error Message */
             error_message?: string | null;
+        };
+        /**
+         * RunBriefWithRetries
+         * @description 报告列表行：同一次触发的多次尝试折成一行。
+         *
+         *     本行 = 最后一次尝试（整体结果），retries = 此前各次尝试（attempt 升序）；无重试时为空。
+         *     分页与总条数按「行」（重试链）计，不按尝试次数计。
+         */
+        RunBriefWithRetries: {
+            /** Id */
+            id: number;
+            /** Parent Run Id */
+            parent_run_id?: number | null;
+            /** Target Type */
+            target_type: string;
+            /** Target Id */
+            target_id: number;
+            /** Target Name */
+            target_name: string;
+            /** Environment Id */
+            environment_id?: number | null;
+            /** Status */
+            status: string;
+            /** Total Count */
+            total_count: number;
+            /** Passed Count */
+            passed_count: number;
+            /** Failed Count */
+            failed_count: number;
+            /** Pass Rate */
+            pass_rate?: number | null;
+            /** Duration Ms */
+            duration_ms?: number | null;
+            /** Triggered By */
+            triggered_by: string;
+            /** Retry Of Run Id */
+            retry_of_run_id?: number | null;
+            /**
+             * Attempt
+             * @default 1
+             */
+            attempt: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Retries */
+            retries?: components["schemas"]["RunBrief"][];
         };
         /** RunOut */
         RunOut: {
@@ -5769,6 +6481,13 @@ export interface components {
             duration_ms?: number | null;
             /** Triggered By */
             triggered_by: string;
+            /** Retry Of Run Id */
+            retry_of_run_id?: number | null;
+            /**
+             * Attempt
+             * @default 1
+             */
+            attempt: number;
             /**
              * Started At
              * Format: date-time
@@ -5790,7 +6509,7 @@ export interface components {
         /** RunPageOut */
         RunPageOut: {
             /** Items */
-            items: components["schemas"]["RunBrief"][];
+            items: components["schemas"]["RunBriefWithRetries"][];
             /** Total */
             total: number;
             /** Page */
@@ -5814,6 +6533,11 @@ export interface components {
              * @default 0
              */
             iteration: number;
+            /**
+             * Loop Round
+             * @default 0
+             */
+            loop_round: number;
             /** Case Id */
             case_id?: number | null;
             /** Case Name */
@@ -5976,8 +6700,19 @@ export interface components {
             /** Sort Order */
             sort_order: number;
         };
+        /** ScenarioReorderOut */
+        ScenarioReorderOut: {
+            /** Project Id */
+            project_id: number;
+            /** Order Version */
+            order_version: number;
+            /** Updated Count */
+            updated_count: number;
+        };
         /** ScenarioReorderRequest */
         ScenarioReorderRequest: {
+            /** Expected Order Version */
+            expected_order_version: number;
             /** Items */
             items: components["schemas"]["ScenarioReorderItem"][];
         };
@@ -6867,8 +7602,36 @@ export interface components {
             /** Page Size */
             page_size: number;
         };
+        /** TrashRestoreOut */
+        TrashRestoreOut: {
+            /**
+             * Entity Type
+             * @enum {string}
+             */
+            entity_type: "scenario" | "suite" | "case" | "endpoint";
+            /** Entity Id */
+            entity_id: number;
+            /**
+             * Restored At
+             * Format: date-time
+             */
+            restored_at: string;
+            /** Version */
+            version?: number | null;
+        };
+        /** TreeReorderOut */
+        TreeReorderOut: {
+            /** Project Id */
+            project_id: number;
+            /** Order Version */
+            order_version: number;
+            /** Updated Count */
+            updated_count: number;
+        };
         /** TreeReorderRequest */
         TreeReorderRequest: {
+            /** Expected Order Version */
+            expected_order_version: number;
             /** Folders */
             folders?: components["schemas"]["ReorderFolder"][];
             /** Endpoints */
@@ -7082,6 +7845,52 @@ export interface components {
             /** Sort Order */
             sort_order?: number | null;
         };
+        /**
+         * WorkbenchAiTask
+         * @description 跨项目 AI 任务（Hub 需求/用例 + Apifox 接口生成）。
+         */
+        WorkbenchAiTask: {
+            /** Task Key */
+            task_key: string;
+            /** Category */
+            category: string;
+            /** Task Id */
+            task_id: number;
+            /** Project Id */
+            project_id: number;
+            /** Project Name */
+            project_name: string;
+            /** Title */
+            title: string;
+            /** Status */
+            status: string;
+            /**
+             * Done Items
+             * @default 0
+             */
+            done_items: number;
+            /**
+             * Total Items
+             * @default 0
+             */
+            total_items: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** WorkbenchAiTaskPageOut */
+        WorkbenchAiTaskPageOut: {
+            /** Items */
+            items: components["schemas"]["WorkbenchAiTask"][];
+            /** Total */
+            total: number;
+            /** Page */
+            page: number;
+            /** Page Size */
+            page_size: number;
+        };
         /** WorkbenchManual */
         WorkbenchManual: {
             /** Run Id */
@@ -7144,6 +7953,16 @@ export interface components {
             case_count: number;
             /** Role */
             role: string;
+            /**
+             * Owner Name
+             * @default
+             */
+            owner_name: string;
+            /**
+             * Department Name
+             * @default
+             */
+            department_name: string;
             /**
              * Pinned
              * @default false
@@ -7408,7 +8227,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
         };
@@ -7432,7 +8251,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -7531,7 +8350,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -7627,6 +8446,37 @@ export interface operations {
             };
         };
     };
+    ai_tasks_overview_api_v1_projects__project_id__overview_ai_tasks_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiTasksOverviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_project_api_v1_projects__project_id__get: {
         parameters: {
             query?: never;
@@ -7705,13 +8555,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -7836,12 +8684,222 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_hub_ai_tasks_api_v1_projects__pid__hub_ai_tasks_get: {
+        parameters: {
+            query: {
+                /** @description requirement | functional */
+                task_type: string;
+                page?: number;
+                page_size?: number;
+                keyword?: string | null;
+                status?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+                /** @description 按任务 ID 精确查询 */
+                task_id?: number | null;
+            };
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["HubAiTaskPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_hub_ai_task_api_v1_projects__pid__hub_ai_tasks__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubAiTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cancel_hub_ai_task_api_v1_projects__pid__hub_ai_tasks__task_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubAiTaskBrief"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_hub_ai_task_requirements_api_v1_projects__pid__hub_ai_tasks__task_id__requirements_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                pid: number;
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubAiTaskRequirementsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_hub_ai_task_requirements_api_v1_projects__pid__hub_ai_tasks__task_id__requirements_discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HubAiTaskRequirementDiscard"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubAiTaskRequirementDiscardResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_hub_ai_task_cases_api_v1_projects__pid__hub_ai_tasks__task_id__cases_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                pid: number;
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HubAiTaskCasesOut"];
                 };
             };
             /** @description Validation Error */
@@ -7860,10 +8918,6 @@ export interface operations {
             query?: {
                 project_id?: number | null;
                 status?: string | null;
-                source?: string | null;
-                order?: string | null;
-                unreviewed?: boolean | null;
-                linked?: boolean | null;
                 keyword?: string | null;
                 page?: number | null;
                 page_size?: number;
@@ -8187,6 +9241,46 @@ export interface operations {
             };
         };
     };
+    download_requirements_import_template_excel_api_v1_requirements_import_template_excel_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    download_requirements_import_template_xmind_api_v1_requirements_import_template_xmind_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_requirement_api_v1_requirements__req_id__get: {
         parameters: {
             query?: never;
@@ -8265,13 +9359,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -8301,7 +9393,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -8547,6 +9639,46 @@ export interface operations {
             };
         };
     };
+    download_testcases_import_template_excel_api_v1_testcases_import_template_excel_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    download_testcases_import_template_xmind_api_v1_testcases_import_template_xmind_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     batch_review_testcases_api_v1_testcases_batch_review_post: {
         parameters: {
             query?: never;
@@ -8691,13 +9823,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -8916,13 +10046,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9119,13 +10247,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9159,7 +10285,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -9190,7 +10316,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -9221,7 +10347,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ActionResultOut"];
                 };
             };
             /** @description Validation Error */
@@ -9489,13 +10615,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9572,6 +10696,44 @@ export interface operations {
             };
         };
     };
+    list_runs_page_api_v1_test_executions_page_get: {
+        parameters: {
+            query: {
+                project_id: number;
+                page?: number;
+                page_size?: number;
+                /** @description waiting | running | finished */
+                status?: string | null;
+                keyword?: string | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualTestRunPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_available_cases_api_v1_test_executions_available_cases_list_get: {
         parameters: {
             query: {
@@ -9591,7 +10753,40 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ManualTestRunAvailableCaseOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    batch_delete_runs_api_v1_test_executions_batch_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualTestRunBatchDelete"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -9683,13 +10878,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -9725,215 +10918,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ManualTestRunCaseOut"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    list_log_sources_api_v1_logs_sources_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    tail_logs_api_v1_logs_tail_get: {
-        parameters: {
-            query: {
-                /** @description backend | frontend | ensure */
-                source: string;
-                lines?: number;
-                keyword?: string | null;
-                level?: string | null;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stream_logs_api_v1_logs_stream_get: {
-        parameters: {
-            query: {
-                /** @description backend | frontend | ensure */
-                source: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    download_log_api_v1_logs_download_get: {
-        parameters: {
-            query: {
-                /** @description backend | frontend | ensure */
-                source: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    error_log_summary_api_v1_logs_errors_summary_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    tail_error_logs_api_v1_logs_errors_tail_get: {
-        parameters: {
-            query?: {
-                category?: string;
-                lines?: number;
-                keyword?: string | null;
-                status_min?: number | null;
-                method?: string | null;
-                offset?: number;
-                page?: number | null;
-                page_size?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    stream_error_logs_api_v1_logs_errors_stream_get: {
-        parameters: {
-            query?: {
-                category?: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */
@@ -10113,13 +11097,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -10276,13 +11258,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -10316,7 +11296,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TreeReorderOut"];
                 };
             };
             /** @description Validation Error */
@@ -10443,13 +11423,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -10575,13 +11553,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -10707,13 +11683,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -10874,13 +11848,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -11173,13 +12145,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -11236,6 +12206,8 @@ export interface operations {
                 date_from?: string | null;
                 /** @description 创建时间上界（含当天） */
                 date_to?: string | null;
+                /** @description 按任务 ID 精确查询 */
+                task_id?: number | null;
             };
             header?: never;
             path: {
@@ -11327,6 +12299,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_my_active_ai_gen_tasks_api_v1_apifox_ai_gen_tasks_mine_active_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenTaskBrief"][];
                 };
             };
         };
@@ -11451,6 +12443,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["AiGenBatchApplyResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_ai_gen_task_item_api_v1_apifox_ai_gen_tasks__tid__items__iid__discard_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                tid: number;
+                iid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AiGenApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiGenDiscardResult"];
                 };
             };
             /** @description Validation Error */
@@ -11737,13 +12765,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -11934,13 +12960,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -12031,13 +13055,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -12227,13 +13249,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -12359,13 +13379,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -12491,13 +13509,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -12597,7 +13613,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["ScenarioReorderOut"];
                 };
             };
             /** @description Validation Error */
@@ -12689,13 +13705,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -12956,13 +13970,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -13194,7 +14206,7 @@ export interface operations {
             };
         };
     };
-    import_openapi_api_v1_apifox_projects__pid__import_openapi_post: {
+    import_openapi_preview_api_v1_apifox_projects__pid__import_openapi_preview_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -13206,6 +14218,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportPreviewOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_openapi_api_v1_apifox_projects__pid__import_openapi_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pid: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportOpenapiRequest"];
             };
         };
         responses: {
@@ -13412,13 +14459,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -13540,13 +14585,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -13750,13 +14793,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14050,6 +15091,38 @@ export interface operations {
             };
         };
     };
+    workbench_ai_tasks_api_v1_apifox_workbench_ai_tasks_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkbenchAiTaskPageOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_suites_api_v1_apifox_projects__pid__suites_get: {
         parameters: {
             query?: never;
@@ -14194,13 +15267,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14250,7 +15321,7 @@ export interface operations {
                 page?: number;
                 page_size?: number;
                 keyword?: string | null;
-                kind?: "scenario" | "suite" | "case" | "endpoint" | null;
+                kind?: ("scenario" | "suite" | "case" | "endpoint") | null;
             };
             header?: never;
             path: {
@@ -14368,7 +15439,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["TrashRestoreOut"];
                 };
             };
             /** @description Validation Error */
@@ -14395,13 +15466,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14593,13 +15662,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -14725,13 +15792,11 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Successful Response */
-            200: {
+            204: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": unknown;
-                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

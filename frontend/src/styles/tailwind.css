@@ -18,7 +18,7 @@
   --popover: var(--ax-bg);
   --popover-foreground: var(--ax-text);
   --primary: var(--ax-brand);
-  --primary-foreground: #ffffff;
+  --primary-foreground: var(--ax-raw-hex-ffffff);
   --secondary: var(--ax-bg-subtle);
   --secondary-foreground: var(--ax-text);
   --muted: var(--ax-bg-subtle);
@@ -26,7 +26,7 @@
   --accent: var(--ax-bg-hover);
   --accent-foreground: var(--ax-text);
   --destructive: var(--ax-danger);
-  --destructive-foreground: #ffffff;
+  --destructive-foreground: var(--ax-raw-hex-ffffff);
   --border: var(--ax-border);
   --input: var(--ax-border);
   --ring: var(--ax-brand);

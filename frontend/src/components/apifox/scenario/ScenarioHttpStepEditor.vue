@@ -49,6 +49,7 @@ async function send() {
       environment_id: store.currentEnvironmentId,
       assertions: props.config.assertions as Schemas['DebugRequest']['assertions'],
       extracts: props.config.extracts as Schemas['DebugRequest']['extracts'],
+      console_print_db: false, // 场景步骤单发不打印数据库操作日志（与后端默认一致）
     })
     if (resp.value.extract_results?.some((r) => r.passed && r.scope !== 'temporary')) {
       await reloadResolvableVars()

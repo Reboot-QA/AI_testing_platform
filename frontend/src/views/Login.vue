@@ -3,7 +3,14 @@
     <!-- 左：品牌区（大屏可见） -->
     <div
       class="relative hidden flex-col justify-between overflow-hidden p-12 text-white lg:flex"
-      style="background: linear-gradient(150deg, #0f2544 0%, #1a365d 45%, #2c5282 100%)"
+      style="
+        background: linear-gradient(
+          150deg,
+          var(--ax-raw-hex-0f2544) 0%,
+          var(--ax-raw-hex-1a365d) 45%,
+          var(--ax-raw-hex-2c5282) 100%
+        );
+      "
     >
       <div class="flex items-center gap-3">
         <el-icon :size="30"><Cpu /></el-icon>
@@ -96,6 +103,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { isUnauthorizedError } from '@/api/request'
+import { resolveLandingPath } from '@/router/landing'
 import { useUserStore } from '@/stores/user'
 import { Button } from '@/components/ui/button'
 import type { FormInstance, FormRules } from '@/types/element-plus'
@@ -134,7 +142,7 @@ onMounted(async () => {
     if (userStore.mustChangePassword) {
       await router.replace('/force-change-password')
     } else {
-      await router.replace('/hub')
+      await router.replace(resolveLandingPath(userStore.hasPermission))
     }
   } catch (error) {
     if (isUnauthorizedError(error)) {
@@ -153,7 +161,7 @@ async function handleLogin() {
     if (userStore.mustChangePassword) {
       router.push('/force-change-password')
     } else {
-      router.push('/hub')
+      router.push(resolveLandingPath(userStore.hasPermission))
     }
   } finally {
     loading.value = false

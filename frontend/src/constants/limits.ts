@@ -1,18 +1,27 @@
 /**
  * 字段长度上限（与后端 app/constants/limits.py 对齐，单一事实来源在后端）。
  *
- * 标题（name/title 等展示名）≤ 100，描述（description）≤ 500；
- * apifox 各标题/描述输入框据此设 maxlength，超限无法输入，呼应后端 422 校验。
+ * 标题（name/title 等展示名）≤ 100，接口路径 ≤ 500，描述（description）≤ 500；
+ * apifox 各标题/路径/描述输入框据此设 maxlength，超限无法输入，呼应后端 422 校验。
  */
 
 /** 标题/名称上限（apifox 主实体展示名 name/title） */
 export const TITLE_MAX_LEN = 100
+
+/** 接口路径上限（对齐 apifox_endpoints.path 的 String(500)） */
+export const PATH_MAX_LEN = 500
 
 /** 描述上限（apifox 各实体 description） */
 export const DESC_MAX_LEN = 500
 
 /** 数据模型(Schema)名称上限：按测试要求收窄到 50（区别于通用标题 100） */
 export const MODEL_NAME_MAX_LEN = 50
+
+/** 需求点 / 功能用例标题上限（与 apifox 通用标题 100 区分） */
+export const REQ_CASE_TITLE_MAX_LEN = 60
+
+/** 手工测试单「版本/构建」上限 */
+export const BUILD_NAME_MAX_LEN = 30
 
 /**
  * 以下为前端侧输入防护上限：后端对应字段多为 Text/无长度校验，

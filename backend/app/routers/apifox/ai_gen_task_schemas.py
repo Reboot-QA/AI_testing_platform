@@ -24,6 +24,7 @@ class AiGenTaskItemOut(BaseModel):
     applied_count: int
     error: Optional[str] = None
     cases: List[CaseCreate] = []  # 生成的用例预览（未入库），供前端勾选后 apply
+    applied_cases: List[CaseCreate] = []  # 已从预览入库的用例快照，供「已入库」Tab 查看
     discarded_cases: List[CaseCreate] = []  # 已从预览废弃、未入库，供「废弃」Tab 查看
 
 
@@ -33,7 +34,8 @@ class AiGenTaskOut(BaseModel):
     status: str
     mode: Optional[str] = None
     provider_id: Optional[int] = None
-    provider_name: Optional[str] = None  # provider_id 对应的模型名称，详情展示（mock 无）
+    provider_name: Optional[str] = None  # provider 配置名称（兼容）
+    model_label: str = ""  # 详情/列表「模型」：仅 model 标识
     categories: List[AiGenCategory] = []  # 生成时选的类别配置（含数量），详情信息区展示
     creator_name: Optional[str] = None
     total_items: int
@@ -52,6 +54,7 @@ class AiGenTaskBrief(BaseModel):
     categories: List[str] = []  # 选中的类别值（positive/negative/...），列表摘要用
     generated_total: int = 0  # 该任务已生成用例总数（Σ 各接口）
     applied_total: int = 0  # 已入库用例总数（Σ 各接口 applied_count）
+    model_label: str = ""  # 列表「模型」：仅 model 标识
     creator_name: Optional[str] = None
     total_items: int
     done_items: int

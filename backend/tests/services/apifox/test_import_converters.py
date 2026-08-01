@@ -82,9 +82,18 @@ def test_curl_defaults_get_without_body():
     assert eps[0]["method"] == "GET" and eps[0]["path"] == "/ping"
 
 
-def test_curl_without_url_raises():
-    with pytest.raises(ValueError):
-        conv.to_openapi3("curl -X GET -H 'A: b'")
+def test_curl_without_url_imports_empty_path():
+    # 对齐 Postman：cURL 没有 URL 也能导入，不再报错；path 退回 "/"（host 由环境前置URL 提供）
+    doc = conv.to_openapi3("curl -X GET -H 'A: b'")
+    eps = import_service.parse_openapi(doc)
+    assert eps[0]["method"] == "GET" and eps[0]["path"] == "/"
+
+
+def test_curl_relative_url_keeps_path():
+    # 相对路径（无 host）作为 path 导入，不再报错
+    doc = conv.to_openapi3("curl -X POST '/api/login' -H 'Content-Type: application/json' -d '{}'")
+    eps = import_service.parse_openapi(doc)
+    assert eps[0]["method"] == "POST" and eps[0]["path"] == "/api/login"
 
 
 # ---------- Postman ----------

@@ -1,18 +1,25 @@
 <template>
-  <div>
-    <div class="mb-3 flex flex-wrap items-center gap-2">
+  <div class="px-2 py-2">
+    <div
+      class="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5"
+    >
       <el-input
         v-model="form.name"
         :maxlength="TITLE_MAX_LEN"
+        size="small"
         placeholder="用例名称"
-        class="min-w-0 flex-1 case-name-input"
+        class="min-w-[220px] flex-1 case-name-input"
       >
         <template v-if="listIndex != null" #prefix>
           <span class="case-list-index">{{ listIndex }}</span>
         </template>
       </el-input>
-      <slot name="header-actions" />
-      <el-button type="primary" :loading="saving" @click="$emit('save')">保存</el-button>
+      <div class="ml-auto flex items-center gap-2">
+        <slot name="header-actions" />
+        <el-button size="small" type="primary" :loading="saving" @click="$emit('save')"
+          >保存</el-button
+        >
+      </div>
     </div>
 
     <el-tabs v-model="activeTab">
@@ -66,9 +73,8 @@ import { useSqlScripts } from '@/composables/useSqlScripts'
 type ScriptBrief = Schemas['ScriptBrief']
 type DatasetBrief = Schemas['DatasetBrief']
 
-const props = withDefaults(
+withDefaults(
   defineProps<{
-    form: CaseEditorForm
     saving?: boolean
     scripts?: ScriptBrief[]
     datasets?: DatasetBrief[]
@@ -86,6 +92,7 @@ const props = withDefaults(
     listIndex: undefined,
   },
 )
+const form = defineModel<CaseEditorForm>('form', { required: true })
 defineEmits<{ save: [] }>()
 
 const pid = useRouteParamId()
@@ -96,8 +103,8 @@ const { databases } = useEnvDatabases()
 const { sqlScripts } = useSqlScripts()
 // 数据驱动 tab 与请求 tab 是兄弟节点：在 CaseEditor 提供，单元格 VarInput 才能看到用例变量
 provideEditorVariables(() => ({
-  postProcessors: props.form.post_processors ?? [],
-  variableRows: props.form.variables,
+  postProcessors: form.value.post_processors ?? [],
+  variableRows: form.value.variables,
 }))
 // 处理器由父组件加载用例后派生（deriveProcessors），本组件仅编辑 form.pre_processors/post_processors
 </script>

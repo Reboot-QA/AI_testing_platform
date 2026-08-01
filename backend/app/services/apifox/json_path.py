@@ -13,10 +13,12 @@ def resolve_json_path(data: Any, path: str) -> Tuple[bool, Any]:
     elif normalized.startswith("$"):
         normalized = normalized[1:].lstrip(".")
 
-    current = data
     parts = [part for part in normalized.replace("[", ".").replace("]", "").split(".") if part]
+    return _resolve_parts(data, parts)
 
-    for part in parts:
+
+def _resolve_parts(current: Any, parts: list) -> Tuple[bool, Any]:
+    for i, part in enumerate(parts):
         if current is None:
             return False, None
 
@@ -29,6 +31,13 @@ def resolve_json_path(data: Any, path: str) -> Tuple[bool, Any]:
                 current = parsed
             else:
                 return False, None
+
+        if part == "*":
+            # 数组通配符：对列表每个元素取剩余路径；元素缺该字段则该位为 None，整体判为找到
+            if not isinstance(current, list):
+                return False, None
+            rest = parts[i + 1 :]
+            return True, [_resolve_parts(item, rest)[1] for item in current]
 
         if isinstance(current, dict):
             if part not in current:

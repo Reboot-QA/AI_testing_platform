@@ -1,7 +1,14 @@
 // API 层公共封装：axios 实例 + 拦截器 + 泛型请求方法 + SSE 公共封装。
 // 各域模块（auth/project/...）只声明端点，统一从这里取 get/post/put/patch/del/streamSSE。
-import axios, { type AxiosRequestConfig } from 'axios'
+import axios, { type AxiosError, type AxiosRequestConfig } from 'axios'
 import { ElMessage } from 'element-plus'
+
+declare module 'axios' {
+  // 调用方自己给用户提示（或有意静默）时置 true，跳过响应拦截器的全局 ElMessage
+  export interface AxiosRequestConfig {
+    skipErrorToast?: boolean
+  }
+}
 
 const request = axios.create({
   baseURL: '/api/v1',
@@ -16,7 +23,7 @@ request.interceptors.request.use((config) => {
   return config
 })
 
-function shouldSuppress401Toast(error: any): boolean {
+function shouldSuppress401Toast(error: AxiosError): boolean {
   const url = error.config?.url || ''
   const onLoginPage = window.location.pathname.includes('/login')
   const isAuthMe = url.includes('/auth/me')
@@ -53,6 +60,9 @@ request.interceptors.response.use(
         return Promise.reject(error)
       }
     }
+    if (error.config?.skipErrorToast) {
+      return Promise.reject(error)
+    }
     ElMessage.error(typeof msg === 'string' ? msg : JSON.stringify(msg))
     return Promise.reject(error)
   },
@@ -78,20 +88,22 @@ export function del<T>(url: string, config?: AxiosRequestConfig): Promise<T> {
   return request.delete<T, T>(url, config)
 }
 
-// SSE 事件无 response_model，按弱类型占位（技术债：后端补类型）。
-export type SSEEvent = any
+export type SSEEvent = Record<string, unknown>
 
-export interface StreamSSEOptions {
+export interface StreamSSEOptions<TEvent extends SSEEvent = SSEEvent> {
   method?: string
   body?: BodyInit | null
   headers?: Record<string, string>
   signal?: AbortSignal
-  onEvent: (event: SSEEvent) => void
+  onEvent: (event: TEvent) => void
 }
 
 // 收敛原先 4 份重复的 SSE 解析（extract/aiGenerate/chat/apifoxRun）：
 // 带 token、`data:` 分块解析、按 \n\n 切分、非 2xx 抛后端 detail。
-export async function streamSSE(url: string, opts: StreamSSEOptions): Promise<void> {
+export async function streamSSE<TEvent extends SSEEvent = SSEEvent>(
+  url: string,
+  opts: StreamSSEOptions<TEvent>,
+): Promise<void> {
   const token = localStorage.getItem('token')
   const response = await fetch(url, {
     method: opts.method ?? 'POST',
@@ -128,7 +140,8 @@ export async function streamSSE(url: string, opts: StreamSSEOptions): Promise<vo
     for (const chunk of chunks) {
       const line = chunk.trim()
       if (!line.startsWith('data:')) continue
-      opts.onEvent(JSON.parse(line.slice(5).trim()))
+      const event = JSON.parse(line.slice(5).trim()) as TEvent
+      opts.onEvent(event)
     }
   }
 }

@@ -10,11 +10,19 @@
           size="small"
           placeholder="默认前置URL"
           clearable
+          :value-on-clear="null"
           class="server-sel"
+          @clear="form.server_name = null"
         >
           <el-option v-for="n in serverNames" :key="n" :label="n" :value="n" />
         </el-select>
-        <VarInput v-model="form.path" size="small" placeholder="/path/to/api" class="path-input" />
+        <VarInput
+          v-model="form.path"
+          size="small"
+          placeholder="/path/to/api"
+          class="path-input"
+          :maxlength="PATH_MAX_LEN"
+        />
         <slot name="actions" />
         <el-button
           v-if="showSave"
@@ -94,13 +102,15 @@
           <el-radio-button value="bearer">Bearer</el-radio-button>
           <el-radio-button value="basic">Basic</el-radio-button>
         </el-radio-group>
-        <VarInput
-          v-if="form.request_spec.auth.type === 'bearer'"
-          v-model="form.request_spec.auth.token"
-          size="small"
-          placeholder="Token"
-          class="auth-input"
-        />
+        <div v-if="form.request_spec.auth.type === 'bearer'" class="auth-row">
+          <span class="auth-label">Token</span>
+          <VarInput
+            v-model="form.request_spec.auth.token"
+            size="small"
+            placeholder="Bearer Token，支持 {{变量}}"
+            class="auth-row-input"
+          />
+        </div>
         <template v-else-if="form.request_spec.auth.type === 'basic'">
           <VarInput
             v-model="form.request_spec.auth.username"
@@ -174,7 +184,7 @@
 </template>
 
 <script setup lang="ts">
-import { TITLE_MAX_LEN } from '@/constants/limits'
+import { PATH_MAX_LEN, TITLE_MAX_LEN } from '@/constants/limits'
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import type { UploadRawFile } from 'element-plus'
@@ -195,7 +205,6 @@ type SchemaBrief = Schemas['SchemaBrief']
 
 const props = withDefaults(
   defineProps<{
-    form: RequestSpecHolderForm
     saving?: boolean
     showMeta?: boolean
     showSave?: boolean
@@ -216,6 +225,7 @@ const props = withDefaults(
     projectId: '',
   },
 )
+const form = defineModel<RequestSpecHolderForm>('form', { required: true })
 defineEmits<{ save: [] }>()
 
 // 数据库操作处理器需按当前环境选连接（环境级）
@@ -223,13 +233,13 @@ const { databases } = useEnvDatabases()
 const { sqlScripts } = useSqlScripts()
 
 provideEditorVariables(() => ({
-  postProcessors: props.form.post_processors ?? [],
-  variableRows: (props.form as CaseEditorForm).variables,
+  postProcessors: form.value.post_processors ?? [],
+  variableRows: (form.value as CaseEditorForm).variables,
 }))
 
 // 兼容历史/未归一化 spec：确保 settings 存在，避免「设置」tab 的 v-model 绑定报错
 watch(
-  () => props.form.request_spec,
+  () => form.value.request_spec,
   (spec) => {
     if (spec && !spec.settings) {
       spec.settings = { timeout_ms: null, verify_ssl: true, follow_redirects: true }
@@ -243,7 +253,7 @@ const BODY_TYPES = ['none', 'json', 'xml', 'form-data', 'urlencoded', 'raw', 'gr
 const activeTab = ref('params')
 
 const bodyLang = computed(() => {
-  const t = props.form.request_spec.body.type
+  const t = form.value.request_spec.body.type
   return t === 'json' ? 'json' : t === 'xml' ? 'xml' : 'plaintext'
 })
 
@@ -253,8 +263,8 @@ async function onPickFile(file: UploadRawFile) {
   uploading.value = true
   try {
     const res = await apifoxApi.uploadFile(props.projectId, file)
-    props.form.request_spec.body.file_id = res.id
-    props.form.request_spec.body.file_name = res.filename
+    form.value.request_spec.body.file_id = res.id
+    form.value.request_spec.body.file_name = res.filename
     ElMessage.success('已上传')
   } catch (e: unknown) {
     ElMessage.error((e as Error).message || '上传失败')
@@ -264,8 +274,8 @@ async function onPickFile(file: UploadRawFile) {
   return false // 阻止 el-upload 默认自动上传（已手动走 api client）
 }
 function clearFile() {
-  props.form.request_spec.body.file_id = null
-  props.form.request_spec.body.file_name = ''
+  form.value.request_spec.body.file_id = null
+  form.value.request_spec.body.file_name = ''
 }
 </script>
 
@@ -299,6 +309,25 @@ function clearFile() {
 .body-raw,
 .auth-input {
   margin-top: var(--ax-space-2);
+}
+
+.auth-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ax-space-2);
+  margin-top: var(--ax-space-2);
+}
+
+.auth-label {
+  flex-shrink: 0;
+  min-width: 48px;
+  font-size: var(--ax-font-sm);
+  color: var(--ax-text-secondary);
+}
+
+.auth-row-input {
+  flex: 1;
+  min-width: 0;
 }
 
 .binary-body {

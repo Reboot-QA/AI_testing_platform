@@ -6,10 +6,10 @@ export const userApi = {
   create: (data: Schemas['UserCreateByAdmin']) => post<Schemas['UserOut']>('/users', data),
   update: (id: Id, data: Schemas['UserUpdate']) => put<Schemas['UserOut']>(`/users/${id}`, data),
   resetPassword: (id: Id, password: Schemas['UserPasswordReset']['password']) =>
-    put<any>(`/users/${id}/password`, { password }),
+    put<Schemas['ActionResultOut']>(`/users/${id}/password`, { password }),
   lockLogin: (id: Id) => post<{ message: string }>(`/users/${id}/login-lock`),
   unlockLogin: (id: Id) => post<{ message: string }>(`/users/${id}/login-unlock`),
-  delete: (id: Id) => del<any>(`/users/${id}`),
+  delete: (id: Id) => del<void>(`/users/${id}`),
   listMenus: () => get<Schemas['MenuDefinitionOut'][]>('/users/menus'),
   getPermissions: (id: Id) => get<Schemas['UserPermissionsOut']>(`/users/${id}/permissions`),
   updatePermissions: (

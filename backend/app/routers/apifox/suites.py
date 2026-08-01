@@ -73,8 +73,8 @@ def update_suite(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@router.delete("/suites/{sid}")
+@router.delete("/suites/{sid}", status_code=204)
 def delete_suite(sid: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     suite = _suite_checked(db, sid, user)
     service.delete_suite(db, suite, deleted_by=user.id)
-    return {"message": "套件已删除"}
+    return None

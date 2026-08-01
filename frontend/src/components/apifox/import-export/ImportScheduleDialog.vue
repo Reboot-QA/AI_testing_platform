@@ -22,7 +22,8 @@
               </el-tag>
             </div>
             <div class="isd-sub">{{ s.schedule_desc }} · {{ s.url }}</div>
-            <div v-if="s.last_run_detail" class="isd-detail">{{ s.last_run_detail }}</div>
+            <ImportManifestView v-if="s.last_run_manifest" :manifest="s.last_run_manifest" />
+            <div v-else-if="s.last_run_detail" class="isd-detail">{{ s.last_run_detail }}</div>
           </div>
           <div class="isd-ops">
             <el-switch
@@ -54,6 +55,7 @@ import type { Schemas } from '@/api/types'
 import { apifoxApi } from '@/api'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 import ImportScheduleForm from '@/components/apifox/import-export/ImportScheduleForm.vue'
+import ImportManifestView from '@/components/apifox/import-export/ImportManifestView.vue'
 
 defineProps<{ modelValue: boolean }>()
 const emit = defineEmits<{ 'update:modelValue': [v: boolean] }>()

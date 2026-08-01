@@ -33,7 +33,9 @@ def _make_suite(db, case_id, name="套件"):
 def test_soft_deleted_entities_appear_in_trash_newest_first(db, make_case):
     case = make_case(name="用例A")
     scn = _make_scenario(db, name="场景A")
-    suite = _make_suite(db, case.id, name="套件A")
+    # 套件引用独立占位用例，避免挡住「用例A」软删（守卫把被套件引用的用例视为不可删，含软删套件）
+    suite_case = make_case(name="套件占位用例")
+    suite = _make_suite(db, suite_case.id, name="套件A")
 
     case_service.delete_case(db, case_service.repo.get_case(db, case.id))
     scenario_service.delete_scenario(db, scenario_service.repo.get_scenario(db, scn.id))

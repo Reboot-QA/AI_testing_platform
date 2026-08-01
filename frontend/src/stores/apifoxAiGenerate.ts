@@ -7,7 +7,7 @@ type TaskItem = Schemas['AiGenTaskItemOut']
 type Category = Schemas['AiGenTaskCreate']['categories'][number]
 
 const TERMINAL = ['succeeded', 'partial', 'failed', 'canceled']
-const POLL_INTERVAL_MS = 1000
+const POLL_INTERVAL_MS = 5000
 
 // 轮询定时器放模块级，避免进 Pinia state 被序列化/响应式追踪
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -26,10 +26,12 @@ function patchTaskItem(
   if (!task) return
   const idx = task.items.findIndex((i) => i.id === itemId)
   if (idx < 0) return
+  const prev = task.items[idx]
   task.items[idx] = patch({
-    ...task.items[idx],
-    cases: [...task.items[idx].cases],
-    discarded_cases: [...(task.items[idx].discarded_cases || [])],
+    ...prev,
+    cases: [...prev.cases],
+    applied_cases: [...(prev.applied_cases || [])],
+    discarded_cases: [...(prev.discarded_cases || [])],
   })
 }
 
@@ -39,9 +41,17 @@ function patchAfterApply(
   result: Schemas['AiGenApplyResult'],
 ): TaskItem {
   const failed = new Set(result.failed)
-  const pick = indexes && indexes.length ? new Set(indexes) : new Set(item.cases.map((_, i) => i))
+  const pick =
+    indexes && indexes.length ? new Set(indexes) : new Set(item.cases.map((_, i) => i))
+  const archived = [...(item.applied_cases || [])]
+  for (let i = 0; i < item.cases.length; i++) {
+    if (!pick.has(i) || failed.has(item.cases[i].name)) continue
+    archived.push(item.cases[i])
+  }
+  item.applied_cases = archived
   item.applied_count += result.created
   item.cases = item.cases.filter((c, i) => !pick.has(i) || failed.has(c.name))
+  item.generated_count = item.cases.length
   return item
 }
 
@@ -91,6 +101,32 @@ export const useApifoxAiGenerateStore = defineStore('apifoxAiGenerate', {
     },
     hasActive(state): boolean {
       return Object.values(state.tasks).some((t) => !isTerminal(t.status))
+    },
+    activeCountForUser(state) {
+      return (userName: string | null | undefined): number => {
+        if (!userName) return 0
+        return Object.values(state.tasks).filter(
+          (t) => !isTerminal(t.status) && t.creator_name === userName,
+        ).length
+      }
+    },
+    activeCountForUserInProject(state) {
+      return (userName: string | null | undefined, projectId: number): number => {
+        if (!userName || !projectId) return 0
+        return Object.values(state.tasks).filter(
+          (t) =>
+            !isTerminal(t.status) &&
+            t.creator_name === userName &&
+            t.project_id === projectId,
+        ).length
+      }
+    },
+    hasActiveInProject(state) {
+      return (projectId: number): boolean =>
+        !!projectId &&
+        Object.values(state.tasks).some(
+          (t) => !isTerminal(t.status) && t.project_id === projectId,
+        )
     },
   },
   actions: {
@@ -151,6 +187,12 @@ export const useApifoxAiGenerateStore = defineStore('apifoxAiGenerate', {
     ): Promise<Schemas['AiGenApplyResult']> {
       const result = await apifoxApi.applyAiGenTaskItem(taskId, itemId, { indexes })
       patchTaskItem(this.tasks, taskId, itemId, (item) => patchAfterApply(item, indexes, result))
+      try {
+        const fresh = await apifoxApi.getAiGenTask(taskId)
+        mergeTaskItems(this.tasks, taskId, fresh)
+      } catch {
+        /* 本地 patch 已更新；拉全量失败时仍可用 */
+      }
       return result
     },
 

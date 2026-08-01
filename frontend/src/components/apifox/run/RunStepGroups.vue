@@ -1,6 +1,6 @@
 <template>
   <div class="step-groups">
-    <div class="list-toolbar">
+    <div v-if="!hideToolbar" class="list-toolbar">
       <div class="filter-tabs">
         <button
           v-for="tab in filterTabs"
@@ -30,33 +30,36 @@
       <div v-if="g.label" class="group-title">{{ g.label }}</div>
       <div class="step-list">
         <template v-for="s in g.steps" :key="s.id">
-          <button
-            type="button"
-            class="step-row"
-            :class="{
-              'step-row--active': expandedId === s.id,
-              'step-row--failed': s.status !== 'passed',
-            }"
-            @click="toggleExpand(s.id)"
-          >
-            <span
-              class="status-pill"
-              :class="s.status === 'passed' ? 'status-pill--ok' : 'status-pill--fail'"
+          <RunStepDetailPanel v-if="showDetailOnly" :step="s" />
+          <template v-else>
+            <button
+              type="button"
+              class="step-row"
+              :class="{
+                'step-row--active': expandedId === s.id,
+                'step-row--failed': s.status !== 'passed',
+              }"
+              @click="toggleExpand(s.id)"
             >
-              {{ s.status === 'passed' ? '通过' : '失败' }}
-            </span>
-            <span class="step-name" :title="s.case_name">{{ s.case_name || '未命名步骤' }}</span>
-            <MethodTag v-if="s.method" :method="s.method" />
-            <span class="step-path" :title="s.url">{{ displayRequestPath(s.url) }}</span>
-            <span class="step-code" :class="{ 'step-code--fail': s.status !== 'passed' }">
-              {{ s.response_status ?? '-' }}
-            </span>
-            <span class="step-time">{{ formatReportDuration(s.duration_ms) }}</span>
-            <el-icon class="step-arrow" :class="{ open: expandedId === s.id }">
-              <ArrowRight />
-            </el-icon>
-          </button>
-          <RunStepDetailPanel v-if="expandedId === s.id" :step="s" />
+              <span
+                class="status-pill"
+                :class="s.status === 'passed' ? 'status-pill--ok' : 'status-pill--fail'"
+              >
+                {{ s.status === 'passed' ? '通过' : '失败' }}
+              </span>
+              <span class="step-name" :title="s.case_name">{{ s.case_name || '未命名步骤' }}</span>
+              <MethodTag v-if="s.method" :method="s.method" />
+              <span class="step-path" :title="s.url">{{ displayRequestPath(s.url) }}</span>
+              <span class="step-code" :class="{ 'step-code--fail': s.status !== 'passed' }">
+                {{ s.response_status ?? '-' }}
+              </span>
+              <span class="step-time">{{ formatReportDuration(s.duration_ms) }}</span>
+              <el-icon class="step-arrow" :class="{ open: expandedId === s.id }">
+                <ArrowRight />
+              </el-icon>
+            </button>
+            <RunStepDetailPanel v-if="expandedId === s.id" :step="s" />
+          </template>
         </template>
       </div>
     </div>
@@ -76,9 +79,19 @@ import { displayRequestPath, formatReportDuration } from '@/utils/runReportStats
 type StepFilter = 'all' | 'passed' | 'failed'
 type RunStep = Schemas['RunStepOut']
 
-const props = withDefaults(defineProps<{ detail: Schemas['RunOut']; live?: boolean }>(), {
-  live: false,
-})
+const props = withDefaults(
+  defineProps<{
+    detail: Schemas['RunOut']
+    live?: boolean
+    autoExpandFirst?: boolean
+    hideToolbar?: boolean
+  }>(),
+  {
+    live: false,
+    autoExpandFirst: false,
+    hideToolbar: false,
+  },
+)
 
 const stepFilter = ref<StepFilter>('all')
 const keyword = ref('')
@@ -127,6 +140,11 @@ const visibleGroups = computed(() =>
 
 const visibleSteps = computed(() => visibleGroups.value.flatMap((g) => g.steps))
 
+/** \u6279\u6b21\u62a5\u544a\u884c\u5185\u5c55\u5f00\uff1a\u5355\u6b65\u9aa4\u7528\u4f8b\u76f4\u63a5\u51fa\u8be6\u60c5\uff0c\u907f\u514d\u4e0e\u5916\u5c42\u7528\u4f8b\u884c\u91cd\u590d */
+const showDetailOnly = computed(
+  () => props.hideToolbar && props.autoExpandFirst && visibleSteps.value.length === 1,
+)
+
 const emptyHint = computed(() => {
   if (props.live && allSteps.value.length === 0) return '等待步骤执行…'
   if (keyword.value.trim()) return '无匹配步骤'
@@ -146,13 +164,19 @@ watch(stepFilter, (v) => {
   }
 })
 
+function resetExpandedStep() {
+  const steps = allSteps.value
+  expandedId.value = props.autoExpandFirst && steps.length ? steps[0].id : null
+}
+
 watch(
   () => props.detail?.id,
   () => {
     stepFilter.value = 'all'
     keyword.value = ''
-    expandedId.value = null
+    resetExpandedStep()
   },
+  { immediate: true },
 )
 
 watch(

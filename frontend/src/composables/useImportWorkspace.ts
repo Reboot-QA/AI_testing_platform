@@ -1,4 +1,8 @@
-/** 导入页内工作台：文件/URL/粘贴导入 + 同源智能识别为「更新同步（预览）」 */
+/**
+ * 导入页内工作台：文件/URL/粘贴导入 →「预览 & 配置」（勾选接口 + 选目标目录 + 已存在接口的处理）。
+ * 项目已有接口不再强制走更新同步，只在预览里标出「已存在/有变更」，由用户自行决定；
+ * 需要清理文档中已移除的接口时，再从预览面板切到「更新同步」。
+ */
 
 import { computed, onMounted, ref, watch, type Ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -8,6 +12,14 @@ import { apifoxApi } from '@/api'
 import { useRouteParamId } from '@/composables/useRouteParamId'
 
 export type ImportMode = 'file' | 'url' | 'git' | 'paste' | 'stub'
+
+/** 「预览 & 配置」面板回传的导入选择 */
+export interface ImportChoice {
+  selectedKeys: string[]
+  targetFolderId: number | null
+  onConflict: 'skip' | 'overwrite'
+  withSchemas: boolean
+}
 
 function normalizeDiff(raw: Schemas['ImportDiffOut']): ImportDiffView {
   return { ...raw, added: raw.added ?? [], changed: raw.changed ?? [], removed: raw.removed ?? [] }
@@ -28,19 +40,11 @@ export function useImportWorkspace(format: Ref<ImportSourceFormat>) {
 
   // 上次导入 URL（后端记住）：URL 模式下回填，方便再次导入同一地址
   const lastImportUrl = ref('')
-  // 项目是否已有接口（导入过）：非空则 OpenAPI 再导入按「更新同步」走预览，而非盲目新建
+  // 项目是否已有接口（导入过）：决定是否给出「更新同步」这个可选入口
   const hasEndpoints = ref(false)
+  const preview = ref<Schemas['ImportPreviewOut'] | null>(null)
   const diff = ref<ImportDiffView | null>(null)
   const deleteUnreferenced = ref(false)
-
-  // 项目已导入过（有接口）+ OpenAPI 的 URL/文件 → 走「更新同步」（先预览变更再应用）
-  const isUpdate = computed(
-    () =>
-      format.value === 'openapi' &&
-      (mode.value === 'url' || mode.value === 'file') &&
-      hasEndpoints.value,
-  )
-  const continueLabel = computed(() => (isUpdate.value ? '预览变更' : '继续'))
 
   const showContinue = computed(() => mode.value !== 'git')
   const canContinue = computed(() => {
@@ -84,7 +88,7 @@ export function useImportWorkspace(format: Ref<ImportSourceFormat>) {
     fileContent.value = ''
     curlText.value = ''
     hasStubFile.value = false
-    resetDiff()
+    resetPreview()
   })
 
   function comingSoon() {
@@ -132,24 +136,44 @@ export function useImportWorkspace(format: Ref<ImportSourceFormat>) {
     hasStubFile.value = false
   }
 
-  async function doImport() {
+  /** 按用户在「预览 & 配置」里的勾选与位置执行导入 */
+  async function confirmImport(choice: ImportChoice) {
     busy.value = true
     try {
-      const report = await apifoxApi.importOpenapi(pid.value, payload())
+      const report = await apifoxApi.importOpenapi(pid.value, {
+        ...payload(),
+        target_folder_id: choice.targetFolderId,
+        selected_keys: choice.selectedKeys,
+        on_conflict: choice.onConflict,
+        with_schemas: choice.withSchemas,
+      })
       ElMessage.success(
-        `导入完成：新建 ${report.created} 个接口、${report.schemas_created || 0} 个数据模型、` +
-          `跳过 ${report.skipped} 个、新建文件夹 ${report.folders_created} 个`,
+        `导入完成：新建 ${report.created} 个接口、更新 ${report.updated || 0} 个、` +
+          `跳过 ${report.skipped} 个、新建文件夹 ${report.folders_created} 个、` +
+          `数据模型 ${report.schemas_created || 0} 个`,
       )
       clearInputs()
+      resetPreview()
       await loadLastUrl() // URL 导入后记住地址
-      await loadHasEndpoints() // 首次导入后项目变非空，之后再导入走更新预览
+      await loadHasEndpoints()
       return true
     } finally {
       busy.value = false
     }
   }
 
-  async function preview() {
+  /** 拉取「预览 & 配置」数据（只读，不写库） */
+  async function loadPreview() {
+    busy.value = true
+    try {
+      preview.value = await apifoxApi.importPreview(pid.value, payload())
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** 可选入口：切到更新同步，看新增/变更/移除并可清理已移除接口 */
+  async function loadDiff() {
     busy.value = true
     try {
       diff.value = normalizeDiff(await apifoxApi.importDiff(pid.value, payload()))
@@ -179,31 +203,34 @@ export function useImportWorkspace(format: Ref<ImportSourceFormat>) {
       if (changedCount) {
         ElMessage.info(`${changedCount} 个接口契约有变更，可到「AI 任务中心」为待复核接口生成用例`)
       }
-      resetDiff()
+      clearInputs()
+      resetPreview()
+      await loadHasEndpoints()
       return true
     } finally {
       busy.value = false
     }
   }
 
-  function resetDiff() {
+  /** 从更新同步退回「预览 & 配置」 */
+  function backToPreview() {
     diff.value = null
     deleteUnreferenced.value = false
   }
 
+  function resetPreview() {
+    preview.value = null
+    backToPreview()
+  }
+
+  /** 输入完成 → 进入「预览 & 配置」（不直接落库，由用户勾选后再导入） */
   async function onContinue() {
     if (mode.value === 'stub') {
       comingSoon()
-      return false
+      return
     }
-    if (isUpdate.value) {
-      await preview() // 同源 → 进入预览，不算完成（预览后再「应用更新」）
-      return false
-    }
-    if (mode.value === 'url' && url.value.trim()) return doImport()
-    if (mode.value === 'file' && fileContent.value) return doImport()
-    if (mode.value === 'paste' && curlText.value.trim()) return doImport()
-    return false
+    if (!canContinue.value) return
+    await loadPreview()
   }
 
   return {
@@ -216,15 +243,18 @@ export function useImportWorkspace(format: Ref<ImportSourceFormat>) {
     mode,
     showContinue,
     canContinue,
-    isUpdate,
-    continueLabel,
+    hasEndpoints,
+    preview,
     diff,
     deleteUnreferenced,
     comingSoon,
     onFile,
     onStubFile,
     onContinue,
+    confirmImport,
+    loadDiff,
     applySync,
-    resetDiff,
+    backToPreview,
+    resetPreview,
   }
 }

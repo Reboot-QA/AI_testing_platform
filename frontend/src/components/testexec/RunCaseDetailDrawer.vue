@@ -23,7 +23,7 @@
           caseItem.executor_name || '-'
         }}</el-descriptions-item>
         <el-descriptions-item label="执行时间">{{
-          formatTime(caseItem.executed_at)
+          formatWallTime(caseItem.executed_at)
         }}</el-descriptions-item>
       </el-descriptions>
 
@@ -53,7 +53,7 @@
 
 <script setup lang="ts">
 import type { Schemas } from '@/api/types'
-import { formatBeijingTime } from '@/utils/datetime'
+import { formatBeijingWallClock } from '@/utils/datetime'
 import { formatCaseTypeLabel } from '@/utils/caseType'
 import type { DateInput } from '@/types/common'
 
@@ -79,8 +79,8 @@ const resultType: Record<string, string> = {
   skip: '',
 }
 
-function formatTime(value: DateInput) {
-  return formatBeijingTime(value)
+function formatWallTime(value: DateInput) {
+  return formatBeijingWallClock(value)
 }
 </script>
 

@@ -312,10 +312,14 @@ def _parse_curl(text: str) -> Dict[str, Any]:
         elif tok.startswith("http://") or tok.startswith("https://"):
             url = tok
             i += 1
+        elif url is None and not tok.startswith("-"):
+            # 首个裸位置参数当作 URL（可为相对 path，host 由环境前置URL 提供）；对齐 Postman
+            url = tok
+            i += 1
         else:
             i += 1
     if not url:
-        raise ValueError("cURL 中未找到 URL")
+        url = ""  # 不再强制要求 URL（对齐 Postman）；空 URL 后续按 path "/" 处理
     if not method:
         method = "POST" if body else "GET"
     return {"method": method, "url": url, "headers": headers, "body": body}

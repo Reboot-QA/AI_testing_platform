@@ -44,6 +44,8 @@ async function doImport() {
     const report = await apifoxApi.importOpenapi(pid.value, {
       url: rawUrl.value.trim(),
       git_token: token.value.trim() || undefined,
+      on_conflict: 'skip', // Git 面板是直连导入，不走预览勾选：已存在的一律跳过
+      with_schemas: true,
     })
     ElMessage.success(
       `导入完成：新建 ${report.created} 个接口、${report.schemas_created || 0} 个数据模型、跳过 ${report.skipped} 个`,

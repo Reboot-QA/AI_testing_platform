@@ -7,7 +7,7 @@ export const departmentApi = {
     post<Schemas['DepartmentOut']>('/departments', data),
   update: (id: Id, data: Schemas['DepartmentUpdate']) =>
     put<Schemas['DepartmentOut']>(`/departments/${id}`, data),
-  delete: (id: Id) => del<any>(`/departments/${id}`), // 无 response_model（技术债）
+  delete: (id: Id) => del<void>(`/departments/${id}`),
   getPermissions: (id: Id) =>
     get<Schemas['DepartmentPermissionsOut']>(`/departments/${id}/permissions`),
   updatePermissions: (

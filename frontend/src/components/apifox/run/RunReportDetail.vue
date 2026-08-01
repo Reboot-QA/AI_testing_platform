@@ -34,6 +34,7 @@ const TARGET_LABELS: Record<string, string> = {
   case: '用例',
   scenario: '场景',
   suite: '套件',
+  endpoint: '接口批次',
 }
 
 const targetTypeLabel = computed(() => TARGET_LABELS[props.detail.target_type] || '')
